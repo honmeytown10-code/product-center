@@ -11,6 +11,7 @@ import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new
 import { WebCategoryManager } from './web/WebCategoryManager';
 import { WebImportModal, WebCategorySelectModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
+import { WebComboProductForm } from './web/WebComboProductForm';
 
 // Extended Category type for Web Admin local state
 export interface WebCategory extends Category {
@@ -85,6 +86,14 @@ export const WebAdmin: React.FC = () => {
   // Determine current content
   const renderContent = () => {
       if (creationContext) {
+          if (creationContext.type === 'combo') {
+              return (
+                  <WebComboProductForm 
+                      category={creationContext.category} 
+                      onClose={() => setCreationContext(null)} 
+                  />
+              );
+          }
           return (
               <WebProductForm 
                   type={creationContext.type} 

@@ -228,38 +228,16 @@ export const INITIAL_CATEGORIES: Category[] = [
 ];
 
 export const INITIAL_PRODUCTS: Product[] = [
-  {
-    id: "prod_1",
-    name: "槐店生椰拿铁",
-    price: 28,
-    category: "c1_2",
-    status: "on_shelf",
-    stockStatus: "available",
-    image: "https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=200",
-    skuCode: "SKU10001",
-    type: "standard",
-    industryId: 'drinks',
-    createdTime: "2025-01-20 10:00:00",
-    isMultiSpec: false,
-    stock: 100
-  },
-  {
-    id: "prod_2",
-    name: "美式咖啡（多规格）",
-    price: 22,
-    category: "c1_2",
-    status: "on_shelf",
-    stockStatus: "available",
-    image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=200",
-    skuCode: "SKU10002",
-    type: "standard",
-    industryId: 'drinks',
-    createdTime: "2025-01-22 10:00:00",
-    isMultiSpec: true,
-    specs: [
-      { name: '中杯', stock: 50, price: 22 },
-      { name: '大杯', stock: 10, unlimited: true, price: 25 },
-      { name: '超大杯', stock: 0, price: 28 }
-    ]
-  }
+  { id: '1', name: '招牌珍珠奶茶', price: 18, category: '现制饮品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?w=200&h=200&fit=crop', skuCode: '1001', stock: 100, isMultiSpec: true, specs: [{name: '中杯/热/少糖', stock: 50}, {name: '大杯/冷/正常糖', stock: 20}] },
+  { id: '2', name: '手打柠檬茶', price: 22, category: '现制饮品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=200&h=200&fit=crop', skuCode: '1002', stock: 85 },
+  { id: '3', name: '黑糖波波鲜奶', price: 24, category: '现制饮品', status: 'off_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=200&h=200&fit=crop', skuCode: '1003', stock: 0 },
+  { id: '4', name: '多肉葡萄', price: 28, category: '现制饮品', status: 'on_shelf', stockStatus: 'sold_out', image: 'https://images.unsplash.com/photo-1626803775151-61d756612fcd?w=200&h=200&fit=crop', skuCode: '1004', stock: 0 },
+  { id: '5', name: '麻辣火锅底料', price: 45, category: '中式正餐', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=200&h=200&fit=crop', skuCode: '2001', stock: 200 },
+  { id: '6', name: '经典牛肉汉堡', price: 32, category: '西式快餐', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop', skuCode: '3001', stock: 50 },
+  { id: '7', name: '提拉米苏蛋糕', price: 38, category: '烘焙甜品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1571115177098-24ec42ed204d?w=200&h=200&fit=crop', skuCode: '4001', stock: 15 },
+  { id: '8', name: '精品挂耳咖啡', price: 59, category: '零售商品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=200&h=200&fit=crop', skuCode: '5001', stock: 500 },
+  // 新增 Mock 数据以覆盖更多场景
+  { id: '9', name: '季节限定樱花拿铁', price: 35, category: '现制饮品', status: 'off_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=200&h=200&fit=crop', skuCode: '1005', stock: 100 }, // 已下架
+  { id: '10', name: '超值双人套餐', price: 88, category: '西式快餐', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=200&h=200&fit=crop', skuCode: '3002', stock: 20, type: 'combo' }, // 套餐
+  { id: '11', name: '库存紧张示例商品', price: 15, category: '零售商品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1584736286279-4a858e984928?w=200&h=200&fit=crop', skuCode: '5002', stock: 5, isMultiSpec: true, specs: [{name: '小', stock: 2}, {name: '大', stock: 3}] }, // 库存紧张
 ];

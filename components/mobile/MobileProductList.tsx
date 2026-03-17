@@ -79,6 +79,8 @@ export const MobileProductList: React.FC<Props> = ({
     const [showChannelSheet, setShowChannelSheet] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('全部');
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState<'all' | 'on_shelf' | 'off_shelf' | 'sold_out'>('all');
+    const [showFilterSheet, setShowFilterSheet] = useState(false);
     
     // Local State for Modals
     const [editModal, setEditModal] = useState<{ show: boolean, type: 'stock' | 'price', item: any } | null>(null);
@@ -91,9 +93,20 @@ export const MobileProductList: React.FC<Props> = ({
             if (selectedCategory !== '全部' && p.category !== selectedCategory && 
                 !CATEGORIES.find(c => c === selectedCategory && p.category.includes(c))) return false;
             if (searchQuery && !p.name.includes(searchQuery) && !p.skuCode.includes(searchQuery)) return false;
+            
+            // 状态筛选逻辑
+            if (filterType !== 'all') {
+                const isOffShelf = p.status === 'off_shelf';
+                const isSoldOut = p.stockStatus === 'sold_out';
+                
+                if (filterType === 'on_shelf' && isOffShelf) return false;
+                if (filterType === 'off_shelf' && !isOffShelf) return false;
+                if (filterType === 'sold_out' && !isSoldOut) return false;
+            }
+            
             return true;
         });
-    }, [products, selectedCategory, searchQuery, activeChannel]);
+    }, [products, selectedCategory, searchQuery, activeChannel, filterType]);
 
     // --- Helpers ---
     const getProductChannelStatus = (productId: string, channel: ChannelType, globalStatus: string) => {
@@ -148,7 +161,7 @@ export const MobileProductList: React.FC<Props> = ({
             <div className="px-4 py-3 flex items-center space-x-2 bg-white shrink-0">
                 <div onClick={() => setShowChannelSheet(true)} className="flex items-center bg-gray-100 pl-3 pr-2 py-2 rounded-lg cursor-pointer active:bg-gray-200 transition-colors"><span className="text-xs font-bold text-gray-700 mr-1 whitespace-nowrap">{ALL_CHANNELS_DEF.find(c => c.id === activeChannel)?.label.slice(0,4)}</span><ChevronDown size={12} className="text-gray-500"/></div>
                 <div className="flex-1 relative bg-gray-100 rounded-lg overflow-hidden"><Search className="absolute left-3 top-2.5 text-gray-400" size={16}/><input className="w-full pl-9 pr-4 py-2 bg-transparent text-sm outline-none placeholder:text-gray-400" placeholder="搜索商品..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}/></div>
-                <button className="p-2 bg-gray-100 rounded-lg text-gray-600 hover:text-black"><Filter size={18}/></button>
+                <button onClick={() => setShowFilterSheet(true)} className={`p-2 rounded-lg text-gray-600 hover:text-black transition-colors ${filterType !== 'all' ? 'bg-[#00C06B]/10 text-[#00C06B]' : 'bg-gray-100'}`}><Filter size={18}/></button>
             </div>
 
             {/* List */}
@@ -161,20 +174,74 @@ export const MobileProductList: React.FC<Props> = ({
                         const isSelected = selectedIds.has(product.id);
                         let statusLabel = ''; let statusColor = ''; let isOffShelf = false; let showPartial = false; let hideBadge = false;
                         if (activeChannel === 'all') {
-                            if (isShelvesUnited) { isOffShelf = product.status === 'off_shelf'; hideBadge = true; } else { const aggStatus = getAggregatedShelfStatus(product.id, product.status); if (aggStatus === 'mixed') { statusLabel = '部分上架'; statusColor = 'text-orange-600 border-orange-200 bg-orange-50'; showPartial = true; } else if (aggStatus === 'all_off') { isOffShelf = true; hideBadge = true; } else { hideBadge = true; } }
-                        } else { const chStatus = getProductChannelStatus(product.id, activeChannel, product.status); isOffShelf = chStatus === 'off_shelf'; statusLabel = isOffShelf ? '已下架' : '已上架'; }
-                        const isSoldOut = product.stockStatus === 'sold_out';
+                            if (isShelvesUnited) { 
+                                isOffShelf = product.status === 'off_shelf'; 
+                                hideBadge = !isOffShelf; 
+                                if (isOffShelf) { statusLabel = '已下架'; statusColor = 'text-gray-500 border-gray-200 bg-gray-100'; }
+                            } else { 
+                                const aggStatus = getAggregatedShelfStatus(product.id, product.status); 
+                                if (aggStatus === 'mixed') { 
+                                    statusLabel = '部分上架'; statusColor = 'text-orange-600 border-orange-200 bg-orange-50'; showPartial = true; 
+                                } else if (aggStatus === 'all_off') { 
+                                    isOffShelf = true; statusLabel = '已下架'; statusColor = 'text-gray-500 border-gray-200 bg-gray-100'; 
+                                } else { 
+                                    hideBadge = true; 
+                                } 
+                            }
+                        } else { 
+                            const chStatus = getProductChannelStatus(product.id, activeChannel, product.status); 
+                            isOffShelf = chStatus === 'off_shelf'; 
+                            statusLabel = isOffShelf ? '已下架' : '已上架'; 
+                            statusColor = isOffShelf ? 'text-gray-500 border-gray-200 bg-gray-100' : 'text-green-600 border-green-200 bg-green-50';
+                            hideBadge = !isOffShelf;
+                        }
+                        const isSoldOut = product.stockStatus === 'sold_out' || product.stock === 0;
                         const isMultiSpec = product.isMultiSpec;
+                        const isUnlimitedStock = product.stock === -1;
+
+                        // 优先级覆盖：下架 > 售罄 > 部分售罄
+                        if (!isOffShelf) {
+                            if (isSoldOut) {
+                                statusLabel = '已售罄';
+                                statusColor = 'text-red-600 border-red-200 bg-red-50';
+                                hideBadge = false;
+                            } else if (isMultiSpec && product.stock !== -1 && (product.stock ?? 0) < 20) {
+                                // 模拟部分规格售罄或库存紧张 (Mock逻辑)
+                                statusLabel = '库存紧张';
+                                statusColor = 'text-orange-600 border-orange-200 bg-orange-50';
+                                hideBadge = false;
+                            }
+                        }
 
                         return (
-                            <div key={product.id} onClick={() => isBatchMode && onToggleSelection(product.id)} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'}`}>
+                            <div key={product.id} onClick={() => isBatchMode && onToggleSelection(product.id)} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'} ${isOffShelf ? 'opacity-75 grayscale-[0.5]' : ''}`}>
                                 <div className="flex">
-                                    <div className="w-20 h-20 rounded-lg bg-gray-100 shrink-0 mr-3 relative overflow-hidden"><img src={product.image} className="w-full h-full object-cover" alt={product.name}/>{isOffShelf && !showPartial && (<div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-white text-[10px] font-bold border border-white px-1.5 py-0.5 rounded">已下架</span></div>)}</div>
+                                    <div className="w-20 h-20 rounded-lg bg-gray-100 shrink-0 mr-3 relative overflow-hidden">
+                                        <img src={product.image} className="w-full h-full object-cover" alt={product.name}/>
+                                        {!hideBadge && (
+                                            <div className={`absolute top-0 left-0 px-1.5 py-0.5 rounded-br-lg text-[9px] font-bold border-r border-b shadow-sm z-10 ${statusColor.replace('text-', 'bg-').replace('border-', 'border-transparent ').split(' ')[0]} text-white`}>
+                                                {statusLabel}
+                                            </div>
+                                        )}
+                                        {isOffShelf && !showPartial && (<div className="absolute inset-0 bg-black/10 flex items-center justify-center"></div>)}
+                                    </div>
                                     <div className="flex-1 min-w-0 flex flex-col justify-between">
-                                        <div><div className="flex justify-between items-start"><h4 className="text-sm font-bold text-gray-800 line-clamp-1 flex-1">{product.name}</h4>{(!hideBadge && activeChannel === 'all') && (<span className={`text-[9px] px-1.5 py-0.5 rounded border ml-2 whitespace-nowrap ${statusColor}`}>{statusLabel}</span>)}</div><div className="flex flex-wrap gap-1 mt-1"><span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[9px] font-bold">标准</span>{product.type === 'combo' && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[9px] font-bold">套餐</span>}{isMultiSpec && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-[9px] font-bold ml-1">多规格</span>}</div></div>
+                                        <div>
+                                            <div className="flex justify-between items-start">
+                                                <h4 className={`text-sm font-bold line-clamp-1 flex-1 ${isOffShelf ? 'text-gray-500' : 'text-gray-800'}`}>{product.name}</h4>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[9px] font-bold">标准</span>
+                                                {product.type === 'combo' && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[9px] font-bold">套餐</span>}
+                                                {isMultiSpec && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-[9px] font-bold ml-1">多规格</span>}
+                                            </div>
+                                        </div>
                                         {activeChannel === 'all' && (<div className="flex items-center gap-1.5 mt-2" onClick={(e) => { e.stopPropagation(); setShelfManageItem(product); }}>{ALL_CHANNELS_DEF.filter(c => c.id !== 'all').map(ch => { const status = getProductChannelStatus(product.id, ch.id, product.status); const isOn = status === 'on_shelf'; const isUnmapped = status === 'unmapped'; return (<div key={ch.id} className={`flex items-center justify-center w-6 h-6 rounded-full border transition-all ${isUnmapped ? 'bg-gray-50 border-gray-300 border-dashed text-gray-400' : isOn ? `${ch.id === 'pos' ? 'bg-blue-50 border-blue-100 text-blue-600' : ch.id === 'mini' ? 'bg-green-50 border-green-100 text-green-600' : ch.id === 'meituan' ? 'bg-yellow-50 border-yellow-100 text-yellow-600' : 'bg-orange-50 border-orange-100 text-orange-600'}` : 'bg-gray-100 border-gray-200 text-gray-400 grayscale'}`}>{isUnmapped ? <Link2Off size={10}/> : <span className="scale-75">{ch.icon}</span>}</div>); })}</div>)}
                                         <div className="flex items-center justify-between mt-auto pt-1">
-                                            <div className="font-mono text-base font-black text-[#1F2129]"><span className="text-xs mr-0.5">¥</span>{product.price}</div>
+                                            <div className={`font-mono text-base font-black ${isOffShelf ? 'text-gray-400' : 'text-[#1F2129]'}`}>
+                                                <span className="text-xs mr-0.5">¥</span>
+                                                {isMultiSpec ? `${product.price} 起` : product.price}
+                                            </div>
                                             
                                             {/* 根据渠道视图和规格类型显示库存 */}
                                             {activeChannel === 'all' ? (
@@ -184,7 +251,9 @@ export const MobileProductList: React.FC<Props> = ({
                                                     isMultiSpec ? (
                                                         <button onClick={(e) => { e.stopPropagation(); setSpecInventoryItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">查看规格库存 <ChevronRight size={10} className="ml-0.5"/></button>
                                                     ) : (
-                                                        <div className="flex items-center bg-blue-50 px-2 py-1 rounded text-[10px] font-bold text-blue-600 border border-blue-100">库存 {product.stock === -1 ? '9999' : (product.stock ?? 100)}</div>
+                                                        <div className={`flex items-center px-2 py-1 rounded text-[10px] font-bold border ${isSoldOut ? 'bg-red-50 text-red-500 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                            {isSoldOut ? '已售罄' : (isUnlimitedStock ? '无限库存' : `库存 ${product.stock}`)}
+                                                        </div>
                                                     )
                                                 )
                                             ) : (
@@ -194,7 +263,7 @@ export const MobileProductList: React.FC<Props> = ({
                                                     isSoldOut ? (
                                                         <div className="flex items-center bg-red-50 px-2 py-1 rounded text-[10px] font-bold text-red-500 border border-red-100">已售罄</div>
                                                     ) : (
-                                                        <div className="flex items-center bg-blue-50 px-2 py-1 rounded text-[10px] font-bold text-blue-600 border border-blue-100">库存 {product.stock === -1 ? '9999' : (product.stock ?? 100)}</div>
+                                                        <div className="flex items-center bg-blue-50 px-2 py-1 rounded text-[10px] font-bold text-blue-600 border border-blue-100">{isUnlimitedStock ? '无限库存' : `库存 ${product.stock}`}</div>
                                                     )
                                                 )
                                             )}
@@ -260,6 +329,31 @@ export const MobileProductList: React.FC<Props> = ({
 
             {showChannelSheet && (<div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in"><div onClick={() => setShowChannelSheet(false)} className="flex-1"></div><div className="bg-white rounded-t-[24px] p-4 animate-in slide-in-from-bottom duration-300"><div className="flex justify-between items-center mb-4 px-2"><span className="font-black text-lg text-[#1F2129]">切换渠道视角</span><button onClick={() => setShowChannelSheet(false)} className="bg-gray-100 p-1.5 rounded-full"><X size={16}/></button></div><div className="grid grid-cols-2 gap-3 mb-6">{ALL_CHANNELS_DEF.map(ch => (<div key={ch.id} onClick={() => { setActiveChannel(ch.id); setShowChannelSheet(false); }} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${activeChannel === ch.id ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100 bg-white'}`}><div className={`mr-3 ${activeChannel === ch.id ? 'text-[#00C06B]' : 'text-gray-400'}`}>{ch.icon}</div><span className={`text-sm font-bold ${activeChannel === ch.id ? 'text-[#00C06B]' : 'text-gray-600'}`}>{ch.label}</span>{activeChannel === ch.id && <Check size={16} className="ml-auto text-[#00C06B]"/>}</div>))}</div></div></div>)}
             
+            {showFilterSheet && (
+                <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in">
+                    <div onClick={() => setShowFilterSheet(false)} className="flex-1"></div>
+                    <div className="bg-white rounded-t-[24px] p-5 animate-in slide-in-from-bottom duration-300">
+                        <div className="flex justify-between items-center mb-5">
+                            <h3 className="text-lg font-black text-[#1F2129]">筛选商品</h3>
+                            <button onClick={() => setShowFilterSheet(false)} className="bg-gray-100 p-1.5 rounded-full"><X size={18}/></button>
+                        </div>
+                        <div className="mb-6">
+                            <div className="text-sm font-bold text-gray-800 mb-3">售卖状态</div>
+                            <div className="grid grid-cols-4 gap-3">
+                                <div onClick={() => setFilterType('all')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'all' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>全部</div>
+                                <div onClick={() => setFilterType('on_shelf')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'on_shelf' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>仅在售</div>
+                                <div onClick={() => setFilterType('sold_out')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'sold_out' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>已售罄</div>
+                                <div onClick={() => setFilterType('off_shelf')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'off_shelf' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>已下架</div>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                            <button onClick={() => setFilterType('all')} className="flex-1 py-3.5 bg-gray-100 text-gray-600 font-bold rounded-xl active:bg-gray-200">重置</button>
+                            <button onClick={() => setShowFilterSheet(false)} className="flex-[2] py-3.5 bg-[#1F2129] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform">查看结果</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {editModal && (<div className="absolute inset-0 bg-black/50 z-50 flex flex-col justify-end animate-in fade-in duration-200"><div onClick={() => setEditModal(null)} className="flex-1"></div>{editModal.type === 'price' ? (<MobilePriceEditor product={editModal.item} activeChannel={activeChannel} onClose={() => setEditModal(null)} onConfirm={handlePriceConfirm} />) : (<ClearanceModal item={editModal.item} onClose={() => setEditModal(null)} activeChannel={activeChannel} isStockShared={isStockShared}/>)}</div>)}
             {shelfManageItem && (<ShelfManagementModal item={shelfManageItem} onClose={() => setShelfManageItem(null)} isShelvesUnited={isShelvesUnited} getProductChannelStatus={getProductChannelStatus} />)}
             {stockManageItem && (<div className="absolute inset-0 bg-black/60 z-[60] flex flex-col justify-end animate-in fade-in"><div onClick={() => setStockManageItem(null)} className="flex-1"></div><div className="bg-white rounded-t-[24px] overflow-hidden animate-in slide-in-from-bottom flex flex-col max-h-[85vh]"><div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0"><div><h3 className="text-lg font-black text-[#1F2129]">多渠道库存管理</h3><p className="text-xs text-gray-400 mt-0.5">{stockManageItem.name}</p></div><button onClick={() => setStockManageItem(null)} className="bg-white p-1.5 rounded-full text-gray-500 shadow-sm"><X size={18}/></button></div><div className="p-5 space-y-4 overflow-y-auto no-scrollbar"><div className="bg-orange-50 text-orange-700 px-3 py-2.5 rounded-lg text-xs font-medium flex items-start leading-relaxed"><AlertTriangle size={14} className="mr-2 mt-0.5 shrink-0"/><div>当前为独立库存模式，餐饮商品通常为无限库存，如需限制售卖数量（沽清），请使用“沽清”功能。</div></div>{stockManageItem.isMultiSpec ? (

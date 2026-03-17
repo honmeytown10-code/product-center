@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronDown, Search, Filter, Link2Off, Printer, Smartphone, Store, ShoppingBag, ChevronRight, CheckCircle2, Circle, List, Plus, X, Check, Delete, Clock, AlertTriangle, Coffee } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Search, Filter, Link2Off, Printer, Smartphone, Store, ShoppingBag, ChevronRight, CheckCircle2, Circle, List, Plus, X, Check, Delete, Clock, AlertTriangle, Coffee, Edit2 } from 'lucide-react';
 import { Product, CATEGORIES } from '../../types';
 import { ChannelType } from './types';
 import { BatchActionType } from './MobileBatchComponents';
@@ -20,6 +20,7 @@ interface Props {
   // Context Actions
   toggleShelfStatus: (id: string) => void;
   onUpdateProduct?: (id: string, updates: Partial<Product>) => void; // Added updater prop
+  onEditProduct?: (product: Product) => void; // Added edit prop
   isStockShared: boolean;
   isShelvesUnited: boolean;
 }
@@ -73,13 +74,14 @@ const SpecInventoryModal = ({ product, onClose }: { product: Product, onClose: (
 export const MobileProductList: React.FC<Props> = ({ 
     products, isBatchMode, selectedIds, batchActionType, onToggleSelection, onSelectAll, 
     onBack, onNavigate, onBatchModeToggle, activeOrgType,
-    toggleShelfStatus, onUpdateProduct, isStockShared, isShelvesUnited
+    toggleShelfStatus, onUpdateProduct, onEditProduct, isStockShared, isShelvesUnited
 }) => {
     const [activeChannel, setActiveChannel] = useState<ChannelType>('all');
     const [showChannelSheet, setShowChannelSheet] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('全部');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState<'all' | 'on_shelf' | 'off_shelf' | 'sold_out'>('all');
+    const [productTypeFilter, setProductTypeFilter] = useState<'all' | 'standard' | 'combo'>('all');
     const [showFilterSheet, setShowFilterSheet] = useState(false);
     
     // Local State for Modals
@@ -103,10 +105,16 @@ export const MobileProductList: React.FC<Props> = ({
                 if (filterType === 'off_shelf' && !isOffShelf) return false;
                 if (filterType === 'sold_out' && !isSoldOut) return false;
             }
+
+            // 类型筛选逻辑
+            if (productTypeFilter !== 'all') {
+                const pType = p.type || 'standard'; // 兼容老数据，默认standard
+                if (productTypeFilter !== pType) return false;
+            }
             
             return true;
         });
-    }, [products, selectedCategory, searchQuery, activeChannel, filterType]);
+    }, [products, selectedCategory, searchQuery, activeChannel, filterType, productTypeFilter]);
 
     // --- Helpers ---
     const getProductChannelStatus = (productId: string, channel: ChannelType, globalStatus: string) => {
@@ -161,7 +169,7 @@ export const MobileProductList: React.FC<Props> = ({
             <div className="px-4 py-3 flex items-center space-x-2 bg-white shrink-0">
                 <div onClick={() => setShowChannelSheet(true)} className="flex items-center bg-gray-100 pl-3 pr-2 py-2 rounded-lg cursor-pointer active:bg-gray-200 transition-colors"><span className="text-xs font-bold text-gray-700 mr-1 whitespace-nowrap">{ALL_CHANNELS_DEF.find(c => c.id === activeChannel)?.label.slice(0,4)}</span><ChevronDown size={12} className="text-gray-500"/></div>
                 <div className="flex-1 relative bg-gray-100 rounded-lg overflow-hidden"><Search className="absolute left-3 top-2.5 text-gray-400" size={16}/><input className="w-full pl-9 pr-4 py-2 bg-transparent text-sm outline-none placeholder:text-gray-400" placeholder="搜索商品..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}/></div>
-                <button onClick={() => setShowFilterSheet(true)} className={`p-2 rounded-lg text-gray-600 hover:text-black transition-colors ${filterType !== 'all' ? 'bg-[#00C06B]/10 text-[#00C06B]' : 'bg-gray-100'}`}><Filter size={18}/></button>
+                <button onClick={() => setShowFilterSheet(true)} className={`p-2 rounded-lg text-gray-600 hover:text-black transition-colors ${(filterType !== 'all' || productTypeFilter !== 'all') ? 'bg-[#00C06B]/10 text-[#00C06B]' : 'bg-gray-100'}`}><Filter size={18}/></button>
             </div>
 
             {/* List */}
@@ -214,7 +222,13 @@ export const MobileProductList: React.FC<Props> = ({
                         }
 
                         return (
-                            <div key={product.id} onClick={() => isBatchMode && onToggleSelection(product.id)} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'} ${isOffShelf ? 'opacity-75 grayscale-[0.5]' : ''}`}>
+                            <div key={product.id} onClick={() => {
+                                if (isBatchMode) {
+                                    onToggleSelection(product.id);
+                                } else if (onEditProduct) {
+                                    onEditProduct(product);
+                                }
+                            }} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'} ${isOffShelf ? 'opacity-75 grayscale-[0.5]' : ''} ${!isBatchMode ? 'cursor-pointer active:scale-[0.98]' : ''}`}>
                                 <div className="flex">
                                     <div className="w-20 h-20 rounded-lg bg-gray-100 shrink-0 mr-3 relative overflow-hidden">
                                         <img src={product.image} className="w-full h-full object-cover" alt={product.name}/>
@@ -229,6 +243,11 @@ export const MobileProductList: React.FC<Props> = ({
                                         <div>
                                             <div className="flex justify-between items-start">
                                                 <h4 className={`text-sm font-bold line-clamp-1 flex-1 ${isOffShelf ? 'text-gray-500' : 'text-gray-800'}`}>{product.name}</h4>
+                                                {!isBatchMode && (
+                                                    <div className="flex items-center text-gray-300 ml-2">
+                                                        <ChevronRight size={16} />
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex flex-wrap gap-1 mt-1">
                                                 <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[9px] font-bold">标准</span>
@@ -337,17 +356,30 @@ export const MobileProductList: React.FC<Props> = ({
                             <h3 className="text-lg font-black text-[#1F2129]">筛选商品</h3>
                             <button onClick={() => setShowFilterSheet(false)} className="bg-gray-100 p-1.5 rounded-full"><X size={18}/></button>
                         </div>
-                        <div className="mb-6">
-                            <div className="text-sm font-bold text-gray-800 mb-3">售卖状态</div>
-                            <div className="grid grid-cols-4 gap-3">
-                                <div onClick={() => setFilterType('all')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'all' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>全部</div>
-                                <div onClick={() => setFilterType('on_shelf')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'on_shelf' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>仅在售</div>
-                                <div onClick={() => setFilterType('sold_out')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'sold_out' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>已售罄</div>
-                                <div onClick={() => setFilterType('off_shelf')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'off_shelf' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>已下架</div>
+                        
+                        <div className="mb-6 space-y-6">
+                            <div>
+                                <div className="text-sm font-bold text-gray-800 mb-3">售卖状态</div>
+                                <div className="grid grid-cols-4 gap-3">
+                                    <div onClick={() => setFilterType('all')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'all' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>全部</div>
+                                    <div onClick={() => setFilterType('on_shelf')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'on_shelf' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>仅在售</div>
+                                    <div onClick={() => setFilterType('sold_out')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'sold_out' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>已售罄</div>
+                                    <div onClick={() => setFilterType('off_shelf')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${filterType === 'off_shelf' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>已下架</div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <div className="text-sm font-bold text-gray-800 mb-3">商品类型</div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div onClick={() => setProductTypeFilter('all')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${productTypeFilter === 'all' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>全部</div>
+                                    <div onClick={() => setProductTypeFilter('standard')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${productTypeFilter === 'standard' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>标准商品</div>
+                                    <div onClick={() => setProductTypeFilter('combo')} className={`text-center py-2.5 rounded-xl text-xs font-bold transition-all ${productTypeFilter === 'combo' ? 'bg-[#00C06B] text-white shadow-lg shadow-green-100' : 'bg-gray-100 text-gray-600'}`}>套餐商品</div>
+                                </div>
                             </div>
                         </div>
+
                         <div className="flex gap-4">
-                            <button onClick={() => setFilterType('all')} className="flex-1 py-3.5 bg-gray-100 text-gray-600 font-bold rounded-xl active:bg-gray-200">重置</button>
+                            <button onClick={() => { setFilterType('all'); setProductTypeFilter('all'); }} className="flex-1 py-3.5 bg-gray-100 text-gray-600 font-bold rounded-xl active:bg-gray-200">重置</button>
                             <button onClick={() => setShowFilterSheet(false)} className="flex-[2] py-3.5 bg-[#1F2129] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform">查看结果</button>
                         </div>
                     </div>

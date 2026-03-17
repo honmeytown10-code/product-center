@@ -17,9 +17,10 @@ import { MobileProductTools } from './mobile/MobileProductTools';
 import { MobileBrandProductTools } from './mobile/MobileBrandProductTools';
 import { MobileProductSorter } from './mobile/MobileProductSorter';
 import { MobileCategorySorter } from './mobile/MobileCategorySorter';
+import { MobileProductEditor } from './mobile/MobileProductEditor';
 import { BatchOperationSelect, BatchConfigStep, BatchActionMenu, BatchActionType, BatchStep } from './mobile/MobileBatchComponents';
 
-type Screen = 'dashboard' | 'product_tools' | 'brand_product_tools' | 'product_list' | 'product_create' | 'category_list' | 'addon_list' | 'addon_type_list' | 'method_list' | 'spec_list' | 'combo_list' | 'batch_operation_select' | 'batch_config' | 'product_sort' | 'category_sort';
+type Screen = 'dashboard' | 'product_tools' | 'brand_product_tools' | 'product_list' | 'product_create' | 'product_edit' | 'category_list' | 'addon_list' | 'addon_type_list' | 'method_list' | 'spec_list' | 'combo_list' | 'batch_operation_select' | 'batch_config' | 'product_sort' | 'category_sort';
 type OrgType = 'brand' | 'region' | 'store';
 
 interface OrgNode {
@@ -57,6 +58,7 @@ export const MobileApp: React.FC = () => {
   const [activeOrg, setActiveOrg] = useState<OrgNode>(ORG_TREE[0].children![0].children![0]); 
   const [showOrgSelector, setShowOrgSelector] = useState(false);
   const [returnScreen, setReturnScreen] = useState<Screen>('dashboard');
+  const [editingProduct, setEditingProduct] = useState<any>(null);
 
   // Batch Mode State (Shared between List and Batch Screens)
   const [isBatchMode, setIsBatchMode] = useState(false);
@@ -247,6 +249,10 @@ export const MobileApp: React.FC = () => {
                         activeOrgType={activeOrg.type}
                         toggleShelfStatus={toggleShelfStatus}
                         onUpdateProduct={updateProduct}
+                        onEditProduct={(p) => {
+                            setEditingProduct(p);
+                            navigateTo('product_edit', 'product_list');
+                        }}
                         isStockShared={isStockShared}
                         isShelvesUnited={isShelvesUnited}
                     />
@@ -270,6 +276,8 @@ export const MobileApp: React.FC = () => {
             );
           case 'product_create': 
             return <MobileProductCreator onBack={() => setCurrentScreen(returnScreen)} categories={categories} />;
+          case 'product_edit':
+            return <MobileProductEditor product={editingProduct} onBack={() => setCurrentScreen('product_list')} categories={categories} />;
           case 'category_list': 
             return <MobileCategoryManager onBack={() => setCurrentScreen(returnScreen)} />;
           case 'addon_list':

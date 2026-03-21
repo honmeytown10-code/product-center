@@ -12,6 +12,8 @@ import { WebCategoryManager } from './web/WebCategoryManager';
 import { WebImportModal, WebCategorySelectModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
 import { WebComboProductForm } from './web/WebComboProductForm';
+import { WebRecipeManager } from './web/WebRecipeManager'; 
+import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
 
 // Extended Category type for Web Admin local state
 export interface WebCategory extends Category {
@@ -63,7 +65,7 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
 export const WebAdmin: React.FC = () => {
   // Navigation State
   const [activeMenu, setActiveMenu] = useState('product_list');
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['product_archives', 'store_products']); // Expanded 'store_products' by default for visibility
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['product_archives', 'store_products', 'recipe_management']); // Expanded 'store_products' and 'recipe_management' by default
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -118,6 +120,14 @@ export const WebAdmin: React.FC = () => {
                 onDelete={deleteWebCategory}
              />
           );
+      }
+
+      if (activeMenu === 'recipe_default') {
+          return <WebRecipeManager onNavigate={(path) => setActiveMenu(path)} />;
+      }
+
+      if (activeMenu === 'addon_group') {
+          return <WebAddonGroupManager onBack={() => setActiveMenu('recipe_default')} />;
       }
 
       // Default: Product List
@@ -221,6 +231,24 @@ export const WebAdmin: React.FC = () => {
                     <SidebarItem label="门店做法" />
                     <SidebarItem label="门店区域" />
                     <SidebarItem label="必选商品" />
+                 </div>
+              )}
+           </div>
+
+           {/* Recipe Management Group */}
+           <div className="mb-1">
+              <div 
+                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
+                 onClick={() => toggleMenu('recipe_management')}
+              >
+                 <span className="font-bold">配方管理</span>
+                 {expandedMenus.includes('recipe_management') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+              </div>
+              {expandedMenus.includes('recipe_management') && (
+                 <div className="mt-1 space-y-0.5">
+                    <SidebarItem label="配料库" />
+                    <SidebarItem label="商品配方" />
+                    <SidebarItem label="新商品配方" active={activeMenu === 'recipe_default' || activeMenu === 'addon_group'} onClick={() => { setActiveMenu('recipe_default'); setCreationContext(null); }} />
                  </div>
               )}
            </div>

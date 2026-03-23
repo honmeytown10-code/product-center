@@ -25,6 +25,10 @@ interface LocalAddon {
   channels: Record<ChannelType, 'on_shelf' | 'off_shelf' | 'unmapped'>;
   channelStocks?: Record<ChannelType, number>;
   isIndependent?: boolean;
+  independentCategory?: string;
+  packageSurcharge?: string;
+  noPackageRestriction?: 'same_item' | 'any_item';
+  independentDetails?: string;
 }
 
 interface Props {
@@ -637,6 +641,41 @@ const AddonForm = ({ initialItem, onBack, onSave }: { initialItem?: LocalAddon |
                                     <span className="text-sm font-bold text-gray-700">独立售卖</span>
                                     <SwitchRow active={form.isIndependent || false} onClick={() => updateForm('isIndependent', !form.isIndependent)} />
                                 </div>
+                                {form.isIndependent && (
+                                    <div className="space-y-4 pl-4 border-l-[3px] border-[#00C06B] animate-in slide-in-from-top-2">
+                                        <div className="flex flex-col space-y-2">
+                                            <label className="text-xs font-bold text-gray-500">独立售卖分类</label>
+                                            <div className="relative">
+                                                <select 
+                                                    value={form.independentCategory || '默认类型'} 
+                                                    onChange={e => updateForm('independentCategory', e.target.value)}
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-[#00C06B] transition-colors appearance-none pr-10"
+                                                >
+                                                    {MOCK_CATEGORIES.slice(1).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                </select>
+                                                <ChevronRight size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        <Input label="分装加价 (元)" type="number" value={form.packageSurcharge} onChange={(v: string) => updateForm('packageSurcharge', v)} placeholder="0.00"/>
+                                        <div className="flex flex-col space-y-2">
+                                            <div className="flex flex-col">
+                                                <label className="text-xs font-bold text-gray-500">不分装限制</label>
+                                                <span className="text-[10px] text-gray-400 mt-0.5 leading-snug">当用户选择加料不分装时，允许将加料添加到：</span>
+                                            </div>
+                                            <div className="flex flex-col space-y-3 mt-1 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                    <input type="radio" name="noPackageRestriction" checked={!form.noPackageRestriction || form.noPackageRestriction === 'same_item'} onChange={() => updateForm('noPackageRestriction', 'same_item')} className="w-4 h-4 accent-[#00C06B] shrink-0" />
+                                                    <span className="text-sm font-bold text-gray-700">购物车里有该加料的商品</span>
+                                                </label>
+                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                    <input type="radio" name="noPackageRestriction" checked={form.noPackageRestriction === 'any_item'} onChange={() => updateForm('noPackageRestriction', 'any_item')} className="w-4 h-4 accent-[#00C06B] shrink-0" />
+                                                    <span className="text-sm font-bold text-gray-700">购物车里任意一个商品</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {/* 独立售卖商品详情配置项已隐藏 */}
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between py-1">
                                     <span className="text-sm font-bold text-gray-700">是否打印</span>
                                     <SwitchRow active={true} onClick={() => {}} />

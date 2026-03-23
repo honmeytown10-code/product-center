@@ -13,7 +13,7 @@ type ImportStep = 'source' | 'analyzing' | 'review';
 
 const IMPORT_SOURCES: { id: ImportSource; name: string; icon: React.ReactNode; desc: string; color: string; disabled?: boolean; tag?: string }[] = [
   { id: 'local', name: '本地标准导入', icon: <FileSpreadsheet size={24}/>, desc: '按系统模板填写并导入', color: 'text-green-600 bg-green-50' },
-  { id: 'external', name: '三方平台导入', icon: <CloudUpload size={24}/>, desc: '自动识别美团/饿了么/淘宝等文件', color: 'text-blue-600 bg-blue-50', disabled: true, tag: '敬请期待' },
+  { id: 'external', name: '三方平台导入', icon: <CloudUpload size={24}/>, desc: '自动识别美团/饿了么/淘宝等文件', color: 'text-[#00C06B] bg-[#00C06B]/10', disabled: true, tag: '敬请期待' },
 ];
 
 export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -64,7 +64,7 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
         <div className="bg-white rounded-[24px] shadow-2xl w-[960px] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-start bg-white">
                 <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Database size={24}/></div>
+                    <div className="p-3 bg-[#00C06B]/10 text-[#00C06B] rounded-xl"><Database size={24}/></div>
                     <div><h3 className="text-xl font-black text-[#1F2129]">选择导入来源</h3><p className="text-xs text-gray-400 mt-0.5">我们将根据来源自动转换 Excel 格式，无需手动修改原始表头。</p></div>
                 </div>
                 <button onClick={onClose} className="bg-gray-100 p-2 rounded-full text-gray-500 hover:bg-gray-200 hover:text-[#333] transition-colors"><X size={20}/></button>
@@ -80,7 +80,7 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                             className={`
                                 relative rounded-[20px] p-5 flex items-center border-2 transition-all 
                                 ${source.disabled ? 'opacity-60 cursor-not-allowed border-transparent bg-white' : 'cursor-pointer hover:shadow-lg'}
-                                ${isSelected && !source.disabled ? 'bg-white border-blue-500 shadow-md ring-4 ring-blue-500/10' : 'bg-white border-transparent hover:border-gray-200 shadow-sm'}
+                                ${isSelected && !source.disabled ? 'bg-white border-[#00C06B] shadow-md ring-4 ring-[#00C06B]/10' : 'bg-white border-transparent hover:border-gray-200 shadow-sm'}
                             `}
                         >
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mr-4 transition-colors shrink-0 ${isSelected && !source.disabled ? source.color : 'bg-gray-100 text-gray-500'}`}>{source.icon}</div>
@@ -91,14 +91,14 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                                 </div>
                                 <div className="text-xs text-gray-400 leading-tight">{source.desc}</div>
                             </div>
-                            {isSelected && !source.disabled && (<div className="absolute top-3 right-3 text-blue-500"><CheckCircle2 size={20} fill="currentColor" className="text-white"/></div>)}
+                            {isSelected && !source.disabled && (<div className="absolute top-3 right-3 text-[#00C06B]"><CheckCircle2 size={20} fill="currentColor" className="text-white"/></div>)}
                         </div>
                     );
                     })}
                 </div>
-                <div className="flex gap-6 h-[420px]">
+                <div className="flex gap-6 min-h-[460px]">
                     <div className="w-[320px] bg-white rounded-[24px] p-8 border border-gray-100 shadow-sm flex flex-col">
-                        <h4 className="text-sm font-black text-gray-800 flex items-center mb-6"><Info size={16} className="mr-2 text-blue-500"/> 操作引导</h4>
+                        <h4 className="text-sm font-black text-gray-800 flex items-center mb-6"><Info size={16} className="mr-2 text-[#00C06B]"/> 操作引导</h4>
                         <div className="relative pl-6 space-y-8 flex-1">
                             <div className="absolute left-[9px] top-2 bottom-4 w-[2px] bg-gray-100"></div>
                             
@@ -111,11 +111,11 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                                 </p>
                                 {importSource === 'local' && (
                                     <div className="flex flex-col space-y-2 w-full">
-                                        <button className="flex items-center justify-center w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors group">
-                                            <FileSpreadsheet size={14} className="mr-2 text-gray-400 group-hover:text-blue-500"/> 下载标准商品模版
+                                        <button className="flex items-center justify-center w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:text-[#00C06B] hover:border-[#00C06B]/30 hover:bg-[#00C06B]/5 transition-colors group">
+                                            <FileSpreadsheet size={14} className="mr-2 text-gray-400 group-hover:text-[#00C06B]"/> 下载标准商品模版
                                         </button>
-                                        <button className="flex items-center justify-center w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:text-orange-600 hover:border-orange-200 hover:bg-orange-50 transition-colors group">
-                                            <FileText size={14} className="mr-2 text-gray-400 group-hover:text-orange-500"/> 下载套餐商品模版
+                                        <button className="flex items-center justify-center w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:text-[#00C06B] hover:border-[#00C06B]/30 hover:bg-[#00C06B]/5 transition-colors group">
+                                            <FileText size={14} className="mr-2 text-gray-400 group-hover:text-[#00C06B]"/> 下载套餐商品模版
                                         </button>
                                     </div>
                                 )}
@@ -137,14 +137,14 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                         </div>
                     </div>
                     <div 
-                        className="flex-1 bg-white rounded-[24px] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center relative hover:border-blue-400 hover:bg-blue-50/10 transition-all group cursor-pointer"
+                        className="flex-1 bg-white rounded-[24px] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center relative hover:border-[#00C06B]/50 hover:bg-[#00C06B]/5 transition-all group cursor-pointer"
                         onClick={handleStartAnalysis}
                     >
-                        <div className="w-64 h-64 bg-gray-50 rounded-[48px] flex items-center justify-center mb-6 group-hover:scale-105 transition-transform"><FileUp size={64} className="text-gray-300 group-hover:text-blue-500 transition-colors"/></div>
+                        <div className="w-64 h-64 bg-gray-50 rounded-[48px] flex items-center justify-center mb-6 group-hover:scale-105 transition-transform"><FileUp size={64} className="text-gray-300 group-hover:text-[#00C06B] transition-colors"/></div>
                         <h4 className="text-xl font-black text-gray-800 mb-2">上传已填写的标准数据</h4>
                         <p className="text-xs text-gray-400 mb-8">请确保已按照下载的模板格式填写。</p>
-                        <button className="px-10 py-3.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 flex items-center pointer-events-none">开始校验并导入 <ChevronRight size={16} className="ml-1"/></button>
-                        <div className="absolute inset-4 rounded-[20px] bg-blue-500/5 border-2 border-blue-500 border-dashed opacity-0 group-hover:opacity-100 pointer-events-none flex items-center justify-center transition-opacity"><span className="bg-white px-4 py-2 rounded-lg text-blue-600 font-bold text-sm shadow-sm">释放鼠标以上传</span></div>
+                        <button className="px-10 py-3.5 bg-[#00C06B] text-white rounded-xl text-sm font-bold shadow-xl shadow-[#00C06B]/20 hover:bg-[#00A35B] transition-all active:scale-95 flex items-center pointer-events-none">开始校验并导入 <ChevronRight size={16} className="ml-1"/></button>
+                        <div className="absolute inset-4 rounded-[20px] bg-[#00C06B]/5 border-2 border-[#00C06B] border-dashed opacity-0 group-hover:opacity-100 pointer-events-none flex items-center justify-center transition-opacity"><span className="bg-white px-4 py-2 rounded-lg text-[#00C06B] font-bold text-sm shadow-sm">释放鼠标以上传</span></div>
                     </div>
                 </div>
             </div>
@@ -218,9 +218,9 @@ export const WebCategorySelectModal = ({
                 
                 {/* Content */}
                 <div className="flex-1 p-8 bg-[#F8FAFB] overflow-y-auto no-scrollbar">
-                    <div className="flex items-start bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-                        <Info size={16} className="text-blue-500 mt-0.5 mr-2 shrink-0"/>
-                        <span className="text-sm text-blue-700 font-medium">请选择您要创建的商品类目，不同类目可管理不同的商品属性</span>
+                    <div className="flex items-start bg-[#00C06B]/5 border border-[#00C06B]/20 rounded-xl p-4 mb-6">
+                        <Info size={16} className="text-[#00C06B] mt-0.5 mr-2 shrink-0"/>
+                        <span className="text-sm text-[#00C06B] font-medium">请选择您要创建的商品类目，不同类目可管理不同的商品属性</span>
                     </div>
 
                     <div className="grid grid-cols-4 gap-4">

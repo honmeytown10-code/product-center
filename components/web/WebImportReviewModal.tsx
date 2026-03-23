@@ -195,7 +195,7 @@ export const WebImportReviewModal: React.FC<Props> = ({ onBack, onConfirm, onClo
                             label="新增前台分类" 
                             count={currentData.newCategories.length} 
                             icon={<Layers size={24}/>} 
-                            color="text-blue-600" bg="bg-blue-50"
+                            color="text-[#00C06B]" bg="bg-[#00C06B]/10"
                             onClick={() => setActiveTab('categories')}
                             active={activeTab === 'categories'}
                         />
@@ -322,7 +322,7 @@ const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => (
                         <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
                             <td className="px-6 py-3.5 font-bold text-gray-800">{row.name}</td>
                             <td className="px-6 py-3.5 text-gray-600">
-                                <span className={`px-2 py-0.5 rounded text-xs ${data.newCategories.includes(row.cat) ? 'bg-blue-50 text-blue-600 font-bold' : ''}`}>
+                                <span className={`px-2 py-0.5 rounded text-xs ${data.newCategories.includes(row.cat) ? 'bg-[#00C06B]/10 text-[#00C06B] font-bold' : ''}`}>
                                     {row.cat} {data.newCategories.includes(row.cat) && '(新)'}
                                 </span>
                             </td>
@@ -387,16 +387,16 @@ const CategoriesDetailView = ({ items }: { items: string[] }) => (
     <div className="flex-1 flex flex-col">
         <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 shrink-0">
             <h4 className="font-bold text-sm text-gray-800 flex items-center">
-                <Layers size={16} className="mr-2 text-blue-600"/>
+                <Layers size={16} className="mr-2 text-[#00C06B]"/>
                 新增前台分类列表
             </h4>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
             <div className="grid grid-cols-4 gap-4">
                 {items.map((cat, idx) => (
-                    <div key={idx} className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center justify-between hover:shadow-md transition-all">
-                        <span className="font-bold text-sm text-blue-900">{cat}</span>
-                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <div key={idx} className="bg-[#00C06B]/5 border border-[#00C06B]/20 rounded-xl p-4 flex items-center justify-between hover:shadow-md transition-all">
+                        <span className="font-bold text-sm text-[#00C06B]">{cat}</span>
+                        <div className="w-2 h-2 rounded-full bg-[#00C06B]"></div>
                     </div>
                 ))}
             </div>

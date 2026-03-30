@@ -9,6 +9,7 @@ import { SidebarItem } from './web/WebCommon';
 import { WebProductList } from './web/WebProductList';
 import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new component
 import { WebCategoryManager } from './web/WebCategoryManager';
+import { WebCategoryListManager } from './web/WebCategoryListManager';
 import { WebImportModal, WebCategorySelectModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
 import { WebComboProductForm } from './web/WebComboProductForm';
@@ -107,6 +108,10 @@ export const WebAdmin: React.FC = () => {
 
       if (activeMenu === 'store_product_list') {
           return <WebStoreProductList />;
+      }
+
+      if (activeMenu === 'categories') {
+          return <WebCategoryListManager />;
       }
 
       if (activeMenu === 'category_management') {

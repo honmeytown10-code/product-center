@@ -12,9 +12,12 @@ import { WebCategoryManager } from './web/WebCategoryManager';
 import { WebCategoryListManager } from './web/WebCategoryListManager';
 import { WebImportModal, WebCategorySelectModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
-import { WebComboProductForm } from './web/WebComboProductForm';
+import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
+import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
+
+import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
 // Extended Category type for Web Admin local state
 export interface WebCategory extends Category {
@@ -70,6 +73,7 @@ export const WebAdmin: React.FC = () => {
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [detailContext, setDetailContext] = useState<any>(null); // New detail context
   const [creationType, setCreationType] = useState<'standard' | 'combo' | null>(null); // Triggers Category Modal
   const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category } | null>(null); // Triggers Form Page
 
@@ -91,7 +95,7 @@ export const WebAdmin: React.FC = () => {
       if (creationContext) {
           if (creationContext.type === 'combo') {
               return (
-                  <WebComboProductForm 
+                  <WebComboProductFormV2 
                       category={creationContext.category} 
                       onClose={() => setCreationContext(null)} 
                   />
@@ -102,6 +106,15 @@ export const WebAdmin: React.FC = () => {
                   type={creationContext.type} 
                   category={creationContext.category} 
                   onClose={() => setCreationContext(null)} 
+              />
+          );
+      }
+
+      if (detailContext) {
+          return (
+              <WebProductDetail 
+                  product={detailContext} 
+                  onClose={() => setDetailContext(null)} 
               />
           );
       }
@@ -135,11 +148,16 @@ export const WebAdmin: React.FC = () => {
           return <WebAddonGroupManager onBack={() => setActiveMenu('recipe_default')} />;
       }
 
+      if (activeMenu === 'general_settings') {
+          return <WebGeneralSettings />;
+      }
+
       // Default: Product List
       return (
          <WebProductList 
             onCreateClick={setCreationType} 
             onImportClick={() => setIsImportModalOpen(true)} 
+            onViewDetail={(p: any) => setDetailContext(p)}
          />
       );
   };
@@ -258,6 +276,22 @@ export const WebAdmin: React.FC = () => {
               )}
            </div>
 
+           <div className="mb-1">
+              <div 
+                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
+                 onClick={() => toggleMenu('product_settings')}
+              >
+                 <span className="font-bold">商品设置</span>
+                 {expandedMenus.includes('product_settings') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+              </div>
+              {expandedMenus.includes('product_settings') && (
+                 <div className="mt-1 space-y-0.5">
+                    <SidebarItem label="通用设置" active={activeMenu === 'general_settings'} onClick={() => { setActiveMenu('general_settings'); setCreationContext(null); }} />
+                    <SidebarItem label="自定义属性" />
+                 </div>
+              )}
+           </div>
+
            <div className="mt-auto h-4"></div>
         </aside>
 
@@ -273,10 +307,13 @@ export const WebAdmin: React.FC = () => {
         <WebCategorySelectModal 
           type={creationType} 
           onClose={() => setCreationType(null)} 
-          categories={webCategories.filter(c => c.classification === creationType)} 
+          categories={webCategories} 
           onSelect={(category) => {
+              console.log("Category selected:", category, "for type:", creationType);
               setCreationType(null); // Close modal
-              setCreationContext({ type: creationType, category }); // Open full page form
+              setTimeout(() => {
+                  setCreationContext({ type: creationType, category }); // Open full page form
+              }, 0);
           }}
         />
       )}

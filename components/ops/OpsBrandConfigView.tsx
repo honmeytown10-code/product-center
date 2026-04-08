@@ -127,12 +127,10 @@ export const OpsBrandConfigView: React.FC = () => {
                             })}
                         </div>
                     </div>
-                    
-                    {/* New Channel Grouping Config Section */}
-                    <OpsChannelGroupingConfig 
-                        config={tempConfig} 
-                        onChange={(newConfig) => setTempConfig(newConfig)}
-                    />
+
+                    {/* We removed the Channel Grouping config from here, it is now in WebAdmin -> General Settings */}
+
+                    {/* We removed the POS Store Ops Config Section (SPU/SKU mode & Threshold) from here, it is now in WebAdmin -> General Settings */}
 
                     </section>
                 </div>

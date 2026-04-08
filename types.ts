@@ -62,6 +62,8 @@ export interface BrandConfig {
   };
   enableChannelGrouping?: boolean;
   channelGroups?: ChannelGroup[];
+  posStockoutMode?: 'spu' | 'sku'; // POS沽清模式 (SPU / SKU)
+  posStockoutWarningThreshold?: number; // POS已沽清列表预警阈值
 }
 
 export const MOCK_BRANDS = [
@@ -198,9 +200,9 @@ export interface Product {
   stockStatus: 'available' | 'sold_out';
   image: string;
   skuCode: string;
-  type: 'standard' | 'combo';
-  industryId: IndustryTemplateId;
-  createdTime: string;
+  type?: 'standard' | 'combo';
+  industryId?: IndustryTemplateId;
+  createdTime?: string;
   isCombo?: boolean;
   // 新增多规格支持
   isMultiSpec?: boolean;

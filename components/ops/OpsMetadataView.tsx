@@ -355,6 +355,30 @@ export const OpsMetadataView: React.FC = () => {
                         </div>
                         <div className="bg-white rounded-[32px] p-10 border border-gray-100 shadow-sm space-y-10 border-blue-200 ring-4 ring-blue-50/50">
                             
+                            {/* System Built-in */}
+                            <div className="flex flex-col space-y-4">
+                                <label className="text-[13px] font-black text-gray-700 flex items-center">
+                                    <span className="text-red-500 mr-1">*</span> 系统内置
+                                </label>
+                                <div className="flex items-center space-x-3">
+                                    <div 
+                                        onClick={() => setEditingField({...editingField, isDefaultField: true})}
+                                        className={`px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition-all border flex items-center ${editingField.isDefaultField ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                    >
+                                        {editingField.isDefaultField && <Check size={12} className="mr-1.5" strokeWidth={3}/>}
+                                        是
+                                    </div>
+                                    <div 
+                                        onClick={() => setEditingField({...editingField, isDefaultField: false})}
+                                        className={`px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition-all border flex items-center ${!editingField.isDefaultField ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                    >
+                                        {!editingField.isDefaultField && <Check size={12} className="mr-1.5" strokeWidth={3}/>}
+                                        否
+                                    </div>
+                                </div>
+                                <p className="text-[11px] font-bold text-gray-400 mt-1">开启后，新建类目时该字段将自动作为必选内置字段</p>
+                            </div>
+
                             {/* Applicable Categories */}
                             <div className="flex flex-col space-y-4">
                                 <label className="text-[13px] font-black text-gray-700 flex items-center">

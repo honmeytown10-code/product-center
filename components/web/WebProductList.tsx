@@ -15,7 +15,8 @@ const TAB_COUNTS = {
 export const WebProductList: React.FC<{ 
     onCreateClick: (type: 'standard' | 'combo') => void;
     onImportClick: () => void;
-}> = ({ onCreateClick, onImportClick }) => {
+    onViewDetail?: (product: any) => void;
+}> = ({ onCreateClick, onImportClick, onViewDetail }) => {
   const { products, categories } = useProducts();
   const [activeTab, setActiveTab] = useState<'all' | 'on_shelf' | 'off_shelf' | 'draft'>('on_shelf');
   const [searchQuery, setSearchQuery] = useState('');
@@ -184,7 +185,7 @@ export const WebProductList: React.FC<{
                             <td className="px-4 py-3 sticky right-0 bg-white group-hover:bg-[#F9FFFC] shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.05)]">
                                 <div className="flex items-center justify-center space-x-3 text-[#00C06B]">
                                 <button className="hover:underline font-medium hover:text-[#00A35B]">编辑</button>
-                                <button className="hover:underline font-medium hover:text-[#00A35B]">详情</button>
+                                <button className="hover:underline font-medium hover:text-[#00A35B]" onClick={() => onViewDetail?.(p)}>详情</button>
                                 <div className="relative group/more">
                                     <MoreHorizontal size={16} className="text-[#999] hover:text-[#00C06B] cursor-pointer"/>
                                 </div>

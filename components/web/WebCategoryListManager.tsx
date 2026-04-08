@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Search, Plus, Filter, ChevronRight, ChevronDown, Edit2, Info, ArrowRight, X, Minus, HelpCircle } from 'lucide-react';
-import { SwitchRow } from '../mobile/MobileCommon';
 
 interface DisplayCategory {
     id: string;
@@ -36,9 +35,6 @@ export const WebCategoryListManager: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCat, setEditingCat] = useState<DisplayCategory | null>(null);
     const [parentForNew, setParentForNew] = useState<DisplayCategory | null>(null);
-    
-    // Transfer confirm modal state
-    const [transferConfirm, setTransferConfirm] = useState<{parent: DisplayCategory, newSubName: string} | null>(null);
 
     const toggleExpand = (id: string) => {
         setExpandedIds(prev => {
@@ -50,37 +46,16 @@ export const WebCategoryListManager: React.FC = () => {
     };
 
     const handleCreateSub = (parent: DisplayCategory) => {
-        if (parent.productCount > 0 && (!parent.children || parent.children.length === 0)) {
-            // Trigger intercept
-            setParentForNew(parent);
-            setEditingCat(null);
-            setIsModalOpen(true);
-        } else {
-            // Normal create sub
-            setParentForNew(parent);
-            setEditingCat(null);
-            setIsModalOpen(true);
-        }
+        // No intercept needed, allow direct creation
+        setParentForNew(parent);
+        setEditingCat(null);
+        setIsModalOpen(true);
     };
 
     const handleSaveCategory = (data: any) => {
-        if (parentForNew && parentForNew.productCount > 0 && (!parentForNew.children || parentForNew.children.length === 0)) {
-            // Intercept and show transfer confirm
-            setTransferConfirm({ parent: parentForNew, newSubName: data.name });
-            setIsModalOpen(false);
-            return;
-        }
-
         // ... normal save logic (mocked)
         alert('保存成功');
         setIsModalOpen(false);
-    };
-
-    const handleConfirmTransfer = () => {
-        if (!transferConfirm) return;
-        alert(`已创建二级分类【${transferConfirm.newSubName}】，并将【${transferConfirm.parent.name}】下的 ${transferConfirm.parent.productCount} 个商品转移至该分类下。`);
-        setTransferConfirm(null);
-        // In real app, update local state here
     };
 
     const renderRow = (cat: DisplayCategory, level: number = 0) => {
@@ -227,33 +202,6 @@ export const WebCategoryListManager: React.FC = () => {
                         <div className="px-6 py-4 flex justify-end space-x-3 mt-4">
                             <button onClick={() => setIsModalOpen(false)} className="px-5 py-2 rounded text-[14px] text-[#666] bg-white border border-gray-200 hover:bg-gray-50 transition-colors">取消</button>
                             <button onClick={() => handleSaveCategory({ name: (document.getElementById('catNameInput') as HTMLInputElement).value })} className="px-5 py-2 rounded text-[14px] text-white bg-[#00C06B] hover:bg-[#00A35B] transition-colors">确定</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Transfer Confirm Modal (The Intercept) */}
-            {transferConfirm && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-lg w-[420px] flex flex-col overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
-                        <div className="px-6 py-4 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-[#333]">系统提示</h3>
-                            <button onClick={() => setTransferConfirm(null)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                        </div>
-                        <div className="px-8 py-6">
-                            <div className="flex items-start mb-4">
-                                <Info size={24} className="text-[#00C06B] mr-3 shrink-0 mt-0.5" />
-                                <div className="text-[14px] text-[#333] leading-relaxed">
-                                    当前 <span className="font-bold">【{transferConfirm.parent.name}】</span> 分类下已有 <span className="font-bold text-[#00C06B]">{transferConfirm.parent.productCount}</span> 个商品。创建二级分类后，这些商品将自动移入您即将创建的 <span className="font-bold">【{transferConfirm.newSubName}】</span> 分类中。
-                                </div>
-                            </div>
-                            <p className="text-[13px] text-[#999] ml-9">您可以在创建完成后，再根据需要将商品移动到其他分类。</p>
-                        </div>
-                        <div className="px-6 py-4 flex justify-end space-x-3 mt-2">
-                            <button onClick={() => setTransferConfirm(null)} className="px-5 py-2 rounded text-[14px] text-[#666] bg-white border border-gray-200 hover:bg-gray-50 transition-colors">取消</button>
-                            <button onClick={handleConfirmTransfer} className="px-5 py-2 rounded text-[14px] text-white bg-[#00C06B] hover:bg-[#00A35B] transition-colors">
-                                确认创建
-                            </button>
                         </div>
                     </div>
                 </div>

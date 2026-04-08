@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, RotateCcw, Lock, Clock3, AlertTriangle, Delete, Layers, CheckCircle2, RefreshCw } from 'lucide-react';
+import { X, Check, RotateCcw, Lock, Clock3, AlertTriangle, Delete, Layers, CheckCircle2, RefreshCw, ChevronLeft, ChevronRight, Table } from 'lucide-react';
 import { useProducts } from '../../context';
 import { CHANNEL_TABS, SHELF_VIEW_TABS, ChannelType, ChannelTabType, NumpadInput, ChannelTag } from './PosCommon';
 import { ChannelGroup } from '../../types';
@@ -18,201 +18,205 @@ export const ShelfActionDialog = ({
   open: boolean;
   data: { item?: any; items?: any[]; action: 'on' | 'off'; targetChannel: ChannelType; isAllView: boolean; visibleChannels?: string[] };
   onClose: () => void;
-  onConfirm: (channels: ChannelTabType[]) => void;
+  onConfirm: (updates: Record<string, 'on_shelf' | 'off_shelf'>) => void;
   isShelvesUnited: boolean;
   enableChannelGrouping?: boolean;
   channelGroups?: ChannelGroup[];
 }) => {
-  const [selectedChannels, setSelectedChannels] = useState<ChannelTabType[]>([]);
-
   const isBatch = !!data.items;
   const items = isBatch ? (data.items || []) : (data.item ? [data.item] : []);
   const count = items.length;
   const name = isBatch ? `${count}个商品` : data.item?.name;
-  const actionText = data.action === 'on' ? '上架' : '下架';
-  const targetLabel = data.isAllView ? '全部渠道' : (SHELF_VIEW_TABS.find(t => t.id === data.targetChannel)?.label || 'POS');
   
-  const visibleChannels = data.visibleChannels;
+  // Calculate which channels are mapped for ALL selected items
+  const validChannels = useMemo(() => {
+     return CHANNEL_TABS.map(t => t.id).filter(chId => {
+         return items.every(i => {
+             const dataKey = chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId;
+             return i.channels[dataKey as ChannelTabType] !== 'unmapped';
+         });
+     });
+  }, [items]);
+
+  // State for single product channel statuses
+  const [channelStatus, setChannelStatus] = useState<Record<string, 'on_shelf' | 'off_shelf'>>({});
   
-  // Special mode: Not unified, but grouped and in "All" view. Force group selection.
-  const isGroupMode = !isShelvesUnited && enableChannelGrouping && data.isAllView;
+  // State for batch action selected channels
+  const [batchSelectedChannels, setBatchSelectedChannels] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
     
-    // If visibleChannels are passed (e.g. from Group view), use them
-    if (visibleChannels && visibleChannels.length > 0) {
-        const validVisible = visibleChannels.filter(chId => items.every(i => i.channels[chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId] !== 'unmapped'));
-        setSelectedChannels(validVisible as ChannelTabType[]);
-        return;
+    if (isBatch) {
+        setBatchSelectedChannels(validChannels);
+    } else if (data.item) {
+        const initialStatus: Record<string, 'on_shelf' | 'off_shelf'> = {};
+        validChannels.forEach(ch => {
+            const dataKey = ch === 'mini_dine' || ch === 'mini_take' || ch === 'mini_pickup' ? 'mini' : ch;
+            const status = data.item.channels[dataKey as ChannelTabType] || 'off_shelf';
+            initialStatus[ch] = isShelvesUnited ? data.item.status : status;
+        });
+        setChannelStatus(initialStatus);
     }
+  }, [open, data, validChannels, isBatch, isShelvesUnited]);
 
-    if (isShelvesUnited || (enableChannelGrouping && !data.isAllView)) {
-        // Strict lock cases
-        setSelectedChannels(CHANNEL_TABS.map(t => t.id));
-        return;
-    }
-    
-    if (isGroupMode) {
-        // In group mode, default select all *mapped* channels
-        // User can then toggle groups
-        const allMapped = CHANNEL_TABS.map(t => t.id).filter(chId => items.every(i => i.channels[chId] !== 'unmapped'));
-        setSelectedChannels(allMapped);
-        return;
-    }
+  const toggleChannelStatus = (chId: string) => {
+      if (isShelvesUnited) return; // locked
+      setChannelStatus(prev => ({
+          ...prev,
+          [chId]: prev[chId] === 'on_shelf' ? 'off_shelf' : 'on_shelf'
+      }));
+  };
 
-    // Default individual independent behavior
-    const validChannels = CHANNEL_TABS
-        .filter(t => t.id !== data.targetChannel)
-        .map(t => t.id);
-    const initiallySelected = validChannels.filter(chId => items.every(i => i.channels[chId] !== 'unmapped'));
-    setSelectedChannels(initiallySelected);
-  }, [open, data, items, isShelvesUnited, enableChannelGrouping, visibleChannels, isGroupMode]);
-
-  const toggleGroup = (groupId: string) => {
-      const group = channelGroups?.find(g => g.id === groupId);
-      if (!group) return;
+  const toggleGroupStatus = (groupChannels: string[], targetStatus?: 'on_shelf' | 'off_shelf') => {
+      if (isShelvesUnited) return; // locked
+      const validGroupChannels = groupChannels.filter(c => validChannels.includes(c));
+      if (validGroupChannels.length === 0) return;
       
-      const groupChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c)) as ChannelTabType[];
-      const validChannels = groupChannels.filter(c => !items.some(i => i.channels[c] === 'unmapped'));
-      
-      if (validChannels.length === 0) return;
+      setChannelStatus(prev => {
+          const next = { ...prev };
+          const allOn = validGroupChannels.every(c => prev[c] === 'on_shelf');
+          const newStatus = targetStatus || (allOn ? 'off_shelf' : 'on_shelf');
+          validGroupChannels.forEach(c => { next[c] = newStatus; });
+          return next;
+      });
+  };
 
-      const allSelected = validChannels.every(c => selectedChannels.includes(c));
+  const handleAllChannels = (status: 'on_shelf' | 'off_shelf') => {
+      setChannelStatus(prev => {
+          const next = { ...prev };
+          validChannels.forEach(c => { next[c] = status; });
+          return next;
+      });
+  };
+
+  const toggleBatchChannel = (chId: string) => {
+      if (isShelvesUnited) return; // locked
+      setBatchSelectedChannels(prev => prev.includes(chId) ? prev.filter(c => c !== chId) : [...prev, chId]);
+  };
+
+  const toggleBatchGroup = (groupChannels: string[]) => {
+      if (isShelvesUnited) return; // locked
+      const validGroupChannels = groupChannels.filter(c => validChannels.includes(c));
+      if (validGroupChannels.length === 0) return;
       
+      const allSelected = validGroupChannels.every(c => batchSelectedChannels.includes(c));
       if (allSelected) {
-          // Deselect all
-          setSelectedChannels(prev => prev.filter(c => !validChannels.includes(c)));
+          setBatchSelectedChannels(prev => prev.filter(c => !validGroupChannels.includes(c)));
       } else {
-          // Select all
-          const toAdd = validChannels.filter(c => !selectedChannels.includes(c));
-          setSelectedChannels(prev => [...prev, ...toAdd]);
+          const toAdd = validGroupChannels.filter(c => !batchSelectedChannels.includes(c));
+          setBatchSelectedChannels(prev => [...prev, ...toAdd]);
       }
   };
 
-  const renderGroups = () => {
-      if (!channelGroups) return null;
-      return channelGroups.map(group => {
-         const groupChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c));
-         if (groupChannels.length === 0) return null;
-         
-         const validGroupChannels = groupChannels.filter(c => !items.some(i => i.channels[c as any] === 'unmapped'));
-         // If no valid channels in this group for this item, we can disable or hide.
-         const isDisabled = validGroupChannels.length === 0;
-
-         const allInGroupSelected = validGroupChannels.length > 0 && validGroupChannels.every(c => selectedChannels.includes(c as ChannelTabType));
-         const someInGroupSelected = validGroupChannels.some(c => selectedChannels.includes(c as ChannelTabType));
-         
-         return (
-            <div 
-               key={group.id}
-               className={`border rounded-xl p-3 transition-all ${isDisabled ? 'bg-gray-50 opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300'} ${allInGroupSelected ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200'}`}
-               onClick={() => !isDisabled && toggleGroup(group.id)}
-            >
-               <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center">
-                     <div className={`w-5 h-5 rounded border mr-2 flex items-center justify-center transition-colors ${allInGroupSelected ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
-                        {allInGroupSelected && <Check size={12} className="text-white"/>}
-                        {!allInGroupSelected && someInGroupSelected && <div className="w-2 h-2 bg-blue-500 rounded-sm"></div>}
-                     </div>
-                     <span className="font-bold text-sm text-gray-800">{group.name}</span>
-                  </div>
-               </div>
-               <div className="flex flex-wrap gap-1 pl-7">
-                  {groupChannels.map(c => {
-                     const tab = CHANNEL_TABS.find(t => t.id === c);
-                     const isUnmapped = items.some(i => i.channels[c as any] === 'unmapped');
-                     return <span key={c} className={`text-[10px] border px-1.5 py-0.5 rounded ${isUnmapped ? 'bg-gray-100 text-gray-400 border-gray-100' : 'bg-white border-gray-200 text-gray-600'}`}>{tab?.label}</span>
-                  })}
-               </div>
-            </div>
-         )
-      })
+  const handleConfirm = () => {
+      if (isBatch) {
+          const updates: Record<string, 'on_shelf' | 'off_shelf'> = {};
+          const status = data.action === 'on' ? 'on_shelf' : 'off_shelf';
+          batchSelectedChannels.forEach(ch => { updates[ch] = status; });
+          onConfirm(updates);
+      } else {
+          onConfirm(channelStatus);
+      }
   };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-       <div className="bg-white rounded-[12px] shadow-2xl w-[600px] overflow-hidden animate-in zoom-in-95 font-sans">
-          <div className="pt-8 pb-4 text-center">
-             <h3 className="text-2xl font-bold text-[#333] tracking-tight">{actionText}确认</h3>
-             {(isShelvesUnited || (enableChannelGrouping && !isGroupMode)) && (
-                 <div className="mt-2 inline-flex items-center bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
-                    <Lock size={12} className="text-orange-500 mr-1.5"/>
-                    <span className="text-xs font-bold text-orange-600">
-                        {isShelvesUnited ? '已开启全渠道统一上下架，操作将同步至所有渠道' : '已开启渠道分组，操作将同步至分组下所有渠道'}
-                    </span>
-                 </div>
-             )}
-             {isGroupMode && (
-                 <div className="mt-2 inline-flex items-center bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
-                    <RotateCcw size={12} className="text-blue-500 mr-1.5"/>
-                    <span className="text-xs font-bold text-blue-600">渠道分组联动模式，操作将按分组同步</span>
-                 </div>
-             )}
+       <div className="bg-white rounded-[12px] shadow-2xl w-[500px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[80vh]">
+          <div className="pt-6 pb-4 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
+             <h3 className="text-xl font-bold text-[#333] flex items-center">
+                {isBatch ? '批量' : ''}{actionText}操作
+             </h3>
+             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
           </div>
-          <div className="px-10 text-center mb-8">
-             <span className="text-[#666] text-lg">确认在 <span className="font-bold text-[#333]">{targetLabel}</span> {actionText} <span className="font-bold text-[#333]">{name}</span> 吗？</span>
-          </div>
-          <div className="mx-8 mb-8 bg-[#F7F8FA] rounded-xl p-6 border border-[#E8E8E8]">
-             {(!isShelvesUnited && !enableChannelGrouping) && (
-                 <div className="flex items-center mb-4 text-[#666] text-sm font-bold">
-                    <RotateCcw size={14} className="mr-2 text-blue-600"/>
-                    {visibleChannels ? `选择需要${actionText}的渠道` : (data.isAllView ? `选择需要${actionText}的渠道` : `同步${actionText}其他渠道`)}
+          
+          <div className="p-6 overflow-y-auto flex-1">
+             <div className="mb-6 text-center">
+                <span className="text-[#666] text-base">确认将 <span className="font-bold text-[#333] text-lg mx-1">{name}</span> {actionText}吗？</span>
+             </div>
+
+             {isShelvesUnited && (
+                 <div className="mb-6 bg-orange-50 border border-orange-100 rounded-lg p-4 flex items-start">
+                     <Lock size={16} className="text-orange-500 mr-2 mt-0.5 shrink-0"/>
+                     <div className="text-sm text-orange-700">
+                         <div className="font-bold mb-1">已开启全渠道统一</div>
+                         <p className="opacity-90 text-xs">本次操作将自动同步至所有已关联渠道，无需单独勾选。</p>
+                     </div>
                  </div>
              )}
-             
-             {isGroupMode ? (
-                 <div className="flex flex-col gap-3">
-                     {renderGroups()}
+
+             {/* Always show channel selection, but lock it if united */}
+             <div className="bg-[#F7F8FA] rounded-xl p-5 border border-[#E8E8E8]">
+                 <div className="text-sm font-bold text-gray-700 mb-4">选择生效渠道</div>
+                 
+                 {enableChannelGrouping ? (
+                     // Grouped toggles
+                         <div className="space-y-3">
+                             {channelGroups?.map(group => {
+                                 const gChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c));
+                                 const validGChannels = gChannels.filter(c => validChannels.includes(c));
+                                 if (validGChannels.length === 0) return null;
+                                 
+                                 const isAllSelected = validGChannels.every(c => batchSelectedChannels.includes(c));
+                                 
+                                 return (
+                                     <div 
+                                         key={group.id} 
+                                         onClick={() => toggleBatchGroup(validGChannels)}
+                                         className={`flex items-center justify-between p-4 bg-white border rounded-lg cursor-pointer transition-all hover:border-[#00C06B]/50 ${isAllSelected ? 'border-[#00C06B] shadow-sm' : 'border-gray-200'}`}
+                                     >
+                                         <div>
+                                             <div className="font-bold text-gray-800 text-sm mb-1">{group.name}</div>
+                                             <div className="text-xs text-gray-500">包含: {validGChannels.map(c => CHANNEL_TABS.find(t => t.id === c)?.label).join(', ')}</div>
+                                         </div>
+                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isAllSelected ? 'bg-[#00C06B] border-[#00C06B]' : 'border-gray-300'}`}>
+                                             {isAllSelected && <Check size={14} className="text-white"/>}
+                                         </div>
+                                     </div>
+                                 )
+                             })}
+                         </div>
+                     ) : (
+                         // Independent flat toggles
+                         <div className="grid grid-cols-2 gap-3">
+                             {CHANNEL_TABS.map(tab => {
+                                 const isValid = validChannels.includes(tab.id);
+                                 const isSelected = batchSelectedChannels.includes(tab.id);
+                                 
+                                 if (!isValid) return null;
+                                 
+                                 return (
+                                     <div 
+                                         key={tab.id}
+                                         onClick={() => toggleBatchChannel(tab.id)}
+                                         className={`flex items-center justify-between p-3 bg-white border rounded-lg transition-all ${isShelvesUnited ? 'opacity-60 cursor-not-allowed border-gray-200' : `cursor-pointer hover:border-[#00C06B]/50 ${isSelected ? 'border-[#00C06B] shadow-sm' : 'border-gray-200'}`}`}
+                                     >
+                                         <div className="flex items-center space-x-3">
+                                             <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isShelvesUnited ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600'}`}>{tab.icon}</div>
+                                             <span className="font-bold text-[#333] text-sm">{tab.label}</span>
+                                         </div>
+                                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#00C06B] border-[#00C06B]' : 'border-gray-300'}`}>
+                                             {isSelected && <Check size={12} className="text-white"/>}
+                                         </div>
+                                     </div>
+                                 )
+                             })}
+                         </div>
+                     )}
                  </div>
-             ) : (
-                 <div className="grid grid-cols-2 gap-3">
-                    {CHANNEL_TABS.filter(t => {
-                        if (visibleChannels) {
-                            return visibleChannels.includes(t.id);
-                        }
-                        // If standard grouping lock is active, show all
-                        // If standard individual mode, filter out current target (unless all view)
-                        return (isShelvesUnited || enableChannelGrouping) ? true : (data.isAllView ? true : t.id !== data.targetChannel);
-                    }).map(tab => {
-                       const isUnmapped = items.some(i => i.channels[tab.id] === 'unmapped');
-                       const isChecked = selectedChannels.includes(tab.id);
-                       // Lock if United OR (Grouping AND NOT AllView)
-                       const isDisabled = isShelvesUnited || (enableChannelGrouping && !data.isAllView) || isUnmapped;
-                       
-                       return (
-                          <div 
-                            key={tab.id}
-                            onClick={() => {
-                                if (isDisabled) return;
-                                if (selectedChannels.includes(tab.id)) setSelectedChannels(prev => prev.filter(c => c !== tab.id));
-                                else setSelectedChannels(prev => [...prev, tab.id]);
-                            }}
-                            className={`
-                                flex items-center p-3 bg-white border rounded-lg transition-all select-none
-                                ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer hover:border-orange-400 hover:shadow-sm'}
-                                ${isDisabled && isUnmapped ? 'opacity-60 border-gray-100' : 'border-[#E8E8E8]'}
-                                ${isChecked && !isDisabled ? 'border-orange-500' : ''}
-                            `}
-                          >
-                             <div className={`w-5 h-5 rounded border-[1.5px] flex items-center justify-center mr-3 transition-colors ${isChecked ? (isDisabled ? 'bg-gray-300 border-gray-300' : 'bg-[#FF5500] border-[#FF5500]') : 'bg-white border-gray-300'}`}>
-                                {isChecked && <Check size={12} className="text-white" strokeWidth={4}/>}
-                             </div>
-                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-[#333]">{tab.label}</span>
-                                {isUnmapped && <span className="text-[10px] text-red-500 font-medium mt-0.5">未映射关联</span>}
-                             </div>
-                          </div>
-                       )
-                    })}
-                 </div>
-             )}
           </div>
-          <div className="flex p-8 pt-0 gap-4">
-             <button onClick={onClose} className="flex-1 h-[56px] rounded-[8px] bg-[#F5F5F5] text-[#666] text-lg font-bold hover:bg-[#E0E0E0] transition-colors">取消</button>
-             <button onClick={() => onConfirm(selectedChannels)} className={`flex-1 h-[56px] rounded-[8px] text-white text-lg font-bold transition-all shadow-lg active:scale-95 ${data.action === 'on' ? 'bg-[#3B72FF] hover:bg-[#2F60E8]' : 'bg-[#FF5500] hover:bg-[#E04800]'}`}>确认{actionText}</button>
+          
+          <div className="p-6 pt-4 border-t border-gray-100 flex space-x-4 shrink-0">
+             <button onClick={onClose} className="flex-1 py-3 rounded-lg bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-colors">取消</button>
+             <button 
+                 onClick={handleConfirm} 
+                 disabled={!isShelvesUnited && batchSelectedChannels.length === 0}
+                 className="flex-1 py-3 rounded-lg text-white font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-[#00C06B] hover:bg-[#00A35B]"
+             >
+                 确认{actionText}
+             </button>
           </div>
        </div>
     </div>
@@ -220,21 +224,19 @@ export const ShelfActionDialog = ({
 };
 
 // --- Shelf Management Modal ---
-export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, onClose: () => void, onConfirm: (updated: any) => void }) => {
-   const { activeBrandId, brandConfigs } = useProducts();
-   const currentConfig = brandConfigs[activeBrandId];
-   const enableChannelGrouping = currentConfig?.enableChannelGrouping ?? false;
-   const channelGroups = currentConfig?.channelGroups || [];
-
+export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited, enableChannelGrouping, channelGroups }: { item: any, onClose: () => void, onConfirm: (updated: any) => void, isShelvesUnited: boolean, enableChannelGrouping?: boolean, channelGroups?: ChannelGroup[] }) => {
    const [localChannels, setLocalChannels] = useState(item.channels);
+   const [globalStatus, setGlobalStatus] = useState(item.status);
 
    const toggleChannel = (chId: ChannelTabType) => {
+      if (isShelvesUnited) return;
       const current = localChannels[chId];
       if (current === 'unmapped') return;
       setLocalChannels((prev: any) => ({ ...prev, [chId]: current === 'on_shelf' ? 'off_shelf' : 'on_shelf' }));
    };
 
    const toggleGroup = (group: ChannelGroup) => {
+       if (isShelvesUnited) return;
        const statuses = group.channels.map(ch => localChannels[ch]);
        const validStatuses = statuses.filter(s => s !== 'unmapped');
        if (validStatuses.length === 0) return; // All unmapped
@@ -258,35 +260,69 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, 
       setLocalChannels(newState);
    };
 
+   const handleConfirm = () => {
+       let globalStatus = item.status;
+       if (isShelvesUnited) {
+           // In unified mode, assume if any valid channel is on_shelf, global is on_shelf
+           const hasOn = Object.values(localChannels).some(s => s === 'on_shelf');
+           globalStatus = hasOn ? 'on_shelf' : 'off_shelf';
+       }
+       onConfirm({ ...item, status: globalStatus, channels: localChannels });
+   };
+
    // Render Logic
    const renderContent = () => {
-       if (enableChannelGrouping && channelGroups.length > 0) {
+       if (isShelvesUnited) {
+           return (
+               <div className="space-y-4">
+                   <div className="bg-orange-50 border border-orange-100 rounded-lg p-4 flex items-start">
+                       <Lock size={16} className="text-orange-500 mr-2 mt-0.5 shrink-0"/>
+                       <div className="text-sm text-orange-700">
+                           <div className="font-bold mb-1">已开启全渠道统一</div>
+                           <p className="opacity-90 text-xs">本次操作将自动同步至以下所有已关联渠道，不支持单独修改。请点击下方按钮进行一键操作。</p>
+                       </div>
+                   </div>
+                   <div className="bg-white rounded-xl border border-gray-200 p-5">
+                       <div className="text-sm font-bold text-gray-700 mb-4">生效渠道 (只读)</div>
+                       <div className="flex flex-wrap gap-2">
+                           {CHANNEL_TABS.map(tab => {
+                               if (localChannels[tab.id] === 'unmapped') return null;
+                               return (
+                                   <div key={tab.id} className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg">
+                                       <span className="text-gray-400">{tab.icon}</span>
+                                       <span className="text-sm text-gray-600 font-medium">{tab.label}</span>
+                                   </div>
+                               )
+                           })}
+                       </div>
+                   </div>
+               </div>
+           );
+       } else if (enableChannelGrouping && channelGroups.length > 0) {
            return (
                <div className="space-y-4">
                    {channelGroups.map(group => {
-                       const groupChannels = group.channels.map(cId => {
-                           const def = CHANNEL_TABS.find(t => t.id === cId);
-                           return { id: cId, ...def, status: localChannels[cId] };
-                       }).filter(c => c.label); // Filter valid
+                       const groupChannels = group.channels
+                           .filter(c => localChannels[c])
+                           .map(c => {
+                               const def = CHANNEL_TABS.find(t => t.id === c);
+                               return { id: c, ...def, status: localChannels[c] };
+                           }).filter(c => c.label); // Filter valid
 
-                       const validStatuses = groupChannels.filter(c => c.status !== 'unmapped').map(c => c.status);
-                       const isUnmappedGroup = validStatuses.length === 0;
-                       const allOn = !isUnmappedGroup && validStatuses.every(s => s === 'on_shelf');
+                       if (groupChannels.length === 0) return null;
                        
+                       const isUnmappedGroup = groupChannels.every(ch => ch.status === 'unmapped');
+                       const allOn = groupChannels.filter(ch => ch.status !== 'unmapped').every(ch => ch.status === 'on_shelf');
+
                        return (
-                           <div key={group.id} className={`p-4 bg-white rounded-xl border transition-all ${isUnmappedGroup ? 'border-gray-100 opacity-60' : 'border-gray-200 hover:border-blue-200'}`}>
-                               <div className="flex items-center justify-between mb-3">
+                           <div key={group.id} className={`bg-white rounded-xl border ${isUnmappedGroup ? 'border-gray-100 opacity-60' : 'border-gray-200'} overflow-hidden shadow-sm`}>
+                               {/* Group Header */}
+                               <div className="flex items-center justify-between p-4 bg-gray-50/50 border-b border-gray-100">
                                    <div className="flex items-center">
-                                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 ${isUnmappedGroup ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600'}`}>
-                                           <Layers size={20}/>
-                                       </div>
-                                       <div className="flex flex-col">
-                                           <span className="font-bold text-[#333] text-sm">{group.name}</span>
-                                           {isUnmappedGroup && <span className="text-[10px] text-red-500 font-medium">无关联渠道</span>}
-                                       </div>
+                                       <span className="font-bold text-[#333]">{group.name}</span>
                                    </div>
                                    {!isUnmappedGroup && (
-                                       <div onClick={() => toggleGroup(group)} className={`w-14 h-8 rounded-full relative cursor-pointer transition-all ${allOn ? 'bg-[#3B72FF]' : 'bg-gray-200'}`}>
+                                       <div onClick={() => toggleGroup(group)} className={`w-14 h-8 rounded-full relative transition-all ${isShelvesUnited ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${allOn ? 'bg-[#3B72FF]' : 'bg-gray-200'}`}>
                                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm flex items-center justify-center ${allOn ? 'left-7' : 'left-1'}`}>
                                                {allOn ? <Check size={14} className="text-blue-600"/> : <X size={14} className="text-gray-400"/>}
                                            </div>
@@ -294,20 +330,28 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, 
                                    )}
                                </div>
                                {/* Channel List in Group */}
-                               <div className="pl-[56px] space-y-2">
-                                   {groupChannels.map(ch => (
-                                       <div key={ch.id} className="flex items-center text-xs text-gray-500">
-                                           <div className="w-5 h-5 flex items-center justify-center mr-2">{ch.icon}</div>
-                                           <span className="flex-1">{ch.label}</span>
-                                           {ch.status === 'unmapped' ? (
-                                               <span className="text-red-400 bg-red-50 px-1.5 rounded-[4px] scale-90">未关联</span>
-                                           ) : (
-                                               <span className={`px-1.5 rounded-[4px] scale-90 font-bold ${ch.status === 'on_shelf' ? 'text-blue-600 bg-blue-50' : 'text-gray-400 bg-gray-100'}`}>
-                                                   {ch.status === 'on_shelf' ? '已上架' : '已下架'}
-                                               </span>
-                                           )}
-                                       </div>
-                                   ))}
+                               <div className="p-4 space-y-3 bg-white">
+                                   {groupChannels.map(ch => {
+                                       const isOn = ch.status === 'on_shelf';
+                                       const isUnmapped = ch.status === 'unmapped';
+                                       return (
+                                           <div key={ch.id} className="flex items-center justify-between">
+                                               <div className="flex items-center">
+                                                   <div className="w-6 h-6 rounded bg-gray-50 flex items-center justify-center mr-3 text-gray-500">{ch.icon}</div>
+                                                   <span className="text-sm font-medium text-gray-700">{ch.label}</span>
+                                               </div>
+                                               <div className="flex items-center">
+                                                   {isUnmapped ? (
+                                                       <span className="text-[10px] text-red-400 bg-red-50 px-2 py-0.5 rounded font-bold">未建立映射</span>
+                                                   ) : (
+                                                       <div onClick={() => toggleChannel(ch.id as ChannelTabType)} className={`w-10 h-6 rounded-full relative transition-all ${isShelvesUnited ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${isOn ? 'bg-[#00C06B]' : 'bg-gray-200'}`}>
+                                                           <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all shadow-sm flex items-center justify-center ${isOn ? 'left-4.5' : 'left-0.5'}`}></div>
+                                                       </div>
+                                                   )}
+                                               </div>
+                                           </div>
+                                       );
+                                   })}
                                </div>
                            </div>
                        );
@@ -320,6 +364,7 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, 
                <div className="space-y-3">
                   {CHANNEL_TABS.map(tab => {
                      const status = localChannels[tab.id];
+                     if (!status) return null;
                      const isUnmapped = status === 'unmapped';
                      const isOn = status === 'on_shelf';
                      return (
@@ -328,7 +373,13 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, 
                               <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 ${isUnmapped ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600'}`}>{tab.icon}</div>
                               <div className="flex flex-col"><span className="font-bold text-[#333]">{tab.label}</span>{isUnmapped && <span className="text-[10px] text-red-500 font-medium">未建立映射</span>}</div>
                            </div>
-                           {!isUnmapped && (<div onClick={() => toggleChannel(tab.id)} className={`w-14 h-8 rounded-full relative cursor-pointer transition-all ${isOn ? 'bg-[#3B72FF]' : 'bg-gray-200'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm flex items-center justify-center ${isOn ? 'left-7' : 'left-1'}`}>{isOn ? <Check size={14} className="text-blue-600"/> : <X size={14} className="text-gray-400"/>}</div></div>)}
+                           {!isUnmapped && (
+                               <div onClick={() => toggleChannel(tab.id as ChannelTabType)} className={`w-14 h-8 rounded-full relative transition-all ${isShelvesUnited ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${isOn ? 'bg-[#3B72FF]' : 'bg-gray-200'}`}>
+                                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm flex items-center justify-center ${isOn ? 'left-7' : 'left-1'}`}>
+                                       {isOn ? <Check size={14} className="text-blue-600"/> : <X size={14} className="text-gray-400"/>}
+                                   </div>
+                               </div>
+                           )}
                            {isUnmapped && <div className="px-3 py-1 bg-gray-100 rounded text-xs text-gray-400 font-bold">不可操作</div>}
                         </div>
                      );
@@ -346,14 +397,26 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, 
                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={20}/></button>
             </div>
             <div className="p-6 bg-[#F7F8FA] overflow-y-auto">
-               <div className="flex space-x-3 mb-6">
-                  <button onClick={() => handleBatch('on')} className="flex-1 bg-white border border-gray-200 text-blue-600 font-bold py-3 rounded-lg shadow-sm hover:border-blue-400 hover:shadow-md transition-all active:scale-95">一键全渠道上架</button>
-                  <button onClick={() => handleBatch('off')} className="flex-1 bg-white border border-gray-200 text-gray-600 font-bold py-3 rounded-lg shadow-sm hover:border-gray-400 hover:shadow-md transition-all active:scale-95">一键全渠道下架</button>
-               </div>
+               {!isShelvesUnited && (
+                   <div className="flex space-x-3 mb-6">
+                      <button onClick={() => handleBatch('on')} className="flex-1 bg-white border border-gray-200 text-blue-600 font-bold py-3 rounded-lg shadow-sm hover:border-blue-400 hover:shadow-md transition-all active:scale-95">一键全渠道上架</button>
+                      <button onClick={() => handleBatch('off')} className="flex-1 bg-white border border-gray-200 text-gray-600 font-bold py-3 rounded-lg shadow-sm hover:border-gray-400 hover:shadow-md transition-all active:scale-95">一键全渠道下架</button>
+                   </div>
+               )}
                {renderContent()}
             </div>
             <div className="p-6 border-t border-gray-100 bg-white shrink-0">
-               <button onClick={() => onConfirm({ ...item, channels: localChannels })} className="w-full h-12 bg-[#3B72FF] text-white text-lg font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-600 active:scale-95 transition-all">确认修改</button>
+               {isShelvesUnited ? (
+                   <div className="flex space-x-3">
+                       {globalStatus === 'on_shelf' ? (
+                           <button onClick={() => handleBatch('off')} className="flex-1 h-12 bg-white border border-gray-200 text-gray-600 text-lg font-bold rounded-xl shadow-sm hover:bg-gray-50 active:scale-95 transition-all">下架</button>
+                       ) : (
+                           <button onClick={() => handleBatch('on')} className="flex-1 h-12 bg-[#3B72FF] text-white text-lg font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-600 active:scale-95 transition-all">上架</button>
+                       )}
+                   </div>
+               ) : (
+                   <button onClick={handleConfirm} className="w-full h-12 bg-[#3B72FF] text-white text-lg font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-600 active:scale-95 transition-all">确认修改</button>
+               )}
             </div>
          </div>
       </div>
@@ -361,278 +424,360 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm }: { item: any, 
 };
 
 // --- Clearance Settings Modal ---
-export const ClearanceSettingsModal: React.FC<{ product: any; onClose: () => void; onConfirm: () => void; activeChannel: ChannelType | string }> = ({ product, onClose, onConfirm, activeChannel }) => {
+export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string[]; isBatch?: boolean; onClose: () => void; onConfirm: () => void; activeChannel: ChannelType | string }> = ({ product, batchIds, isBatch, onClose, onConfirm, activeChannel }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const currentConfig = brandConfigs[activeBrandId];
   const isStockShared = currentConfig?.features.stock_shared ?? true;
   const enableChannelGrouping = currentConfig?.enableChannelGrouping ?? false;
   const channelGroups = currentConfig?.channelGroups || [];
 
-  const [method, setMethod] = useState<'cycle' | 'total'>('cycle');
-  const [cycleMode, setCycleMode] = useState<'day' | 'meal'>('day');
-  
-  // Resolve activeChannel to a list of channels
-  const resolvedChannels = useMemo(() => {
-      if (activeChannel === 'all') {
-          // Use all defined channels from CHANNEL_TABS to ensure complete coverage (e.g. jingdong)
-          return CHANNEL_TABS.map(t => t.id);
-      }
-      const group = channelGroups.find(g => g.id === activeChannel);
-      if (group) return group.channels;
-      return [activeChannel];
-  }, [activeChannel, channelGroups]);
+  const title = isBatch ? `批量沽清 (${batchIds?.length}个商品)` : product?.name;
+  const isMultiSpec = !isBatch && product?.hasMultipleSpecs;
 
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(() => {
-    return resolvedChannels;
-  });
-  
+  // Resolve valid channels for stockout operation
+  const resolvedChannels = useMemo(() => {
+      return CHANNEL_TABS.map(t => t.id).filter(chId => {
+          if (isBatch) return true; // simplified for batch
+          if (!product) return false;
+          const dataKey = chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId;
+          return product.channels[dataKey as ChannelTabType] !== 'unmapped';
+      });
+  }, [product, isBatch]);
+
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(resolvedChannels);
+
   useEffect(() => {
       setSelectedChannels(resolvedChannels);
-  }, [resolvedChannels]);
-
-  const [formValues, setFormValues] = useState({ dayLimit: '', dayRemain: '0', mealLunchLimit: '', mealLunchRemain: '0', mealDinnerLimit: '', mealDinnerRemain: '0', totalLimit: '' });
-  const [activeField, setActiveField] = useState<keyof typeof formValues>('dayLimit');
-
-  useEffect(() => {
-     if (method === 'total') setActiveField('totalLimit');
-     else if (cycleMode === 'day') setActiveField('dayLimit');
-     else setActiveField('mealLunchLimit');
-  }, [method, cycleMode]);
+  }, [resolvedChannels, isStockShared]);
 
   const toggleChannel = (c: string) => {
-    // Logic update: Locked if Shared OR if we are inside a specific Group view
-    // (User req 3: In single group mode, channels inside cannot be deselected)
-    const isGroupView = enableChannelGrouping && channelGroups.some(g => g.id === activeChannel);
-    if (isStockShared || isGroupView) return; 
-    
-    if (selectedChannels.includes(c)) setSelectedChannels(prev => prev.filter(x => x !== c));
-    else setSelectedChannels(prev => [...prev, c]);
+    if (isStockShared) return; 
+    setSelectedChannels(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
   };
 
-  const handleNumpadInput = (key: string) => {
-     setFormValues(prev => {
-        const current = prev[activeField];
-        let next = current;
-        if (key === 'backspace') next = current.slice(0, -1);
-        else if (key === 'clear') next = '';
-        else if (key === '.') { if (!current.includes('.')) next = current + '.'; }
-        else next = current + key;
-        return { ...prev, [activeField]: next };
-     });
-  };
-
-  // Calculate aggregated stock for a group
-  const getGroupStock = (group: ChannelGroup) => {
-      const uniqueDataKeys = new Set(group.channels.map(ch => 
-          ch === 'mini_dine' || ch === 'mini_take' || ch === 'mini_pickup' ? 'mini' : ch
-      ));
-      
-      let total = 0;
-      uniqueDataKeys.forEach(key => {
-          total += (product.channelStocks?.[key] || 0);
-      });
-      return total;
-  };
-
-  // Helper to render channel selector
   const renderChannelSelector = () => {
-      // Scenario: Grouping Enabled AND All Channels View
-      if (enableChannelGrouping && activeChannel === 'all') {
-          return channelGroups.map(group => {
-              const groupChannelIds = group.channels;
-              // Group is active if all its channels are selected
-              const isGroupActive = groupChannelIds.every(id => selectedChannels.includes(id));
-              // Locked logic: Locked if stock is shared
-              const isLocked = isStockShared;
+      if (enableChannelGrouping && !isStockShared) {
+          // Find unassigned channels
+          const assignedChannels = new Set(channelGroups.flatMap(g => g.channels));
+          const unassignedChannels = resolvedChannels.filter(c => !assignedChannels.has(c));
+          
+          const groupsToRender = [...channelGroups];
+          if (unassignedChannels.length > 0) {
+              groupsToRender.push({
+                  id: 'ungrouped_fallback',
+                  name: '未分组渠道',
+                  channels: unassignedChannels
+              });
+          }
+
+          return groupsToRender.map(group => {
+              const groupChannels = group.channels.filter(c => resolvedChannels.includes(c));
+              if (groupChannels.length === 0) return null;
+              
+              const isGroupActive = groupChannels.every(id => selectedChannels.includes(id));
+              const isLocked = false; // groups only render in independent mode, so never locked here
               
               return (
                   <div 
                     key={group.id}
                     onClick={() => {
-                        if (isLocked) return;
-                        if (isGroupActive) {
-                            // Deselect all
-                            setSelectedChannels(prev => prev.filter(id => !groupChannelIds.includes(id)));
-                        } else {
-                            // Select all
-                            setSelectedChannels(prev => {
-                                const next = new Set(prev);
-                                groupChannelIds.forEach(id => next.add(id));
-                                return Array.from(next);
-                            });
-                        }
+                        if (isGroupActive) setSelectedChannels(prev => prev.filter(id => !groupChannels.includes(id)));
+                        else setSelectedChannels(prev => Array.from(new Set([...prev, ...groupChannels])));
                     }}
                     className={`
                         flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer min-w-[140px] relative
-                        ${isGroupActive 
-                            ? 'bg-blue-50 border-blue-600 text-blue-700' 
-                            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
-                        }
-                        ${isLocked ? 'cursor-not-allowed opacity-80' : ''}
+                        ${isGroupActive ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B]' : 'bg-white border-gray-200 text-gray-500 hover:border-[#00C06B]/50'}
                     `}
                   >
                       <div className="flex items-center justify-between mb-2">
                           <span className="font-bold text-sm">{group.name}</span>
-                          {isLocked && <Lock size={12} className="ml-1 text-orange-400"/>}
                       </div>
-                      
-                      {/* Enhanced Channel Chips Display */}
                       <div className="flex flex-wrap gap-1.5">
-                          {groupChannelIds.map(cId => {
-                              const def = CHANNEL_TABS.find(t => t.id === cId);
-                              const label = def?.label || cId;
-                              return (
-                                  <span key={cId} className={`text-[10px] px-1.5 py-0.5 rounded border ${isGroupActive ? 'bg-white border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
-                                      {label}
-                                  </span>
-                              )
-                          })}
+                          {groupChannels.map(cId => (
+                              <span key={cId} className={`text-[10px] px-1.5 py-0.5 rounded border ${isGroupActive ? 'bg-white border-[#00C06B]/30 text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                                  {CHANNEL_TABS.find(t => t.id === cId)?.label || cId}
+                              </span>
+                          ))}
                       </div>
                   </div>
               );
           });
       }
 
-      // Scenario: Specific Group or No Grouping - Show individual channels
+      // Legacy flat channels or Shared mode
       return resolvedChannels.map(chId => {
           const tab = CHANNEL_TABS.find(t => t.id === chId);
-          const label = tab?.label || chId;
           const isActive = selectedChannels.includes(chId);
-          
-          // Lock if Stock Shared is ON OR if in Group View (User req 3)
-          const isGroupView = enableChannelGrouping && channelGroups.some(g => g.id === activeChannel);
-          const isLocked = isStockShared || isGroupView;
+          const isLocked = isStockShared;
 
           return (
-              <ChannelTag 
+              <div 
                 key={chId}
-                label={label} 
-                active={isActive} 
-                locked={isLocked} 
                 onClick={() => toggleChannel(chId)}
-              />
+                className={`flex items-center px-3 py-2 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'border-[#00C06B] bg-[#00C06B]/10 text-[#00C06B]' : 'border-gray-200 bg-white text-gray-600'} ${isLocked ? 'opacity-80 cursor-not-allowed' : 'hover:border-[#00C06B]/50'}`}
+              >
+                  <span className="text-sm font-bold mr-2">{tab?.label}</span>
+                  {isLocked && <Lock size={12} className="text-orange-400"/>}
+              </div>
           );
       });
   };
 
-  // Check if product is restorable (sold out or partial/warning)
-  const isRestorable = product.status === 'sold_out' || product.status === 'warning';
+  // State management for 2-column unified layout
+  const [globalMethod, setGlobalMethod] = useState<'day' | 'long'>('day');
+  
+  // Logic for default dayNextLimit (if product has maxStock, use it, else empty string representing infinite)
+  const defaultNextLimit = product?.maxStock !== undefined && product?.maxStock !== null ? String(product.maxStock) : '';
+  
+  const [targetValues, setTargetValues] = useState({ dayRemain: '0', dayNextLimit: defaultNextLimit, longLimit: '0' });
+  const [activeField, setActiveField] = useState<'dayRemain' | 'dayNextLimit' | 'longLimit'>('dayRemain');
+  
+  // Selected specs for multi-spec operations
+  const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
+
+  const handleMethodChange = (m: 'day' | 'long') => {
+      setGlobalMethod(m);
+      setActiveField(m === 'day' ? 'dayRemain' : 'longLimit');
+  };
+
+  const handleNumpadInput = (key: string) => {
+     const updateValue = (current: string) => {
+         if (key === 'backspace') return current.slice(0, -1);
+         if (key === 'clear') return '';
+         if (key === '.') return current.includes('.') ? current : current + '.';
+         return current + key;
+     };
+     setTargetValues(prev => ({ ...prev, [activeField]: updateValue(prev[activeField]) }));
+  };
+
+  const toggleSpec = (id: string) => {
+      setSelectedSpecs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const selectAllSpecs = () => {
+      if (selectedSpecs.length === product.specs.length) setSelectedSpecs([]);
+      else setSelectedSpecs(product.specs.map((s:any) => s.id));
+  };
+
+  const canConfirm = isMultiSpec ? selectedSpecs.length > 0 : true;
+
+  // View toggle for stock details
+  const [showStockDetails, setShowStockDetails] = useState(false);
+  const showDetailsButton = !isStockShared && !isBatch;
+
+  // Prepare specs for table view (handles both single and multi-spec)
+  const tableSpecs = isMultiSpec ? product?.specs : [{ id: 'default', name: product?.spec || '标准', stock: product?.stock }];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-white rounded-[24px] w-[960px] h-[650px] shadow-2xl flex overflow-hidden transform scale-100 transition-all font-sans">
-            <div className="flex-1 flex flex-col p-8 bg-white relative">
-               <div className="flex justify-between items-start mb-6">
+        <div className={`bg-white rounded-[24px] h-[680px] shadow-2xl flex overflow-hidden transform scale-100 transition-all font-sans ${showStockDetails ? 'w-[800px]' : 'w-[880px]'}`}>
+            
+            {/* Left Panel: Settings Workspace */}
+            <div className="flex-1 flex flex-col bg-white relative border-r border-gray-100 min-w-0">
+               <div className="p-8 pb-6 flex justify-between items-start shrink-0 border-b border-gray-50">
                   <div>
-                     <h3 className="text-2xl font-black text-gray-900 leading-tight">{product.name}</h3>
-                     <div className="text-sm font-bold text-gray-400 mt-1 flex items-center gap-2">
-                        <span>¥{product.price}</span> 
-                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                        <span>{product.spec}</span>
-                     </div>
+                     <h3 className="text-2xl font-black text-gray-900 leading-tight">{title}</h3>
+                     {!isBatch && !isMultiSpec && (
+                         <div className="text-sm font-bold text-gray-400 mt-2 flex items-center gap-2">
+                            <span className="text-gray-600">¥{product?.price?.toFixed(2)}</span> 
+                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                            <span>{product?.spec}</span>
+                            {isStockShared && (
+                                <>
+                                    <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                    <span className="text-gray-500">剩余: {product?.stock ?? 0}</span>
+                                </>
+                            )}
+                         </div>
+                     )}
                   </div>
-                  <button onClick={onClose} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"><X size={20}/></button>
+                  {showDetailsButton && (
+                      <button 
+                          onClick={() => setShowStockDetails(!showStockDetails)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border-2 ${showStockDetails ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-[#00C06B]/30 hover:text-[#00C06B]'}`}
+                      >
+                          <Table size={16} />
+                          {showStockDetails ? '返回操作面板' : '查看各渠道库存'}
+                      </button>
+                  )}
                </div>
-               
-               {/* Inventory Display Logic - Updated: Show Group Stock if Grouping Enabled & All View */}
-               {(!isStockShared && activeChannel === 'all') && (
-                   <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                       <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                           {enableChannelGrouping ? '各分组当前库存' : '各渠道当前库存'}
+
+               {showStockDetails ? (
+                   <div className="flex-1 overflow-y-auto px-8 py-6 no-scrollbar animate-in fade-in zoom-in-95 duration-200">
+                       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                               <div className="font-bold text-sm text-gray-700 flex items-center">
+                                   <Layers size={16} className="mr-2 text-gray-500" />
+                                   商品多渠道库存明细
+                               </div>
+                           </div>
+                           <div className="overflow-x-auto">
+                               <table className="w-full text-left text-sm">
+                                   <thead>
+                                       <tr className="bg-white border-b border-gray-100">
+                                           <th className="py-3 px-4 font-bold text-gray-500 bg-gray-50/50 sticky left-0 z-10 w-[120px]">{isMultiSpec ? '规格名称' : '商品规格'}</th>
+                                           {resolvedChannels.map(chId => (
+                                               <th key={chId} className="py-3 px-4 font-bold text-gray-500 whitespace-nowrap">
+                                                   {CHANNEL_TABS.find(t => t.id === chId)?.label || chId}
+                                               </th>
+                                           ))}
+                                       </tr>
+                                   </thead>
+                                   <tbody>
+                                       {tableSpecs?.map((spec: any, idx: number) => (
+                                           <tr key={spec.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                               <td className="py-3 px-4 font-bold text-gray-800 bg-white sticky left-0 z-10">{spec.name}</td>
+                                               {resolvedChannels.map(chId => {
+                                                   // Use channelStocks if available, otherwise fallback to standard logic
+                                                   let stock = '0';
+                                                   if (product?.channelStocks && product.channelStocks[chId] !== undefined) {
+                                                        if (typeof product.channelStocks[chId] === 'object') {
+                                                            stock = String(product.channelStocks[chId][spec.name] ?? 0);
+                                                        } else {
+                                                            stock = String(product.channelStocks[chId] ?? 0); // single spec logic
+                                                        }
+                                                   } else {
+                                                       stock = String(spec.stock ?? 0); // Fallback to base spec stock
+                                                   }
+                                                   const isZero = stock === '0';
+                                                   return (
+                                                       <td key={chId} className="py-3 px-4">
+                                                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${isZero ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
+                                                               {stock}
+                                                           </span>
+                                                       </td>
+                                                   );
+                                               })}
+                                           </tr>
+                                       ))}
+                                   </tbody>
+                               </table>
+                           </div>
                        </div>
-                       <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                           {enableChannelGrouping ? (
-                               // Render Groups Stock (User Req 1)
-                               channelGroups.map(group => {
-                                   const stock = getGroupStock(group);
-                                   return (
-                                       <div key={group.id} className="flex flex-col items-center min-w-[60px]">
-                                           <span className="text-xs text-gray-500 font-bold mb-1 truncate max-w-[80px]">{group.name}</span>
-                                           <span className={`text-sm font-black font-mono ${stock > 0 ? 'text-gray-800' : 'text-red-500'}`}>{stock}</span>
-                                       </div>
-                                   );
-                               })
-                           ) : (
-                               // Render Individual Channels Stock
-                               resolvedChannels.map(ch => {
-                                   const dataKey = ch === 'mini_dine' || ch === 'mini_take' || ch === 'mini_pickup' ? 'mini' : ch;
-                                   const stock = product.channelStocks?.[dataKey] || 0;
-                                   const isUnmapped = product.channels?.[dataKey] === 'unmapped';
-                                   const label = CHANNEL_TABS.find(t => t.id === ch)?.label || ch;
-                                   return (
-                                       <div key={ch} className={`flex flex-col items-center ${isUnmapped ? 'opacity-50' : ''} min-w-[60px]`}>
-                                           <span className="text-xs text-gray-500 font-bold mb-1">{label}</span>
-                                           {isUnmapped ? <span className="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-500">未映射</span> : <span className={`text-sm font-black font-mono ${stock > 0 ? 'text-gray-800' : 'text-red-500'}`}>{stock}</span>}
-                                       </div>
-                                   );
-                               })
-                           )}
+                       <div className="mt-4 text-xs text-gray-400 flex items-center justify-center">
+                           <AlertTriangle size={14} className="mr-1" />
+                           此页面为只读视图，请返回操作面板进行库存修改
                        </div>
                    </div>
-               )}
+               ) : (
+                   <div className="flex-1 overflow-y-auto px-8 py-6 no-scrollbar space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                   {/* Method Toggle */}
+                   <div>
+                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">沽清类型</div>
+                       <div className="flex space-x-4">
+                           <button onClick={() => handleMethodChange('day')} className={`flex-1 py-3.5 rounded-xl text-[15px] font-black transition-all border-2 ${globalMethod === 'day' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>当日沽清</button>
+                           <button onClick={() => handleMethodChange('long')} className={`flex-1 py-3.5 rounded-xl text-[15px] font-black transition-all border-2 ${globalMethod === 'long' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>长期沽清</button>
+                       </div>
+                   </div>
 
-               <div className="bg-gray-100 p-1 rounded-xl flex mb-8 w-fit">
-                   <button onClick={() => setMethod('cycle')} className={`px-8 py-2.5 rounded-lg text-sm font-black transition-all ${method === 'cycle' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>按周期沽清</button>
-                   <button onClick={() => setMethod('total')} className={`px-8 py-2.5 rounded-lg text-sm font-black transition-all ${method === 'total' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>按总数沽清</button>
+                   {/* Specs Selection */}
+                   {isMultiSpec && (
+                       <div>
+                           <div className="flex justify-between items-center mb-4">
+                               <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center">
+                                   生效规格 <span className="text-red-500 ml-1">*</span>
+                                   <span className="ml-2 text-[10px] text-gray-400 font-normal bg-gray-100 px-1.5 py-0.5 rounded">已选 {selectedSpecs.length}/{product.specs.length}</span>
+                               </div>
+                               <button onClick={selectAllSpecs} className="text-[#00C06B] text-sm font-bold hover:text-[#00A35B] transition-colors">
+                                   {selectedSpecs.length === product.specs.length ? '取消全选' : '全选'}
+                               </button>
+                           </div>
+                           <div className="grid grid-cols-3 gap-3">
+                               {product.specs.map((spec: any) => {
+                                   const isSelected = selectedSpecs.includes(spec.id);
+                                   return (
+                                       <div 
+                                           key={spec.id} 
+                                           onClick={() => toggleSpec(spec.id)}
+                                           className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center justify-center h-[54px] relative overflow-hidden group ${isSelected ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-200 bg-white hover:border-[#00C06B]/30'}`}
+                                       >
+                                           <div className="flex items-center justify-center w-full z-10 relative">
+                                               <span className={`font-bold text-[15px] ${isSelected ? 'text-[#00C06B] mr-6' : 'text-gray-800'}`}>{spec.name}</span>
+                                               {isSelected && <CheckCircle2 size={18} className="text-[#00C06B] absolute right-0"/>}
+                                           </div>
+                                           {isStockShared && (
+                                               <span className="text-[10px] text-gray-500 mt-0.5 font-normal z-10">剩余: {spec.stock ?? 0}</span>
+                                           )}
+                                           {isSelected && <div className="absolute inset-0 bg-[#00C06B]/5 z-0 pointer-events-none"></div>}
+                                       </div>
+                                   )
+                               })}
+                           </div>
+                       </div>
+                   )}
+                   
+                   {/* Inputs */}
+                   <div>
+                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">库存设置</div>
+                       {globalMethod === 'day' ? (
+                           <div className="grid grid-cols-2 gap-4">
+                               <NumpadInput label="今日剩余数量" value={targetValues.dayRemain} active={activeField === 'dayRemain'} onFocus={() => setActiveField('dayRemain')} placeholder="必填"/>
+                               <NumpadInput label="次日补足数量" value={targetValues.dayNextLimit} active={activeField === 'dayNextLimit'} onFocus={() => setActiveField('dayNextLimit')} placeholder="不填默认为无限"/>
+                           </div>
+                       ) : (
+                           <div>
+                               <NumpadInput label="剩余可售数量" value={targetValues.longLimit} active={activeField === 'longLimit'} onFocus={() => setActiveField('longLimit')} placeholder="设为0即长期售罄" large/>
+                           </div>
+                       )}
+                   </div>
+
+                   {/* Channel Selector Area */}
+                   <div>
+                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center">
+                           操作生效渠道
+                           {isStockShared && <span className="ml-3 normal-case text-orange-500 bg-orange-50 px-2 py-0.5 rounded font-bold flex items-center text-[10px]"><Lock size={10} className="mr-1"/> 全渠道锁定</span>}
+                       </div>
+                       <div className="flex flex-wrap gap-3">
+                           {renderChannelSelector()}
+                       </div>
+                   </div>
                </div>
-               <div className="flex-1 overflow-y-auto no-scrollbar pr-2">
-                  {method === 'cycle' ? (
-                      <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
-                         <div className="flex items-center space-x-6 mb-2">
-                             <label className="flex items-center space-x-2 cursor-pointer group"><div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${cycleMode === 'day' ? 'border-blue-500' : 'border-gray-300 group-hover:border-blue-400'}`}>{cycleMode === 'day' && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>}</div><input type="radio" className="hidden" checked={cycleMode === 'day'} onChange={() => setCycleMode('day')}/><span className={`font-bold ${cycleMode === 'day' ? 'text-gray-900' : 'text-gray-500'}`}>按营业日</span></label>
-                             <label className="flex items-center space-x-2 cursor-pointer group"><div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${cycleMode === 'meal' ? 'border-blue-500' : 'border-gray-300 group-hover:border-blue-400'}`}>{cycleMode === 'meal' && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>}</div><input type="radio" className="hidden" checked={cycleMode === 'meal'} onChange={() => setCycleMode('meal')}/><span className={`font-bold ${cycleMode === 'meal' ? 'text-gray-900' : 'text-gray-500'}`}>按餐段</span></label>
-                         </div>
-                         {cycleMode === 'day' ? (
-                             <div className="grid grid-cols-2 gap-6"><NumpadInput label="每日限售数量" value={formValues.dayLimit} active={activeField === 'dayLimit'} onFocus={() => setActiveField('dayLimit')} placeholder="不限制"/><NumpadInput label="今日剩余数量" value={formValues.dayRemain} active={activeField === 'dayRemain'} onFocus={() => setActiveField('dayRemain')}/></div>
-                         ) : (
-                             <div className="space-y-6"><div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100"><div className="text-xs font-bold text-blue-800 mb-3 flex items-center"><Clock3 size={12} className="mr-1"/> 午市 (10:00-14:00)</div><div className="grid grid-cols-2 gap-4"><NumpadInput label="限售" value={formValues.mealLunchLimit} active={activeField === 'mealLunchLimit'} onFocus={() => setActiveField('mealLunchLimit')} placeholder="不限"/><NumpadInput label="剩余" value={formValues.mealLunchRemain} active={activeField === 'mealLunchRemain'} onFocus={() => setActiveField('mealLunchRemain')}/></div></div><div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100"><div className="text-xs font-bold text-orange-800 mb-3 flex items-center"><Clock3 size={12} className="mr-1"/> 晚市 (17:00-21:00)</div><div className="grid grid-cols-2 gap-4"><NumpadInput label="限售" value={formValues.mealDinnerLimit} active={activeField === 'mealDinnerLimit'} onFocus={() => setActiveField('mealDinnerLimit')} placeholder="不限"/><NumpadInput label="剩余" value={formValues.mealDinnerRemain} active={activeField === 'mealDinnerRemain'} onFocus={() => setActiveField('mealDinnerRemain')}/></div></div></div>
-                         )}
-                      </div>
-                  ) : (
-                      <div className="py-10 animate-in fade-in slide-in-from-right-4 duration-300"><NumpadInput label="可售总数量" value={formValues.totalLimit} active={activeField === 'totalLimit'} onFocus={() => setActiveField('totalLimit')} placeholder="不限制" large/></div>
-                  )}
-                  
-                  <div className="mt-8 pt-8 border-t border-gray-100">
-                      <div className="flex items-center justify-between mb-4">
-                          <div className="text-xs font-black text-gray-400 uppercase tracking-widest">生效渠道</div>
-                          {(isStockShared || (enableChannelGrouping && (activeChannel !== 'all' || isStockShared))) && (
-                              <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center">
-                                  <Lock size={10} className="mr-1"/> 
-                                  {enableChannelGrouping ? '渠道分组联动锁定' : '全渠道库存共享锁定'}
-                              </span>
-                          )}
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                          {renderChannelSelector()}
-                      </div>
-                  </div>
+               )}
+               
+               {/* Global Lock Info Bar */}
+               <div className="px-8 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
+                   <div className="text-xs font-bold text-gray-500 flex items-center">
+                       当前库存规则：
+                       {isStockShared ? (
+                           <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded flex items-center ml-2"><Lock size={12} className="mr-1"/> 共享库存 (全局同步)</span>
+                       ) : enableChannelGrouping ? (
+                           <span className="text-[#00C06B] bg-[#00C06B]/10 px-2 py-1 rounded flex items-center ml-2"><Layers size={12} className="mr-1"/> 渠道分组独立</span>
+                       ) : (
+                           <span className="text-gray-600 bg-gray-200 px-2 py-1 rounded ml-2">全渠道完全独立</span>
+                       )}
+                   </div>
                </div>
             </div>
-            <div className="w-[340px] bg-gray-50 border-l border-gray-200 p-6 flex flex-col justify-between shrink-0 select-none">
-                <div className="grid grid-cols-3 gap-3 flex-1 content-start mb-6">
-                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map(num => (<button key={num} onClick={() => handleNumpadInput(num.toString())} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-2xl font-black text-gray-800 hover:bg-white hover:border-blue-400 hover:text-blue-600 hover:shadow-md active:bg-blue-50 active:scale-95 transition-all">{num}</button>))}
-                   <button onClick={() => handleNumpadInput('backspace')} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 hover:shadow-md active:scale-95 transition-all flex items-center justify-center"><Delete size={28}/></button>
-                </div>
-                <div className="space-y-3">
-                    <button onClick={() => handleNumpadInput('clear')} className="w-full py-3 text-gray-400 text-sm font-bold hover:text-gray-600 transition-colors">清空当前输入</button>
-                    <div className="flex gap-3">
-                        {isRestorable && (
+
+            {/* Right Panel: Numpad & Actions */}
+            {!showStockDetails && (
+                <div className="w-[320px] bg-[#F7F8FA] p-6 flex flex-col justify-between shrink-0 select-none relative">
+                    <button onClick={onClose} className="absolute top-4 right-4 p-2.5 bg-gray-200 hover:bg-gray-300 rounded-full text-gray-500 transition-colors z-10 active:scale-90"><X size={20}/></button>
+                    
+                    <div className="mt-12 grid grid-cols-3 gap-3 flex-1 content-start mb-6">
+                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map(num => (
+                           <button key={num} onClick={() => handleNumpadInput(num.toString())} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-2xl font-black text-gray-800 hover:bg-white hover:border-[#00C06B] hover:text-[#00C06B] hover:shadow-md active:bg-[#00C06B]/5 active:scale-95 transition-all">{num}</button>
+                       ))}
+                       <button onClick={() => handleNumpadInput('backspace')} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 hover:shadow-md active:scale-95 transition-all flex items-center justify-center"><X size={28}/></button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        <button onClick={() => handleNumpadInput('clear')} className="w-full py-3 text-gray-400 text-sm font-bold hover:text-gray-600 transition-colors">清空当前输入</button>
+                        <div className="flex gap-3">
+                            {(!isBatch && (product?.status === 'sold_out' || product?.status === 'warning')) && (
+                                <button onClick={onConfirm} className="flex-[0.8] h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center shadow-sm">取消沽清</button>
+                            )}
                             <button 
                                 onClick={onConfirm} 
-                                className="flex-1 h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center"
+                                disabled={!canConfirm}
+                                className={`flex-1 h-16 text-white rounded-2xl text-xl font-black shadow-lg transition-all flex items-center justify-center ${canConfirm ? 'bg-[#00C06B] shadow-[#00C06B]/30 hover:bg-[#00A35B] active:scale-95' : 'bg-gray-300 shadow-none cursor-not-allowed'}`}
                             >
-                                取消沽清
+                                确认修改
                             </button>
-                        )}
-                        <button 
-                            onClick={onConfirm} 
-                            className={`${isRestorable ? 'flex-[1.5]' : 'w-full'} h-16 bg-blue-600 text-white rounded-2xl text-xl font-black shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-blue-300 active:scale-95 transition-all flex items-center justify-center`}
-                        >
-                            {isRestorable ? '更新设置' : '确认沽清'}
-                        </button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     </div>
   );

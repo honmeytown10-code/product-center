@@ -430,7 +430,7 @@ export const WebComboProductForm: React.FC<WebComboProductFormProps> = ({ catego
                                             )}
                                         </div>
                                     )}
-                                    {(!isFree && !isOptional) && (
+                                    {(!isFree && group.type !== 'optional') && (
                                         <div className="col-span-1 text-right">
                                             <button className="text-xs text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors">
                                                 <Trash2 size={14}/>

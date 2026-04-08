@@ -71,7 +71,9 @@ const INITIAL_BRAND_CONFIGS: Record<string, BrandConfig> = {
     channelGroups: [
         { id: 'cg_self', name: '自营渠道', channels: ['pos', 'mini_dine', 'mini_take', 'mini_pickup'] },
         { id: 'cg_third', name: '三方外卖', channels: ['meituan', 'taobao', 'jingdong'] }
-    ]
+    ],
+    posStockoutMode: 'spu',
+    posStockoutWarningThreshold: 30
   }
 };
 

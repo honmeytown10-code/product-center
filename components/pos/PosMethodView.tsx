@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Search, Info, CheckCircle, CheckSquare, Ban, Zap, PowerOff } from 'lucide-react';
+import { Search, Info, CheckCircle, CheckSquare, Ban, Zap, PowerOff, Circle, CheckCircle2, Square } from 'lucide-react';
 import { CategoryButton } from './PosCommon';
 
 const MOCK_METHOD_GROUPS = ['全部', '甜度', '温度', '加料', '口味'];
@@ -33,6 +33,11 @@ export const PosMethodView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Left Panel Batch Mode
+  const [isLeftBatchMode, setIsLeftBatchMode] = useState(false);
+  const [leftSelectedIds, setLeftSelectedIds] = useState<Set<string>>(new Set());
+
   const [methodActionModal, setMethodActionModal] = useState<{ open: boolean; item: any | null; type: 'enable' | 'disable' }>({ open: false, item: null, type: 'disable' });
 
   const displayMethodItems = useMemo(() => {
@@ -81,8 +86,10 @@ export const PosMethodView: React.FC = () => {
         {/* Left Sidebar: Disabled List */}
         <div className="w-[340px] bg-white border-r border-gray-200 flex flex-col z-10 shrink-0">
             <div className="h-14 border-b border-gray-100 flex items-center justify-between px-5 bg-white shrink-0">
-                <span className="font-bold text-gray-800 text-[16px]">已停用做法</span>
-                <span className="bg-red-50 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{disabledMethodItems.length}</span>
+                <div className="flex items-center">
+                    <span className="font-bold text-gray-800 text-[16px] mr-2">已停用做法</span>
+                    <span className="bg-red-50 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{disabledMethodItems.length}</span>
+                </div>
             </div>
             <div className="flex-1 overflow-y-auto">
                 {disabledMethodItems.length === 0 ? (
@@ -92,19 +99,93 @@ export const PosMethodView: React.FC = () => {
                     </div>
                 ) : (
                     disabledMethodItems.map(m => (
-                        <div key={m.id} onClick={() => handleItemClick(m)} className="px-5 py-4 border-b border-gray-50 cursor-pointer hover:bg-red-50/50 transition-all flex items-center justify-between group">
-                            <div>
-                                <div className="font-bold text-[14px] text-gray-700 group-hover:text-red-600 transition-colors">{m.name}</div>
-                                <div className="text-[10px] text-gray-400 mt-1">{m.group}</div>
+                        <div 
+                            key={m.id} 
+                            onClick={() => {
+                                if (isLeftBatchMode) {
+                                    const newSet = new Set(leftSelectedIds);
+                                    if (newSet.has(m.id)) newSet.delete(m.id);
+                                    else newSet.add(m.id);
+                                    setLeftSelectedIds(newSet);
+                                } else {
+                                    handleItemClick(m);
+                                }
+                            }} 
+                            className={`px-5 py-4 border-b border-gray-50 cursor-pointer transition-all flex items-center group ${isLeftBatchMode && leftSelectedIds.has(m.id) ? 'bg-[#00C06B]/5 border-l-4 border-l-[#00C06B]' : 'hover:bg-red-50/50 border-l-4 border-l-transparent'}`}
+                        >
+                            {isLeftBatchMode && (
+                                <div className="mr-3 shrink-0">
+                                    {leftSelectedIds.has(m.id) ? <CheckCircle2 size={20} className="text-[#00C06B] fill-white"/> : <Circle size={20} className="text-gray-200 fill-transparent"/>}
+                                </div>
+                            )}
+                            <div className="flex-1 flex justify-between items-center min-w-0">
+                                <div>
+                                    <div className="font-bold text-[14px] text-gray-700 group-hover:text-red-600 transition-colors truncate pr-2">{m.name}</div>
+                                    <div className="text-[10px] text-gray-400 mt-1">{m.group}</div>
+                                </div>
+                                {!isLeftBatchMode && (
+                                    <div className="px-2 py-1 rounded bg-white border border-gray-200 text-xs font-bold text-gray-500 shadow-sm group-hover:border-red-200 group-hover:text-red-500 shrink-0">启用</div>
+                                )}
                             </div>
-                            <div className="px-2 py-1 rounded bg-white border border-gray-200 text-xs font-bold text-gray-500 shadow-sm group-hover:border-red-200 group-hover:text-red-500">启用</div>
                         </div>
                     ))
                 )}
             </div>
-            <div className="p-4 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 leading-snug">
-                <Info size={12} className="inline mr-1 text-blue-500 mb-0.5"/>
-                点击左侧列表中的停用项，可快速重新启用该做法。
+            
+            {/* Left Panel Batch Action Footer */}
+            <div className="bg-white border-t border-gray-200 h-16 flex items-center justify-between px-4 z-20 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                {!isLeftBatchMode ? (
+                    <button 
+                        onClick={() => setIsLeftBatchMode(true)}
+                        className="w-full py-2.5 rounded-lg bg-gray-50 text-gray-600 font-bold hover:bg-gray-100 transition-all flex items-center justify-center text-sm"
+                    >
+                        <CheckSquare size={16} className="mr-2"/> 批量操作
+                    </button>
+                ) : (
+                    <>
+                        <button 
+                            onClick={() => {
+                                if (leftSelectedIds.size === disabledMethodItems.length) {
+                                    setLeftSelectedIds(new Set());
+                                } else {
+                                    setLeftSelectedIds(new Set(disabledMethodItems.map(i => i.id)));
+                                }
+                            }}
+                            className="flex items-center text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
+                        >
+                            <div className="mr-2">
+                                {leftSelectedIds.size > 0 ? (
+                                    <CheckSquare size={18} className="text-[#00C06B]" />
+                                ) : (
+                                    <Square size={18} className="text-gray-300" />
+                                )}
+                            </div>
+                            全选
+                        </button>
+                        <div className="flex items-center space-x-2">
+                            <button 
+                                disabled={leftSelectedIds.size === 0} 
+                                onClick={() => {
+                                    setMethodItems(prev => prev.map(m => {
+                                        if (leftSelectedIds.has(m.id)) return { ...m, status: 'available' };
+                                        return m;
+                                    }));
+                                    setIsLeftBatchMode(false);
+                                    setLeftSelectedIds(new Set());
+                                }}
+                                className="px-3 py-1.5 rounded bg-[#00C06B] text-white font-bold disabled:opacity-50 transition-all text-xs hover:bg-[#00A35B]"
+                            >
+                                启用
+                            </button>
+                            <button 
+                                onClick={() => { setIsLeftBatchMode(false); setLeftSelectedIds(new Set()); }}
+                                className="px-3 py-1.5 rounded text-gray-400 hover:bg-gray-100 font-bold transition-all text-xs"
+                            >
+                                退出
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
 

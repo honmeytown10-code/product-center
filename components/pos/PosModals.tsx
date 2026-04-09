@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, RotateCcw, Lock, Clock3, AlertTriangle, Delete, Layers, CheckCircle2, RefreshCw, ChevronLeft, ChevronRight, Table } from 'lucide-react';
+import { X, Check, RotateCcw, Lock, Clock3, AlertTriangle, Delete, Layers, CheckCircle2, Circle, RefreshCw, ChevronLeft, ChevronRight, Table, HelpCircle } from 'lucide-react';
 import { useProducts } from '../../context';
 import { CHANNEL_TABS, SHELF_VIEW_TABS, ChannelType, ChannelTabType, NumpadInput, ChannelTag } from './PosCommon';
 import { ChannelGroup } from '../../types';
@@ -525,6 +525,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
 
   // State management for 2-column unified layout
   const [globalMethod, setGlobalMethod] = useState<'day' | 'long'>('day');
+  const [clearanceMode, setClearanceMode] = useState<'spu' | 'sku'>('spu');
   
   // Logic for default dayNextLimit (if product has maxStock, use it, else empty string representing infinite)
   const defaultNextLimit = product?.maxStock !== undefined && product?.maxStock !== null ? String(product.maxStock) : '';
@@ -534,6 +535,23 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
   
   // Selected specs for multi-spec operations
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
+  
+  // Advanced Spec Row Focus Logic
+  const [activeSpecRowId, setActiveSpecRowId] = useState<string | null>(null);
+  
+  // Store individual spec values: specId -> { dayRemain, dayNextLimit, longLimit }
+  const [specValues, setSpecValues] = useState<Record<string, { dayRemain: string, dayNextLimit: string, longLimit: string }>>({});
+
+  // Initialize spec values on mount
+  useEffect(() => {
+      if (isMultiSpec && product?.specs) {
+          const initial: Record<string, { dayRemain: string, dayNextLimit: string, longLimit: string }> = {};
+          product.specs.forEach((s: any) => {
+              initial[s.id] = { dayRemain: '0', dayNextLimit: defaultNextLimit, longLimit: '0' };
+          });
+          setSpecValues(initial);
+      }
+  }, [isMultiSpec, product]);
 
   const handleMethodChange = (m: 'day' | 'long') => {
       setGlobalMethod(m);
@@ -547,7 +565,38 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
          if (key === '.') return current.includes('.') ? current : current + '.';
          return current + key;
      };
-     setTargetValues(prev => ({ ...prev, [activeField]: updateValue(prev[activeField]) }));
+
+     if (isMultiSpec && activeSpecRowId && clearanceMode === 'sku') {
+         // Update specific spec row
+         setSpecValues(prev => ({
+             ...prev,
+             [activeSpecRowId]: {
+                 ...prev[activeSpecRowId],
+                 [activeField]: updateValue(prev[activeSpecRowId][activeField])
+             }
+         }));
+     } else {
+         // Update global target value and sync to ALL selected specs
+         setTargetValues(prev => {
+             const newVal = updateValue(prev[activeField]);
+             
+             // Sync down to selected specs if it's a global change
+             if (isMultiSpec) {
+                 setSpecValues(specPrev => {
+                     const nextSpecs = { ...specPrev };
+                     const targets = clearanceMode === 'spu' ? Object.keys(nextSpecs) : selectedSpecs;
+                     targets.forEach(specId => {
+                         if (nextSpecs[specId]) {
+                             nextSpecs[specId] = { ...nextSpecs[specId], [activeField]: newVal };
+                         }
+                     });
+                     return nextSpecs;
+                 });
+             }
+             
+             return { ...prev, [activeField]: newVal };
+         });
+     }
   };
 
   const toggleSpec = (id: string) => {
@@ -555,15 +604,21 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
   };
 
   const selectAllSpecs = () => {
-      if (selectedSpecs.length === product.specs.length) setSelectedSpecs([]);
-      else setSelectedSpecs(product.specs.map((s:any) => s.id));
+      if (selectedSpecs.length === (product?.specs?.length || 0)) setSelectedSpecs([]);
+      else setSelectedSpecs(product?.specs?.map((s:any) => s.id) || []);
   };
 
-  const canConfirm = isMultiSpec ? selectedSpecs.length > 0 : true;
+  const canConfirm = (isMultiSpec && clearanceMode === 'sku') ? selectedSpecs.length > 0 : true;
 
   // View toggle for stock details
   const [showStockDetails, setShowStockDetails] = useState(false);
   const showDetailsButton = !isStockShared && !isBatch;
+
+  // Secondary confirmation for cancel clearance
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // Help Modal State
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Prepare specs for table view (handles both single and multi-spec)
   const tableSpecs = isMultiSpec ? product?.specs : [{ id: 'default', name: product?.spec || '标准', stock: product?.stock }];
@@ -576,7 +631,16 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
             <div className="flex-1 flex flex-col bg-white relative border-r border-gray-100 min-w-0">
                <div className="p-8 pb-6 flex justify-between items-start shrink-0 border-b border-gray-50">
                   <div>
-                     <h3 className="text-2xl font-black text-gray-900 leading-tight">{title}</h3>
+                     <div className="flex items-center gap-3">
+                         <h3 className="text-2xl font-black text-gray-900 leading-tight">{title}</h3>
+                         <button 
+                            onClick={() => setShowHelpModal(true)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors"
+                         >
+                            <HelpCircle size={14} />
+                            如何沽清商品
+                         </button>
+                     </div>
                      {!isBatch && !isMultiSpec && (
                          <div className="text-sm font-bold text-gray-400 mt-2 flex items-center gap-2">
                             <span className="text-gray-600">¥{product?.price?.toFixed(2)}</span> 
@@ -662,64 +726,123 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                ) : (
                    <div className="flex-1 overflow-y-auto px-8 py-6 no-scrollbar space-y-8 animate-in fade-in zoom-in-95 duration-200">
                    {/* Method Toggle */}
-                   <div>
-                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">沽清类型</div>
-                       <div className="flex space-x-4">
-                           <button onClick={() => handleMethodChange('day')} className={`flex-1 py-3.5 rounded-xl text-[15px] font-black transition-all border-2 ${globalMethod === 'day' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>当日沽清</button>
-                           <button onClick={() => handleMethodChange('long')} className={`flex-1 py-3.5 rounded-xl text-[15px] font-black transition-all border-2 ${globalMethod === 'long' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>长期沽清</button>
-                       </div>
-                   </div>
-
-                   {/* Specs Selection */}
-                   {isMultiSpec && (
-                       <div>
-                           <div className="flex justify-between items-center mb-4">
-                               <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center">
-                                   生效规格 <span className="text-red-500 ml-1">*</span>
-                                   <span className="ml-2 text-[10px] text-gray-400 font-normal bg-gray-100 px-1.5 py-0.5 rounded">已选 {selectedSpecs.length}/{product.specs.length}</span>
+                   <div className="space-y-5 pb-5 border-b border-gray-100">
+                       <div className="flex gap-4">
+                           <div className="flex-1">
+                               <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">沽清类型</div>
+                               <div className="flex space-x-3">
+                                   <button onClick={() => handleMethodChange('day')} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${globalMethod === 'day' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>当日沽清</button>
+                                   <button onClick={() => handleMethodChange('long')} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${globalMethod === 'long' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>长期沽清</button>
                                </div>
-                               <button onClick={selectAllSpecs} className="text-[#00C06B] text-sm font-bold hover:text-[#00A35B] transition-colors">
-                                   {selectedSpecs.length === product.specs.length ? '取消全选' : '全选'}
-                               </button>
-                           </div>
-                           <div className="grid grid-cols-3 gap-3">
-                               {product.specs.map((spec: any) => {
-                                   const isSelected = selectedSpecs.includes(spec.id);
-                                   return (
-                                       <div 
-                                           key={spec.id} 
-                                           onClick={() => toggleSpec(spec.id)}
-                                           className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center justify-center h-[54px] relative overflow-hidden group ${isSelected ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-200 bg-white hover:border-[#00C06B]/30'}`}
-                                       >
-                                           <div className="flex items-center justify-center w-full z-10 relative">
-                                               <span className={`font-bold text-[15px] ${isSelected ? 'text-[#00C06B] mr-6' : 'text-gray-800'}`}>{spec.name}</span>
-                                               {isSelected && <CheckCircle2 size={18} className="text-[#00C06B] absolute right-0"/>}
-                                           </div>
-                                           {isStockShared && (
-                                               <span className="text-[10px] text-gray-500 mt-0.5 font-normal z-10">剩余: {spec.stock ?? 0}</span>
-                                           )}
-                                           {isSelected && <div className="absolute inset-0 bg-[#00C06B]/5 z-0 pointer-events-none"></div>}
-                                       </div>
-                                   )
-                               })}
                            </div>
                        </div>
-                   )}
-                   
-                   {/* Inputs */}
-                   <div>
-                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">库存设置</div>
-                       {globalMethod === 'day' ? (
-                           <div className="grid grid-cols-2 gap-4">
-                               <NumpadInput label="今日剩余数量" value={targetValues.dayRemain} active={activeField === 'dayRemain'} onFocus={() => setActiveField('dayRemain')} placeholder="必填"/>
-                               <NumpadInput label="次日补足数量" value={targetValues.dayNextLimit} active={activeField === 'dayNextLimit'} onFocus={() => setActiveField('dayNextLimit')} placeholder="不填默认为无限"/>
-                           </div>
-                       ) : (
-                           <div>
-                               <NumpadInput label="剩余可售数量" value={targetValues.longLimit} active={activeField === 'longLimit'} onFocus={() => setActiveField('longLimit')} placeholder="设为0即长期售罄" large/>
+                       
+                       {isMultiSpec && (
+                           <div className="flex gap-4">
+                               <div className="flex-1">
+                                   <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">沽清模式</div>
+                                   <div className="flex space-x-3">
+                                       <button onClick={() => { setClearanceMode('spu'); setActiveSpecRowId(null); }} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${clearanceMode === 'spu' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>按商品统一设置</button>
+                                       <button onClick={() => { setClearanceMode('sku'); if(product?.specs?.length && !activeSpecRowId) { setActiveSpecRowId(product.specs[0].id); if (selectedSpecs.length === 0) setSelectedSpecs(product.specs.map((s:any)=>s.id)); } }} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${clearanceMode === 'sku' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>按规格独立设置</button>
+                                   </div>
+                               </div>
                            </div>
                        )}
                    </div>
+
+                   {/* Inputs & Specs Logic */}
+                   {isMultiSpec && clearanceMode === 'sku' ? (
+                       <div className="space-y-6">
+                           {/* Spec Rows */}
+                           <div>
+                               <div className="flex justify-between items-center mb-3">
+                                   <div className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center">
+                                       生效规格明细 <span className="text-red-500 ml-1">*</span>
+                                       <span className="ml-2 text-[10px] text-gray-400 font-normal bg-gray-100 px-1.5 py-0.5 rounded">已选 {selectedSpecs.length}/{product?.specs?.length || 0}</span>
+                                   </div>
+                                   <button onClick={selectAllSpecs} className="text-[#00C06B] text-sm font-bold hover:text-[#00A35B] transition-colors">
+                                       {selectedSpecs.length === (product?.specs?.length || 0) ? '取消全选' : '全选'}
+                                   </button>
+                               </div>
+                           
+                               <div className="space-y-2">
+                                   {product?.specs?.map((spec: any) => {
+                                       const isSelected = selectedSpecs.includes(spec.id);
+                                       const isActiveRow = activeSpecRowId === spec.id;
+                                       const vals = specValues[spec.id] || { dayRemain: '0', dayNextLimit: defaultNextLimit, longLimit: '0' };
+                                       
+                                       return (
+                                           <div 
+                                               key={spec.id} 
+                                               onClick={() => {
+                                                   if (!isSelected) toggleSpec(spec.id);
+                                                   setActiveSpecRowId(spec.id);
+                                                   if (globalMethod === 'day' && activeField === 'longLimit') setActiveField('dayRemain');
+                                                   if (globalMethod === 'long' && activeField !== 'longLimit') setActiveField('longLimit');
+                                               }}
+                                               className={`flex items-center p-3 rounded-xl border-2 transition-all cursor-pointer ${isSelected ? (isActiveRow ? 'border-[#00C06B] bg-[#00C06B]/5 shadow-sm ring-2 ring-[#00C06B]/20' : 'border-gray-200 bg-white hover:border-[#00C06B]/30') : 'border-transparent bg-gray-50 opacity-60 hover:opacity-100'}`}
+                                           >
+                                               <div 
+                                                   onClick={(e) => { e.stopPropagation(); toggleSpec(spec.id); }}
+                                                   className="mr-3 p-1"
+                                               >
+                                                   {isSelected ? <CheckCircle2 size={22} className="text-[#00C06B] fill-white"/> : <Circle size={22} className="text-gray-300 fill-transparent"/>}
+                                               </div>
+                                               
+                                               <div className="w-[100px] shrink-0 font-bold text-gray-800 text-[15px] truncate pr-2">
+                                                   {spec.name}
+                                               </div>
+                                               
+                                               <div className="flex-1 flex gap-2">
+                                                   {globalMethod === 'day' ? (
+                                                       <>
+                                                           <div 
+                                                               onClick={(e) => { e.stopPropagation(); setActiveSpecRowId(spec.id); setActiveField('dayRemain'); if(!isSelected) toggleSpec(spec.id); }}
+                                                               className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'dayRemain' ? 'bg-white border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
+                                                           >
+                                                               <span className="text-[10px] text-gray-400">今日剩余</span>
+                                                               <span className="font-mono font-bold">{vals.dayRemain || '0'}</span>
+                                                           </div>
+                                                           <div 
+                                                               onClick={(e) => { e.stopPropagation(); setActiveSpecRowId(spec.id); setActiveField('dayNextLimit'); if(!isSelected) toggleSpec(spec.id); }}
+                                                               className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'dayNextLimit' ? 'bg-white border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
+                                                           >
+                                                               <span className="text-[10px] text-gray-400">次日补足</span>
+                                                               <span className="font-mono font-bold">{vals.dayNextLimit || '无限'}</span>
+                                                           </div>
+                                                       </>
+                                                   ) : (
+                                                       <div 
+                                                           onClick={(e) => { e.stopPropagation(); setActiveSpecRowId(spec.id); setActiveField('longLimit'); if(!isSelected) toggleSpec(spec.id); }}
+                                                           className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'longLimit' ? 'bg-white border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
+                                                       >
+                                                           <span className="text-[10px] text-gray-400">剩余可售</span>
+                                                           <span className="font-mono font-bold">{vals.longLimit || '0'}</span>
+                                                       </div>
+                                                   )}
+                                               </div>
+                                           </div>
+                                       );
+                                   })}
+                               </div>
+                           </div>
+                       </div>
+                   ) : (
+                       /* Single Spec Inputs OR SPU mode Inputs */
+                       <div>
+                           <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">库存设置 {isMultiSpec && clearanceMode === 'spu' && <span className="normal-case text-[10px] text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded ml-2">将应用至所有规格</span>}</div>
+                           {globalMethod === 'day' ? (
+                               <div className="grid grid-cols-2 gap-4">
+                                   <NumpadInput label="今日剩余数量" value={targetValues.dayRemain} active={activeField === 'dayRemain'} onFocus={() => { setActiveSpecRowId(null); setActiveField('dayRemain'); }} placeholder="必填"/>
+                                   <NumpadInput label="次日补足数量" value={targetValues.dayNextLimit} active={activeField === 'dayNextLimit'} onFocus={() => { setActiveSpecRowId(null); setActiveField('dayNextLimit'); }} placeholder="不填默认为无限"/>
+                               </div>
+                           ) : (
+                               <div>
+                                   <NumpadInput label="剩余可售数量" value={targetValues.longLimit} active={activeField === 'longLimit'} onFocus={() => { setActiveSpecRowId(null); setActiveField('longLimit'); }} placeholder="设为0即长期售罄" large/>
+                               </div>
+                           )}
+                       </div>
+                   )}
 
                    {/* Channel Selector Area */}
                    <div>
@@ -765,7 +888,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                         <button onClick={() => handleNumpadInput('clear')} className="w-full py-3 text-gray-400 text-sm font-bold hover:text-gray-600 transition-colors">清空当前输入</button>
                         <div className="flex gap-3">
                             {(!isBatch && (product?.status === 'sold_out' || product?.status === 'warning')) && (
-                                <button onClick={onConfirm} className="flex-[0.8] h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center shadow-sm">取消沽清</button>
+                                <button onClick={() => setShowCancelConfirm(true)} className="flex-[0.8] h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center shadow-sm">取消沽清</button>
                             )}
                             <button 
                                 onClick={onConfirm} 
@@ -779,6 +902,167 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                 </div>
             )}
         </div>
+
+        {/* Cancel Clearance Confirm Dialog inside the Modal */}
+        {showCancelConfirm && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
+                <div className="bg-white rounded-xl shadow-2xl w-[400px] overflow-hidden animate-in zoom-in-95 font-sans">
+                    <div className="p-6 text-center">
+                        <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">确认取消沽清？</h3>
+                        <p className="text-gray-500 text-sm">
+                            取消沽清后，该商品 <span className="font-bold text-[#333]">{product?.name}</span> 将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许所有关联渠道正常售卖。
+                        </p>
+                    </div>
+                    <div className="flex border-t border-gray-100">
+                        <button onClick={() => setShowCancelConfirm(false)} className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-50 transition-colors">再想想</button>
+                        <div className="w-px bg-gray-100"></div>
+                        <button onClick={() => {
+                            setShowCancelConfirm(false);
+                            onConfirm();
+                        }} className="flex-1 py-4 font-bold text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">确认恢复</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Help Modal */}
+        {showHelpModal && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
+                <div className="bg-white rounded-xl shadow-2xl w-[600px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[85vh]">
+                    <div className="pt-5 pb-4 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
+                        <h3 className="text-xl font-bold text-[#333]">如何沽清商品</h3>
+                        <button onClick={() => setShowHelpModal(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                    </div>
+                    <div className="p-6 overflow-y-auto flex-1 space-y-8 bg-[#F7F8FA]">
+                        {/* Scenario 1 */}
+                        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                            <h4 className="text-[15px] font-bold text-gray-900 mb-3 flex items-center">
+                                <span className="w-1.5 h-4 bg-blue-500 rounded-full mr-2"></span>
+                                场景一：今日商品不卖了，明日需自动恢复售卖
+                            </h4>
+                            <div className="text-sm text-gray-600 space-y-2 leading-relaxed">
+                                <p><span className="font-bold text-gray-800">适用场景：</span>现制饮品、手作甜点等每日限量供应的商品。</p>
+                                <p><span className="font-bold text-gray-800">操作步骤：</span></p>
+                                <ol className="list-decimal list-inside pl-1 space-y-3">
+                                    <li>选择 <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded">当日沽清</span> 类型；</li>
+                                    <li>将 <span className="font-bold text-gray-800">今日剩余</span> 修改为 <span className="font-mono font-bold text-red-500">0</span>；</li>
+                                    <li>将 <span className="font-bold text-gray-800">次日补足</span> 修改为你明天计划备货的数量（不填则默认为无限库存）；</li>
+                                    <li>点击“确认修改”。第二天营业时，该商品会自动按你设置的补足数量恢复售卖。</li>
+                                </ol>
+                            </div>
+                            <div className="mt-4 bg-gray-50 rounded-lg border border-gray-100 p-4 flex items-center justify-center">
+                                <svg width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    {/* Mock UI Background */}
+                                    <rect width="400" height="120" rx="8" fill="white" stroke="#E5E7EB"/>
+                                    {/* Toggle */}
+                                    <rect x="20" y="20" width="160" height="30" rx="4" fill="#F3F4F6"/>
+                                    <rect x="22" y="22" width="76" height="26" rx="3" fill="#DBEAFE"/>
+                                    <text x="60" y="39" fontSize="12" fill="#2563EB" textAnchor="middle" fontWeight="bold">当日沽清</text>
+                                    <text x="138" y="39" fontSize="12" fill="#6B7280" textAnchor="middle">长期沽清</text>
+                                    
+                                    {/* Inputs */}
+                                    <rect x="20" y="65" width="170" height="40" rx="4" fill="white" stroke="#3B82F6" strokeWidth="1.5"/>
+                                    <text x="30" y="80" fontSize="10" fill="#9CA3AF">今日剩余</text>
+                                    <text x="30" y="96" fontSize="14" fill="#111827" fontWeight="bold" fontFamily="monospace">0</text>
+
+                                    <rect x="210" y="65" width="170" height="40" rx="4" fill="white" stroke="#E5E7EB"/>
+                                    <text x="220" y="80" fontSize="10" fill="#9CA3AF">次日补足</text>
+                                    <text x="220" y="96" fontSize="14" fill="#111827" fontWeight="bold" fontFamily="monospace">80</text>
+                                    
+                                    {/* Pointers/Arrows */}
+                                    <path d="M100 45 L50 65" stroke="#3B82F6" strokeWidth="1.5" strokeDasharray="4 2" markerEnd="url(#arrow)"/>
+                                    <defs>
+                                        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+                                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#3B82F6" />
+                                        </marker>
+                                    </defs>
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Scenario 2 */}
+                        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                            <h4 className="text-[15px] font-bold text-gray-900 mb-3 flex items-center">
+                                <span className="w-1.5 h-4 bg-orange-500 rounded-full mr-2"></span>
+                                场景二：商品无限期停售，直到人工重新补货
+                            </h4>
+                            <div className="text-sm text-gray-600 space-y-2 leading-relaxed">
+                                <p><span className="font-bold text-gray-800">适用场景：</span>预包装零食、周边周边、或因为原材料缺货导致长期无法供应的商品。</p>
+                                <p><span className="font-bold text-gray-800">操作步骤：</span></p>
+                                <ol className="list-decimal list-inside pl-1 space-y-3">
+                                    <li>选择 <span className="font-bold text-orange-600 bg-orange-50 px-1 rounded">长期沽清</span> 类型；</li>
+                                    <li>将 <span className="font-bold text-gray-800">剩余可售</span> 修改为 <span className="font-mono font-bold text-red-500">0</span>（如果仓库里还有最后几个，也可以填具体数字，卖完为止）；</li>
+                                    <li>点击“确认修改”。该商品将一直保持售罄状态，<span className="text-red-500 font-bold">次日不会自动恢复</span>，直到你手动改回无限库存。</li>
+                                </ol>
+                            </div>
+                            <div className="mt-4 bg-gray-50 rounded-lg border border-gray-100 p-4 flex items-center justify-center">
+                                <svg width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    {/* Mock UI Background */}
+                                    <rect width="400" height="120" rx="8" fill="white" stroke="#E5E7EB"/>
+                                    {/* Toggle */}
+                                    <rect x="20" y="20" width="160" height="30" rx="4" fill="#F3F4F6"/>
+                                    <rect x="102" y="22" width="76" height="26" rx="3" fill="#FFEDD5"/>
+                                    <text x="60" y="39" fontSize="12" fill="#6B7280" textAnchor="middle">当日沽清</text>
+                                    <text x="140" y="39" fontSize="12" fill="#EA580C" textAnchor="middle" fontWeight="bold">长期沽清</text>
+                                    
+                                    {/* Inputs */}
+                                    <rect x="20" y="65" width="360" height="40" rx="4" fill="white" stroke="#EA580C" strokeWidth="1.5"/>
+                                    <text x="30" y="80" fontSize="10" fill="#9CA3AF">剩余可售</text>
+                                    <text x="30" y="96" fontSize="14" fill="#111827" fontWeight="bold" fontFamily="monospace">0</text>
+                                    <text x="360" y="90" fontSize="10" fill="#9CA3AF" textAnchor="end">设为0即长期售罄</text>
+                                    
+                                    {/* Pointers/Arrows */}
+                                    <path d="M140 45 L140 65" stroke="#EA580C" strokeWidth="1.5" strokeDasharray="4 2" markerEnd="url(#arrowOrange)"/>
+                                    <defs>
+                                        <marker id="arrowOrange" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+                                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#EA580C" />
+                                        </marker>
+                                    </defs>
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Scenario 3 */}
+                        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                            <h4 className="text-[15px] font-bold text-gray-900 mb-3 flex items-center">
+                                <span className="w-1.5 h-4 bg-[#00C06B] rounded-full mr-2"></span>
+                                场景三：恢复已沽清商品的正常售卖
+                            </h4>
+                            <div className="text-sm text-gray-600 space-y-2 leading-relaxed">
+                                <p><span className="font-bold text-gray-800">操作步骤：</span></p>
+                                <ol className="list-decimal list-inside pl-1 space-y-3">
+                                    <li>点击处于“已售罄”状态的商品卡片打开沽清弹窗；</li>
+                                    <li>点击弹窗右下方的 <span className="font-bold text-red-500 bg-red-50 px-1 rounded">取消沽清</span> 按钮；</li>
+                                    <li>在弹出的确认框中点击“确认恢复”即可。商品将被重置为无限库存并立即允许各渠道售卖。</li>
+                                </ol>
+                            </div>
+                            <div className="mt-4 bg-gray-50 rounded-lg border border-gray-100 p-4 flex items-center justify-center">
+                                <svg width="400" height="100" viewBox="0 0 400 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    {/* Buttons mock */}
+                                    <rect width="400" height="100" rx="8" fill="#F9FAFB" stroke="#E5E7EB"/>
+                                    
+                                    <rect x="20" y="30" width="160" height="40" rx="8" fill="white" stroke="#FECACA" strokeWidth="1.5"/>
+                                    <text x="100" y="55" fontSize="14" fill="#EF4444" textAnchor="middle" fontWeight="bold">取消沽清</text>
+
+                                    <rect x="200" y="30" width="180" height="40" rx="8" fill="#00C06B"/>
+                                    <text x="290" y="55" fontSize="14" fill="white" textAnchor="middle" fontWeight="bold">确认修改</text>
+                                    
+                                    {/* Cursor mock */}
+                                    <path d="M90 70 L105 50 L115 60 Z" fill="black" stroke="white" strokeWidth="2"/>
+                                    <circle cx="100" cy="55" r="15" fill="#EF4444" fillOpacity="0.2"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="p-4 border-t border-gray-100 shrink-0">
+                        <button onClick={() => setShowHelpModal(false)} className="w-full py-3 bg-[#00C06B] text-white rounded-lg font-bold hover:bg-[#00A35B] transition-colors">我已了解</button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

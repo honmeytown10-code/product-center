@@ -51,15 +51,8 @@ export const PosShelfView: React.FC<{showImage: boolean}> = ({ showImage }) => {
   const filterTabs = useMemo(() => {
       // Fix: Added icon to allTab for type consistency
       const allTab = { id: 'all', label: '全部', shortLabel: '全部', icon: <LayoutGrid size={14}/> };
-      if (enableChannelGrouping) {
-          return [
-              allTab,
-              // Fix: Added icon to group tabs for type consistency
-              ...channelGroups.map(g => ({ id: g.id, label: g.name, shortLabel: g.name, channels: g.channels, icon: <Layers size={14}/> }))
-          ];
-      }
       return FILTER_CHANNEL_OPTIONS;
-  }, [enableChannelGrouping, channelGroups]);
+  }, []);
 
   const [shelfItems, setShelfItems] = useState(INITIAL_SHELF_ITEMS);
   const [shelfCategory, setShelfCategory] = useState('全部');
@@ -74,7 +67,7 @@ export const PosShelfView: React.FC<{showImage: boolean}> = ({ showImage }) => {
   const [shelfActionDialog, setShelfActionDialog] = useState<{ open: boolean; item?: any; items?: any[]; action: 'on' | 'off'; targetChannel: ChannelType; isAllView: boolean; visibleChannels?: string[] }>({ open: false, action: 'on', targetChannel: 'all', isAllView: true });
   const [shelfManagementItem, setShelfManagementItem] = useState<any>(null);
 
-  // The POS shelf view always operates on ALL channels now, eliminating the top channel filter
+  // The POS shelf view always operates on ALL channels now, eliminating the top channel filter.
   const getActiveChannels = () => {
       return ['pos', 'mini_dine', 'mini_take', 'mini_pickup', 'meituan', 'taobao'];
   };

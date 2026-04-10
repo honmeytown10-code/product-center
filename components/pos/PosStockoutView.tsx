@@ -7,12 +7,12 @@ import { CATEGORIES } from '../../types';
 import { ClearanceSettingsModal } from './PosModals';
 
 const MOCK_DISPLAY_PRODUCTS = [
-  { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '标准', stock: 80, status: 'warning', tags: [{ text: '套餐', color: 'green' }], channels: { pos: 'normal', mini: 'normal', meituan: 'unmapped', taobao: 'normal' }, channelStocks: { pos: 80, mini: 50, meituan: 0, taobao: 20 } },
-  { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '称重', stock: 1200, status: 'normal', tags: [{ text: '称重', color: 'blue' }], channels: { pos: 'normal', mini: 'normal', meituan: 'normal', taobao: 'sold_out' }, channelStocks: { pos: 1200, mini: 800, meituan: 1200, taobao: 0 } },
-  { id: 'p3', name: '生椰拿铁', price: 18.00, spec: '多规格', stock: 15, status: 'sold_out', tags: [], channels: { pos: 'normal', mini: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 15, mini: 15, meituan: 0, taobao: 5 }, hasMultipleSpecs: true, specs: [{id: 's1', name: '大杯', stock: 10}, {id: 's2', name: '中杯', stock: 5}, {id: 's3', name: '小杯', stock: 0}] },
-  { id: 'p4', name: '老火例汤', price: 12.00, spec: '按餐段', stock: 10, status: 'warning', tags: [], channels: { pos: 'normal', mini: 'normal', meituan: 'normal' }, channelStocks: { pos: 10, mini: 10, meituan: 10 } },
-  { id: 'p5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: 55, status: 'normal', tags: [], channels: { pos: 'normal', mini: 'normal', meituan: 'normal' }, channelStocks: { pos: 55, mini: 30, meituan: 30 } },
-  { id: 'p6', name: '手打柠檬茶', price: 18.00, spec: '多规格', stock: 0, status: 'sold_out', tags: [], channels: { pos: 'sold_out', mini: 'sold_out', meituan: 'sold_out' }, channelStocks: { pos: 0, mini: 0, meituan: 0 }, hasMultipleSpecs: true, specs: [{id: 's4', name: '标准', stock: 0}] },
+  { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '套餐', stock: 80, status: 'normal', tags: [{ text: '套餐', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 80, mini_dine: 80, mini_take: 80, mini_pickup: 80, meituan: 80, taobao: 80 } },
+  { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '称重', stock: 1200, status: 'normal', tags: [{ text: '称重', color: 'blue' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 1200, mini_dine: 1200, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, channelTypes: { mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日' } },
+  { id: 'p3', name: '生椰拿铁', price: 18.00, spec: '多规格', stock: 15, status: 'sold_out', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 15, mini_dine: 15, mini_take: 0, mini_pickup: 15, meituan: 0, taobao: 5 }, hasMultipleSpecs: true, specs: [{id: 's1', name: '大杯', stock: 10}, {id: 's2', name: '中杯', stock: 5}, {id: 's3', name: '小杯', stock: 0}], channelTypes: { mini_take: '当日', meituan: '长期' } },
+  { id: 'p4', name: '老火例汤', price: 12.00, spec: '按餐段', stock: 10, status: 'warning', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 10, mini_dine: 10, mini_take: 10, mini_pickup: 10, meituan: 10, taobao: 10 } },
+  { id: 'p5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: 55, status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 55, mini_dine: 55, mini_take: 30, mini_pickup: 30, meituan: 0, taobao: 30 }, channelTypes: { meituan: '当日' } },
+  { id: 'p6', name: '手打柠檬茶', price: 18.00, spec: '多规格', stock: 0, status: 'sold_out', tags: [], channels: { pos: 'sold_out', mini_dine: 'sold_out', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 0, mini_dine: 0, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, hasMultipleSpecs: true, specs: [{id: 's4', name: '标准', stock: 0}], channelTypes: { pos: '长期', mini_dine: '长期', mini_take: '长期', mini_pickup: '长期', meituan: '长期', taobao: '长期' } },
 ];
 
 const MOCK_LEFT_LOGS = [
@@ -23,13 +23,16 @@ const MOCK_LEFT_LOGS = [
   { id: 'l2', name: '多肉葡萄冻冻', price: 15.00, spec: '标准', stock: 0, status: 'sold_out', tags: [], type: '长期沽清', time: '11:15', rank: 2, channels: { pos: 'sold_out', mini_take: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 0, mini_take: 0, meituan: 0, taobao: 0 }, channelTypes: { pos: '长期', mini_take: '长期', meituan: '长期', taobao: '长期' } },
   
   // 场景3：各渠道库存不同，但都没有售罄（低库存预警）
-  { id: 'l3', name: '招牌红烧肉盖饭', price: 38.00, spec: '标准', stock: 25, status: 'warning', tags: [], type: '当日沽清', time: '09:00', rank: 3, channels: { pos: 'normal', mini_take: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 10, mini_take: 5, meituan: 8, taobao: 2 } },
+  { id: 'l3', name: '招牌红烧肉盖饭', price: 38.00, spec: '标准', stock: 25, status: 'warning', tags: [], type: '当日沽清', time: '09:00', rank: 3, channels: { pos: 'normal', mini_take: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 10, mini_take: 5, meituan: 8, taobao: 2 }, channelTypes: { pos: '当日', mini_take: '当日', meituan: '当日', taobao: '当日' } },
   
   // 场景4：全渠道库存完全一致的低库存
-  { id: 'l4', name: '老火例汤', price: 12.00, spec: '按餐段', stock: 8, status: 'warning', tags: [], type: '长期沽清', time: '14:20', rank: 4, channels: { pos: 'normal', mini_take: 'normal', meituan: 'normal' }, channelStocks: { pos: 8, mini_take: 8, meituan: 8 } },
+  { id: 'l4', name: '老火例汤', price: 12.00, spec: '按餐段', stock: 8, status: 'warning', tags: [], type: '长期沽清', time: '14:20', rank: 4, channels: { pos: 'normal', mini_take: 'normal', meituan: 'normal' }, channelStocks: { pos: 8, mini_take: 8, meituan: 8 }, channelTypes: { pos: '长期', mini_take: '长期', meituan: '长期' } },
   
-  // 场景5：单渠道售罄（比如只关了外卖）
-  { id: 'l5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: 20, status: 'warning', tags: [], type: '当日沽清', time: '22:00', rank: 5, channels: { pos: 'normal', mini_take: 'normal', meituan: 'sold_out' }, channelStocks: { pos: 15, mini_take: 5, meituan: 0 }, channelTypes: { meituan: '当日' } },
+  // 场景5：单渠道特殊沽清（仅美团沽清）
+  { id: 'l5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: 15, status: 'warning', tags: [], type: 'mixed', time: '15:00', rank: 5, channels: { pos: 'normal', mini_take: 'normal', meituan: 'sold_out' }, channelStocks: { pos: 15, mini_take: 5, meituan: 0 }, channelTypes: { meituan: '当日' } },
+  
+  // 场景6：分组隔离示例（仅外卖渠道沽清）
+  { id: 'l6', name: '香煎三文鱼', price: 0.58, spec: '称重', stock: 1200, status: 'warning', tags: [], type: 'mixed', time: '16:00', rank: 6, channels: { pos: 'normal', mini_take: 'sold_out', meituan: 'sold_out' }, channelStocks: { pos: 1200, mini_take: 0, meituan: 0 }, channelTypes: { mini_take: '当日', meituan: '当日' } },
 ];
 
 export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) => {
@@ -51,21 +54,20 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
   const [leftSelectedIds, setLeftSelectedIds] = useState<Set<string>>(new Set());
 
   // Channel View State (only used when isStockShared is false)
-  const [activeChannelTab, setActiveChannelTab] = useState<string>('pos'); // Default to POS or first available
+  // CRITICAL FIX: The initial state MUST be a valid single channel ID, never an empty string or invalid group ID.
+  const [activeChannelTab, setActiveChannelTab] = useState<string>('pos'); 
 
+  // The dropdown options are ALWAYS the atomic channels, regardless of grouping.
   const channelTabs = useMemo(() => {
       if (isStockShared) return []; // No tabs needed
-      if (enableChannelGrouping && channelGroups.length > 0) {
-          return channelGroups.map(g => ({ id: g.id, label: g.name }));
-      }
-      return FILTER_CHANNEL_OPTIONS.filter(opt => opt.id !== 'all'); // { id, label, shortLabel }
-  }, [isStockShared, enableChannelGrouping, channelGroups]);
+      return FILTER_CHANNEL_OPTIONS.filter(opt => opt.id !== 'all');
+  }, [isStockShared]);
 
-  // Ensure active tab is valid when switching modes
+  // Clean up any stray group IDs if the config changes
   React.useEffect(() => {
       if (!isStockShared && channelTabs.length > 0) {
-          if (!channelTabs.find(t => t.id === activeChannelTab)) {
-              setActiveChannelTab(channelTabs[0].id);
+          if (!channelTabs.some(t => t.id === activeChannelTab)) {
+              setActiveChannelTab('pos');
           }
       }
   }, [isStockShared, channelTabs, activeChannelTab]);
@@ -74,8 +76,42 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
   const [editingTarget, setEditingTarget] = useState<any>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
+  const displayList = useMemo(() => {
+      const threshold = posStockoutWarningThreshold ?? 30;
+      
+      if (isStockShared) {
+          return MOCK_LEFT_LOGS.filter(log => log.status === 'sold_out' || log.stock < threshold);
+      }
+      
+      // Use the raw state. The useEffect guarantees it will eventually be valid.
+      // But we need a fallback for the very first render cycle if activeChannelTab is somehow 'self_operated'
+      const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
+      
+      return MOCK_LEFT_LOGS.filter(log => {
+          // Add extra safety for channels objects
+          if (!log.channels || !log.channelStocks) return false;
+          
+          const channelStatus = log.channels[currentTab];
+          const channelStock = log.channelStocks[currentTab];
+          
+          // Show if completely sold out in this channel
+          if (channelStatus === 'sold_out') return true;
+          // Show if stock is low (< threshold) in this channel
+          if (channelStock !== undefined && channelStock !== null && channelStock < threshold) return true;
+          
+          return false;
+      });
+  }, [isStockShared, activeChannelTab, channelTabs, posStockoutWarningThreshold]);
+
   const currentList = useMemo(() => {
       let list = MOCK_DISPLAY_PRODUCTS.filter(p => p.name.includes(searchQuery));
+      
+      if (selectedCategory !== '全部') {
+          list = list.filter(p => {
+              if (selectedCategory === '加料') return p.tags && p.tags.some((t: any) => t.text === '加料');
+              return true;
+          });
+      }
       
       // If SKU mode is enabled, flatten multi-spec products into individual SKU cards
       if (posStockoutMode === 'sku') {
@@ -102,7 +138,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
       }
       
       return list;
-  }, [searchQuery, posStockoutMode]);
+  }, [searchQuery, posStockoutMode, selectedCategory]);
 
   const handleItemClick = (item: any) => {
     if (isBatchMode) {
@@ -124,32 +160,13 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
      let displayStock: string | number = item.stock;
      
      if (!isStockShared) {
-         if (activeChannelTab === 'all') {
-             // In "All Channels" view, we calculate overall status across all channels
-             const stocks = Object.values(item.channelStocks || {}) as number[];
-             if (stocks.every(s => s <= 0)) isOverallSoldOut = true;
-             else if (stocks.some(s => s <= 0) && stocks.some(s => s > 0)) isPartialSoldOut = true;
-             
-             displayStock = isPartialSoldOut ? '部分售罄' : '多渠道';
-         } else {
-             // Single channel / group view
-             if (enableChannelGrouping) {
-                 const group = channelGroups.find(g => g.id === activeChannelTab);
-                 // Because we assume strong consistency inside a group, we just take the first channel's stock
-                 const firstCh = group?.channels[0];
-                 if (firstCh && item.channelStocks) {
-                     displayStock = item.channelStocks[firstCh] ?? 0;
-                 } else {
-                     displayStock = 0;
-                 }
-             } else {
-                 displayStock = item.channelStocks?.[activeChannelTab] ?? 0;
-             }
-             
-             // If displayStock is a number and is 0, it is overall sold out FOR THIS CHANNEL/GROUP
-             if (typeof displayStock === 'number' && displayStock <= 0) {
-                 isOverallSoldOut = true;
-             }
+         // Single channel view ONLY
+         const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
+         displayStock = item.channelStocks?.[currentTab] ?? 0;
+         
+         // If displayStock is a number and is 0, it is overall sold out FOR THIS CHANNEL/GROUP
+         if (typeof displayStock === 'number' && displayStock <= 0) {
+             isOverallSoldOut = true;
          }
      } else {
         // Shared stock mode
@@ -233,32 +250,19 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                             <Layers size={16} className="text-[#00C06B] mr-2" />
                             当前操作渠道/分组：
                         </div>
-                        {enableChannelGrouping ? (
-                            <div className="flex items-center space-x-2">
+                        {/* 无论是否开启渠道分组，顶部始终只展示原子的单渠道下拉框 */}
+                        <div className="relative group flex items-center bg-gray-50 rounded-lg px-3 py-1 border border-gray-200 cursor-pointer hover:border-[#00C06B]/30 transition-all min-w-[120px]">
+                            <select 
+                                value={channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos'}
+                                onChange={(e) => setActiveChannelTab(e.target.value)}
+                                className="bg-transparent text-[13px] font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-6 w-full"
+                            >
                                 {channelTabs.map(tab => (
-                                    <button 
-                                        key={tab.id} 
-                                        onClick={() => setActiveChannelTab(tab.id)} 
-                                        className={`px-3 py-1 rounded-lg text-[13px] font-bold transition-all ${activeChannelTab === tab.id ? 'bg-[#00C06B] text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                    >
-                                        {tab.label}
-                                    </button>
+                                    <option key={tab.id} value={tab.id}>{tab.label}</option>
                                 ))}
-                            </div>
-                        ) : (
-                            <div className="relative group flex items-center bg-gray-50 rounded-lg px-3 py-1 border border-gray-200 cursor-pointer hover:border-[#00C06B]/30 transition-all min-w-[120px]">
-                                <select 
-                                    value={activeChannelTab}
-                                    onChange={(e) => setActiveChannelTab(e.target.value)}
-                                    className="bg-transparent text-[13px] font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-6 w-full"
-                                >
-                                    {channelTabs.map(tab => (
-                                        <option key={tab.id} value={tab.id}>{tab.label}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown size={14} className="text-gray-400 absolute right-2 pointer-events-none"/>
-                            </div>
-                        )}
+                            </select>
+                            <ChevronDown size={14} className="text-gray-400 absolute right-2 pointer-events-none"/>
+                        </div>
                     </>
                 ) : (
                     <div className="flex items-center text-sm font-bold text-gray-800">
@@ -289,9 +293,9 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                     <div className="h-14 flex items-center justify-between px-5">
                         <div className="flex items-center">
                             <span className="font-bold text-gray-800 text-[16px] mr-2">今日已沽清/低库存预警</span>
-                            {MOCK_LEFT_LOGS.length > 0 && (<span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{MOCK_LEFT_LOGS.length}</span>)}
+                            {displayList.length > 0 && (<span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{displayList.length}</span>)}
                         </div>
-                        {MOCK_LEFT_LOGS.length > 0 && (
+                        {displayList.length > 0 && (
                             <span className="text-xs font-medium text-gray-400">滑动查看更多</span>
                         )}
                     </div>
@@ -304,25 +308,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-0 bg-white">
-                    {MOCK_LEFT_LOGS.filter(item => {
-                        // Filter logic for left panel based on active tab
-                        if (isStockShared || activeChannelTab === 'all') {
-                            // In all/shared mode, just use the global stock for filtering
-                            return item.stock < posStockoutWarningThreshold;
-                        } else {
-                            // Single channel/group mode
-                            if (enableChannelGrouping) {
-                                const group = channelGroups.find(g => g.id === activeChannelTab);
-                                const firstCh = group?.channels[0];
-                                if (firstCh && item.channelStocks) {
-                                    return (item.channelStocks[firstCh] ?? 0) < posStockoutWarningThreshold;
-                                }
-                                return false;
-                            } else {
-                                return (item.channelStocks?.[activeChannelTab] ?? 0) < posStockoutWarningThreshold;
-                            }
-                        }
-                    }).map((item) => {
+                    {displayList.map((item) => {
                         let isOverallSoldOut = false;
                         let isPartialSoldOut = false;
                         let hasStock = true;
@@ -332,35 +318,12 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                         let displayType: string = item.type;
 
                         if (!isStockShared) {
-                            if (activeChannelTab === 'all') {
-                                const stocks = Object.entries(item.channelStocks || {}) as [string, number][];
-                                const stockValues = stocks.map(s => s[1]);
-                                if (stockValues.every(s => s <= 0)) {
-                                    isOverallSoldOut = true;
-                                    hasStock = false;
-                                } else if (stockValues.some(s => s <= 0) && stockValues.some(s => s > 0)) {
-                                    isPartialSoldOut = true;
-                                }
-                                channelStockEntries = stocks.filter(s => s[1] > 0);
-                            } else {
-                                // Single channel/group mode
-                                if (enableChannelGrouping) {
-                                    const group = channelGroups.find(g => g.id === activeChannelTab);
-                                    const firstCh = group?.channels[0];
-                                    if (firstCh && item.channelStocks) {
-                                        displayStock = item.channelStocks[firstCh] ?? 0;
-                                        displayType = item.channelTypes?.[firstCh] || '当日沽清'; // fallback
-                                    } else {
-                                        displayStock = 0;
-                                    }
-                                } else {
-                                    displayStock = item.channelStocks?.[activeChannelTab] ?? 0;
-                                    displayType = item.channelTypes?.[activeChannelTab] || '当日沽清';
-                                }
-                                
-                                hasStock = displayStock > 0;
-                                isOverallSoldOut = !hasStock;
-                            }
+                            const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
+                            displayStock = item.channelStocks?.[currentTab] ?? 0;
+                            displayType = item.channelTypes?.[currentTab] || '当日沽清';
+                            
+                            hasStock = displayStock > 0;
+                            isOverallSoldOut = !hasStock;
                         } else {
                             hasStock = item.stock > 0;
                             isOverallSoldOut = !hasStock;
@@ -392,7 +355,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                                 <div className="flex items-center mb-1 w-full relative">
                                     <span className="font-bold text-[14px] text-gray-900 truncate flex-1">{item.name}</span>
                                     {(isStockShared || activeChannelTab !== 'all') && (
-                                        displayType === 'mixed' ? (
+                                        (!isStockShared && displayType === 'mixed') ? (
                                             <span className="shrink-0 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded leading-none whitespace-nowrap ml-2 absolute right-0 -top-1 shadow-sm">多态沽清</span>
                                         ) : (displayType === '长期沽清' || displayType === '长期') ? (
                                             <span className="shrink-0 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded leading-none whitespace-nowrap ml-2 absolute right-0 -top-1 shadow-sm">长期沽清</span>
@@ -497,16 +460,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                         <>
                             <button 
                                 onClick={() => {
-                                    const allIds = MOCK_LEFT_LOGS.filter(item => {
-                                        if (isStockShared || activeChannelTab === 'all') return item.stock < posStockoutWarningThreshold;
-                                        if (enableChannelGrouping) {
-                                            const group = channelGroups.find(g => g.id === activeChannelTab);
-                                            const firstCh = group?.channels[0];
-                                            if (firstCh && item.channelStocks) return (item.channelStocks[firstCh] ?? 0) < posStockoutWarningThreshold;
-                                            return false;
-                                        }
-                                        return (item.channelStocks?.[activeChannelTab] ?? 0) < posStockoutWarningThreshold;
-                                    }).map(i => i.id);
+                                    const allIds = displayList.map(i => i.id);
                                     if (leftSelectedIds.size === allIds.length) {
                                         setLeftSelectedIds(new Set());
                                     } else {

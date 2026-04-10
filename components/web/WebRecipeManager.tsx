@@ -31,7 +31,7 @@ export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }>
   // Add top-level tab state for switching between Default Recipes and Policies
   const [activeTab, setActiveTab] = useState<'default' | 'policy'>('default');
   
-  const [currentView, setCurrentView] = useState<'list' | 'detail' | 'policy_list' | 'policy_detail'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'detail' | 'policy_list' | 'policy_detail' | 'policy_products'>('list');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedPolicy, setSelectedPolicy] = useState<any>(null);
 
@@ -75,13 +75,20 @@ export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }>
       {currentView === 'policy_list' && (
         <PolicyList 
           onViewPolicy={(p) => { setSelectedPolicy(p); setCurrentView('policy_detail'); }}
+          onViewPolicyProducts={(p) => { setSelectedPolicy(p); setCurrentView('policy_products'); }}
         />
       )}
       {currentView === 'policy_detail' && (
         <PolicyDetail 
           policy={selectedPolicy} 
           onBack={() => setCurrentView('policy_list')}
-          onConfigProduct={(p) => { setSelectedProduct(p); setCurrentView('detail'); }} // Reuses detail component in override mode
+        />
+      )}
+      {currentView === 'policy_products' && (
+        <PolicyProductManager 
+          policy={selectedPolicy} 
+          onBack={() => setCurrentView('policy_list')}
+          onConfigProduct={(p) => { setSelectedProduct(p); setCurrentView('detail'); }}
         />
       )}
     </div>
@@ -366,7 +373,7 @@ const RecipeDetail = ({ product, onBack, isOverrideMode }: { product: any, onBac
                </div>
 
                <div className="space-y-3 mb-6 border border-[#E8E8E8] rounded-md p-4 bg-[#FAFAFA]">
-                  {practiceGroups.map(g => (
+                  {practiceGroups.filter(g => g.type !== '规格').map(g => (
                     <label key={g.id} className="flex items-center space-x-3 cursor-pointer group">
                       <input 
                         type="checkbox" 
@@ -376,12 +383,10 @@ const RecipeDetail = ({ product, onBack, isOverrideMode }: { product: any, onBac
                           const newGroups = practiceGroups.map(pg => pg.id === g.id ? { ...pg, isIncluded: e.target.checked } : pg);
                           setPracticeGroups(newGroups);
                         }}
-                        disabled={g.type === '规格'} // Specs usually can't be excluded
                       />
-                      <span className={`text-sm ${g.type === '规格' ? 'text-[#999]' : 'text-[#333] group-hover:text-[#00C06B]'}`}>
+                      <span className="text-sm text-[#333] group-hover:text-[#00C06B]">
                         {g.name} <span className="text-xs text-[#999]">({g.values.join(', ')})</span>
                       </span>
-                      {g.type === '规格' && <span className="text-[10px] text-[#999] border border-[#EEE] px-1 rounded ml-auto">不可取消</span>}
                     </label>
                   ))}
                </div>
@@ -391,7 +396,7 @@ const RecipeDetail = ({ product, onBack, isOverrideMode }: { product: any, onBac
                   <AlertTriangle size={16} className="text-orange-500 mr-2 mt-0.5 shrink-0"/>
                   <div className="text-xs text-orange-700 leading-relaxed">
                     <strong>注意：</strong>修改参与配方的维度将导致组合重新生成。<br/>
-                    系统将尝试合并并继承一致的历史数据；若存在数据冲突的组合，将被重置为“未配置”状态。
+                    历史配方组合数据将被直接清空并移除，不再进行任何继承，请谨慎操作！
                   </div>
                </div>
             </div>
@@ -408,7 +413,7 @@ const RecipeDetail = ({ product, onBack, isOverrideMode }: { product: any, onBac
 };
 
 // 3. 配方策略列表页 (Solution 2)
-const PolicyList = ({ onViewPolicy }: { onViewPolicy: (p: any) => void }) => {
+const PolicyList = ({ onViewPolicy, onViewPolicyProducts }: { onViewPolicy: (p: any) => void, onViewPolicyProducts: (p: any) => void }) => {
   const [policies, setPolicies] = useState(MOCK_POLICIES);
 
   const togglePolicyStatus = (id: string) => {
@@ -423,6 +428,19 @@ const PolicyList = ({ onViewPolicy }: { onViewPolicy: (p: any) => void }) => {
     }
   };
 
+  const handleCreatePolicy = () => {
+    const newPolicy = {
+      id: `p${Date.now()}`,
+      name: '新建配方策略',
+      storeCount: 0,
+      productCount: 0,
+      status: 'inactive',
+      updateTime: new Date().toLocaleString()
+    };
+    setPolicies([newPolicy, ...policies]);
+    onViewPolicy(newPolicy);
+  };
+
   return (
     <div className="flex-1 flex flex-col m-4 bg-white rounded-md shadow-sm overflow-hidden">
       <div className="p-4 border-b border-[#E8E8E8] flex justify-between items-center">
@@ -430,7 +448,7 @@ const PolicyList = ({ onViewPolicy }: { onViewPolicy: (p: any) => void }) => {
             <h2 className="text-[16px] font-bold text-[#333]">门店配方策略</h2>
             <p className="text-xs text-[#999] mt-1">创建区域或特殊门店的配方重写策略，未配置的商品将继承默认配方。</p>
          </div>
-         <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B] flex items-center">
+         <button onClick={handleCreatePolicy} className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B] flex items-center">
             <Plus size={16} className="mr-1"/> 新建配方策略
          </button>
       </div>
@@ -466,12 +484,14 @@ const PolicyList = ({ onViewPolicy }: { onViewPolicy: (p: any) => void }) => {
                   </div>
                </div>
 
-               <div className="flex justify-between items-center pt-4 border-t border-[#F5F5F5]">
-                  <span className="text-xs text-[#999]">更新于 {policy.updateTime}</span>
-                  <div className="flex space-x-3">
-                     <button onClick={() => deletePolicy(policy.id)} className="text-[#999] hover:text-red-500 text-sm font-medium transition-colors">删除</button>
-                     <div className="w-px h-3 bg-gray-300 my-auto"></div>
-                     <button onClick={() => onViewPolicy(policy)} className="text-[#00C06B] text-sm hover:underline font-medium">配置策略</button>
+               <div className="flex justify-between items-center pt-4 border-t border-[#F5F5F5] mt-auto">
+                  <span className="text-[11px] text-[#999] truncate mr-2" title={`更新于 ${policy.updateTime}`}>更新于 {policy.updateTime.split(' ')[0]}</span>
+                  <div className="flex items-center space-x-2 shrink-0">
+                     <button onClick={() => deletePolicy(policy.id)} className="text-[#999] hover:text-red-500 text-xs font-medium transition-colors">删除</button>
+                     <div className="w-px h-3 bg-gray-200"></div>
+                     <button onClick={() => onViewPolicy(policy)} className="text-[#00C06B] text-xs hover:underline font-medium">基础信息</button>
+                     <div className="w-px h-3 bg-gray-200"></div>
+                     <button onClick={() => onViewPolicyProducts(policy)} className="text-[#00C06B] text-xs hover:underline font-medium">配方商品</button>
                   </div>
                </div>
             </div>
@@ -482,7 +502,7 @@ const PolicyList = ({ onViewPolicy }: { onViewPolicy: (p: any) => void }) => {
 };
 
 // 4. 配方策略详情页
-const PolicyDetail = ({ policy, onBack, onConfigProduct }: { policy: any, onBack: () => void, onConfigProduct: (p: any) => void }) => {
+const PolicyDetail = ({ policy, onBack }: { policy: any, onBack: () => void }) => {
   const [isActive, setIsActive] = useState(policy?.status === 'active');
 
   return (
@@ -522,14 +542,20 @@ const PolicyDetail = ({ policy, onBack, onConfigProduct }: { policy: any, onBack
                 <div className="space-y-4">
                    <div className="flex items-center">
                       <span className="w-20 text-sm text-[#666]">策略名称:</span>
-                      <input className="flex-1 border border-[#E8E8E8] rounded px-3 py-1.5 text-sm focus:border-[#00C06B] focus:outline-none" defaultValue={policy?.name} />
+                      <input className="flex-1 border border-[#E8E8E8] rounded px-3 py-1.5 text-sm focus:border-[#00C06B] focus:outline-none" defaultValue={policy?.name} placeholder="请输入策略名称" />
                    </div>
                    <div className="flex items-start">
                       <span className="w-20 text-sm text-[#666] mt-1.5">适用门店:</span>
                       <div className="flex-1">
                          <div className="border border-[#E8E8E8] rounded p-3 min-h-[80px] bg-[#FAFAFA] flex flex-wrap gap-2">
-                            <span className="px-2 py-1 bg-white border border-[#E8E8E8] rounded text-xs flex items-center">深圳海岸城店 <X size={12} className="ml-1 text-[#999] cursor-pointer hover:text-red-500"/></span>
-                            <span className="px-2 py-1 bg-white border border-[#E8E8E8] rounded text-xs flex items-center">广州正佳广场店 <X size={12} className="ml-1 text-[#999] cursor-pointer hover:text-red-500"/></span>
+                            {policy?.storeCount > 0 ? (
+                               <>
+                                 <span className="px-2 py-1 bg-white border border-[#E8E8E8] rounded text-xs flex items-center">深圳海岸城店 <X size={12} className="ml-1 text-[#999] cursor-pointer hover:text-red-500"/></span>
+                                 <span className="px-2 py-1 bg-white border border-[#E8E8E8] rounded text-xs flex items-center">广州正佳广场店 <X size={12} className="ml-1 text-[#999] cursor-pointer hover:text-red-500"/></span>
+                               </>
+                            ) : (
+                               <span className="text-sm text-gray-400 mt-1">暂无绑定门店</span>
+                            )}
                             <button className="px-2 py-1 bg-white border border-dashed border-[#00C06B] text-[#00C06B] rounded text-xs flex items-center hover:bg-[#00C06B]/5">
                                <Plus size={12} className="mr-1"/> 添加门店
                             </button>
@@ -537,7 +563,7 @@ const PolicyDetail = ({ policy, onBack, onConfigProduct }: { policy: any, onBack
                          <p className="text-[11px] text-[#999] mt-1">选中的门店在请求配方时，将优先使用此策略中配置的数据。</p>
                          
                          {/* Conflict Warning Message (Hidden by default, shown when conflict detected) */}
-                         <div className="mt-2 bg-red-50 border border-red-100 text-red-600 text-[11px] p-2 rounded flex items-start">
+                         <div className="mt-2 hidden bg-red-50 border border-red-100 text-red-600 text-[11px] p-2 rounded items-start">
                             <AlertTriangle size={14} className="mr-1.5 mt-0.5 flex-shrink-0"/>
                             <div>
                                <strong>门店冲突：</strong> 发现“广州正佳广场店”已绑定在“华北特殊配方策略”中。同一门店同时只能生效一个策略，请先在其他策略中移除该门店。
@@ -545,45 +571,76 @@ const PolicyDetail = ({ policy, onBack, onConfigProduct }: { policy: any, onBack
                          </div>
                       </div>
                    </div>
+                   <div className="flex items-start mt-4">
+                      <span className="w-20 text-sm text-[#666] mt-1.5">备注:</span>
+                      <textarea className="flex-1 border border-[#E8E8E8] rounded px-3 py-2 text-sm focus:border-[#00C06B] focus:outline-none min-h-[80px]" placeholder="选填，请输入备注信息" defaultValue={policy?.remark}></textarea>
+                   </div>
                 </div>
              </div>
 
+          </div>
+       </div>
+    </div>
+  );
+};
+
+// 5. 策略配方商品管理页
+const PolicyProductManager = ({ policy, onBack, onConfigProduct }: { policy: any, onBack: () => void, onConfigProduct: (p: any) => void }) => {
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F6FA]">
+       <div className="h-[60px] bg-white border-b border-[#E8E8E8] flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
+         <div className="flex items-center">
+            <button onClick={onBack} className="mr-4 text-[#666] hover:text-[#333]"><ChevronLeft size={20}/></button>
+            <h2 className="text-lg font-bold text-[#333] flex items-center">
+               {policy?.name || '策略配方商品管理'} 
+            </h2>
+         </div>
+         <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-bold hover:bg-[#00A35B] flex items-center">
+            <Plus size={16} className="mr-1"/> 导入/添加商品
+         </button>
+       </div>
+       <div className="flex-1 overflow-y-auto p-6 flex justify-center">
+          <div className="w-[900px] space-y-6">
+             
              {/* Overridden Products Card */}
              <div className="bg-white rounded-md shadow-sm border border-[#E8E8E8] p-5">
                 <div className="flex justify-between items-center mb-4 border-b border-[#F0F0F0] pb-2">
                    <h3 className="font-bold text-[#333]">差异化配方商品 ({policy?.productCount || 0})</h3>
-                   <button className="px-3 py-1.5 bg-[#00C06B] text-white rounded text-xs font-medium hover:bg-[#00A35B] flex items-center">
-                      <Plus size={14} className="mr-1"/> 添加商品
-                   </button>
                 </div>
                 
-                <table className="w-full text-left text-sm">
-                   <thead className="bg-[#F9F9F9] text-[#666]">
-                      <tr>
-                         <th className="py-2 px-4 font-normal rounded-l">商品名称</th>
-                         <th className="py-2 px-4 font-normal">配方覆盖状态</th>
-                         <th className="py-2 px-4 font-normal text-right rounded-r">操作</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      <tr className="border-b border-[#F5F5F5]">
-                         <td className="py-3 px-4 font-medium text-[#333]">0316标品-6</td>
-                         <td className="py-3 px-4 text-[#00C06B] font-medium flex items-center">
-                            <CheckCircle2 size={14} className="mr-1.5"/> 已整体覆盖
-                         </td>
-                         <td className="py-3 px-4 text-right">
-                            <button onClick={() => onConfigProduct(MOCK_RECIPE_LIST[0])} className="text-[#00C06B] hover:underline mr-3">去配置</button>
-                            <button className="text-red-500 hover:underline">移除</button>
-                         </td>
-                      </tr>
-                   </tbody>
-                </table>
+                {policy?.productCount > 0 ? (
+                  <table className="w-full text-left text-sm">
+                     <thead className="bg-[#F9F9F9] text-[#666]">
+                        <tr>
+                           <th className="py-2 px-4 font-normal rounded-l">商品名称</th>
+                           <th className="py-2 px-4 font-normal">配方覆盖状态</th>
+                           <th className="py-2 px-4 font-normal text-right rounded-r">操作</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        <tr className="border-b border-[#F5F5F5]">
+                           <td className="py-3 px-4 font-medium text-[#333]">0316标品-6</td>
+                           <td className="py-3 px-4 text-[#00C06B] font-medium flex items-center">
+                              <CheckCircle2 size={14} className="mr-1.5"/> 已整体覆盖
+                           </td>
+                           <td className="py-3 px-4 text-right">
+                              <button onClick={() => onConfigProduct(MOCK_RECIPE_LIST[0])} className="text-[#00C06B] hover:underline mr-3">去配置</button>
+                              <button className="text-red-500 hover:underline">移除</button>
+                           </td>
+                        </tr>
+                     </tbody>
+                  </table>
+                ) : (
+                  <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
+                     <div className="text-gray-400 mb-2">当前策略暂未绑定任何商品</div>
+                     <button className="text-[#00C06B] text-sm hover:underline">立即添加商品，生成配方快照</button>
+                  </div>
+                )}
                 <p className="text-[11px] text-[#999] mt-4 bg-blue-50/50 border border-blue-100 p-3 rounded leading-relaxed text-blue-800">
                    💡 <strong>核心机制说明：</strong>将商品添加至此策略后，系统会为其创建一份“独立配方快照”。<br/>
                    该商品在此策略（及绑定的门店）下的所有组合配方，将<strong>完全脱离总部默认配方</strong>。您可以在此安全地进行修改，总部后续对该商品默认配方的任何调整，都不会影响此策略中的数据。
                 </p>
              </div>
-
           </div>
        </div>
     </div>

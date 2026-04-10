@@ -67,7 +67,7 @@ const INITIAL_BRAND_CONFIGS: Record<string, BrandConfig> = {
       store_export: true,
       upgrade_3_0: true
     },
-    enableChannelGrouping: true,
+    enableChannelGrouping: false,
     channelGroups: [
         { id: 'cg_self', name: '自营渠道', channels: ['pos', 'mini_dine', 'mini_take', 'mini_pickup'] },
         { id: 'cg_third', name: '三方外卖', channels: ['meituan', 'taobao', 'jingdong'] }

@@ -53,9 +53,9 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                     {activeTab === 'order' ? (
                         <div className="max-w-3xl">
                             
-                            {/* Section 1: 点单页商品展示 */}
+                            {/* Section 1: 商品展示 */}
                             <div className="mb-10">
-                                <h3 className="text-[15px] font-bold text-[#333] mb-5">点单页商品展示</h3>
+                                <h3 className="text-[15px] font-bold text-[#333] mb-5">商品展示</h3>
                                 
                                 <div className="flex items-start space-x-6 mb-6">
                                     {/* No Image Card */}

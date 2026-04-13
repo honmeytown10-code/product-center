@@ -610,22 +610,15 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
 
   const canConfirm = (isMultiSpec && clearanceMode === 'sku') ? selectedSpecs.length > 0 : true;
 
-  // View toggle for stock details
-  const [showStockDetails, setShowStockDetails] = useState(false);
-  const showDetailsButton = !isStockShared && !isBatch;
-
   // Secondary confirmation for cancel clearance
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Help Modal State
   const [showHelpModal, setShowHelpModal] = useState(false);
 
-  // Prepare specs for table view (handles both single and multi-spec)
-  const tableSpecs = isMultiSpec ? product?.specs : [{ id: 'default', name: product?.spec || '标准', stock: product?.stock }];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className={`bg-white rounded-[24px] h-[680px] shadow-2xl flex overflow-hidden transform scale-100 transition-all font-sans ${showStockDetails ? 'w-[800px]' : 'w-[880px]'}`}>
+        <div className={`bg-white rounded-[24px] h-[680px] shadow-2xl flex overflow-hidden transform scale-100 transition-all font-sans w-[880px]`}>
             
             {/* Left Panel: Settings Workspace */}
             <div className="flex-1 flex flex-col bg-white relative border-r border-gray-100 min-w-0">
@@ -655,76 +648,9 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                          </div>
                      )}
                   </div>
-                  {showDetailsButton && (
-                      <button 
-                          onClick={() => setShowStockDetails(!showStockDetails)}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border-2 ${showStockDetails ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-[#00C06B]/30 hover:text-[#00C06B]'}`}
-                      >
-                          <Table size={16} />
-                          {showStockDetails ? '返回操作面板' : '查看各渠道库存'}
-                      </button>
-                  )}
                </div>
 
-               {showStockDetails ? (
-                   <div className="flex-1 overflow-y-auto px-8 py-6 no-scrollbar animate-in fade-in zoom-in-95 duration-200">
-                       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                               <div className="font-bold text-sm text-gray-700 flex items-center">
-                                   <Layers size={16} className="mr-2 text-gray-500" />
-                                   商品多渠道库存明细
-                               </div>
-                           </div>
-                           <div className="overflow-x-auto">
-                               <table className="w-full text-left text-sm">
-                                   <thead>
-                                       <tr className="bg-white border-b border-gray-100">
-                                           <th className="py-3 px-4 font-bold text-gray-500 bg-gray-50/50 sticky left-0 z-10 w-[120px]">{isMultiSpec ? '规格名称' : '商品规格'}</th>
-                                           {resolvedChannels.map(chId => (
-                                               <th key={chId} className="py-3 px-4 font-bold text-gray-500 whitespace-nowrap">
-                                                   {CHANNEL_TABS.find(t => t.id === chId)?.label || chId}
-                                               </th>
-                                           ))}
-                                       </tr>
-                                   </thead>
-                                   <tbody>
-                                       {tableSpecs?.map((spec: any, idx: number) => (
-                                           <tr key={spec.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                               <td className="py-3 px-4 font-bold text-gray-800 bg-white sticky left-0 z-10">{spec.name}</td>
-                                               {resolvedChannels.map(chId => {
-                                                   // Use channelStocks if available, otherwise fallback to standard logic
-                                                   let stock = '0';
-                                                   if (product?.channelStocks && product.channelStocks[chId] !== undefined) {
-                                                        if (typeof product.channelStocks[chId] === 'object') {
-                                                            stock = String(product.channelStocks[chId][spec.name] ?? 0);
-                                                        } else {
-                                                            stock = String(product.channelStocks[chId] ?? 0); // single spec logic
-                                                        }
-                                                   } else {
-                                                       stock = String(spec.stock ?? 0); // Fallback to base spec stock
-                                                   }
-                                                   const isZero = stock === '0';
-                                                   return (
-                                                       <td key={chId} className="py-3 px-4">
-                                                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${isZero ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
-                                                               {stock}
-                                                           </span>
-                                                       </td>
-                                                   );
-                                               })}
-                                           </tr>
-                                       ))}
-                                   </tbody>
-                               </table>
-                           </div>
-                       </div>
-                       <div className="mt-4 text-xs text-gray-400 flex items-center justify-center">
-                           <AlertTriangle size={14} className="mr-1" />
-                           此页面为只读视图，请返回操作面板进行库存修改
-                       </div>
-                   </div>
-               ) : (
-                   <div className="flex-1 overflow-y-auto px-8 py-6 no-scrollbar space-y-8 animate-in fade-in zoom-in-95 duration-200">
+               <div className="flex-1 overflow-y-auto px-8 py-6 no-scrollbar space-y-8 animate-in fade-in zoom-in-95 duration-200">
                    {/* Method Toggle */}
                    <div className="space-y-5 pb-5 border-b border-gray-100">
                        <div className="flex gap-4">
@@ -789,8 +715,9 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                                    {isSelected ? <CheckCircle2 size={22} className="text-[#00C06B] fill-white"/> : <Circle size={22} className="text-gray-300 fill-transparent"/>}
                                                </div>
                                                
-                                               <div className="w-[100px] shrink-0 font-bold text-gray-800 text-[15px] truncate pr-2">
-                                                   {spec.name}
+                                               <div className="w-[100px] shrink-0 font-bold text-gray-800 text-[15px] truncate pr-2 flex flex-col">
+                                                   <span>{spec.name}</span>
+                                                   <span className="text-[10px] text-gray-400 font-normal mt-0.5">当前库存: {spec.stock ?? 0}</span>
                                                </div>
                                                
                                                <div className="flex-1 flex gap-2">
@@ -855,7 +782,6 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                        </div>
                    </div>
                </div>
-               )}
                
                {/* Global Lock Info Bar */}
                <div className="px-8 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
@@ -873,34 +799,32 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
             </div>
 
             {/* Right Panel: Numpad & Actions */}
-            {!showStockDetails && (
-                <div className="w-[320px] bg-[#F7F8FA] p-6 flex flex-col justify-between shrink-0 select-none relative">
-                    <button onClick={onClose} className="absolute top-4 right-4 p-2.5 bg-gray-200 hover:bg-gray-300 rounded-full text-gray-500 transition-colors z-10 active:scale-90"><X size={20}/></button>
-                    
-                    <div className="mt-12 grid grid-cols-3 gap-3 flex-1 content-start mb-6">
-                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map(num => (
-                           <button key={num} onClick={() => handleNumpadInput(num.toString())} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-2xl font-black text-gray-800 hover:bg-white hover:border-[#00C06B] hover:text-[#00C06B] hover:shadow-md active:bg-[#00C06B]/5 active:scale-95 transition-all">{num}</button>
-                       ))}
-                       <button onClick={() => handleNumpadInput('backspace')} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 hover:shadow-md active:scale-95 transition-all flex items-center justify-center"><X size={28}/></button>
-                    </div>
-                    
-                    <div className="space-y-3">
-                        <button onClick={() => handleNumpadInput('clear')} className="w-full py-3 text-gray-400 text-sm font-bold hover:text-gray-600 transition-colors">清空当前输入</button>
-                        <div className="flex gap-3">
-                            {(!isBatch && (product?.status === 'sold_out' || product?.status === 'warning')) && (
-                                <button onClick={() => setShowCancelConfirm(true)} className="flex-[0.8] h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center shadow-sm">取消沽清</button>
-                            )}
-                            <button 
-                                onClick={onConfirm} 
-                                disabled={!canConfirm}
-                                className={`flex-1 h-16 text-white rounded-2xl text-xl font-black shadow-lg transition-all flex items-center justify-center ${canConfirm ? 'bg-[#00C06B] shadow-[#00C06B]/30 hover:bg-[#00A35B] active:scale-95' : 'bg-gray-300 shadow-none cursor-not-allowed'}`}
-                            >
-                                确认修改
-                            </button>
-                        </div>
+            <div className="w-[320px] bg-[#F7F8FA] p-6 flex flex-col justify-between shrink-0 select-none relative">
+                <button onClick={onClose} className="absolute top-4 right-4 p-2.5 bg-gray-200 hover:bg-gray-300 rounded-full text-gray-500 transition-colors z-10 active:scale-90"><X size={20}/></button>
+                
+                <div className="mt-12 grid grid-cols-3 gap-3 flex-1 content-start mb-6">
+                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map(num => (
+                       <button key={num} onClick={() => handleNumpadInput(num.toString())} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-2xl font-black text-gray-800 hover:bg-white hover:border-[#00C06B] hover:text-[#00C06B] hover:shadow-md active:bg-[#00C06B]/5 active:scale-95 transition-all">{num}</button>
+                   ))}
+                   <button onClick={() => handleNumpadInput('backspace')} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 hover:shadow-md active:scale-95 transition-all flex items-center justify-center"><X size={28}/></button>
+                </div>
+                
+                <div className="space-y-3">
+                    <button onClick={() => handleNumpadInput('clear')} className="w-full py-3 text-gray-400 text-sm font-bold hover:text-gray-600 transition-colors">清空当前输入</button>
+                    <div className="flex gap-3">
+                        {(!isBatch && (product?.status === 'sold_out' || product?.status === 'warning')) && (
+                            <button onClick={() => setShowCancelConfirm(true)} className="flex-[0.8] h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center shadow-sm">取消沽清</button>
+                        )}
+                        <button 
+                            onClick={onConfirm} 
+                            disabled={!canConfirm}
+                            className={`flex-1 h-16 text-white rounded-2xl text-xl font-black shadow-lg transition-all flex items-center justify-center ${canConfirm ? 'bg-[#00C06B] shadow-[#00C06B]/30 hover:bg-[#00A35B] active:scale-95' : 'bg-gray-300 shadow-none cursor-not-allowed'}`}
+                        >
+                            确认修改
+                        </button>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
 
         {/* Cancel Clearance Confirm Dialog inside the Modal */}
@@ -913,7 +837,15 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">确认取消沽清？</h3>
                         <p className="text-gray-500 text-sm">
-                            取消沽清后，该商品 <span className="font-bold text-[#333]">{product?.name}</span> 将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许所有关联渠道正常售卖。
+                            取消沽清后，该商品 <span className="font-bold text-[#333]">{product?.name}</span> 在
+                            {!isStockShared && selectedChannels.length > 0 ? (
+                                <span className="font-bold text-blue-600 mx-1">
+                                    {selectedChannels.map(id => CHANNEL_TABS.find(t => t.id === id)?.label || id).join('、')}
+                                </span>
+                            ) : (
+                                <span className="font-bold text-[#333] mx-1">所有关联渠道</span>
+                            )}
+                            将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许正常售卖。
                         </p>
                     </div>
                     <div className="flex border-t border-gray-100">

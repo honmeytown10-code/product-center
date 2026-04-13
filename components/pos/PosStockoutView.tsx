@@ -75,6 +75,32 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTarget, setEditingTarget] = useState<any>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelSelectedChannels, setCancelSelectedChannels] = useState<string[]>([]);
+
+  // Initialize selected channels for cancellation
+  React.useEffect(() => {
+      if (cancelConfirmOpen) {
+          if (isStockShared) {
+              setCancelSelectedChannels([]);
+          } else {
+              const validChannels = CHANNEL_TABS.map(t => t.id);
+              if (editingTarget && !isBatchMode && !isLeftBatchMode) {
+                  // Single product
+                  setCancelSelectedChannels(validChannels.filter(chId => {
+                      const dataKey = chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId;
+                      return editingTarget.channels[dataKey as any] !== 'unmapped';
+                  }));
+              } else {
+                  // Batch mode
+                  setCancelSelectedChannels(validChannels);
+              }
+          }
+      }
+  }, [cancelConfirmOpen, editingTarget, isBatchMode, isLeftBatchMode, isStockShared]);
+
+  const toggleCancelChannel = (c: string) => {
+      setCancelSelectedChannels(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+  };
 
   const displayList = useMemo(() => {
       const threshold = posStockoutWarningThreshold ?? 30;
@@ -171,6 +197,18 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
      } else {
         // Shared stock mode
         if (displayStock <= 0) isOverallSoldOut = true;
+     }
+
+     // 多规格商品（SPU模式）的部分售罄逻辑
+     if (item.hasMultipleSpecs && item.specs && !item.isFlattenedSku) {
+         const allSpecsSoldOut = item.specs.every((sku: any) => sku.stock <= 0);
+         const someSpecsSoldOut = item.specs.some((sku: any) => sku.stock <= 0);
+         
+         if (allSpecsSoldOut) {
+             isOverallSoldOut = true;
+         } else if (someSpecsSoldOut) {
+             isPartialSoldOut = true;
+         }
      }
 
      // Grid View
@@ -584,13 +622,13 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
         {/* Cancel Clearance Confirm Dialog */}
         {cancelConfirmOpen && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-                <div className="bg-white rounded-xl shadow-2xl w-[400px] overflow-hidden animate-in zoom-in-95 font-sans">
-                    <div className="p-6 text-center">
+                <div className="bg-white rounded-xl shadow-2xl w-[480px] overflow-hidden animate-in zoom-in-95 font-sans">
+                    <div className="p-6">
                         <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
                             <AlertTriangle size={32} />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">确认取消沽清？</h3>
-                        <p className="text-gray-500 text-sm">
+                        <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">确认取消沽清？</h3>
+                        <p className="text-gray-500 text-sm text-center mb-6">
                             取消沽清后，
                             {isLeftBatchMode ? (
                                 <>选中的 <span className="font-bold text-[#333]">{leftSelectedIds.size}</span> 个预警商品</>
@@ -599,25 +637,81 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                             ) : (
                                 <>该商品 <span className="font-bold text-[#333]">{editingTarget?.name}</span></>
                             )}
-                            将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许所有关联渠道正常售卖。
+                            将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许在<span className="font-bold text-[#333] mx-1">{isStockShared ? '所有关联渠道' : '下方选中渠道'}</span>正常售卖。
                         </p>
+
+                        {!isStockShared && (
+                            <div className="bg-[#F7F8FA] rounded-xl p-5 border border-[#E8E8E8]">
+                                <div className="text-xs font-bold text-gray-700 mb-3">选择生效渠道</div>
+                                {enableChannelGrouping ? (
+                                    <div className="space-y-3">
+                                        {channelGroups.map(group => {
+                                            const groupChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c));
+                                            if (groupChannels.length === 0) return null;
+                                            
+                                            const isGroupActive = groupChannels.every(id => cancelSelectedChannels.includes(id));
+                                            return (
+                                                <div 
+                                                    key={group.id}
+                                                    onClick={() => {
+                                                        if (isGroupActive) setCancelSelectedChannels(prev => prev.filter(id => !groupChannels.includes(id)));
+                                                        else setCancelSelectedChannels(prev => Array.from(new Set([...prev, ...groupChannels])));
+                                                    }}
+                                                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isGroupActive ? 'bg-[#00C06B]/10 border-[#00C06B] shadow-sm text-[#00C06B]' : 'bg-white border-gray-200 text-gray-600 hover:border-[#00C06B]/50'}`}
+                                                >
+                                                    <span className="font-bold text-sm">{group.name}</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {groupChannels.map(cId => (
+                                                            <span key={cId} className={`text-[10px] px-1.5 py-0.5 rounded border ${isGroupActive ? 'bg-white border-[#00C06B]/30 text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                                                                {CHANNEL_TABS.find(t => t.id === cId)?.label || cId}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {CHANNEL_TABS.map(tab => {
+                                            const isActive = cancelSelectedChannels.includes(tab.id);
+                                            return (
+                                                <div 
+                                                    key={tab.id}
+                                                    onClick={() => toggleCancelChannel(tab.id)}
+                                                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${isActive ? 'bg-[#00C06B]/10 border-[#00C06B] shadow-sm text-[#00C06B]' : 'bg-white border-gray-200 text-gray-600 hover:border-[#00C06B]/50'}`}
+                                                >
+                                                    <span className="text-sm font-bold">{tab.label}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div className="flex border-t border-gray-100">
                         <button onClick={() => { setCancelConfirmOpen(false); setEditingTarget(null); }} className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-50 transition-colors">再想想</button>
                         <div className="w-px bg-gray-100"></div>
-                        <button onClick={() => {
-                            // Execute cancel clearance logic here
-                            setCancelConfirmOpen(false);
-                            setEditingTarget(null);
-                            if (isLeftBatchMode) {
-                                setLeftSelectedIds(new Set());
-                                setIsLeftBatchMode(false);
-                            }
-                            if (isBatchMode) {
-                                setSelectedIds(new Set());
-                                setIsBatchMode(false);
-                            }
-                        }} className="flex-1 py-4 font-bold text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">确认恢复</button>
+                        <button 
+                            onClick={() => {
+                                // Execute cancel clearance logic here
+                                setCancelConfirmOpen(false);
+                                setEditingTarget(null);
+                                if (isLeftBatchMode) {
+                                    setLeftSelectedIds(new Set());
+                                    setIsLeftBatchMode(false);
+                                }
+                                if (isBatchMode) {
+                                    setSelectedIds(new Set());
+                                    setIsBatchMode(false);
+                                }
+                            }} 
+                            disabled={!isStockShared && cancelSelectedChannels.length === 0}
+                            className={`flex-1 py-4 font-bold transition-colors ${(!isStockShared && cancelSelectedChannels.length === 0) ? 'text-gray-300 bg-gray-50 cursor-not-allowed' : 'text-[#00C06B] hover:bg-[#00C06B]/5'}`}
+                        >
+                            确认恢复
+                        </button>
                     </div>
                 </div>
             </div>

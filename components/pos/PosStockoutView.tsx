@@ -196,7 +196,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
          }
      } else {
         // Shared stock mode
-        if (displayStock <= 0) isOverallSoldOut = true;
+        if (typeof displayStock === 'number' && displayStock <= 0) isOverallSoldOut = true;
      }
 
      // 多规格商品（SPU模式）的部分售罄逻辑

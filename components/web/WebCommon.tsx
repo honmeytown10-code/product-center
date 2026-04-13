@@ -15,18 +15,36 @@ export const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode }> 
   </div>
 );
 
-export const FormRow: React.FC<{ label: string; required?: boolean; description?: string; children: React.ReactNode }> = ({ label, required, description, children }) => (
-  <div className="flex flex-col space-y-2">
-    <div className="flex justify-between items-baseline">
-      <label className="text-[13px] font-bold text-gray-700">
-        {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      {description && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
+export const FormRow: React.FC<{ label: string; required?: boolean; description?: string; children: React.ReactNode; isHorizontal?: boolean }> = ({ label, required, description, children, isHorizontal }) => {
+  if (isHorizontal) {
+      return (
+          <div className="flex items-start">
+              <div className="w-[120px] shrink-0 mt-2.5 flex justify-end pr-6 items-baseline border-r border-gray-200/60 h-full min-h-[32px]">
+                <label className="text-[14px] font-bold text-gray-700 text-right">
+                  {label}
+                  {required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+              </div>
+              <div className="flex-1 flex flex-col space-y-2 pl-6">
+                  {children}
+                  {description && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
+              </div>
+          </div>
+      );
+  }
+  return (
+    <div className="flex flex-col space-y-2">
+      <div className="flex justify-between items-baseline">
+        <label className="text-[13px] font-bold text-gray-700">
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+        {description && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
+      </div>
+      {children}
     </div>
-    {children}
-  </div>
-);
+  );
+};
 
 export const SidebarItem: React.FC<{ label: string; active?: boolean; onClick?: () => void }> = ({ label, active, onClick }) => (
   <div 

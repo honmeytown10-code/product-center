@@ -127,14 +127,14 @@ export const ShelfActionDialog = ({
        <div className="bg-white rounded-[12px] shadow-2xl w-[500px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[80vh]">
           <div className="pt-6 pb-4 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
              <h3 className="text-xl font-bold text-[#333] flex items-center">
-                {isBatch ? '批量' : ''}{actionText}操作
+                {isBatch ? '批量' : ''}{data.action === 'on' ? '上架' : '下架'}操作
              </h3>
              <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
           </div>
           
           <div className="p-6 overflow-y-auto flex-1">
              <div className="mb-6 text-center">
-                <span className="text-[#666] text-base">确认将 <span className="font-bold text-[#333] text-lg mx-1">{name}</span> {actionText}吗？</span>
+                <span className="text-[#666] text-base">确认将 <span className="font-bold text-[#333] text-lg mx-1">{name}</span> {data.action === 'on' ? '上架' : '下架'}吗？</span>
              </div>
 
              {isShelvesUnited && (
@@ -215,7 +215,7 @@ export const ShelfActionDialog = ({
                  disabled={!isShelvesUnited && batchSelectedChannels.length === 0}
                  className="flex-1 py-3 rounded-lg text-white font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-[#00C06B] hover:bg-[#00A35B]"
              >
-                 确认{actionText}
+                 确认{data.action === 'on' ? '上架' : '下架'}
              </button>
           </div>
        </div>

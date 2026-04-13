@@ -43,6 +43,72 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
            case 'number': return (<div className="relative"><input type="number" className="q-form-input pl-8" placeholder="0.00" value={value} onChange={e => setValue(e.target.value)} /><span className="absolute left-3 top-3 text-gray-400">¥</span></div>);
            case 'selector': return (<select className="q-form-select" value={value} onChange={e => setValue(e.target.value)}><option value="">请选择{field.label}...</option><option value="opt1">选项一</option><option value="opt2">选项二</option></select>);
            case 'switch': return (<div className="flex items-center space-x-3"><Switch active={!!value} onClick={() => setValue(!value)}/><span className="text-sm text-gray-600">{value ? '已开启' : '已关闭'}</span></div>);
+           case 'radio_group': {
+               const radioVal = value || {};
+               const activeRadioKey = Object.keys(radioVal)[0];
+               return (
+                   <div className="flex flex-col space-y-2 w-full">
+                       <div className="flex flex-wrap gap-x-8 gap-y-3 items-center">
+                           {(field.presetValues || []).map(opt => {
+                               const isActive = activeRadioKey === opt;
+                               const qty = radioVal[opt] || 1;
+                               return (
+                                   <div key={opt} className="flex items-center space-x-3">
+                                   <label className="flex items-center space-x-2 cursor-pointer group py-1.5">
+                                       <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${isActive ? 'border-[#00C06B]' : 'border-gray-300 group-hover:border-[#00C06B]'}`}>
+                                           {isActive && <div className="w-2 h-2 bg-[#00C06B] rounded-full"></div>}
+                                       </div>
+                                       <span className={`text-[13px] ${isActive ? 'text-[#00C06B] font-bold' : 'text-gray-600'}`}>{opt}</span>
+                                       <input type="radio" className="hidden" checked={isActive} onChange={() => setValue({ [opt]: 1 })} />
+                                   </label>
+                                   {isActive && (
+                                       <div className="flex items-center bg-white border border-gray-200 rounded text-xs font-bold animate-in slide-in-from-left-1 fade-in duration-200 shadow-sm overflow-hidden">
+                                           <button onClick={(e) => { e.preventDefault(); if (qty <= 1) setValue({}); else setValue({ [opt]: qty - 1 }); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">-</button>
+                                           <span className="w-6 text-center text-[#1F2129] border-x border-gray-100 bg-gray-50/50 leading-6">{qty}</span>
+                                           <button onClick={(e) => { e.preventDefault(); setValue({ [opt]: qty + 1 }); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">+</button>
+                                       </div>
+                                   )}
+                               </div>
+                           );
+                       })}
+                       </div>
+                   </div>
+               );
+           }
+           case 'checkbox_group': {
+               const checkVal = value || {};
+               return (
+                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-y-2 gap-x-6 items-center w-full">
+                       {(field.presetValues || []).map(opt => {
+                           const isActive = !!checkVal[opt];
+                           const qty = checkVal[opt] || 1;
+                           return (
+                               <div key={opt} className="flex items-center space-x-3">
+                                   <label className="flex items-center space-x-2 cursor-pointer group py-1.5">
+                                       <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isActive ? 'bg-[#00C06B] border-[#00C06B]' : 'border-gray-300 group-hover:border-[#00C06B]'}`}>
+                                           {isActive && <Check size={12} className="text-white stroke-[3]"/>}
+                                       </div>
+                                       <span className={`text-[13px] ${isActive ? 'text-[#00C06B] font-bold' : 'text-gray-600'}`}>{opt}</span>
+                                       <input type="checkbox" className="hidden" checked={isActive} onChange={() => {
+                                           const newVal = { ...checkVal };
+                                           if (isActive) delete newVal[opt];
+                                           else newVal[opt] = 1;
+                                           setValue(newVal);
+                                       }} />
+                                   </label>
+                                   {isActive && (
+                                       <div className="flex items-center bg-white border border-gray-200 rounded text-xs font-bold animate-in slide-in-from-left-1 fade-in duration-200 shadow-sm overflow-hidden">
+                                           <button onClick={(e) => { e.preventDefault(); if (qty <= 1) { const newVal = { ...checkVal }; delete newVal[opt]; setValue(newVal); } else setValue({ ...checkVal, [opt]: qty - 1 }); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">-</button>
+                                           <span className="w-6 text-center text-[#1F2129] border-x border-gray-100 bg-gray-50/50 leading-6">{qty}</span>
+                                           <button onClick={(e) => { e.preventDefault(); setValue({ ...checkVal, [opt]: qty + 1 }); }} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">+</button>
+                                       </div>
+                                   )}
+                               </div>
+                           );
+                       })}
+                   </div>
+               );
+           }
            case 'tag_group': return (<div className="flex flex-wrap gap-2">{(field.presetValues || ['热门', '推荐', '新品']).map(tag => (<button key={tag} onClick={() => { const currentTags = (value as string[]) || []; if (currentTags.includes(tag)) setValue(currentTags.filter(t => t !== tag)); else setValue([...currentTags, tag]); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${(value as string[])?.includes(tag) ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B]' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}>{tag}</button>))}<button className="px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed border-gray-300 text-gray-400 hover:text-[#00C06B] hover:border-[#00C06B] transition-all flex items-center"><Plus size={12} className="mr-1"/> 自定义</button></div>);
            case 'image': return (<div className="flex items-start space-x-4"><div className="w-24 h-24 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-[#00C06B] hover:text-[#00C06B] transition-colors cursor-pointer group"><ImageIcon size={24} className="mb-1"/><span className="text-xs">添加图片</span></div><div className="text-xs text-gray-400 pt-2"><p>建议尺寸: 800x800px</p><p>支持格式: JPG, PNG</p><p>大小限制: 2MB</p></div></div>);
            case 'textarea': return (<textarea className="q-form-input min-h-[100px] py-3" placeholder={field.placeholder || "请输入..."} value={value} onChange={e => setValue(e.target.value)}></textarea>);
@@ -138,11 +204,23 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         <div id="settings" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
                             <SectionHeader title="其他与高级设置" icon={<Settings size={20}/>} />
                             <div className="grid grid-cols-3 xl:grid-cols-4 gap-6">
-                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => f.module === 'others').map(field => (
-                                    <FormRow key={field.id} label={field.label} required={field.isRequired}>
-                                        {renderDynamicInput({ ...field, isRequiredConfig: field.isRequired || false })}
-                                    </FormRow>
-                                ))}
+                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => f.module === 'others').map(field => {
+                                    const isFullWidth = field.type === 'radio_group' || field.type === 'checkbox_group' || field.type === 'textarea';
+                                    return (
+                                         <div key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
+                                             <div className={`rounded-xl ${isFullWidth && field.type !== 'textarea' ? 'bg-gray-50/20 border border-gray-100 p-6 shadow-sm mt-4' : 'border-transparent'}`}>
+                                                 <FormRow 
+                                                     key={field.id} 
+                                                     label={field.label} 
+                                                     required={field.isRequired}
+                                                     isHorizontal={field.type === 'radio_group' || field.type === 'checkbox_group'}
+                                                 >
+                                                     {renderDynamicInput({ ...field, isRequiredConfig: field.isRequired || false })}
+                                                 </FormRow>
+                                             </div>
+                                         </div>
+                                     );
+                                })}
                             </div>
                                 
                             <div className="mt-6 pt-6 border-t border-gray-100">

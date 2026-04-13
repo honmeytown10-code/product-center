@@ -87,9 +87,9 @@ export const OpsChannelGroupingConfig: React.FC<Props> = ({ config, onChange }) 
             <div className="flex-1">
                 <h4 className="text-lg font-black text-gray-900 flex items-center">
                     <Layers className="mr-2 text-orange-500" size={20}/>
-                    门店商品渠道展示配置
+                    POS商品沽清渠道展示配置
                 </h4>
-                <p className="text-sm text-gray-400 mt-1">开启后，门店商品列表将按配置的分组展示渠道，而非默认平铺所有渠道。</p>
+                <p className="text-sm text-gray-400 mt-1">开启后，POS端商品列表将按配置的分组展示渠道，而非默认平铺所有渠道。该配置仅用于商品管理页面，不影响点单页。</p>
             </div>
             <Switch active={isEnabled} onClick={() => onChange({ ...config, enableChannelGrouping: !isEnabled })} />
         </div>

@@ -16,6 +16,7 @@ import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
+import { WebProductSync } from './web/WebProductSync'; // Import new component
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
@@ -152,6 +153,10 @@ export const WebAdmin: React.FC = () => {
           return <WebGeneralSettings />;
       }
 
+      if (activeMenu === 'product_sync') {
+          return <WebProductSync />;
+      }
+
       // Default: Product List
       return (
          <WebProductList 
@@ -234,6 +239,7 @@ export const WebAdmin: React.FC = () => {
                     <SidebarItem label="属性互斥规则" />
                     <SidebarItem label="商品推荐" />
                     <SidebarItem label="模板管理" />
+                    <SidebarItem label="商品同步" active={activeMenu === 'product_sync'} onClick={() => { setActiveMenu('product_sync'); setCreationContext(null); }} />
                  </div>
               )}
            </div>

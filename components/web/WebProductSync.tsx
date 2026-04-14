@@ -47,6 +47,15 @@ export const WebProductSync: React.FC = () => {
         setSelectedProducts(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
     };
 
+    const handleEditProduct = (e: React.MouseEvent, productId: string) => {
+        e.stopPropagation();
+        if (!selectedProducts.includes(productId)) {
+            setSelectedProducts(prev => [...prev, productId]);
+        }
+        setEnableOverride(true);
+        setStep(2); // Jump directly to step 2 and open the editor
+    };
+
     const toggleStore = (id: string) => {
         setSelectedStores(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
     };
@@ -93,6 +102,7 @@ export const WebProductSync: React.FC = () => {
                             <th className="py-3 px-4">商品名称</th>
                             <th className="py-3 px-4">前台分类</th>
                             <th className="py-3 px-4">标准售价</th>
+                            <th className="py-3 px-4 w-48 text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody className="text-sm">
@@ -105,6 +115,14 @@ export const WebProductSync: React.FC = () => {
                                 </td>
                                 <td className="py-3 px-4 text-gray-600">{p.category}</td>
                                 <td className="py-3 px-4 font-medium">￥{p.price.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right">
+                                    <button 
+                                        onClick={(e) => handleEditProduct(e, p.id)}
+                                        className="text-[#00C06B] font-bold hover:underline"
+                                    >
+                                        编辑差异化属性
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -127,7 +145,15 @@ export const WebProductSync: React.FC = () => {
         <div className="flex-1 flex flex-col h-full bg-[#F5F6FA] overflow-hidden">
             {/* Store Selection Area */}
             <div className="bg-white p-6 border-b border-gray-100 shrink-0">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center"><Store size={18} className="mr-2 text-[#00C06B]"/> 选择目标门店</h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-gray-800 flex items-center"><Store size={18} className="mr-2 text-[#00C06B]"/> 选择目标门店</h3>
+                    <label className="flex items-center cursor-pointer bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100" onClick={() => setEnableOverride(!enableOverride)}>
+                        <span className="mr-2 text-sm font-bold text-orange-600">配置门店差异化属性</span>
+                        <div className={`relative inline-block w-8 h-4 transition-colors duration-200 ease-in-out rounded-full ${enableOverride ? 'bg-orange-500' : 'bg-gray-300'}`}>
+                            <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-200 ease-in-out ${enableOverride ? 'transform translate-x-4' : ''}`}></span>
+                        </div>
+                    </label>
+                </div>
                 <div className="flex flex-wrap gap-3">
                     {MOCK_STORES.map(s => (
                         <div 
@@ -142,25 +168,9 @@ export const WebProductSync: React.FC = () => {
             </div>
 
             {/* Override Area */}
-            <div className="flex-1 flex flex-col p-4 overflow-hidden">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
-                        <div>
-                            <h3 className="font-bold text-gray-800 flex items-center">
-                                <FileEdit size={16} className="mr-2 text-orange-500"/> 
-                                配置门店差异化属性
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-1">开启后，可直接修改下发商品的属性。如果不修改，将按总部标准数据全量同步。</p>
-                        </div>
-                        <label className="flex items-center cursor-pointer">
-                            <div className={`relative inline-block w-10 h-5 transition-colors duration-200 ease-in-out rounded-full ${enableOverride ? 'bg-[#00C06B]' : 'bg-gray-300'}`}>
-                                <span className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${enableOverride ? 'transform translate-x-5' : ''}`}></span>
-                            </div>
-                            <span className="ml-2 text-sm font-bold text-gray-700">{enableOverride ? '已开启' : '未开启'}</span>
-                        </label>
-                    </div>
-
-                    {enableOverride ? (
+            <div className="flex-1 flex flex-col p-4 overflow-hidden relative">
+                {enableOverride ? (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex-1 flex overflow-hidden">
                             {/* Left Sidebar - Categories */}
                             <div className="w-56 bg-white border-r border-gray-100 flex flex-col shrink-0">
@@ -304,16 +314,20 @@ export const WebProductSync: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center bg-gray-50/50">
-                            <div className="text-center">
-                                <Layers size={48} className="mx-auto text-gray-300 mb-4"/>
-                                <h4 className="text-gray-500 font-bold mb-1">差异化配置已关闭</h4>
-                                <p className="text-gray-400 text-sm">将直接按总部标准商品数据同步至选定门店</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <div className="absolute inset-0 bg-gray-50/50 flex flex-col items-center justify-center m-4 rounded-lg border-2 border-dashed border-gray-200">
+                        <Layers size={48} className="text-gray-300 mb-4"/>
+                        <h4 className="text-gray-500 font-bold mb-2">未开启差异化配置</h4>
+                        <p className="text-gray-400 text-sm mb-4">将直接按总部标准商品数据同步至选定门店</p>
+                        <button 
+                            onClick={() => setEnableOverride(true)}
+                            className="px-4 py-2 bg-white border border-gray-300 rounded text-gray-600 text-sm hover:border-[#00C06B] hover:text-[#00C06B] transition-colors"
+                        >
+                            开启差异化配置
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="p-4 border-t border-gray-100 bg-white flex justify-between items-center shrink-0">

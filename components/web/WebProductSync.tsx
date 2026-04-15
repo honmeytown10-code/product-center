@@ -17,23 +17,6 @@ type ProductSpec = {
     price: number;
 };
 
-type MethodConfig = {
-    id: string;
-    name: string;
-    price: number;
-    code: string;
-    temperature: string;
-};
-
-type AddonConfig = {
-    id: string;
-    name: string;
-    code: string;
-    limit: number;
-    stock: number;
-    price: number;
-};
-
 type TimeSaleConfig = {
     enabled: boolean;
     startDate: string;
@@ -53,28 +36,10 @@ type EditableProduct = {
     salesMode: '正常售卖' | '仅套餐售卖';
     timeSale: TimeSaleConfig;
     specs: ProductSpec[];
-    methods: MethodConfig[];
-    addons: AddonConfig[];
-    addonMode: '限制所有加料购买总量' | '点餐时数量不限';
     categories: ProductCategoryConfig[];
 };
 
 const CATEGORY_OPTIONS = ['AAA', '超值儿童餐', '测试满赠分类', '咖啡-邵亮测试', '新品推荐'];
-const METHOD_LIBRARY: MethodConfig[] = [
-    { id: 'method_1', name: '冰量', price: 0, code: '/', temperature: '冷' },
-    { id: 'method_2', name: '糖度', price: 0, code: '/', temperature: '冷/热' },
-    { id: 'method_3', name: '温度', price: 0, code: '/', temperature: '冷/热' },
-    { id: 'method_4', name: '冷热', price: 0, code: '/', temperature: '冷/热' },
-    { id: 'method_5', name: '规格做法', price: 1, code: 'GF001', temperature: '常温' },
-];
-const ADDON_LIBRARY: AddonConfig[] = [
-    { id: 'addon_1', name: '椰果', code: 'AG001', limit: 9999, stock: 9999, price: 1 },
-    { id: 'addon_2', name: '珍珠', code: 'AG002', limit: 9999, stock: 9999, price: 1 },
-    { id: 'addon_3', name: '奶盖', code: 'AG003', limit: 9999, stock: 9999, price: 2 },
-    { id: 'addon_4', name: '西柚粒', code: 'AG004', limit: 9999, stock: 9999, price: 1 },
-    { id: 'addon_5', name: '加浓', code: 'AG005', limit: 9999, stock: 9999, price: 3 },
-    { id: 'addon_6', name: '小料', code: 'AG006', limit: 9999, stock: 9999, price: 1 },
-];
 
 const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
     {
@@ -97,9 +62,6 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
             { id: 'spec_1', name: '统', price: 18 },
             { id: 'spec_2', name: '大杯', price: 20 },
         ],
-        methods: [METHOD_LIBRARY[0], METHOD_LIBRARY[1]].map(item => ({ ...item })),
-        addons: [ADDON_LIBRARY[0], ADDON_LIBRARY[1]].map(item => ({ ...item })),
-        addonMode: '点餐时数量不限',
         categories: [
             { id: 'cate_1', name: 'AAA', categorySort: 1, productSort: 1 },
             { id: 'cate_2', name: '超值儿童餐', categorySort: 2, productSort: 3 },
@@ -125,9 +87,6 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
             { id: 'spec_3', name: '统', price: 22 },
             { id: 'spec_4', name: '大杯', price: 25 },
         ],
-        methods: [METHOD_LIBRARY[2]].map(item => ({ ...item })),
-        addons: [ADDON_LIBRARY[2]].map(item => ({ ...item })),
-        addonMode: '限制所有加料购买总量',
         categories: [
             { id: 'cate_3', name: 'AAA', categorySort: 1, productSort: 2 },
             { id: 'cate_4', name: '测试满赠分类', categorySort: 3, productSort: 1 },
@@ -152,9 +111,6 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
         specs: [
             { id: 'spec_5', name: '统', price: 16 },
         ],
-        methods: [METHOD_LIBRARY[2]].map(item => ({ ...item })),
-        addons: [ADDON_LIBRARY[3]].map(item => ({ ...item })),
-        addonMode: '点餐时数量不限',
         categories: [
             { id: 'cate_5', name: '咖啡-邵亮测试', categorySort: 4, productSort: 1 },
         ],
@@ -171,9 +127,6 @@ const cloneInitialProducts = () => INITIAL_SYNC_PRODUCTS.map(product => ({
         weekdays: [...product.timeSale.weekdays],
     },
     specs: product.specs.map(spec => ({ ...spec })),
-    methods: product.methods.map(method => ({ ...method })),
-    addons: product.addons.map(addon => ({ ...addon })),
-    addonMode: product.addonMode,
     categories: product.categories.map(category => ({ ...category })),
 }));
 
@@ -210,16 +163,13 @@ const getChangedFields = (product: EditableProduct) => {
 
     const changed: string[] = [];
     if (JSON.stringify(product.categories) !== JSON.stringify(initial.categories)) changed.push('前台分类');
-    if (product.price !== initial.price) changed.push('基础价格');
-    if (JSON.stringify(product.specs) !== JSON.stringify(initial.specs)) changed.push('规格基础价格');
+    if (product.price !== initial.price || JSON.stringify(product.specs) !== JSON.stringify(initial.specs)) {
+        changed.push('基础售价');
+    }
     if (JSON.stringify(product.timeSale) !== JSON.stringify(initial.timeSale)) changed.push('售卖时间');
-    if (JSON.stringify(product.methods) !== JSON.stringify(initial.methods)) changed.push('做法');
-    if (JSON.stringify(product.addons) !== JSON.stringify(initial.addons)) changed.push('加料');
     if (product.salesMode !== initial.salesMode) changed.push('售卖方式');
     return changed;
 };
-
-const getNameSummary = (items: Array<{ name: string }>) => getSummaryText(items.map(item => item.name));
 
 export const WebProductSync: React.FC = () => {
     const [step, setStep] = useState(0);
@@ -227,8 +177,6 @@ export const WebProductSync: React.FC = () => {
     const [selectedCategoryName, setSelectedCategoryName] = useState<string>('all');
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-    const [methodPickerOpen, setMethodPickerOpen] = useState(false);
-    const [addonPickerOpen, setAddonPickerOpen] = useState(false);
 
     const categoryList = useMemo(() => {
         const map = new Map<string, { name: string; categorySort: number; productCount: number }>();
@@ -297,8 +245,6 @@ export const WebProductSync: React.FC = () => {
     const openEditor = (productId: string) => {
         setEditingProductId(productId);
         setCategoryDropdownOpen(false);
-        setMethodPickerOpen(false);
-        setAddonPickerOpen(false);
     };
 
     const toggleCategory = (productId: string, categoryName: string) => {
@@ -327,30 +273,6 @@ export const WebProductSync: React.FC = () => {
         });
     };
 
-    const toggleMethodSelection = (productId: string, methodName: string) => {
-        updateProduct(productId, product => {
-            const exists = product.methods.some(item => item.name === methodName);
-            return {
-                ...product,
-                methods: exists
-                    ? product.methods.filter(item => item.name !== methodName)
-                    : [...product.methods, { ...METHOD_LIBRARY.find(item => item.name === methodName)! }],
-            };
-        });
-    };
-
-    const toggleAddonSelection = (productId: string, addonName: string) => {
-        updateProduct(productId, product => {
-            const exists = product.addons.some(item => item.name === addonName);
-            return {
-                ...product,
-                addons: exists
-                    ? product.addons.filter(item => item.name !== addonName)
-                    : [...product.addons, { ...ADDON_LIBRARY.find(item => item.name === addonName)! }],
-            };
-        });
-    };
-
     const toggleWeekday = (productId: string, weekday: string) => {
         updateProduct(productId, product => {
             const exists = product.timeSale.weekdays.includes(weekday);
@@ -364,24 +286,6 @@ export const WebProductSync: React.FC = () => {
                 },
             };
         });
-    };
-
-    const updateMethod = (productId: string, methodId: string, updater: (method: MethodConfig) => MethodConfig) => {
-        updateProduct(productId, product => ({
-            ...product,
-            methods: product.methods.map(method => (
-                method.id === methodId ? updater(method) : method
-            )),
-        }));
-    };
-
-    const updateAddon = (productId: string, addonId: string, updater: (addon: AddonConfig) => AddonConfig) => {
-        updateProduct(productId, product => ({
-            ...product,
-            addons: product.addons.map(addon => (
-                addon.id === addonId ? updater(addon) : addon
-            )),
-        }));
     };
 
     const renderToolsMenu = () => (
@@ -455,7 +359,7 @@ export const WebProductSync: React.FC = () => {
                 <div className="relative w-[860px] h-full bg-white shadow-2xl border-l border-gray-200 overflow-hidden flex flex-col">
                     <div className="px-6 py-5 border-b border-gray-100 bg-white flex items-center justify-between">
                         <div>
-                            <div className="text-lg font-bold text-gray-800">编辑商品信息</div>
+                            <div className="text-lg font-bold text-gray-800">差异化属性修改</div>
                             <div className="text-xs text-gray-400 mt-1">仅影响本次同步到门店的数据</div>
                         </div>
                         <button
@@ -526,13 +430,13 @@ export const WebProductSync: React.FC = () => {
 
                         <div className="bg-white rounded-xl border border-gray-200 p-6">
                             <div className="text-base font-bold text-gray-800 mb-4">商品属性</div>
-                            <div className="text-sm text-gray-600 mb-3">规格基础价格</div>
+                            <div className="text-sm text-gray-600 mb-3">基础售价</div>
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-[#F5F5F5] text-gray-500">
                                         <tr>
                                             <th className="px-4 py-3">规格</th>
-                                            <th className="px-4 py-3">基础价格</th>
+                                            <th className="px-4 py-3">基础售价</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -565,223 +469,6 @@ export const WebProductSync: React.FC = () => {
                                         ))}
                                     </tbody>
                                 </table>
-                            </div>
-
-                            <div className="mt-6">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="text-sm font-bold text-gray-800">做法</div>
-                                    <button
-                                        onClick={() => setMethodPickerOpen(prev => !prev)}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-sm text-gray-700 hover:border-[#00C06B]/40"
-                                    >
-                                        + 选择做法
-                                    </button>
-                                </div>
-                                {methodPickerOpen && (
-                                    <div className="mb-3 p-3 rounded-lg border border-dashed border-[#00C06B]/30 bg-[#F7FFFB] flex flex-wrap gap-2">
-                                        {METHOD_LIBRARY.map(option => {
-                                            const active = product.methods.some(item => item.name === option.name);
-                                            return (
-                                                <button
-                                                    key={option.id}
-                                                    onClick={() => toggleMethodSelection(product.id, option.name)}
-                                                    className={`px-3 py-1.5 rounded text-sm border ${
-                                                        active
-                                                            ? 'bg-[#00C06B] text-white border-[#00C06B]'
-                                                            : 'bg-white text-gray-600 border-gray-200'
-                                                    }`}
-                                                >
-                                                    {active ? '已选 ' : ''}{option.name}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                    <table className="w-full text-left text-sm">
-                                        <thead className="bg-[#F5F5F5] text-gray-500">
-                                            <tr>
-                                                <th className="px-4 py-3">做法名称</th>
-                                                <th className="px-4 py-3">做法价格</th>
-                                                <th className="px-4 py-3">做法标识码</th>
-                                                <th className="px-4 py-3">做法温层</th>
-                                                <th className="px-4 py-3 w-24">操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {product.methods.length > 0 ? product.methods.map(method => (
-                                                <tr key={method.id} className="border-t border-gray-100">
-                                                    <td className="px-4 py-3 text-gray-700">{method.name}</td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            value={method.price}
-                                                            onChange={event => updateMethod(product.id, method.id, current => ({
-                                                                ...current,
-                                                                price: Number(event.target.value) || 0,
-                                                            }))}
-                                                            className="w-20 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            value={method.code}
-                                                            onChange={event => updateMethod(product.id, method.id, current => ({
-                                                                ...current,
-                                                                code: event.target.value,
-                                                            }))}
-                                                            className="w-24 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            value={method.temperature}
-                                                            onChange={event => updateMethod(product.id, method.id, current => ({
-                                                                ...current,
-                                                                temperature: event.target.value,
-                                                            }))}
-                                                            className="w-24 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <button
-                                                            onClick={() => toggleMethodSelection(product.id, method.name)}
-                                                            className="text-gray-500 hover:text-red-500"
-                                                        >
-                                                            删除
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            )) : (
-                                                <tr>
-                                                    <td colSpan={5} className="px-4 py-6 text-center text-gray-400">未选择做法</td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <div className="mt-6">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="text-sm font-bold text-gray-800">加料</div>
-                                    <button
-                                        onClick={() => setAddonPickerOpen(prev => !prev)}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-sm text-gray-700 hover:border-[#00C06B]/40"
-                                    >
-                                        + 选择加料
-                                    </button>
-                                </div>
-                                {addonPickerOpen && (
-                                    <div className="mb-3 p-3 rounded-lg border border-dashed border-[#00C06B]/30 bg-[#F7FFFB] flex flex-wrap gap-2">
-                                        {ADDON_LIBRARY.map(option => {
-                                            const active = product.addons.some(item => item.name === option.name);
-                                            return (
-                                                <button
-                                                    key={option.id}
-                                                    onClick={() => toggleAddonSelection(product.id, option.name)}
-                                                    className={`px-3 py-1.5 rounded text-sm border ${
-                                                        active
-                                                            ? 'bg-[#00C06B] text-white border-[#00C06B]'
-                                                            : 'bg-white text-gray-600 border-gray-200'
-                                                    }`}
-                                                >
-                                                    {active ? '已选 ' : ''}{option.name}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                                <div className="mb-3 flex items-center gap-4 text-sm">
-                                    <span className="text-gray-500">加料配置</span>
-                                    <select
-                                        value={product.addonMode}
-                                        onChange={event => updateProduct(product.id, current => ({
-                                            ...current,
-                                            addonMode: event.target.value as EditableProduct['addonMode'],
-                                        }))}
-                                        className="border border-gray-200 rounded px-3 py-2 outline-none focus:border-[#00C06B]"
-                                    >
-                                        <option value="限制所有加料购买总量">限制所有加料购买总量</option>
-                                        <option value="点餐时数量不限">点餐时数量不限</option>
-                                    </select>
-                                </div>
-                                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                    <table className="w-full text-left text-sm">
-                                        <thead className="bg-[#F5F5F5] text-gray-500">
-                                            <tr>
-                                                <th className="px-4 py-3">加料商品名</th>
-                                                <th className="px-4 py-3">加料商品编码</th>
-                                                <th className="px-4 py-3">限购</th>
-                                                <th className="px-4 py-3">初始库存</th>
-                                                <th className="px-4 py-3">初始价格</th>
-                                                <th className="px-4 py-3 w-24">操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {product.addons.length > 0 ? product.addons.map(addon => (
-                                                <tr key={addon.id} className="border-t border-gray-100">
-                                                    <td className="px-4 py-3 text-gray-700">{addon.name}</td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            value={addon.code}
-                                                            onChange={event => updateAddon(product.id, addon.id, current => ({
-                                                                ...current,
-                                                                code: event.target.value,
-                                                            }))}
-                                                            className="w-24 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            value={addon.limit}
-                                                            onChange={event => updateAddon(product.id, addon.id, current => ({
-                                                                ...current,
-                                                                limit: Number(event.target.value) || 0,
-                                                            }))}
-                                                            className="w-20 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            value={addon.stock}
-                                                            onChange={event => updateAddon(product.id, addon.id, current => ({
-                                                                ...current,
-                                                                stock: Number(event.target.value) || 0,
-                                                            }))}
-                                                            className="w-20 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <input
-                                                            type="number"
-                                                            value={addon.price}
-                                                            onChange={event => updateAddon(product.id, addon.id, current => ({
-                                                                ...current,
-                                                                price: Number(event.target.value) || 0,
-                                                            }))}
-                                                            className="w-20 border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-[#00C06B]"
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <button
-                                                            onClick={() => toggleAddonSelection(product.id, addon.name)}
-                                                            className="text-gray-500 hover:text-red-500"
-                                                        >
-                                                            删除
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            )) : (
-                                                <tr>
-                                                    <td colSpan={6} className="px-4 py-6 text-center text-gray-400">未选择加料</td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
                             </div>
                         </div>
 
@@ -1024,9 +711,8 @@ export const WebProductSync: React.FC = () => {
                                 <th className="py-3 px-4 font-medium w-[300px]">商品名称</th>
                                 <th className="py-3 px-4 font-medium">商品类型</th>
                                 <th className="py-3 px-4 font-medium">前台分类</th>
-                                <th className="py-3 px-4 font-medium">基础价格</th>
+                                <th className="py-3 px-4 font-medium">基础售价</th>
                                 <th className="py-3 px-4 font-medium">可售时间</th>
-                                <th className="py-3 px-4 font-medium">做法/加料</th>
                                 <th className="py-3 px-4 font-medium w-[132px] min-w-[132px] sticky right-0 z-30 bg-[#F5F5F5] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.18)]">操作</th>
                             </tr>
                         </thead>
@@ -1076,21 +762,13 @@ export const WebProductSync: React.FC = () => {
                                             <div className="text-gray-800">{getListTimeSaleSummary(product.timeSale)}</div>
                                             <div className="text-xs text-gray-400 mt-1">{product.salesMode}</div>
                                         </td>
-                                        <td className="py-4 px-4 align-top">
-                                            <div className="text-gray-800">
-                                                {product.methods.length > 0 || product.addons.length > 0 ? '已配置' : '未配置'}
-                                            </div>
-                                            <div className="text-xs text-gray-400 mt-1">
-                                                做法 {product.methods.length} 项 / 加料 {product.addons.length} 项
-                                            </div>
-                                        </td>
                                         <td className="py-4 px-4 align-top w-[132px] min-w-[132px] sticky right-0 z-30 bg-white group-hover:bg-[#F7F8FA] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.16)]">
                                             <div className="flex items-center gap-4 whitespace-nowrap">
                                                 <button
                                                     onClick={() => openEditor(product.id)}
                                                     className="text-[#00C06B] hover:underline"
                                                 >
-                                                    编辑商品
+                                                    差异化属性修改
                                                 </button>
                                                 <button
                                                     onClick={() => handleRemoveProduct(product.id)}
@@ -1131,7 +809,7 @@ export const WebProductSync: React.FC = () => {
                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm">
                                 <p className="text-gray-500 mb-3">如果遇到重复商品，会覆盖门店重复商品，覆盖属性：</p>
                                 <div className="flex flex-wrap gap-x-6 gap-y-3">
-                                    {['基础价格', '库存', '起购限购', '商品排序', '分类排序', '售卖时间', '加料', '做法', '前台分类', '商品主图', '商品封面图', '商品详情图', '商品档口'].map(attr => (
+                                    {['商品名称', '基础售价', '商品排序', '分类排序', '售卖时间', '售卖方式', '前台分类'].map(attr => (
                                         <label key={attr} className="flex items-center text-gray-700 cursor-pointer">
                                             <input type="checkbox" defaultChecked className="mr-2 text-[#00C06B] rounded border-gray-300 focus:ring-[#00C06B]"/> {attr}
                                         </label>

@@ -80,7 +80,64 @@ export const MobileApp: React.FC = () => {
 
   const handleBatchConfirm = (batchData: any) => {
       if (batchData.action === 'edit_attr') {
-          Array.from(selectedIds).forEach(id => updateProduct(id, batchData.data));
+          Array.from(selectedIds).forEach(id => {
+              const product = products.find(item => item.id === id);
+              if (!product) return;
+
+              const updates: any = {};
+
+              if (batchData.fields?.includes('s_price')) {
+                  const priceData = batchData.data?.s_price;
+                  if (product.isMultiSpec && product.specs && product.specs.length > 0) {
+                      const specPriceMap = priceData?.specPrices?.[id];
+                      if (specPriceMap) {
+                          const nextSpecs = product.specs.map((spec, index) => {
+                              const nextPrice = Number(specPriceMap[index]);
+                              return {
+                                  ...spec,
+                                  price: Number.isFinite(nextPrice) && specPriceMap[index] !== '' ? nextPrice : (spec.price ?? product.price),
+                              };
+                          });
+                          const validPrices = nextSpecs
+                              .map(spec => spec.price)
+                              .filter((price): price is number => typeof price === 'number' && Number.isFinite(price));
+
+                          updates.specs = nextSpecs;
+                          if (validPrices.length > 0) {
+                              updates.price = Math.min(...validPrices);
+                          }
+                      }
+                  } else {
+                      const nextPriceValue = priceData?.specPrices?.[id]?.[0] ?? priceData?.uniformPrice;
+                      const nextPrice = Number(nextPriceValue);
+                      if (Number.isFinite(nextPrice)) {
+                          updates.price = nextPrice;
+                      }
+                  }
+              }
+
+              if (batchData.fields?.includes('st_time')) {
+                  const timeSaleData = batchData.data?.st_time;
+                  if (timeSaleData?.mode === 'always') {
+                      updates.timeSales = null;
+                  } else if (timeSaleData?.config) {
+                      updates.timeSales = timeSaleData.config;
+                  }
+              }
+
+              batchData.fields?.forEach((field: string) => {
+                  if (['s_price', 'st_time'].includes(field)) return;
+                  if (batchData.data?.[field] !== undefined) {
+                      if (field === 'p_cat' && Array.isArray(batchData.data[field])) {
+                          updates.category = batchData.data[field].join('、');
+                      } else {
+                          updates[field] = batchData.data[field];
+                      }
+                  }
+              });
+
+              updateProduct(id, updates);
+          });
           alert(`已批量修改 ${selectedIds.size} 个商品的属性`);
       } else {
           alert(`批量${batchData.action}操作模拟完成`);

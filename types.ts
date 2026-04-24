@@ -193,6 +193,18 @@ export interface Category {
   source?: 'system' | 'brand'; 
 }
 
+export interface TimeRule {
+  id: string;
+  days: number[];
+  times: string[];
+}
+
+export interface TimeSalesConfig {
+  startDate: string;
+  endDate: string;
+  rules: TimeRule[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -210,6 +222,7 @@ export interface Product {
   isMultiSpec?: boolean;
   stock?: number; // 单规格库存，-1表示无限(9999)
   specs?: { name: string; stock: number; price?: number; unlimited?: boolean }[];
+  timeSales?: TimeSalesConfig | null;
 }
 
 const mockFields = (ids: string[]) => ids.map(id => ({ id, isRequired: false }));

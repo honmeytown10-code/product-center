@@ -89,6 +89,9 @@ export const MobileApp: React.FC = () => {
               if (batchData.fields?.includes('s_price')) {
                   const priceData = batchData.data?.s_price;
                   if (priceData?.mode === 'uniform') {
+                      const isFixedMode = priceData?.uniformMethod === 'fixed';
+                      const fixedPrice = Number(priceData?.fixedPrice);
+                      const nextFixedPrice = Number.isFinite(fixedPrice) ? fixedPrice : 0;
                       const adjustAmount = Number(priceData?.adjustAmount);
                       const delta = Number.isFinite(adjustAmount) ? adjustAmount : 0;
                       const factor = priceData?.adjustType === 'decrease' ? -1 : 1;
@@ -96,7 +99,7 @@ export const MobileApp: React.FC = () => {
                       if (product.isMultiSpec && product.specs && product.specs.length > 0) {
                           const nextSpecs = product.specs.map(spec => ({
                               ...spec,
-                              price: (spec.price ?? product.price) + factor * delta,
+                              price: isFixedMode ? nextFixedPrice : (spec.price ?? product.price) + factor * delta,
                           }));
                           const validPrices = nextSpecs
                               .map(spec => spec.price)
@@ -106,6 +109,8 @@ export const MobileApp: React.FC = () => {
                           if (validPrices.length > 0) {
                               updates.price = Math.min(...validPrices);
                           }
+                      } else if (isFixedMode) {
+                          updates.price = nextFixedPrice;
                       } else if (delta || priceData?.adjustAmount === '0' || priceData?.adjustAmount === '0.00') {
                           updates.price = product.price + factor * delta;
                       }

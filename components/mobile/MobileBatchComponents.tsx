@@ -21,8 +21,10 @@ type BatchTimeSaleFormData = {
 
 type BatchPriceEditorData = {
   mode: 'uniform' | 'individual';
+  uniformMethod: 'adjust' | 'fixed';
   adjustType: 'increase' | 'decrease';
   adjustAmount: string;
+  fixedPrice: string;
   specPrices: Record<string, Record<number, string>>;
 };
 
@@ -225,9 +227,15 @@ const BatchPriceEditor = ({
   const adjustAmountNumber = Number(priceData.adjustAmount);
   const validAdjustAmount = Number.isFinite(adjustAmountNumber) ? adjustAmountNumber : 0;
   const adjustFactor = priceData.adjustType === 'decrease' ? -1 : 1;
+  const fixedPriceNumber = Number(priceData.fixedPrice);
+  const validFixedPrice = Number.isFinite(fixedPriceNumber) ? fixedPriceNumber : 0;
 
   const updateAdjustAmount = (value: string) => {
     setPriceData(prev => ({ ...prev, adjustAmount: value }));
+  };
+
+  const updateFixedPrice = (value: string) => {
+    setPriceData(prev => ({ ...prev, fixedPrice: value }));
   };
 
   const updateSpecPrice = (productId: string, index: number, value: string) => {
@@ -282,54 +290,83 @@ const BatchPriceEditor = ({
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
               <div>
                 <div className="text-sm font-black text-[#1F2129]">统一改价</div>
-                <div className="text-[11px] text-gray-400 mt-1">按固定金额统一加价或减价，应用到所选商品全部规格</div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-[12px] font-bold text-gray-500">改价类型</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setPriceData(prev => ({ ...prev, adjustType: 'increase' }))}
-                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.adjustType === 'increase' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
-                  >
-                    加价
-                  </button>
-                  <button
-                    onClick={() => setPriceData(prev => ({ ...prev, adjustType: 'decrease' }))}
-                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.adjustType === 'decrease' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
-                  >
-                    减价
-                  </button>
-                </div>
+                <div className="text-[11px] text-gray-400 mt-1">支持按金额统一调整，或直接改为固定金额</div>
               </div>
 
               <div className="space-y-2">
                 <div className="text-[12px] font-bold text-gray-500">改价方式</div>
-                <div className="h-12 rounded-xl border border-gray-200 bg-gray-50 px-4 flex items-center text-sm font-bold text-gray-500">
-                  固定金额
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setPriceData(prev => ({ ...prev, uniformMethod: 'adjust' }))}
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.uniformMethod === 'adjust' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                  >
+                    按金额调整
+                  </button>
+                  <button
+                    onClick={() => setPriceData(prev => ({ ...prev, uniformMethod: 'fixed' }))}
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.uniformMethod === 'fixed' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                  >
+                    改为固定金额
+                  </button>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-[12px] font-bold text-gray-500">改价幅度</div>
-                <div className="flex items-center">
-                  <div className="h-12 w-12 rounded-l-xl border border-r-0 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 font-black">
-                    {priceData.adjustType === 'increase' ? '+' : '-'}
+              {priceData.uniformMethod === 'adjust' ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="text-[12px] font-bold text-gray-500">改价类型</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setPriceData(prev => ({ ...prev, adjustType: 'increase' }))}
+                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.adjustType === 'increase' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                      >
+                        加价
+                      </button>
+                      <button
+                        onClick={() => setPriceData(prev => ({ ...prev, adjustType: 'decrease' }))}
+                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.adjustType === 'decrease' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                      >
+                        减价
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1 h-12 border border-gray-200 bg-white flex items-center px-4">
+
+                  <div className="space-y-2">
+                    <div className="text-[12px] font-bold text-gray-500">改价幅度</div>
+                    <div className="flex items-center">
+                      <div className="h-12 w-12 rounded-l-xl border border-r-0 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 font-black">
+                        {priceData.adjustType === 'increase' ? '+' : '-'}
+                      </div>
+                      <div className="flex-1 h-12 border border-gray-200 bg-white flex items-center px-4">
+                        <input
+                          type="number"
+                          className="w-full text-lg font-bold outline-none bg-transparent text-[#1F2129]"
+                          placeholder="0.00"
+                          value={priceData.adjustAmount}
+                          onChange={e => updateAdjustAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="h-12 px-4 rounded-r-xl border border-l-0 border-gray-200 bg-gray-50 flex items-center text-sm font-bold text-gray-500">
+                        元
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-[12px] font-bold text-gray-500">目标价格</div>
+                  <div className="flex items-center h-12 rounded-xl border border-gray-200 bg-white px-4">
+                    <span className="text-lg font-bold mr-1 text-[#1F2129]">¥</span>
                     <input
                       type="number"
                       className="w-full text-lg font-bold outline-none bg-transparent text-[#1F2129]"
                       placeholder="0.00"
-                      value={priceData.adjustAmount}
-                      onChange={e => updateAdjustAmount(e.target.value)}
+                      value={priceData.fixedPrice}
+                      onChange={e => updateFixedPrice(e.target.value)}
                     />
                   </div>
-                  <div className="h-12 px-4 rounded-r-xl border border-l-0 border-gray-200 bg-gray-50 flex items-center text-sm font-bold text-gray-500">
-                    元
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {productSpecs.map(({ product, specs }) => (
@@ -339,13 +376,17 @@ const BatchPriceEditor = ({
                 </div>
                 <div className="p-4 space-y-3">
                   {specs.map(spec => {
-                    const nextPrice = Math.max(0, spec.price + adjustFactor * validAdjustAmount);
+                    const nextPrice = priceData.uniformMethod === 'fixed'
+                      ? Math.max(0, validFixedPrice)
+                      : Math.max(0, spec.price + adjustFactor * validAdjustAmount);
                     return (
                       <div key={`${product.id}-${spec.index}`} className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-bold text-gray-700 truncate">{spec.name}</div>
                           <div className="text-[11px] text-gray-400 mt-1">
-                            ¥{spec.price.toFixed(2)} {priceData.adjustType === 'increase' ? '+' : '-'} ¥{validAdjustAmount.toFixed(2)}
+                            {priceData.uniformMethod === 'fixed'
+                              ? `¥${spec.price.toFixed(2)} -> ¥${validFixedPrice.toFixed(2)}`
+                              : `¥${spec.price.toFixed(2)} ${priceData.adjustType === 'increase' ? '+' : '-'} ¥${validAdjustAmount.toFixed(2)}`}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
@@ -596,8 +637,10 @@ export const BatchConfigStep = ({
                 ...prev,
                 s_price: {
                     mode: 'uniform',
+                    uniformMethod: 'adjust',
                     adjustType: 'increase',
                     adjustAmount: '',
+                    fixedPrice: '',
                     specPrices,
                 } as BatchPriceEditorData,
             };
@@ -700,9 +743,13 @@ export const BatchConfigStep = ({
     };
 
     const renderPriceEditor = () => {
-        const priceData = (batchFormData.s_price as BatchPriceEditorData | undefined) || { mode: 'uniform', adjustType: 'increase', adjustAmount: '', specPrices: {} };
+        const priceData = (batchFormData.s_price as BatchPriceEditorData | undefined) || { mode: 'uniform', uniformMethod: 'adjust', adjustType: 'increase', adjustAmount: '', fixedPrice: '', specPrices: {} };
         const summary = priceData.mode === 'uniform'
-            ? (priceData.adjustAmount ? `统一${priceData.adjustType === 'increase' ? '加价' : '减价'} ¥${priceData.adjustAmount}` : '按固定金额统一加价或减价')
+            ? (
+                priceData.uniformMethod === 'fixed'
+                    ? (priceData.fixedPrice ? `统一改为 ¥${priceData.fixedPrice}` : '统一改为固定金额')
+                    : (priceData.adjustAmount ? `统一${priceData.adjustType === 'increase' ? '加价' : '减价'} ¥${priceData.adjustAmount}` : '按金额统一加价或减价')
+              )
             : '按商品规格单独修改价格';
 
         return (

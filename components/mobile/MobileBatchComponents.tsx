@@ -20,7 +20,9 @@ type BatchTimeSaleFormData = {
 };
 
 type BatchPriceEditorData = {
-  uniformPrice: string;
+  mode: 'uniform' | 'individual';
+  adjustType: 'increase' | 'decrease';
+  adjustAmount: string;
   specPrices: Record<string, Record<number, string>>;
 };
 
@@ -50,34 +52,6 @@ const getRuleSummary = (rule: TimeSalesConfig['rules'][number]) => {
   const times = rule.times.length > 0 ? rule.times.join(' / ') : '未设置时段';
   return { days, times };
 };
-
-const getCompactRuleSummary = (rule: TimeSalesConfig['rules'][number]) => {
-  const daySummary = rule.days.length === 7
-    ? '全周'
-    : rule.days.length > 0
-      ? rule.days.map(day => DAY_LABELS[day - 1]).join('、')
-      : '未选星期';
-  const timeSummary = rule.times.length > 0 ? rule.times.join(' / ') : '未设置时间';
-  return `${daySummary} ${timeSummary}`;
-};
-
-const getSpecPriceSummary = (product: Product, draftPrices?: Record<number, string>) => {
-  if (!product.specs || product.specs.length === 0) return `¥${product.price}`;
-  const validPrices = product.specs
-    .map((spec, index) => {
-      const draftPrice = draftPrices?.[index];
-      const nextPrice = draftPrice !== undefined && draftPrice !== '' ? Number(draftPrice) : spec.price;
-      return Number.isFinite(nextPrice) ? nextPrice : undefined;
-    })
-    .filter((price): price is number => typeof price === 'number' && Number.isFinite(price));
-
-  if (validPrices.length === 0) return `¥${product.price} 起`;
-
-  const min = Math.min(...validPrices);
-  const max = Math.max(...validPrices);
-  return min === max ? `¥${min}` : `¥${min} - ¥${max}`;
-};
-
 
 const TimeSalesBatchEditor = ({
   data,
@@ -248,9 +222,12 @@ const BatchPriceEditor = ({
       ? product.specs.map((spec, index) => ({ name: spec.name, price: spec.price ?? product.price, index }))
       : [{ name: '标准', price: product.price, index: 0 }],
   }));
+  const adjustAmountNumber = Number(priceData.adjustAmount);
+  const validAdjustAmount = Number.isFinite(adjustAmountNumber) ? adjustAmountNumber : 0;
+  const adjustFactor = priceData.adjustType === 'decrease' ? -1 : 1;
 
-  const updateUniformPrice = (value: string) => {
-    setPriceData(prev => ({ ...prev, uniformPrice: value }));
+  const updateAdjustAmount = (value: string) => {
+    setPriceData(prev => ({ ...prev, adjustAmount: value }));
   };
 
   const updateSpecPrice = (productId: string, index: number, value: string) => {
@@ -264,20 +241,6 @@ const BatchPriceEditor = ({
         },
       },
     }));
-  };
-
-  const applyUniformPrice = () => {
-    if (priceData.uniformPrice === '') return;
-    setPriceData(prev => {
-      const nextSpecPrices: Record<string, Record<number, string>> = {};
-      productSpecs.forEach(({ product, specs }) => {
-        nextSpecPrices[product.id] = {};
-        specs.forEach(spec => {
-          nextSpecPrices[product.id][spec.index] = prev.uniformPrice;
-        });
-      });
-      return { ...prev, specPrices: nextSpecPrices };
-    });
   };
 
   return (
@@ -294,60 +257,136 @@ const BatchPriceEditor = ({
           <div className="flex items-start">
             <Info size={14} className="text-blue-500 mt-0.5 mr-2 shrink-0"/>
             <div className="text-[11px] leading-5 text-gray-500 font-medium">
-              保存后将统一覆盖所选商品当前基础价格配置。
+              保存后将按当前模式更新所选商品基础价格。
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="text-sm font-black text-[#1F2129]">统一修改价格</div>
-          <div className="text-[11px] text-gray-400 mt-1 mb-4">支持将价格统一应用到所选商品全部规格</div>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 flex items-center bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
-              <span className="text-lg font-bold mr-1 text-[#1F2129]">¥</span>
-              <input
-                type="number"
-                className="w-full text-lg font-bold outline-none bg-transparent text-[#1F2129]"
-                placeholder="0.00"
-                value={priceData.uniformPrice}
-                onChange={e => updateUniformPrice(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={applyUniformPrice}
-              className="px-4 py-3 rounded-xl bg-[#E6F8F0] text-[#00C06B] text-sm font-bold whitespace-nowrap"
-            >
-              应用到全部
-            </button>
-          </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setPriceData(prev => ({ ...prev, mode: 'uniform' }))}
+            className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.mode === 'uniform' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+          >
+            统一修改
+          </button>
+          <button
+            onClick={() => setPriceData(prev => ({ ...prev, mode: 'individual' }))}
+            className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.mode === 'individual' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+          >
+            单独修改
+          </button>
         </div>
 
-        {productSpecs.map(({ product, specs }) => (
-          <div key={product.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <div className="font-bold text-sm text-[#1F2129]">{product.name}</div>
-            </div>
-            <div className="p-4 space-y-3">
-              {specs.map(spec => (
-                <div key={`${product.id}-${spec.index}`} className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-gray-700 truncate">{spec.name}</div>
-                    <div className="text-[11px] text-gray-400 mt-1">规格价格</div>
+        {priceData.mode === 'uniform' ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+              <div>
+                <div className="text-sm font-black text-[#1F2129]">统一改价</div>
+                <div className="text-[11px] text-gray-400 mt-1">按固定金额统一加价或减价，应用到所选商品全部规格</div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[12px] font-bold text-gray-500">改价类型</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setPriceData(prev => ({ ...prev, adjustType: 'increase' }))}
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.adjustType === 'increase' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                  >
+                    加价
+                  </button>
+                  <button
+                    onClick={() => setPriceData(prev => ({ ...prev, adjustType: 'decrease' }))}
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${priceData.adjustType === 'decrease' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                  >
+                    减价
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[12px] font-bold text-gray-500">改价方式</div>
+                <div className="h-12 rounded-xl border border-gray-200 bg-gray-50 px-4 flex items-center text-sm font-bold text-gray-500">
+                  固定金额
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[12px] font-bold text-gray-500">改价幅度</div>
+                <div className="flex items-center">
+                  <div className="h-12 w-12 rounded-l-xl border border-r-0 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 font-black">
+                    {priceData.adjustType === 'increase' ? '+' : '-'}
                   </div>
-                  <div className="w-[132px] rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex items-center">
-                    <span className="text-sm font-bold text-[#1F2129] mr-1">¥</span>
+                  <div className="flex-1 h-12 border border-gray-200 bg-white flex items-center px-4">
                     <input
                       type="number"
-                      className="w-full bg-transparent outline-none text-sm font-bold text-[#1F2129]"
-                      value={priceData.specPrices?.[product.id]?.[spec.index] ?? `${spec.price}`}
-                      onChange={e => updateSpecPrice(product.id, spec.index, e.target.value)}
+                      className="w-full text-lg font-bold outline-none bg-transparent text-[#1F2129]"
+                      placeholder="0.00"
+                      value={priceData.adjustAmount}
+                      onChange={e => updateAdjustAmount(e.target.value)}
                     />
                   </div>
+                  <div className="h-12 px-4 rounded-r-xl border border-l-0 border-gray-200 bg-gray-50 flex items-center text-sm font-bold text-gray-500">
+                    元
+                  </div>
                 </div>
-              ))}
+              </div>
             </div>
+
+            {productSpecs.map(({ product, specs }) => (
+              <div key={product.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <div className="font-bold text-sm text-[#1F2129]">{product.name}</div>
+                </div>
+                <div className="p-4 space-y-3">
+                  {specs.map(spec => {
+                    const nextPrice = Math.max(0, spec.price + adjustFactor * validAdjustAmount);
+                    return (
+                      <div key={`${product.id}-${spec.index}`} className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-gray-700 truncate">{spec.name}</div>
+                          <div className="text-[11px] text-gray-400 mt-1">
+                            ¥{spec.price.toFixed(2)} {priceData.adjustType === 'increase' ? '+' : '-'} ¥{validAdjustAmount.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-[11px] text-gray-400">调整后</div>
+                          <div className="text-base font-black text-[#1F2129]">¥{nextPrice.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          productSpecs.map(({ product, specs }) => (
+            <div key={product.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                <div className="font-bold text-sm text-[#1F2129]">{product.name}</div>
+              </div>
+              <div className="p-4 space-y-3">
+                {specs.map(spec => (
+                  <div key={`${product.id}-${spec.index}`} className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-700 truncate">{spec.name}</div>
+                      <div className="text-[11px] text-gray-400 mt-1">规格价格</div>
+                    </div>
+                    <div className="w-[132px] rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex items-center">
+                      <span className="text-sm font-bold text-[#1F2129] mr-1">¥</span>
+                      <input
+                        type="number"
+                        className="w-full bg-transparent outline-none text-sm font-bold text-[#1F2129]"
+                        value={priceData.specPrices?.[product.id]?.[spec.index] ?? `${spec.price}`}
+                        onChange={e => updateSpecPrice(product.id, spec.index, e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-white border-t border-gray-100 shadow-lg">
@@ -556,7 +595,9 @@ export const BatchConfigStep = ({
             return {
                 ...prev,
                 s_price: {
-                    uniformPrice: '',
+                    mode: 'uniform',
+                    adjustType: 'increase',
+                    adjustAmount: '',
                     specPrices,
                 } as BatchPriceEditorData,
             };
@@ -618,18 +659,6 @@ export const BatchConfigStep = ({
         }));
     };
 
-    const toggleCategory = (category: string) => {
-        setBatchFormData(prev => {
-            const currentCategories: string[] = Array.isArray(prev.p_cat) ? prev.p_cat : [];
-            return {
-                ...prev,
-                p_cat: currentCategories.includes(category)
-                    ? currentCategories.filter(item => item !== category)
-                    : [...currentCategories, category],
-            };
-        });
-    };
-
     const renderCategoryEditor = () => {
         const selectedCategories: string[] = Array.isArray(batchFormData.p_cat) ? batchFormData.p_cat : [];
         const previewCategories = selectedCategories.slice(0, 3);
@@ -671,7 +700,10 @@ export const BatchConfigStep = ({
     };
 
     const renderPriceEditor = () => {
-        const priceData = (batchFormData.s_price as BatchPriceEditorData | undefined) || { uniformPrice: '', specPrices: {} };
+        const priceData = (batchFormData.s_price as BatchPriceEditorData | undefined) || { mode: 'uniform', adjustType: 'increase', adjustAmount: '', specPrices: {} };
+        const summary = priceData.mode === 'uniform'
+            ? (priceData.adjustAmount ? `统一${priceData.adjustType === 'increase' ? '加价' : '减价'} ¥${priceData.adjustAmount}` : '按固定金额统一加价或减价')
+            : '按商品规格单独修改价格';
 
         return (
             <div>
@@ -682,9 +714,7 @@ export const BatchConfigStep = ({
                     <div className="flex items-center justify-between">
                         <div className="min-w-0 flex-1">
                             <div className="text-sm font-bold text-[#1F2129]">基础价格</div>
-                            <div className="text-[11px] text-gray-400 mt-1">
-                                {priceData.uniformPrice ? `已设置统一价格 ¥${priceData.uniformPrice}` : `共 ${selectedProducts.length} 个商品，支持统一修改或逐规格调整`}
-                            </div>
+                            <div className="text-[11px] text-gray-400 mt-1">{summary}</div>
                         </div>
                         <ChevronRight size={16} className="text-gray-300 ml-3 shrink-0"/>
                     </div>

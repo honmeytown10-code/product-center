@@ -88,7 +88,28 @@ export const MobileApp: React.FC = () => {
 
               if (batchData.fields?.includes('s_price')) {
                   const priceData = batchData.data?.s_price;
-                  if (product.isMultiSpec && product.specs && product.specs.length > 0) {
+                  if (priceData?.mode === 'uniform') {
+                      const adjustAmount = Number(priceData?.adjustAmount);
+                      const delta = Number.isFinite(adjustAmount) ? adjustAmount : 0;
+                      const factor = priceData?.adjustType === 'decrease' ? -1 : 1;
+
+                      if (product.isMultiSpec && product.specs && product.specs.length > 0) {
+                          const nextSpecs = product.specs.map(spec => ({
+                              ...spec,
+                              price: (spec.price ?? product.price) + factor * delta,
+                          }));
+                          const validPrices = nextSpecs
+                              .map(spec => spec.price)
+                              .filter((price): price is number => typeof price === 'number' && Number.isFinite(price));
+
+                          updates.specs = nextSpecs;
+                          if (validPrices.length > 0) {
+                              updates.price = Math.min(...validPrices);
+                          }
+                      } else if (delta || priceData?.adjustAmount === '0' || priceData?.adjustAmount === '0.00') {
+                          updates.price = product.price + factor * delta;
+                      }
+                  } else if (product.isMultiSpec && product.specs && product.specs.length > 0) {
                       const specPriceMap = priceData?.specPrices?.[id];
                       if (specPriceMap) {
                           const nextSpecs = product.specs.map((spec, index) => {
@@ -108,7 +129,7 @@ export const MobileApp: React.FC = () => {
                           }
                       }
                   } else {
-                      const nextPriceValue = priceData?.specPrices?.[id]?.[0] ?? priceData?.uniformPrice;
+                      const nextPriceValue = priceData?.specPrices?.[id]?.[0];
                       const nextPrice = Number(nextPriceValue);
                       if (Number.isFinite(nextPrice)) {
                           updates.price = nextPrice;

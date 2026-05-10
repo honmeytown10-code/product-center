@@ -8,10 +8,13 @@ export const Switch: React.FC<{ active: boolean; onClick: () => void }> = ({ act
   </div>
 );
 
-export const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode }> = ({ title, icon }) => (
-  <div className="flex items-center mb-6 pb-4 border-b border-gray-100">
-    {icon && <div className="mr-3 text-[#00C06B] opacity-80">{icon}</div>}
-    <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+export const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode; meta?: React.ReactNode }> = ({ title, icon, meta }) => (
+  <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 gap-4">
+    <div className="flex items-center min-w-0">
+      {icon && <div className="mr-3 text-[#00C06B] opacity-80">{icon}</div>}
+      <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+    </div>
+    {meta && <div className="shrink-0">{meta}</div>}
   </div>
 );
 

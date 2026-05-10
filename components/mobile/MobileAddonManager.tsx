@@ -25,6 +25,7 @@ interface LocalAddon {
   channels: Record<ChannelType, 'on_shelf' | 'off_shelf' | 'unmapped'>;
   channelStocks?: Record<ChannelType, number>;
   isIndependent?: boolean;
+
   independentCategory?: string;
   packageSurcharge?: string;
   noPackageRestriction?: 'same_item' | 'any_item';

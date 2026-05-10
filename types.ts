@@ -118,7 +118,7 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   { id: 'p_code', label: '数字助记码', module: 'base', type: 'input', sortOrder: 30 },
   { id: 'p_front_cat', label: '前台分类', module: 'base', type: 'selector', applyToBrands: ['b_1', 'b_2'], sortOrder: 40 },
   { id: 'p_cat', label: '商品类目', module: 'base', type: 'selector', isBase: true, isSystem: true, sortOrder: 50, isRequired: false },
-  { id: 'p_unit', label: '计量单位', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 60, isRequired: true },
+  { id: 'p_unit', label: '计量单位', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 60, isRequired: false },
   { id: 'p_weight_flag', label: '是否为称重商品', module: 'base', type: 'switch', sortOrder: 70 },
 
   // 2. 商品属性 (product_attr)
@@ -153,6 +153,16 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   { id: 's_stock', label: '库存设置', module: 'sales', type: 'number', isBase: true, isSystem: true, sortOrder: 50 },
   { id: 's_limit', label: '起购/限购数量', module: 'sales', type: 'number', sortOrder: 60 },
   { id: 's_pos_edit', label: 'POS临时改价', module: 'sales', type: 'switch', sortOrder: 70 },
+  { id: 's_min_purchase_toggle', label: '起购数量', module: 'sales', type: 'switch', sortOrder: 80 },
+  { id: 's_min_purchase_value', label: '起购数量值', module: 'sales', type: 'number', sortOrder: 81 },
+  { id: 's_max_purchase_toggle', label: '限购数量', module: 'sales', type: 'switch', sortOrder: 82 },
+  { id: 's_max_purchase_value', label: '限购数量值', module: 'sales', type: 'number', sortOrder: 83 },
+  { id: 's_time_sale_toggle', label: '分时段销售', module: 'sales', type: 'switch', sortOrder: 84 },
+  { id: 's_time_sale_rule', label: '分时段规则', module: 'sales', type: 'input', sortOrder: 85 },
+  { id: 's_sale_mode', label: '售卖方式', module: 'sales', type: 'radio_group', presetValues: ['正常售卖', '仅在套餐售卖'], sortOrder: 86 },
+  { id: 's_sale_settings', label: '售卖设置', module: 'sales', type: 'checkbox_group', presetValues: ['单点不送', '关联档口', '参与会员折扣'], sortOrder: 87 },
+  { id: 's_takeout_rule', label: '外带显示规则', module: 'sales', type: 'radio_group', presetValues: ['正常售卖', '外带时隐藏', '仅外带显示'], sortOrder: 88 },
+  { id: 's_tax_rate', label: '税率', module: 'sales', type: 'selector', sortOrder: 89 },
 
   // 4. 展示信息 (display)
   { id: 'p_img', label: '商品主图', module: 'display', type: 'image', isBase: true, sortOrder: 10 },

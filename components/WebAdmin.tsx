@@ -25,40 +25,95 @@ export interface WebCategory extends Category {
   classification: 'standard' | 'combo';
 }
 
+type StoreProductManagePreset = {
+  keyword?: string;
+};
+
 const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_name', isRequired: true },
+  { id: 'p_alias', isRequired: false },
+  { id: 'p_code', isRequired: false },
   { id: 'p_cat', isRequired: true },
+  { id: 'p_front_cat', isRequired: true },
   { id: 'p_img', isRequired: true },
-  { id: 'p_unit', isRequired: true },
+  { id: 'p_unit', isRequired: false },
+  { id: 'p_weight_flag', isRequired: false },
+  { id: 's_specs', isRequired: false },
+  { id: 'm_methods', isRequired: false },
+  { id: 'a_addons', isRequired: false },
   { id: 's_price', isRequired: true },
+  { id: 's_cost', isRequired: false },
+  { id: 's_market_price', isRequired: false },
   { id: 's_stock', isRequired: true },
   { id: 's_pack_fee', isRequired: false },
+  { id: 's_min_purchase_toggle', isRequired: false },
+  { id: 's_min_purchase_value', isRequired: false },
+  { id: 's_max_purchase_toggle', isRequired: false },
+  { id: 's_max_purchase_value', isRequired: false },
+  { id: 's_time_sale_toggle', isRequired: false },
+  { id: 's_time_sale_rule', isRequired: false },
+  { id: 's_sale_mode', isRequired: false },
+  { id: 's_sale_settings', isRequired: false },
+  { id: 's_takeout_rule', isRequired: false },
+  { id: 's_tax_rate', isRequired: false },
+  { id: 'p_stat_tags', isRequired: false },
   { id: 'p_desc_tags', isRequired: false },
+  { id: 'p_order_tags', isRequired: false },
   { id: 'p_list_desc', isRequired: false },
-  { id: 'm_name', isRequired: false },
-  { id: 'm_tags', isRequired: false },
-  { id: 'a_ref', isRequired: false },
+  { id: 'p_badge', isRequired: false },
+  { id: 'p_video', isRequired: false },
+  { id: 'p_rich_desc', isRequired: false },
   { id: 'st_member', isRequired: false },
+  { id: 'o_invoice', isRequired: false },
+  { id: 'o_origin', isRequired: false },
+  { id: 'o_ingredients', isRequired: false },
+  { id: 'o_print_stat_test', isRequired: false },
+  { id: 'o_1202_attr', isRequired: false },
 ];
 
 const DEFAULT_COMBO_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_name', isRequired: true },
+  { id: 'p_alias', isRequired: false },
+  { id: 'p_code', isRequired: false },
   { id: 'p_cat', isRequired: true },
+  { id: 'p_front_cat', isRequired: false },
   { id: 'p_img', isRequired: true },
+  { id: 'm_methods', isRequired: false },
+  { id: 'a_addons', isRequired: false },
   { id: 's_price', isRequired: true },
+  { id: 's_cost', isRequired: false },
+  { id: 's_market_price', isRequired: false },
   { id: 's_stock', isRequired: true },
+  { id: 's_min_purchase_toggle', isRequired: false },
+  { id: 's_min_purchase_value', isRequired: false },
+  { id: 's_max_purchase_toggle', isRequired: false },
+  { id: 's_max_purchase_value', isRequired: false },
+  { id: 's_time_sale_toggle', isRequired: false },
+  { id: 's_time_sale_rule', isRequired: false },
+  { id: 's_sale_mode', isRequired: false },
+  { id: 's_sale_settings', isRequired: false },
+  { id: 's_takeout_rule', isRequired: false },
+  { id: 's_tax_rate', isRequired: false },
   { id: 'c_groups', isRequired: true },
+  { id: 'p_stat_tags', isRequired: false },
+  { id: 'p_desc_tags', isRequired: false },
   { id: 'p_list_desc', isRequired: false },
+  { id: 'p_badge', isRequired: false },
+  { id: 'p_video', isRequired: false },
+  { id: 'p_rich_desc', isRequired: false },
   { id: 'st_member', isRequired: false },
+  { id: 'o_invoice', isRequired: false },
+  { id: 'o_origin', isRequired: false },
+  { id: 'o_ingredients', isRequired: false },
 ];
 
 const INITIAL_WEB_CATEGORIES: WebCategory[] = [
   // Standard Categories
   { id: 'w_cat_s1', name: '通用菜品', productCount: 120, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
-  { id: 'w_cat_s2', name: '现制饮品', productCount: 45, standardFields: [...DEFAULT_STANDARD_FIELDS, {id: 'm_name', isRequired: true}], comboFields: [], source: 'system', classification: 'standard' },
+  { id: 'w_cat_s2', name: '现制饮品', productCount: 45, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
   { id: 'w_cat_s3', name: '称重商品', productCount: 15, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
-  { id: 'w_cat_s4', name: '蛋糕/烘焙', productCount: 30, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
-  { id: 'w_cat_s5', name: '零售商品', productCount: 80, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
+  { id: 'w_cat_s4', name: '蛋糕/烘焙', productCount: 30, standardFields: DEFAULT_STANDARD_FIELDS.filter(field => field.id !== 's_pack_fee').concat([{ id: 'p_badge', isRequired: false }]), comboFields: [], source: 'system', classification: 'standard' },
+  { id: 'w_cat_s5', name: '零售商品', productCount: 80, standardFields: DEFAULT_STANDARD_FIELDS.filter(field => field.id !== 'st_member').concat([{ id: 'o_invoice', isRequired: false }, { id: 'o_origin', isRequired: false }]), comboFields: [], source: 'system', classification: 'standard' },
   // Combo Categories
   { id: 'w_cat_c1', name: '通用套餐', productCount: 20, standardFields: [], comboFields: DEFAULT_COMBO_FIELDS, source: 'system', classification: 'combo' },
   { id: 'w_cat_c2', name: '现制饮品套餐', productCount: 10, standardFields: [], comboFields: DEFAULT_COMBO_FIELDS, source: 'system', classification: 'combo' },
@@ -70,13 +125,20 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
 export const WebAdmin: React.FC = () => {
   // Navigation State
   const [activeMenu, setActiveMenu] = useState('product_list');
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['product_archives', 'store_products', 'recipe_management']); // Expanded 'store_products' and 'recipe_management' by default
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([
+    'product_archives',
+    'product_archives_recipe',
+    'store_products',
+    'chain_management',
+    'platform_products',
+  ]);
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
   const [creationType, setCreationType] = useState<'standard' | 'combo' | null>(null); // Triggers Category Modal
-  const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category } | null>(null); // Triggers Form Page
+  const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category, mode?: 'create' | 'edit', product?: any } | null>(null); // Triggers Form Page
+  const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
 
   // Category Manager State
   const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
@@ -106,6 +168,9 @@ export const WebAdmin: React.FC = () => {
               <WebProductForm 
                   type={creationContext.type} 
                   category={creationContext.category} 
+                  categories={webCategories.filter(cat => cat.classification === creationContext.type)}
+                  mode={creationContext.mode || 'create'}
+                  initialProduct={creationContext.product || null}
                   onClose={() => setCreationContext(null)} 
               />
           );
@@ -121,7 +186,19 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'store_product_list') {
-          return <WebStoreProductList />;
+          return <WebStoreProductList mode="manage" managePreset={storeProductManagePreset} />;
+      }
+
+      if (activeMenu === 'store_product_coverage') {
+          return (
+            <WebStoreProductList
+              mode="coverage"
+              onOpenManageProduct={(preset) => {
+                setStoreProductManagePreset(preset);
+                setActiveMenu('store_product_list');
+              }}
+            />
+          );
       }
 
       if (activeMenu === 'categories') {
@@ -163,6 +240,18 @@ export const WebAdmin: React.FC = () => {
             onCreateClick={setCreationType} 
             onImportClick={() => setIsImportModalOpen(true)} 
             onViewDetail={(p: any) => setDetailContext(p)}
+            onEditProduct={(p: any) => {
+              const matchedCategory = webCategories
+                .filter(cat => cat.classification === p.type)
+                .find(cat => cat.children?.some(sc => sc.id === p.category));
+              const targetCategory = matchedCategory?.children?.find(sc => sc.id === p.category) || webCategories.find(cat => cat.classification === p.type) || categoryData[0];
+              setCreationContext({
+                type: p.type,
+                category: targetCategory,
+                mode: 'edit',
+                product: p,
+              });
+            }}
          />
       );
   };
@@ -235,10 +324,46 @@ export const WebAdmin: React.FC = () => {
                     <SidebarItem label="商品管理" active={activeMenu === 'product_list' && !creationContext} onClick={() => { setActiveMenu('product_list'); setCreationContext(null); }} />
                     <SidebarItem label="商品分类" active={activeMenu === 'categories'} onClick={() => { setActiveMenu('categories'); setCreationContext(null); }} />
                     <SidebarItem label="商品属性" />
+                    <div>
+                       <div
+                          className="flex items-center justify-between pl-6 pr-6 py-2.5 text-[13px] font-medium cursor-pointer text-[#666] hover:bg-gray-50 hover:text-[#333] transition-all"
+                          onClick={() => toggleMenu('product_archives_recipe')}
+                       >
+                          <span>配方管理</span>
+                          {expandedMenus.includes('product_archives_recipe') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                       </div>
+                       {expandedMenus.includes('product_archives_recipe') && (
+                          <div className="space-y-0.5">
+                             <div className="pl-6">
+                                <SidebarItem label="配料库" />
+                             </div>
+                             <div className="pl-6">
+                                <SidebarItem label="商品配方" active={activeMenu === 'recipe_default' || activeMenu === 'addon_group'} onClick={() => { setActiveMenu('recipe_default'); setCreationContext(null); }} />
+                             </div>
+                             <div className="pl-6">
+                                <SidebarItem label="新商品配方" active={activeMenu === 'recipe_default' || activeMenu === 'addon_group'} onClick={() => { setActiveMenu('recipe_default'); setCreationContext(null); }} />
+                             </div>
+                          </div>
+                       )}
+                    </div>
+                 </div>
+              )}
+           </div>
+
+           <div className="mb-1">
+              <div
+                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
+                 onClick={() => toggleMenu('chain_management')}
+              >
+                 <span className="font-bold">商品运营</span>
+                 {expandedMenus.includes('chain_management') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+              </div>
+              {expandedMenus.includes('chain_management') && (
+                 <div className="mt-1 space-y-0.5">
                     <SidebarItem label="价格体系" />
-                    <SidebarItem label="属性互斥规则" />
                     <SidebarItem label="商品推荐" />
-                    <SidebarItem label="模板管理" />
+                    <SidebarItem label="属性互斥" />
+                    <SidebarItem label="商品模板" />
                     <SidebarItem label="商品同步" active={activeMenu === 'product_sync'} onClick={() => { setActiveMenu('product_sync'); setCreationContext(null); }} />
                  </div>
               )}
@@ -255,8 +380,9 @@ export const WebAdmin: React.FC = () => {
               </div>
               {expandedMenus.includes('store_products') && (
                  <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="全部商品" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setCreationContext(null); }} />
-                    <SidebarItem label="门店商品属性" />
+                    <SidebarItem label="商品管理" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setStoreProductManagePreset(null); setCreationContext(null); }} />
+                    <SidebarItem label="售卖门店" active={activeMenu === 'store_product_coverage'} onClick={() => { setActiveMenu('store_product_coverage'); setCreationContext(null); }} />
+                    <SidebarItem label="门店加料" />
                     <SidebarItem label="门店做法" />
                     <SidebarItem label="门店区域" />
                     <SidebarItem label="必选商品" />
@@ -264,20 +390,21 @@ export const WebAdmin: React.FC = () => {
               )}
            </div>
 
-           {/* Recipe Management Group */}
            <div className="mb-1">
-              <div 
+              <div
                  className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
-                 onClick={() => toggleMenu('recipe_management')}
+                 onClick={() => toggleMenu('platform_products')}
               >
-                 <span className="font-bold">配方管理</span>
-                 {expandedMenus.includes('recipe_management') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                 <span className="font-bold">平台商品</span>
+                 {expandedMenus.includes('platform_products') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
               </div>
-              {expandedMenus.includes('recipe_management') && (
+              {expandedMenus.includes('platform_products') && (
                  <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="配料库" />
-                    <SidebarItem label="商品配方" />
-                    <SidebarItem label="新商品配方" active={activeMenu === 'recipe_default' || activeMenu === 'addon_group'} onClick={() => { setActiveMenu('recipe_default'); setCreationContext(null); }} />
+                    <SidebarItem label="菜单管理" />
+                    <SidebarItem label="菜单同步" />
+                    <SidebarItem label="美团团单" />
+                    <SidebarItem label="在线点餐" />
+                    <SidebarItem label="商品映射" />
                  </div>
               )}
            </div>
@@ -293,7 +420,7 @@ export const WebAdmin: React.FC = () => {
               {expandedMenus.includes('product_settings') && (
                  <div className="mt-1 space-y-0.5">
                     <SidebarItem label="通用设置" active={activeMenu === 'general_settings'} onClick={() => { setActiveMenu('general_settings'); setCreationContext(null); }} />
-                    <SidebarItem label="自定义属性" />
+                    <SidebarItem label="自定义字段" />
                  </div>
               )}
            </div>

@@ -13,6 +13,7 @@ import { Switch } from './OpsCommon';
 interface OpsCategory {
   id: string;
   name: string;
+  sort: number;
   classification: 'standard' | 'combo';
   fields: CategoryFieldConfig[];
   productCount: number;
@@ -21,6 +22,8 @@ interface OpsCategory {
   industryDefaults: string[];
   status: 'active' | 'disabled';
   icon?: string;
+  selectedIcon?: string;
+  unselectedIcon?: string;
 }
 
 const INDUSTRY_OPTIONS = ['饮品', '小吃快餐', '中式正餐', '异国料理', '火锅', '地方菜系', '烘焙甜品', '零售'];
@@ -38,11 +41,11 @@ const generateInitialFields = (type: 'standard' | 'combo') => {
 };
 
 const INITIAL_OPS_CATEGORIES: OpsCategory[] = [
-  { id: 'cat_s1', name: '通用菜品', classification: 'standard', fields: generateInitialFields('standard'), productCount: 120, source: 'system', applicableBrands: 'all', industryDefaults: ['中式正餐', '地方菜系'], status: 'active' },
-  { id: 'cat_s2', name: '现制饮品', classification: 'standard', fields: [...generateInitialFields('standard'), {id: 'm_methods', isRequired: true, childConfigs: {'m_method_name': true, 'm_method_markup': true}}], productCount: 45, source: 'system', applicableBrands: 'all', industryDefaults: ['饮品'], status: 'active' },
-  { id: 'cat_s3', name: '称重商品', classification: 'standard', fields: generateInitialFields('standard'), productCount: 15, source: 'system', applicableBrands: 'all', industryDefaults: [], status: 'active' },
-  { id: 'cat_s4', name: '蛋糕/烘焙', classification: 'standard', fields: generateInitialFields('standard'), productCount: 30, source: 'system', applicableBrands: 'all', industryDefaults: ['烘焙甜品'], status: 'active' },
-  { id: 'cat_s5', name: '零售商品', classification: 'standard', fields: generateInitialFields('standard'), productCount: 80, source: 'system', applicableBrands: 'all', industryDefaults: ['零售'], status: 'active' },
+  { id: 'cat_s1', name: '通用菜品', sort: 10, classification: 'standard', fields: generateInitialFields('standard'), productCount: 120, source: 'system', applicableBrands: 'all', industryDefaults: ['中式正餐', '地方菜系'], status: 'active' },
+  { id: 'cat_s2', name: '现制饮品', sort: 20, classification: 'standard', fields: [...generateInitialFields('standard'), {id: 'm_methods', isRequired: true, childConfigs: {'m_method_name': true, 'm_method_markup': true}}], productCount: 45, source: 'system', applicableBrands: 'all', industryDefaults: ['饮品'], status: 'active' },
+  { id: 'cat_s3', name: '称重商品', sort: 30, classification: 'standard', fields: generateInitialFields('standard'), productCount: 15, source: 'system', applicableBrands: 'all', industryDefaults: [], status: 'active' },
+  { id: 'cat_s4', name: '蛋糕/烘焙', sort: 40, classification: 'standard', fields: generateInitialFields('standard'), productCount: 30, source: 'system', applicableBrands: 'all', industryDefaults: ['烘焙甜品'], status: 'active' },
+  { id: 'cat_s5', name: '零售商品', sort: 50, classification: 'standard', fields: generateInitialFields('standard'), productCount: 80, source: 'system', applicableBrands: 'all', industryDefaults: ['零售'], status: 'active' },
 ];
 
 const productModules: { id: FieldModule; label: string; icon: React.ReactNode }[] = [
@@ -248,7 +251,9 @@ export const OpsCategoryConfigView: React.FC = () => {
   const [pendingFields, setPendingFields] = useState<CategoryFieldConfig[]>([]);
   const [isConfigChanged, setIsConfigChanged] = useState(false);
 
-  const displayCategories = categories.filter(c => c.classification === activeTab);
+  const displayCategories = categories
+      .filter(c => c.classification === activeTab)
+      .sort((a, b) => a.sort - b.sort);
 
   useEffect(() => {
     if (selectedCategory) {
@@ -342,19 +347,28 @@ export const OpsCategoryConfigView: React.FC = () => {
       setCategoryModalData({
           id: '',
           name: '',
+          sort: displayCategories.length > 0 ? Math.max(...displayCategories.map(cat => cat.sort || 0)) + 10 : 10,
           classification: activeTab,
           fields: generateInitialFields(activeTab),
           productCount: 0,
           source: 'system', // or custom based on logic, keeping system for simplicity in prototype
           applicableBrands: 'all',
           industryDefaults: [],
-          status: 'active'
+          status: 'active',
+          selectedIcon: '',
+          unselectedIcon: ''
       });
       setShowCategoryModal(true);
   };
 
   const handleOpenEditModal = (cat: OpsCategory) => {
-      setCategoryModalData(JSON.parse(JSON.stringify(cat)));
+      const cloned = JSON.parse(JSON.stringify(cat));
+      setCategoryModalData({
+          ...cloned,
+          // Backward compatibility: the existing icon field now represents the selected state.
+          selectedIcon: cloned.selectedIcon ?? cloned.icon ?? '',
+          unselectedIcon: cloned.unselectedIcon ?? ''
+      });
       setShowCategoryModal(true);
   };
 
@@ -644,6 +658,15 @@ const CategoryFormModal = ({
 }) => {
     const [formData, setFormData] = useState(data);
     const [brandsMode, setBrandsMode] = useState<'all' | 'specific'>(data.applicableBrands === 'all' ? 'all' : 'specific');
+
+    useEffect(() => {
+        setFormData({
+            ...data,
+            selectedIcon: data.selectedIcon ?? data.icon ?? '',
+            unselectedIcon: data.unselectedIcon ?? ''
+        });
+        setBrandsMode(data.applicableBrands === 'all' ? 'all' : 'specific');
+    }, [data]);
     
     // Calculate used industries for the SAME classification, excluding current category
     const disabledIndustries = useMemo(() => {
@@ -684,13 +707,40 @@ const CategoryFormModal = ({
                     </div>
 
                     <div className="space-y-4">
+                        <label className="text-[13px] font-black text-gray-700">排序</label>
+                        <input
+                            type="number"
+                            value={formData.sort ?? 0}
+                            onChange={e => setFormData({ ...formData, sort: Number(e.target.value) || 0 })}
+                            className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition-all"
+                            placeholder="请输入排序值"
+                        />
+                    </div>
+
+                    <div className="space-y-4">
                         <label className="text-[13px] font-black text-gray-700">类目图标 <span className="text-gray-400 font-normal text-xs ml-1">(选填)</span></label>
-                        <div className="flex items-center space-x-4">
-                            <div className="w-16 h-16 bg-gray-50 border border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-blue-500 hover:text-blue-500 text-gray-400 transition-colors">
-                                {formData.icon ? <img src={formData.icon} className="w-full h-full object-cover rounded-lg" /> : <Plus size={20} />}
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                                <div className="text-xs font-bold text-gray-600">未选中样式</div>
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-16 h-16 bg-gray-50 border border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-blue-500 hover:text-blue-500 text-gray-400 transition-colors">
+                                        {formData.unselectedIcon ? <img src={formData.unselectedIcon} className="w-full h-full object-cover rounded-lg" /> : <Plus size={20} />}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 leading-tight">
+                                        建议尺寸 26x26px<br/>支持 JPG, PNG 格式
+                                    </div>
+                                </div>
                             </div>
-                            <div className="text-[10px] text-gray-400 leading-tight">
-                                建议尺寸 100x100px<br/>支持 JPG, PNG 格式
+                            <div className="space-y-3">
+                                <div className="text-xs font-bold text-gray-600">选中样式</div>
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-16 h-16 bg-gray-50 border border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-blue-500 hover:text-blue-500 text-gray-400 transition-colors">
+                                        {formData.selectedIcon ? <img src={formData.selectedIcon} className="w-full h-full object-cover rounded-lg" /> : <Plus size={20} />}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 leading-tight">
+                                        建议尺寸 26x26px<br/>支持 JPG, PNG 格式
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -729,7 +779,11 @@ const CategoryFormModal = ({
                 <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
                     <button onClick={onClose} className="px-6 py-3 rounded-xl text-xs font-bold text-gray-600 hover:bg-white border border-transparent hover:border-gray-200 transition-all">取消</button>
                     <button 
-                        onClick={() => onSave(formData)}
+                        onClick={() => onSave({
+                            ...formData,
+                            // Keep the legacy field aligned so existing previews continue to work.
+                            icon: formData.selectedIcon || formData.unselectedIcon || ''
+                        })}
                         disabled={!formData.name}
                         className={`px-8 py-3 rounded-xl text-xs font-black text-white shadow-lg transition-all active:scale-95 ${formData.name ? 'bg-[#1F2129] hover:bg-black' : 'bg-gray-300 cursor-not-allowed'}`}
                     >

@@ -132,7 +132,7 @@ const DISPLAY_TYPE_OPTIONS: DisplayTypeOption[] = [
     { key: 'market_price_product', label: '是否时价商品', desc: '开启后，可在 POS 端按实时价格售卖。' },
     { key: 'children_meal', label: '是否为儿童餐', desc: '开启后，小程序可按儿童餐场景进行展示。' },
 ];
-const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_remark', 'p_stat_tags', 'p_tare_weight'] as const;
+const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_code', 'p_display_type', 'p_remark', 'p_stat_tags', 'p_tare_weight'] as const;
 const COLLAPSIBLE_SALES_FIELDS = [
     { id: 's_jump_third_mini_program', label: '是否跳转三方小程序' },
     { id: 's_third_mini_program_path', label: '三方小程序页面路径' },
@@ -180,6 +180,59 @@ const PREVIEW_FIELD_TITLES: Record<PreviewField, { title: string; desc: string }
 };
 const DISPLAY_DESC_TAG_OPTIONS = ['店长推荐', '新品首发', '无糖低脂', '人气爆款'];
 const DISPLAY_BADGE_OPTIONS = ['新品', '招牌', '限时', '热卖'];
+
+const CATEGORY_MATCH_RULES: Array<{ categoryNames: string[]; keywords: string[] }> = [
+    { categoryNames: ['现制饮品'], keywords: ['咖啡', '美式', '拿铁', '摩卡', '果茶', '奶茶', '柠檬', '石榴', '椰', '茶'] },
+    { categoryNames: ['蛋糕/烘焙'], keywords: ['蛋糕', '吐司', '面包', '奶油', '可颂', '蛋挞', '烘焙'] },
+    { categoryNames: ['称重商品'], keywords: ['称重', '散装', '熟食', '自选', '斤', '克'] },
+    { categoryNames: ['零售商品'], keywords: ['零售', '瓶装', '罐装', '饼干', '薯片', '矿泉水', '礼盒'] },
+    { categoryNames: ['通用菜品'], keywords: ['饭', '面', '汤', '小炒', '锅', '套餐', '盖饭'] },
+];
+
+const matchCategoryFromName = (name: string, categories: Category[], fallbackCategory: Category) => {
+    const normalizedName = name.trim().toLowerCase();
+    if (!normalizedName) return fallbackCategory;
+
+    for (const rule of CATEGORY_MATCH_RULES) {
+        if (!rule.keywords.some(keyword => normalizedName.includes(keyword.toLowerCase()))) continue;
+        const matchedCategory = categories.find(item => rule.categoryNames.includes(item.name));
+        if (matchedCategory) return matchedCategory;
+    }
+
+    return (
+        categories.find(item => normalizedName.includes(item.name.toLowerCase()))
+        || categories.find(item => item.name.includes('通用'))
+        || categories[0]
+        || fallbackCategory
+    );
+};
+
+const getCategoryImageTheme = (categoryName: string) => {
+    if (categoryName.includes('饮品')) return { bg: '#FFF4E5', accent: '#FA8C16', deco: '#FFD591' };
+    if (categoryName.includes('蛋糕') || categoryName.includes('烘焙')) return { bg: '#FFF1F0', accent: '#EB2F96', deco: '#FFADD2' };
+    if (categoryName.includes('零售')) return { bg: '#F6FFED', accent: '#52C41A', deco: '#B7EB8F' };
+    if (categoryName.includes('称重')) return { bg: '#F9F0FF', accent: '#722ED1', deco: '#D3ADF7' };
+    return { bg: '#E6F7FF', accent: '#1677FF', deco: '#91CAFF' };
+};
+
+const generateProductImageDraft = (productName: string, categoryName: string) => {
+    const safeName = productName.trim().slice(0, 12) || '新商品';
+    const theme = getCategoryImageTheme(categoryName);
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+            <rect width="320" height="320" rx="32" fill="${theme.bg}" />
+            <circle cx="84" cy="86" r="42" fill="${theme.deco}" opacity="0.9" />
+            <circle cx="248" cy="70" r="26" fill="${theme.accent}" opacity="0.18" />
+            <circle cx="252" cy="244" r="38" fill="${theme.deco}" opacity="0.6" />
+            <rect x="56" y="182" width="208" height="78" rx="22" fill="#FFFFFF" opacity="0.96" />
+            <text x="56" y="140" font-size="26" font-weight="700" fill="${theme.accent}" font-family="Arial, sans-serif">${categoryName}</text>
+            <text x="56" y="228" font-size="28" font-weight="700" fill="#1F2129" font-family="Arial, sans-serif">${safeName}</text>
+            <text x="56" y="268" font-size="16" fill="#667085" font-family="Arial, sans-serif">AI draft image</text>
+        </svg>
+    `;
+
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
 
 const createDefaultPrepRule = (overrides: Partial<PrepRule> = {}): PrepRule => ({
     duration: '0',
@@ -243,6 +296,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [activeFormSection, setActiveFormSection] = useState('basic');
     const [pageView, setPageView] = useState<PageView>('form');
     const [currentCategory, setCurrentCategory] = useState(category);
+    const [isCategoryManuallyAdjusted, setIsCategoryManuallyAdjusted] = useState(mode === 'edit');
     const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
     const [showCategoryImpactModal, setShowCategoryImpactModal] = useState(false);
     const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
@@ -297,9 +351,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         nonStock: clonePrepRule(item.nonStock),
     })));
     const [specConfigRows, setSpecConfigRows] = useState<SpecConfigRow[]>([
-        { id: 'spec-1', s_spec_name: '8寸', s_spec_price: '128', s_spec_cost: '76', s_spec_market: '148', s_spec_barcode: '690000000801', s_spec_mark: '经典款', s_spec_sku_code: 'SKU-08', s_spec_amount: '1.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '200', s_spec_max_stock: '9999', s_spec_warning_stock: '20', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'mini_take', 'pos'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '蛋糕盒', s_spec_take_pack_fee: '2', s_spec_take_pack_mark: '保温袋', s_spec_img: '已上传', s_spec_code: 'CAKE-08' },
-        { id: 'spec-2', s_spec_name: '10寸', s_spec_price: '168', s_spec_cost: '98', s_spec_market: '188', s_spec_barcode: '690000000802', s_spec_mark: '热销', s_spec_sku_code: 'SKU-10', s_spec_amount: '1.50', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '120', s_spec_max_stock: '9999', s_spec_warning_stock: '15', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'meituan'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '礼盒装', s_spec_take_pack_fee: '3', s_spec_take_pack_mark: '配送包装', s_spec_img: '', s_spec_code: 'CAKE-10' },
-        { id: 'spec-3', s_spec_name: '12寸', s_spec_price: '228', s_spec_cost: '132', s_spec_market: '258', s_spec_barcode: '690000000803', s_spec_mark: '大份', s_spec_sku_code: 'SKU-12', s_spec_amount: '2.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'unlimited', s_spec_initial_stock: '0', s_spec_max_stock: '9999', s_spec_warning_stock: '0', s_spec_sale_status: 'off', s_spec_channels: ['mini_take'], s_spec_store_pack_fee: '2', s_spec_store_pack_mark: '生日套装', s_spec_take_pack_fee: '4', s_spec_take_pack_mark: '加固包装', s_spec_img: '', s_spec_code: 'CAKE-12' },
+        { id: 'spec-1', s_spec_name: '8寸', s_spec_price: '', s_spec_cost: '76', s_spec_market: '148', s_spec_barcode: '690000000801', s_spec_mark: '经典款', s_spec_sku_code: 'SKU-08', s_spec_amount: '1.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '200', s_spec_max_stock: '9999', s_spec_warning_stock: '20', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'mini_take', 'pos'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '蛋糕盒', s_spec_take_pack_fee: '2', s_spec_take_pack_mark: '保温袋', s_spec_img: '已上传', s_spec_code: 'CAKE-08' },
+        { id: 'spec-2', s_spec_name: '10寸', s_spec_price: '', s_spec_cost: '98', s_spec_market: '188', s_spec_barcode: '690000000802', s_spec_mark: '热销', s_spec_sku_code: 'SKU-10', s_spec_amount: '1.50', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '120', s_spec_max_stock: '9999', s_spec_warning_stock: '15', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'meituan'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '礼盒装', s_spec_take_pack_fee: '3', s_spec_take_pack_mark: '配送包装', s_spec_img: '', s_spec_code: 'CAKE-10' },
+        { id: 'spec-3', s_spec_name: '12寸', s_spec_price: '', s_spec_cost: '132', s_spec_market: '258', s_spec_barcode: '690000000803', s_spec_mark: '大份', s_spec_sku_code: 'SKU-12', s_spec_amount: '2.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'unlimited', s_spec_initial_stock: '0', s_spec_max_stock: '9999', s_spec_warning_stock: '0', s_spec_sale_status: 'off', s_spec_channels: ['mini_take'], s_spec_store_pack_fee: '2', s_spec_store_pack_mark: '生日套装', s_spec_take_pack_fee: '4', s_spec_take_pack_mark: '加固包装', s_spec_img: '', s_spec_code: 'CAKE-12' },
     ]);
     const [methodConfigRows, setMethodConfigRows] = useState<MethodConfigRow[]>([
         { id: 'method-1', groupName: '温度哎', m_method_name: '热', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
@@ -312,6 +366,27 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         { id: 'addon-1', groupName: '小料', addonName: '小料1', addonCode: '1210585227812483072', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
         { id: 'addon-2', groupName: '小料', addonName: '小料2', addonCode: '1210585270384668672', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
     ]);
+    const [committedStarterName, setCommittedStarterName] = useState(() => String(initialProduct?.name || '').trim());
+    const starterProductName = String(dynamicFormData.p_name || '').trim();
+    const isProgressiveCreateMode = mode === 'create';
+    const matchedCategory = useMemo(
+        () => matchCategoryFromName(committedStarterName, categories, category),
+        [committedStarterName, categories, category]
+    );
+    const isStarterReady = !isProgressiveCreateMode || committedStarterName.length > 0;
+    const commitStarterName = () => {
+        if (!isProgressiveCreateMode) return;
+        const normalizedName = String(dynamicFormData.p_name || '').trim();
+        if (normalizedName === committedStarterName) return;
+        if (!normalizedName) {
+            setCommittedStarterName('');
+            setIsCategoryManuallyAdjusted(false);
+            setCurrentCategory(category);
+            setDynamicFormData(prev => (prev.p_img ? { ...prev, p_img: '' } : prev));
+            return;
+        }
+        setCommittedStarterName(normalizedName);
+    };
 
     const getStickyOffset = () => {
         const stickyHeight = stickyToolbarRef.current?.offsetHeight ?? 0;
@@ -564,6 +639,26 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
             setSpecDisplayMode('single');
         }
     }, [isWeightProduct, specDisplayMode]);
+
+    useEffect(() => {
+        if (!isProgressiveCreateMode || isCategoryManuallyAdjusted) return;
+        if (!committedStarterName) return;
+        if (matchedCategory.id === currentCategory.id) return;
+        setCurrentCategory(matchedCategory);
+    }, [committedStarterName, currentCategory.id, isCategoryManuallyAdjusted, isProgressiveCreateMode, matchedCategory]);
+
+    useEffect(() => {
+        if (!isProgressiveCreateMode || !committedStarterName) return;
+        setDynamicFormData(prev => {
+            const nextImage = generateProductImageDraft(committedStarterName, currentCategory.name);
+            if (prev.p_img === nextImage) return prev;
+            return {
+                ...prev,
+                p_img: nextImage,
+            };
+        });
+    }, [committedStarterName, currentCategory.name, isProgressiveCreateMode]);
+
     const getFieldDescription = (field: DynamicFieldConfig) => {
         if (field.id === 'p_unit') {
             return isWeightProduct ? '称重商品的价格单位，单位设置建议与电子秤单位一致' : undefined;
@@ -581,9 +676,75 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         );
     };
 
+    const renderBasicImageField = () => {
+        const imageValue = dynamicFormData.p_img || '';
+        const hasImage = !!imageValue;
+        const hasPreviewImage = typeof imageValue === 'string' && imageValue.startsWith('data:image');
+        const imageField = AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === 'p_img');
+        const imageRequired = currentFieldConfigMap.get('p_img')?.isRequired || imageField?.isRequired;
+
+        return (
+            <div id="field-p_img" className="rounded-2xl border border-gray-200 bg-[#FCFCFD] p-4 space-y-3">
+                <FormRow
+                    label="商品主图"
+                    required={!!imageRequired}
+                    description="主图为必填信息，系统会根据商品名称自动生成草稿图，也可手动替换。"
+                    descriptionPlacement="bottom"
+                >
+                    <div className="space-y-3">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActivePreviewField('p_img');
+                                setDynamicFormData(prev => ({
+                                    ...prev,
+                                    p_img: prev.p_img ? '' : 'mock-image',
+                                }));
+                            }}
+                            className={`group flex h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
+                                hasImage
+                                    ? 'border-[#00C06B] bg-[#F0FDF4]'
+                                    : 'border-gray-200 bg-white text-gray-400 hover:border-[#00C06B] hover:text-[#00A35B]'
+                            }`}
+                        >
+                            {hasPreviewImage ? (
+                                <img src={imageValue} alt="商品主图" className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center">
+                                    <div className={`mb-2 rounded-full p-3 ${hasImage ? 'bg-white text-[#00A35B]' : 'bg-[#F7F8FA]'}`}>
+                                        {hasImage ? <ImageIcon size={22} /> : <Plus size={22} />}
+                                    </div>
+                                    <span className={`text-sm font-bold ${hasImage ? 'text-[#00A35B]' : 'text-gray-500 group-hover:text-[#00A35B]'}`}>
+                                        {hasImage ? '已生成主图草稿，点击可清空' : '点击添加商品主图'}
+                                    </span>
+                                </div>
+                            )}
+                        </button>
+                        <div className="flex items-center justify-between gap-3 text-xs text-gray-400">
+                            <span>建议尺寸：800x800px，支持 JPG/PNG，大小不超过 2MB。</span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActivePreviewField('p_img');
+                                    setDynamicFormData(prev => ({
+                                        ...prev,
+                                        p_img: committedStarterName ? generateProductImageDraft(committedStarterName, currentCategory.name) : '',
+                                    }));
+                                }}
+                                className="shrink-0 font-bold text-[#00A35B] hover:text-[#008A4D]"
+                            >
+                                重新生成草稿
+                            </button>
+                        </div>
+                    </div>
+                </FormRow>
+            </div>
+        );
+    };
 
     const handleCategoryChangeRequest = (targetCategory: Category) => {
         if (!targetCategory || targetCategory.id === currentCategory.id) return;
+        setIsCategoryManuallyAdjusted(true);
         const nextImpactedFields = getImpactedFieldsForCategory(targetCategory);
         if (nextImpactedFields.resetFields.length === 0 && nextImpactedFields.clearFields.length === 0) {
             setCurrentCategory(targetCategory);
@@ -632,7 +793,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     };
 
     const handleContinueCreate = () => {
-        setDynamicFormData({});
+        setDynamicFormData({ p_weight_flag: false, p_unit: '' });
+        setCommittedStarterName('');
         setDraftSaved(false);
         setSaveAttempted(false);
         setHasSavedProduct(false);
@@ -640,6 +802,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         setSelectedSuccessAction(null);
         setActivePreviewField('default');
         setActiveFormSection('basic');
+        setCurrentCategory(category);
+        setIsCategoryManuallyAdjusted(false);
         setPageView('form');
         formContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     };
@@ -1141,7 +1305,26 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         }
 
         switch (field.type) {
-           case 'input': return (<div className="relative"><input onFocus={setPreview} className="q-form-input" placeholder={field.placeholder || `请输入${field.label}`} value={value} onChange={e => setValue(e.target.value)} />{['p_name', 'p_code'].includes(field.id) && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">{String(value).length}/70</span>}</div>);
+           case 'input': return (
+               <div className="relative">
+                   <input
+                       onFocus={setPreview}
+                       className="q-form-input"
+                       placeholder={field.placeholder || `请输入${field.label}`}
+                       value={value}
+                       onChange={e => setValue(e.target.value)}
+                       onBlur={field.id === 'p_name' ? commitStarterName : undefined}
+                       onKeyDown={field.id === 'p_name' ? (e => {
+                           if (e.key === 'Enter') {
+                               e.preventDefault();
+                               commitStarterName();
+                               (e.currentTarget as HTMLInputElement).blur();
+                           }
+                       }) : undefined}
+                   />
+                   {['p_name', 'p_code'].includes(field.id) && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">{String(value).length}/70</span>}
+               </div>
+           );
            case 'number': return MONEY_FIELD_IDS.has(field.id) ? (<div className="relative"><input onFocus={setPreview} type="number" className="q-form-input pl-8" placeholder="0.00" value={value} onChange={e => setValue(e.target.value)} /><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">¥</span></div>) : (<input onFocus={setPreview} type="number" className="q-form-input" placeholder={field.placeholder || `请输入${field.label}`} value={value} onChange={e => setValue(e.target.value)} />);
            case 'selector': return (<select onFocus={setPreview} className="q-form-select" value={value} onChange={e => setValue(e.target.value)}><option value="">请选择{field.label}...</option>{(field.presetValues || ['选项一', '选项二']).map(option => <option key={option} value={option}>{option}</option>)}</select>);
            case 'switch': return (<div className="flex items-center space-x-3"><Switch active={!!value} onClick={() => setValue(!value)}/><span className="text-sm text-gray-600">{value ? '已开启' : '已关闭'}</span></div>);
@@ -1389,21 +1572,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         );
 
         return (
-            <div className="space-y-6">
-                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-5 space-y-5">
+            <div className="space-y-5">
+                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
                     <div>
                         <div className="text-base font-black text-[#1F2129]">列表页展示</div>
                         <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品列表页。</div>
                     </div>
 
-                    <div className="space-y-5 rounded-2xl bg-white p-5">
-                        {renderDisplayUploadField({
-                            fieldId: 'p_img',
-                            label: '商品主图',
-                            tip: '建议尺寸：1:1，单张大小不超过 300K，最多可上传 10 张；可拖拽调整图片顺序。',
-                            previewField: 'p_img',
-                        })}
-
+                    <div className="space-y-4 rounded-2xl bg-white p-4">
                         {renderDisplayUploadField({
                             fieldId: 'p_cover_img',
                             label: '商品封面',
@@ -1457,13 +1633,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-5 space-y-5">
+                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
                     <div>
                         <div className="text-base font-black text-[#1F2129]">详情页展示</div>
                         <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品详情页。</div>
                     </div>
 
-                    <div className="space-y-5 rounded-2xl bg-white p-5">
+                    <div className="space-y-4 rounded-2xl bg-white p-4">
                         {renderDisplayUploadField({
                             fieldId: 'p_detail_imgs',
                             label: '商品详情图',
@@ -2065,7 +2241,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         const previewSpecChips = activeSpecLabels.length > 0
             ? activeSpecLabels.slice(0, 3)
             : (specDisplayMode === 'single' ? ['标准规格'] : ['中杯 480ml', '大杯 600ml +4']);
-        const primarySpecPrice = visibleSpecRows[0]?.s_spec_price || '26';
+        const primarySpecPrice = visibleSpecRows[0]?.s_spec_price || '--';
         const currentPreviewPreference = previewPreference ?? defaultPreviewPreference;
 
         return (
@@ -2236,7 +2412,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         <thead className="bg-[#F7F8FA]">
                             <tr className="text-left text-xs font-bold text-gray-500">
                                 <th className="px-3 py-3 border-b border-gray-200 min-w-[120px]">规格名称</th>
-                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">基础价格</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="text-red-500">*</span>
+                                        <span>基础价格</span>
+                                    </span>
+                                </th>
                                 <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">预估成本</th>
                                 <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">市场价</th>
                                 <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">商品条码</th>
@@ -2275,6 +2456,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                                     value={row[key]}
                                                     onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
                                                     className="q-form-input h-10 pr-8 text-center font-bold text-[#1F2129]"
+                                                    placeholder={key === 's_spec_price' ? '请输入基础价格' : '请输入'}
                                                 />
                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">元</span>
                                             </div>
@@ -3168,7 +3350,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             {pageView === 'detail' && '商品详情'}
                         </h3>
                         <p className="truncate text-xs text-gray-400 mt-0.5">
-                            {pageView === 'form' ? `当前类目: ${currentCategory.name}` : `已从${successMode === 'edit' ? '编辑商品页' : '创建商品页'}进入后续处理流程`}
+                            {pageView === 'form'
+                                ? (isProgressiveCreateMode && !starterProductName
+                                    ? '请先填写商品名称，系统将自动匹配商品类目并展开后续字段'
+                                    : '完善商品信息并保存后，可继续进行后续处理')
+                                : `已从${successMode === 'edit' ? '编辑商品页' : '创建商品页'}进入后续处理流程`}
                         </p>
                     </div>
                 </div>
@@ -3200,13 +3386,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
             </div>
 
             <div className="relative flex-1 flex overflow-hidden min-w-0">
-                {pageView === 'form' && !isCompactPreview && (
+                {pageView === 'form' && isStarterReady && !isCompactPreview && (
                     <div className="w-[300px] bg-white border-r border-[#E8E8E8] shrink-0 flex flex-col">
                         {renderPreviewPanel()}
                     </div>
                 )}
 
-                {pageView === 'form' && isCompactPreview && isPreviewPanelOpen && (
+                {pageView === 'form' && isStarterReady && isCompactPreview && isPreviewPanelOpen && (
                     <div className="pointer-events-none fixed right-6 top-[92px] bottom-6 z-30 flex items-start">
                         <div className="pointer-events-auto">
                             {renderPreviewPanel(true)}
@@ -3216,7 +3402,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
                 {/* Form Content */}
                 <div ref={formContentRef} className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-8 scroll-smooth no-scrollbar lg:px-6 xl:px-8">
-                    <div className="w-full min-w-0 max-w-[1180px] mx-auto pt-8 pb-24 space-y-6">
+                    <div className="w-full min-w-0 max-w-[1240px] mx-auto pt-5 pb-16 space-y-4">
                         {pageView === 'success' ? (
                             <div className="space-y-5">
                                 <div className="rounded-[28px] border border-[#D7F0E1] bg-white p-8 shadow-sm">
@@ -3288,6 +3474,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             renderTaskPage(pageView)
                         ) : (
                         <>
+                        {isStarterReady && (
                         <div ref={stickyToolbarRef} className="sticky top-0 z-10 -mx-2 px-2 pb-3 bg-[#FAFAFA]">
                             <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden">
                                 <div className="px-5 pt-3 pb-1.5 border-b border-gray-100">
@@ -3310,21 +3497,46 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 </div>
                                 <div className="px-5 py-2.5 bg-[#FCFCFD]">
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2 min-w-0">
                                             <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
                                             <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-[#1F2129]">
                                                 {completionSummary.completed}/{completionSummary.total}
                                             </div>
                                             {requiredMissingItems.length > 0 ? (
-                                                <div className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">
-                                                    待完善 {requiredMissingItems.length} 项
-                                                </div>
+                                                <>
+                                                    {requiredMissingItems.slice(0, 3).map(item => (
+                                                        <button
+                                                            key={item.key}
+                                                            type="button"
+                                                            onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
+                                                            className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                                                        >
+                                                            <CircleAlert size={12} className="mr-1.5" />
+                                                            {item.label}
+                                                        </button>
+                                                    ))}
+                                                    {requiredMissingItems.length > 3 && (
+                                                        <span className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-gray-400">
+                                                            另有 {requiredMissingItems.length - 3} 项
+                                                        </span>
+                                                    )}
+                                                </>
                                             ) : (
                                                 <div className="inline-flex items-center rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-2 py-1 text-[11px] font-bold text-[#166534]">
                                                     <CheckCircle2 size={12} className="mr-1" />
                                                     可保存
                                                 </div>
                                             )}
+                                            {requiredMissingItems.length === 0 && recommendedMissingItems.slice(0, 2).map(item => (
+                                                <button
+                                                    key={item.key}
+                                                    type="button"
+                                                    onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
+                                                    className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                                                >
+                                                    建议补充: {item.label}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                     <div className="mt-2 flex items-center gap-2">
@@ -3338,34 +3550,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             {completionSummary.total === 0 ? '100%' : `${Math.round((completionSummary.completed / completionSummary.total) * 100)}%`}
                                         </div>
                                     </div>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {requiredMissingItems.length > 0 ? requiredMissingItems.slice(0, 3).map(item => (
-                                            <button
-                                                key={item.key}
-                                                type="button"
-                                                onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
-                                                className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors flex items-center"
-                                            >
-                                                <CircleAlert size={12} className="mr-1.5" />
-                                                待完善: {item.label}
-                                            </button>
-                                        )) : null}
-                                        {recommendedMissingItems.slice(0, 2).map(item => (
-                                            <button
-                                                key={item.key}
-                                                type="button"
-                                                onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
-                                                className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 text-xs font-bold hover:bg-gray-50 transition-colors"
-                                            >
-                                                建议补充: {item.label}
-                                            </button>
-                                        ))}
-                                        {requiredMissingItems.length > 3 && (
-                                            <span className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-400">
-                                                另有 {requiredMissingItems.length - 3} 项待完善
-                                            </span>
-                                        )}
-                                    </div>
                                     {saveAttempted && requiredMissingItems.length > 0 && (
                                         <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
                                             仍有 {requiredMissingItems.length} 项必填信息未完成。
@@ -3374,33 +3558,48 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 </div>
                             </div>
                         </div>
+                        )}
 
                         {/* Basic Section */}
-                        <div id="basic" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-5">
+                        <div id="basic" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-4">
                             <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
-                                {primaryBasicFields.map(field => {
-                                    const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
-                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                    return (
-                                        <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
-                                            <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
-                                                <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
-                                                    {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                                </FormRow>
+                            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-5 gap-y-3">
+                                    {primaryBasicFields.map(field => {
+                                        if (field.id === 'p_img') return null;
+                                        if (isProgressiveCreateMode && !isStarterReady && field.id !== 'p_name') return null;
+                                        const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
+                                        const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                        return (
+                                            <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
+                                                <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                    <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
+                                                        {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                                    </FormRow>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
+                                {isStarterReady && (
+                                    <div className="xl:pl-1">
+                                        {renderBasicImageField()}
+                                    </div>
+                                )}
                             </div>
-                            {optionalBasicFields.length > 0 && (
-                                <div className="pt-2">
+                            {isProgressiveCreateMode && !isStarterReady && (
+                                <div className="rounded-2xl border border-dashed border-[#D9D9D9] bg-[#FCFCFD] px-4 py-3 text-sm text-gray-500">
+                                    先填写并确认`商品名称`，系统会自动匹配商品类目并根据类目展示完整创建表单。
+                                </div>
+                            )}
+                            {optionalBasicFields.length > 0 && isStarterReady && (
+                                <div className="pt-1">
                                     {expandedBasicFields.length === 0 ? (
-                                        <div className="flex flex-wrap items-center gap-3">
+                                        <div className="flex flex-wrap items-center gap-2.5">
                                             <button
                                                 type="button"
                                                 onClick={() => setExpandedBasicFields(optionalBasicFields.map(field => field.id))}
-                                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
                                             >
                                                 展开
                                                 <ChevronDown size={16} className="ml-1.5 text-gray-400" />
@@ -3410,18 +3609,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                                     key={field.id}
                                                     type="button"
                                                     onClick={() => setExpandedBasicFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
-                                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+                                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-3.5 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
                                                 >
                                                     {field.label}
                                                 </button>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-5 gap-y-3">
                                                 {optionalBasicFields.filter(field => expandedBasicFields.includes(field.id)).map(field => {
                                                     const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                                    const isFullWidth = ['p_remark'].includes(field.id) || field.type === 'rich_text';
+                                                    const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || ['rich_text', 'checkbox_group'].includes(field.type);
                                                     return (
                                                         <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
                                                             <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
@@ -3435,7 +3634,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                                 <button
                                                     type="button"
                                                     onClick={() => setExpandedBasicFields([])}
-                                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
                                                 >
                                                     收起
                                                     <ChevronUp size={16} className="ml-1.5 text-gray-400" />
@@ -3447,8 +3646,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             )}
                         </div>
 
+                        {isStarterReady && (
+                        <>
                         {/* Product Attr Section */}
-                        <div id="method" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6">
+                        <div id="method" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5">
                             <SectionHeader title="商品属性" icon={<ChefHat size={20}/>} meta={renderSectionMeta('method')} />
                             <div id="field-s_specs">
                                 {renderSpecConfigTable()}
@@ -3457,16 +3658,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Display Section */}
-                        <div id="display" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6">
+                        <div id="display" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5">
                             <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
                             {renderDisplaySettingsSection()}
                         </div>
 
                         {/* Sales Section */}
-                        <div id="spec" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6">
+                        <div id="spec" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5">
                             <SectionHeader title="销售属性" icon={<Scale size={20}/>} meta={renderSectionMeta('spec')} />
                             {renderSalesAttributePanel()}
-                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-6">
+                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-5">
                                 {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
                                     f.module === 'sales'
                                     && visibleFieldIds.has(f.id)
@@ -3503,10 +3704,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Others Section */}
-                        <div id="settings" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6 min-w-0 overflow-hidden">
+                        <div id="settings" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5 min-w-0 overflow-hidden">
                             <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
                             {renderOthersAttributePanel()}
                         </div>
+                        </>
+                        )}
                         </>
                         )}
 
@@ -3583,7 +3786,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
             )}
             {renderMethodPickerModal()}
             {renderAddonPickerModal()}
-            <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }`}</style>
+            <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }`}</style>
         </div>
     );
 }

@@ -18,7 +18,7 @@ import { WebRequiredProductPolicyEditor } from './web/WebRequiredProductPolicyEd
 import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
 import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
-import { WebImportModal, WebCategorySelectModal } from './web/WebModals';
+import { WebImportModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
 import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
 import { WebProductDetail } from './web/WebProductDetail';
@@ -158,7 +158,6 @@ export const WebAdmin: React.FC = () => {
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
-  const [creationType, setCreationType] = useState<'standard' | 'combo' | null>(null); // Triggers Category Modal
   const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category, mode?: 'create' | 'edit', product?: any } | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
   const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(null);
@@ -356,7 +355,12 @@ export const WebAdmin: React.FC = () => {
       // Default: Product List
       return (
          <WebProductList 
-            onCreateClick={setCreationType} 
+            onCreateClick={(type) => {
+              const targetCategory = webCategories.find(cat => cat.classification === type)
+                || INITIAL_WEB_CATEGORIES.find(cat => cat.classification === type);
+              if (!targetCategory) return;
+              setCreationContext({ type, category: targetCategory });
+            }}
             onImportClick={() => setIsImportModalOpen(true)} 
             onViewDetail={(p: any) => setDetailContext(p)}
             onEditProduct={(p: any) => {
@@ -570,22 +574,6 @@ export const WebAdmin: React.FC = () => {
       {/* Global Modals */}
       {isImportModalOpen && <WebImportModal onClose={() => setIsImportModalOpen(false)} />}
       
-      {/* Category Selection Modal */}
-      {creationType && (
-        <WebCategorySelectModal 
-          type={creationType} 
-          onClose={() => setCreationType(null)} 
-          categories={webCategories} 
-          onSelect={(category) => {
-              console.log("Category selected:", category, "for type:", creationType);
-              setCreationType(null); // Close modal
-              setTimeout(() => {
-                  setCreationContext({ type: creationType, category }); // Open full page form
-              }, 0);
-          }}
-        />
-      )}
-
     </div>
   );
 };

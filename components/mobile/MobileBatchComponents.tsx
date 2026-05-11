@@ -28,6 +28,16 @@ type BatchPriceEditorData = {
   specPrices: Record<string, Record<number, string>>;
 };
 
+type StoreExecuteChannelId = 'mini_dine' | 'mini_take' | 'pos' | 'meituan' | 'taobao' | 'meituan_kiosk';
+
+type BatchSoldOutConfig = {
+  clearType: 'daily' | 'longterm';
+  remainingCount: string;
+  nextDayMode: 'unlimited' | 'custom';
+  nextDayRestock: string;
+  channels: StoreExecuteChannelId[];
+};
+
 const DEFAULT_TIME_SALES_CONFIG: TimeSalesConfig = {
   startDate: '2025年9月23日',
   endDate: '2025年10月23日',
@@ -38,6 +48,15 @@ const DEFAULT_TIME_SALES_CONFIG: TimeSalesConfig = {
 };
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+const STORE_EXEC_CHANNELS: Array<{ id: StoreExecuteChannelId; label: string; disabled?: boolean; badge?: string }> = [
+  { id: 'mini_dine', label: '小程序堂食' },
+  { id: 'mini_take', label: '小程序外卖' },
+  { id: 'pos', label: 'POS' },
+  { id: 'meituan', label: '美团外卖' },
+  { id: 'taobao', label: '淘宝闪购' },
+  { id: 'meituan_kiosk', label: '美团在线点', disabled: true, badge: '未开通' },
+];
 
 const cloneTimeSalesConfig = (config?: TimeSalesConfig | null): TimeSalesConfig => (
   JSON.parse(JSON.stringify(config || DEFAULT_TIME_SALES_CONFIG))
@@ -593,6 +612,14 @@ export const BatchConfigStep = ({
     const [showTimeSalesEditor, setShowTimeSalesEditor] = React.useState(false);
     const [showPriceEditor, setShowPriceEditor] = React.useState(false);
     const [showCategoryEditor, setShowCategoryEditor] = React.useState(false);
+    const [soldOutConfig, setSoldOutConfig] = React.useState<BatchSoldOutConfig>({
+        clearType: 'daily',
+        remainingCount: '0',
+        nextDayMode: 'unlimited',
+        nextDayRestock: '',
+        channels: ['mini_dine', 'mini_take', 'pos'],
+    });
+    const [deleteTargetChannels, setDeleteTargetChannels] = React.useState<StoreExecuteChannelId[]>([]);
 
     const editableFieldsDef = [
         { id: 's_price', label: '基础价格', type: 'number', icon: <Tag size={14}/> },
@@ -618,6 +645,8 @@ export const BatchConfigStep = ({
         [selectedProducts]
     );
     const hasMultiSpecSelected = multiSpecProducts.length > 0;
+    const isSoldOutMode = actionType === 'sold_out';
+    const isDeleteMode = actionType === 'delete';
 
     const ensurePriceDraft = () => {
         setBatchFormData(prev => {
@@ -687,10 +716,204 @@ export const BatchConfigStep = ({
         onConfirm({
             action: actionType,
             fields: batchEditFields,
-            data: batchFormData,
-            channels: batchTargetChannels
+            data: isSoldOutMode ? { sold_out: soldOutConfig } : batchFormData,
+            channels: isSoldOutMode ? soldOutConfig.channels : (isDeleteMode ? deleteTargetChannels : batchTargetChannels)
         });
     };
+
+    const updateSoldOutConfig = (patch: Partial<BatchSoldOutConfig>) => {
+        setSoldOutConfig(prev => ({ ...prev, ...patch }));
+    };
+
+    const updateCountValue = (field: 'remainingCount' | 'nextDayRestock', delta: number) => {
+        setSoldOutConfig(prev => {
+            const current = Number(prev[field] || 0);
+            const next = Math.max(0, current + delta);
+            return { ...prev, [field]: String(next) };
+        });
+    };
+
+    const toggleStoreChannel = (
+        channelId: StoreExecuteChannelId,
+        selectedChannels: StoreExecuteChannelId[],
+        setter: React.Dispatch<React.SetStateAction<StoreExecuteChannelId[]>>
+    ) => {
+        setter(prev => (
+            prev.includes(channelId)
+                ? prev.filter(id => id !== channelId)
+                : [...prev, channelId]
+        ));
+    };
+
+    const renderCountStepper = ({
+        label,
+        value,
+        onDecrease,
+        onIncrease,
+        helper,
+        displayValue,
+    }: {
+        label: string;
+        value: string;
+        onDecrease: () => void;
+        onIncrease: () => void;
+        helper?: string;
+        displayValue?: string;
+    }) => (
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                    <div className="text-sm font-black text-[#1F2129]">{label}</div>
+                    {helper && <div className="text-[11px] text-gray-400 mt-1">{helper}</div>}
+                </div>
+                <div className="grid grid-cols-[44px_72px_44px] overflow-hidden rounded-xl border border-gray-200 bg-[#FAFAFA] shrink-0">
+                    <button type="button" onClick={onDecrease} className="h-11 text-xl font-black text-gray-400 active:bg-gray-100">-</button>
+                    <div className={`h-11 flex items-center justify-center border-x border-gray-200 text-lg font-black ${value || displayValue ? 'text-[#1F2129]' : 'text-gray-300'}`}>
+                        {displayValue ?? value ?? '0'}
+                    </div>
+                    <button type="button" onClick={onIncrease} className="h-11 text-xl font-black text-[#1F2129] active:bg-gray-100">+</button>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStoreChannels = ({
+        title,
+        selectedChannels,
+        onToggle,
+        helper,
+        includeDisabled = true,
+    }: {
+        title: string;
+        selectedChannels: StoreExecuteChannelId[];
+        onToggle: (channelId: StoreExecuteChannelId) => void;
+        helper?: string;
+        includeDisabled?: boolean;
+    }) => (
+        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+            <div>
+                <div className="text-sm font-black text-[#1F2129]">{title}</div>
+                {helper && <div className="text-[11px] text-gray-400 mt-1">{helper}</div>}
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+                {STORE_EXEC_CHANNELS.filter(option => includeDisabled || !option.disabled).map(option => {
+                    const active = selectedChannels.includes(option.id);
+                    return (
+                        <button
+                            key={option.id}
+                            type="button"
+                            disabled={option.disabled}
+                            onClick={() => !option.disabled && onToggle(option.id)}
+                            className={`relative min-h-[52px] rounded-xl border px-2 py-3 text-xs font-bold transition-all ${
+                                option.disabled
+                                    ? 'border-gray-200 bg-gray-100 text-gray-300 cursor-not-allowed'
+                                    : active
+                                        ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00A35B]'
+                                        : 'border-gray-200 bg-white text-gray-500 active:scale-95'
+                            }`}
+                        >
+                            {option.badge && (
+                                <span className="absolute right-1.5 top-1.5 rounded-full bg-[#EEEEEE] px-1.5 py-0.5 text-[9px] font-bold text-gray-400">
+                                    {option.badge}
+                                </span>
+                            )}
+                            {option.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    const renderSoldOutConfigPanel = () => (
+        <div className="space-y-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="text-sm font-black text-[#1F2129]">沽清方式</div>
+                    <div className="text-sm font-bold text-gray-400">按商品沽清</div>
+                </div>
+                <div className="pt-1">
+                    <div className="text-sm font-black text-[#1F2129] mb-3">沽清类型</div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => updateSoldOutConfig({ clearType: 'daily' })}
+                            className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${soldOutConfig.clearType === 'daily' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00A35B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                        >
+                            当日沽清
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => updateSoldOutConfig({ clearType: 'longterm' })}
+                            className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${soldOutConfig.clearType === 'longterm' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00A35B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                        >
+                            长期沽清
+                        </button>
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-2">
+                        {soldOutConfig.clearType === 'daily' ? '仅当日生效，次日自动恢复售卖' : '长期生效，需手动取消沽清后恢复售卖'}
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                <div className="text-[12px] font-black text-gray-400 px-1">库存补足</div>
+                {renderCountStepper({
+                    label: '剩余份数',
+                    value: soldOutConfig.remainingCount,
+                    onDecrease: () => updateCountValue('remainingCount', -1),
+                    onIncrease: () => updateCountValue('remainingCount', 1),
+                })}
+                {soldOutConfig.clearType === 'daily' && renderCountStepper({
+                    label: '次日补足数量',
+                    value: soldOutConfig.nextDayRestock,
+                    displayValue: soldOutConfig.nextDayMode === 'unlimited' ? '无限' : (soldOutConfig.nextDayRestock || '0'),
+                    helper: '默认补足为无限库存',
+                    onDecrease: () => {
+                        if (soldOutConfig.nextDayMode === 'unlimited') {
+                            updateSoldOutConfig({ nextDayMode: 'custom', nextDayRestock: '0' });
+                            return;
+                        }
+                        updateCountValue('nextDayRestock', -1);
+                    },
+                    onIncrease: () => {
+                        if (soldOutConfig.nextDayMode === 'unlimited') {
+                            updateSoldOutConfig({ nextDayMode: 'custom', nextDayRestock: '1' });
+                            return;
+                        }
+                        updateCountValue('nextDayRestock', 1);
+                    },
+                })}
+            </div>
+
+            {renderStoreChannels({
+                title: '沽清渠道',
+                selectedChannels: soldOutConfig.channels,
+                onToggle: channelId => {
+                    const nextChannels = soldOutConfig.channels.includes(channelId)
+                        ? soldOutConfig.channels.filter(id => id !== channelId)
+                        : [...soldOutConfig.channels, channelId];
+                    updateSoldOutConfig({ channels: nextChannels });
+                },
+                includeDisabled: true,
+            })}
+        </div>
+    );
+
+    const renderDeleteChannelPanel = () => (
+        <div className="space-y-4 animate-in fade-in">
+            <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-[11px] leading-5 text-red-600 font-medium">
+                删除商品为高风险操作，请先选择要执行删除的渠道，确认后仅对所选渠道生效。
+            </div>
+            {renderStoreChannels({
+                title: '删除渠道',
+                selectedChannels: deleteTargetChannels,
+                onToggle: channelId => toggleStoreChannel(channelId, deleteTargetChannels, setDeleteTargetChannels),
+                helper: '至少选择 1 个渠道后才可执行删除',
+                includeDisabled: false,
+            })}
+        </div>
+    );
 
     const updateTimeSaleMode = (mode: 'always' | 'timed') => {
         setBatchFormData(prev => ({
@@ -935,15 +1158,25 @@ export const BatchConfigStep = ({
 
                 {!isAttributeMode && (
                     <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center text-center animate-in zoom-in-95">
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${actionType === 'delete' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-600'}`}>
-                            {actionType === 'delete' ? <Trash2 size={32}/> : <RefreshCw size={32}/>}
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
+                            actionType === 'delete'
+                                ? 'bg-red-50 text-red-500'
+                                : actionType === 'sold_out'
+                                    ? 'bg-orange-50 text-orange-500'
+                                    : 'bg-blue-50 text-blue-600'
+                        }`}>
+                            {actionType === 'delete' ? <Trash2 size={32}/> : actionType === 'sold_out' ? <Ban size={32}/> : <RefreshCw size={32}/>}
                         </div>
                         <h3 className="text-lg font-black text-gray-900 mb-1">{getActionTitle()}</h3>
                         <p className="text-sm text-gray-500 mb-6">即将对 <span className="font-bold text-black mx-1">{selectedIds.size}</span> 个商品执行操作</p>
                     </div>
                 )}
 
-                {actionType !== 'delete' && (
+                {isSoldOutMode && renderSoldOutConfigPanel()}
+
+                {isDeleteMode && renderDeleteChannelPanel()}
+
+                {!isSoldOutMode && !isDeleteMode && actionType !== 'delete' && (
                     <div className="bg-white rounded-2xl p-5 shadow-sm">
                         <h4 className="text-sm font-black text-[#1F2129] mb-4 flex items-center">
                             <Share2 size={16} className="mr-2 text-orange-500"/> 
@@ -1008,10 +1241,14 @@ export const BatchConfigStep = ({
             <div className="p-4 bg-white border-t border-gray-100 pb-10">
                 <button 
                   onClick={handleApply}
-                  disabled={isAttributeMode && batchEditFields.length === 0}
+                  disabled={
+                    (isAttributeMode && batchEditFields.length === 0)
+                    || (isSoldOutMode && soldOutConfig.channels.length === 0)
+                    || (isDeleteMode && deleteTargetChannels.length === 0)
+                  }
                   className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center
                       ${actionType === 'delete' ? 'bg-red-500 shadow-red-200' : 'bg-[#00C06B] shadow-green-100'}
-                      ${isAttributeMode && batchEditFields.length === 0 ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
+                      ${((isAttributeMode && batchEditFields.length === 0) || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
                   `}
                 >
                     {actionType === 'delete' ? (

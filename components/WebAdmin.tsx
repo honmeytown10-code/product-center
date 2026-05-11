@@ -23,6 +23,7 @@ import { WebProductForm } from './web/WebProductForm';
 import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
+import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
 import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
 import { WebProductSync } from './web/WebProductSync'; // Import new component
 import { WebProductAttributeManager } from './web/WebProductAttributeManager';
@@ -332,6 +333,10 @@ export const WebAdmin: React.FC = () => {
           );
       }
 
+      if (activeMenu === 'ingredient_library') {
+          return <WebIngredientLibraryManager />;
+      }
+
       if (activeMenu === 'addon_group') {
           return <WebAddonGroupManager onBack={() => setActiveMenu(lastRecipeMenu)} />;
       }
@@ -458,7 +463,14 @@ export const WebAdmin: React.FC = () => {
                        {expandedMenus.includes('product_archives_recipe') && (
                           <div className="space-y-0.5">
                              <div className="pl-6">
-                                <SidebarItem label="配料库" />
+                                <SidebarItem
+                                  label="配料库"
+                                  active={activeMenu === 'ingredient_library'}
+                                  onClick={() => {
+                                    setActiveMenu('ingredient_library');
+                                    setCreationContext(null);
+                                  }}
+                                />
                              </div>
                              <div className="pl-6">
                                 {!newRecipeEnabled && (

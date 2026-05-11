@@ -146,6 +146,11 @@ const COLLAPSIBLE_OTHER_SECTIONS = [
 const WEIGHT_UNIT_OPTIONS = ['克', '千克', '斤', '两'] as const;
 const DEFAULT_FRONT_CATEGORY_OPTIONS = ['热销推荐', '奶茶系列', '咖啡系列', '果茶系列'];
 const DEFAULT_BACK_CATEGORY_OPTIONS = ['常规商品', '新品商品', '活动商品', '原料商品'];
+const SPEC_LIBRARY = [
+    { id: 'spec-group-1', name: '杯型规格', values: ['中杯 480ml', '大杯 600ml', '超大杯 700ml'] },
+    { id: 'spec-group-2', name: '蛋糕规格', values: ['6寸', '8寸', '10寸', '12寸'] },
+    { id: 'spec-group-3', name: '份量规格', values: ['小份', '中份', '大份'] },
+] as const;
 const METHOD_LIBRARY = [
     { id: 'method-group-1', name: '温度哎', values: ['热', '少冰', '多冰'] },
     { id: 'method-group-2', name: '自建做法组', values: ['做法1', '做法2'] },
@@ -264,6 +269,51 @@ const DEFAULT_SPEC_PREP_RULES: SpecPrepRuleSet[] = [
     },
 ];
 
+const createEmptySpecConfigRow = (id: string, name = ''): SpecConfigRow => ({
+    id,
+    s_spec_name: name,
+    s_spec_price: '',
+    s_spec_cost: '',
+    s_spec_market: '',
+    s_spec_barcode: '',
+    s_spec_mark: '',
+    s_spec_sku_code: '',
+    s_spec_amount: '',
+    s_spec_amount_unit: '份',
+    s_spec_inventory_mode: 'custom',
+    s_spec_initial_stock: '',
+    s_spec_max_stock: '',
+    s_spec_warning_stock: '',
+    s_spec_sale_status: 'on',
+    s_spec_channels: [],
+    s_spec_store_pack_fee: '',
+    s_spec_store_pack_mark: '',
+    s_spec_take_pack_fee: '',
+    s_spec_take_pack_mark: '',
+    s_spec_img: '',
+    s_spec_code: '',
+});
+
+const isSpecConfigRowEmpty = (row: SpecConfigRow) => ![
+    row.s_spec_name,
+    row.s_spec_price,
+    row.s_spec_cost,
+    row.s_spec_market,
+    row.s_spec_barcode,
+    row.s_spec_mark,
+    row.s_spec_sku_code,
+    row.s_spec_amount,
+    row.s_spec_initial_stock,
+    row.s_spec_max_stock,
+    row.s_spec_warning_stock,
+    row.s_spec_store_pack_fee,
+    row.s_spec_store_pack_mark,
+    row.s_spec_take_pack_fee,
+    row.s_spec_take_pack_mark,
+    row.s_spec_img,
+    row.s_spec_code,
+].some(value => String(value || '').trim().length > 0);
+
 const clonePrepRule = (rule: PrepRule): PrepRule => ({ ...rule });
 
 const formatPrepRuleSummary = (rule: PrepRule) => {
@@ -303,7 +353,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [prepEnabled, setPrepEnabled] = useState(true);
     const [prepScope, setPrepScope] = useState<PrepScope>('spu');
     const [splitByStockState, setSplitByStockState] = useState(false);
-    const [specDisplayMode, setSpecDisplayMode] = useState<'single' | 'multi'>('multi');
+    const [specDisplayMode, setSpecDisplayMode] = useState<'single' | 'multi'>(mode === 'create' ? 'single' : 'multi');
     const [activePreviewField, setActivePreviewField] = useState<PreviewField>('default');
     const [previewPreference, setPreviewPreference] = useState<PreviewDisplayPreference | null>(() => getStoredPreviewPreference(previewPreferenceKey));
     const [showPreviewPreferenceMenu, setShowPreviewPreferenceMenu] = useState(false);
@@ -316,18 +366,29 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [backCategoryOptions, setBackCategoryOptions] = useState<string[]>(DEFAULT_BACK_CATEGORY_OPTIONS);
     const [showMethodPickerModal, setShowMethodPickerModal] = useState(false);
     const [showAddonPickerModal, setShowAddonPickerModal] = useState(false);
+    const [showSpecPickerModal, setShowSpecPickerModal] = useState(false);
+    const [activeSpecGroupId, setActiveSpecGroupId] = useState<string>(SPEC_LIBRARY[0].id);
+    const [tempSpecSelections, setTempSpecSelections] = useState<string[]>([]);
     const [activeMethodGroupId, setActiveMethodGroupId] = useState<string>(METHOD_LIBRARY[0].id);
     const [activeAddonGroupId, setActiveAddonGroupId] = useState<string>(ADDON_LIBRARY[0].id);
     const [tempMethodSelections, setTempMethodSelections] = useState<string[]>([]);
     const [tempAddonSelections, setTempAddonSelections] = useState<string[]>([]);
     const [attrGroupSortEnabled, setAttrGroupSortEnabled] = useState(false);
-    const [attrPanelOrder, setAttrPanelOrder] = useState<string[]>(['spec', 'addon:小料', 'method:温度哎', 'method:自建做法组']);
-    const [attrDefaultSelections, setAttrDefaultSelections] = useState<Record<string, string>>({
-        spec: '8寸',
-        'method:温度哎': '热',
-        'method:自建做法组': '做法1',
-        'addon:小料': '小料1',
-    });
+    const [attrPanelOrder, setAttrPanelOrder] = useState<string[]>(() => (
+        mode === 'create'
+            ? ['spec']
+            : ['spec', 'addon:小料', 'method:温度哎', 'method:自建做法组']
+    ));
+    const [attrDefaultSelections, setAttrDefaultSelections] = useState<Record<string, string>>(() => (
+        mode === 'create'
+            ? { spec: '标准规格' }
+            : {
+                spec: '8寸',
+                'method:温度哎': '热',
+                'method:自建做法组': '做法1',
+                'addon:小料': '小料1',
+            }
+    ));
     const [draggingAttrPanelId, setDraggingAttrPanelId] = useState<string | null>(null);
     const [draggingAttrItem, setDraggingAttrItem] = useState<{ groupId: string; item: string } | null>(null);
     const [showAttrSortTip, setShowAttrSortTip] = useState(false);
@@ -350,22 +411,34 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         inStock: clonePrepRule(item.inStock),
         nonStock: clonePrepRule(item.nonStock),
     })));
-    const [specConfigRows, setSpecConfigRows] = useState<SpecConfigRow[]>([
-        { id: 'spec-1', s_spec_name: '8寸', s_spec_price: '', s_spec_cost: '76', s_spec_market: '148', s_spec_barcode: '690000000801', s_spec_mark: '经典款', s_spec_sku_code: 'SKU-08', s_spec_amount: '1.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '200', s_spec_max_stock: '9999', s_spec_warning_stock: '20', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'mini_take', 'pos'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '蛋糕盒', s_spec_take_pack_fee: '2', s_spec_take_pack_mark: '保温袋', s_spec_img: '已上传', s_spec_code: 'CAKE-08' },
-        { id: 'spec-2', s_spec_name: '10寸', s_spec_price: '', s_spec_cost: '98', s_spec_market: '188', s_spec_barcode: '690000000802', s_spec_mark: '热销', s_spec_sku_code: 'SKU-10', s_spec_amount: '1.50', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '120', s_spec_max_stock: '9999', s_spec_warning_stock: '15', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'meituan'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '礼盒装', s_spec_take_pack_fee: '3', s_spec_take_pack_mark: '配送包装', s_spec_img: '', s_spec_code: 'CAKE-10' },
-        { id: 'spec-3', s_spec_name: '12寸', s_spec_price: '', s_spec_cost: '132', s_spec_market: '258', s_spec_barcode: '690000000803', s_spec_mark: '大份', s_spec_sku_code: 'SKU-12', s_spec_amount: '2.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'unlimited', s_spec_initial_stock: '0', s_spec_max_stock: '9999', s_spec_warning_stock: '0', s_spec_sale_status: 'off', s_spec_channels: ['mini_take'], s_spec_store_pack_fee: '2', s_spec_store_pack_mark: '生日套装', s_spec_take_pack_fee: '4', s_spec_take_pack_mark: '加固包装', s_spec_img: '', s_spec_code: 'CAKE-12' },
-    ]);
-    const [methodConfigRows, setMethodConfigRows] = useState<MethodConfigRow[]>([
-        { id: 'method-1', groupName: '温度哎', m_method_name: '热', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
-        { id: 'method-2', groupName: '温度哎', m_method_name: '少冰', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
-        { id: 'method-3', groupName: '温度哎', m_method_name: '多冰', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
-        { id: 'method-4', groupName: '自建做法组', m_method_name: '做法1', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
-        { id: 'method-5', groupName: '自建做法组', m_method_name: '做法2', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
-    ]);
-    const [addonConfigRows, setAddonConfigRows] = useState<AddonConfigRow[]>([
-        { id: 'addon-1', groupName: '小料', addonName: '小料1', addonCode: '1210585227812483072', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
-        { id: 'addon-2', groupName: '小料', addonName: '小料2', addonCode: '1210585270384668672', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
-    ]);
+    const [specConfigRows, setSpecConfigRows] = useState<SpecConfigRow[]>(() => (
+        mode === 'create'
+            ? [createEmptySpecConfigRow('spec-1')]
+            : [
+                { id: 'spec-1', s_spec_name: '8寸', s_spec_price: '', s_spec_cost: '76', s_spec_market: '148', s_spec_barcode: '690000000801', s_spec_mark: '经典款', s_spec_sku_code: 'SKU-08', s_spec_amount: '1.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '200', s_spec_max_stock: '9999', s_spec_warning_stock: '20', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'mini_take', 'pos'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '蛋糕盒', s_spec_take_pack_fee: '2', s_spec_take_pack_mark: '保温袋', s_spec_img: '已上传', s_spec_code: 'CAKE-08' },
+                { id: 'spec-2', s_spec_name: '10寸', s_spec_price: '', s_spec_cost: '98', s_spec_market: '188', s_spec_barcode: '690000000802', s_spec_mark: '热销', s_spec_sku_code: 'SKU-10', s_spec_amount: '1.50', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '120', s_spec_max_stock: '9999', s_spec_warning_stock: '15', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'meituan'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '礼盒装', s_spec_take_pack_fee: '3', s_spec_take_pack_mark: '配送包装', s_spec_img: '', s_spec_code: 'CAKE-10' },
+                { id: 'spec-3', s_spec_name: '12寸', s_spec_price: '', s_spec_cost: '132', s_spec_market: '258', s_spec_barcode: '690000000803', s_spec_mark: '大份', s_spec_sku_code: 'SKU-12', s_spec_amount: '2.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'unlimited', s_spec_initial_stock: '0', s_spec_max_stock: '9999', s_spec_warning_stock: '0', s_spec_sale_status: 'off', s_spec_channels: ['mini_take'], s_spec_store_pack_fee: '2', s_spec_store_pack_mark: '生日套装', s_spec_take_pack_fee: '4', s_spec_take_pack_mark: '加固包装', s_spec_img: '', s_spec_code: 'CAKE-12' },
+            ]
+    ));
+    const [methodConfigRows, setMethodConfigRows] = useState<MethodConfigRow[]>(() => (
+        mode === 'create'
+            ? []
+            : [
+                { id: 'method-1', groupName: '温度哎', m_method_name: '热', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+                { id: 'method-2', groupName: '温度哎', m_method_name: '少冰', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+                { id: 'method-3', groupName: '温度哎', m_method_name: '多冰', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+                { id: 'method-4', groupName: '自建做法组', m_method_name: '做法1', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+                { id: 'method-5', groupName: '自建做法组', m_method_name: '做法2', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+            ]
+    ));
+    const [addonConfigRows, setAddonConfigRows] = useState<AddonConfigRow[]>(() => (
+        mode === 'create'
+            ? []
+            : [
+                { id: 'addon-1', groupName: '小料', addonName: '小料1', addonCode: '1210585227812483072', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
+                { id: 'addon-2', groupName: '小料', addonName: '小料2', addonCode: '1210585270384668672', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
+            ]
+    ));
     const [committedStarterName, setCommittedStarterName] = useState(() => String(initialProduct?.name || '').trim());
     const starterProductName = String(dynamicFormData.p_name || '').trim();
     const isProgressiveCreateMode = mode === 'create';
@@ -840,6 +913,32 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         setActiveMethodGroupId(METHOD_LIBRARY[0].id);
         setTempMethodSelections(methodConfigRows.map(row => `${row.groupName}:${row.m_method_name}`));
         setShowMethodPickerModal(true);
+    };
+
+    const openSpecPicker = () => {
+        setActivePreviewField('s_specs');
+        setActiveSpecGroupId(SPEC_LIBRARY[0].id);
+        setTempSpecSelections(specConfigRows.map(row => row.s_spec_name).filter(Boolean));
+        setShowSpecPickerModal(true);
+    };
+
+    const confirmSpecPicker = () => {
+        const existingMap = new Map(specConfigRows.map(row => [row.s_spec_name, row]));
+        const nextRows = tempSpecSelections.map((specName, index) => {
+            const existingRow = existingMap.get(specName);
+            return existingRow || createEmptySpecConfigRow(`spec-${index + 1}`, specName);
+        });
+        setSpecConfigRows(nextRows);
+        setAttrDefaultSelections(prev => {
+            const next = { ...prev };
+            if (nextRows.length > 0) {
+                next.spec = nextRows[0].s_spec_name;
+            } else {
+                delete next.spec;
+            }
+            return next;
+        });
+        setShowSpecPickerModal(false);
     };
 
     const confirmMethodPicker = () => {
@@ -2240,7 +2339,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         const addonsConfigured = !!dynamicFormData.a_addons;
         const previewSpecChips = activeSpecLabels.length > 0
             ? activeSpecLabels.slice(0, 3)
-            : (specDisplayMode === 'single' ? ['标准规格'] : ['中杯 480ml', '大杯 600ml +4']);
+            : (specDisplayMode === 'multi' ? ['待选择规格'] : ['标准规格']);
         const primarySpecPrice = visibleSpecRows[0]?.s_spec_price || '--';
         const currentPreviewPreference = previewPreference ?? defaultPreviewPreference;
 
@@ -2392,6 +2491,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                     checked={specDisplayMode === option.key}
                                     disabled={isWeightProduct && option.key === 'multi'}
                                     onChange={() => {
+                                        if (option.key === 'single' && specConfigRows.length === 0) {
+                                            setSpecConfigRows([createEmptySpecConfigRow('spec-1')]);
+                                            setAttrDefaultSelections(prev => ({ ...prev, spec: '标准规格' }));
+                                        }
+                                        if (option.key === 'multi' && specConfigRows.length === 1 && isSpecConfigRowEmpty(specConfigRows[0])) {
+                                            setSpecConfigRows([]);
+                                            setAttrDefaultSelections(prev => {
+                                                const next = { ...prev };
+                                                delete next.spec;
+                                                return next;
+                                            });
+                                        }
                                         setSpecDisplayMode(option.key);
                                         setActivePreviewField('s_specs');
                                     }}
@@ -2402,11 +2513,37 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         ))}
                     </div>
                 </div>
+                {specDisplayMode === 'multi' && (
+                    <button
+                        type="button"
+                        onClick={openSpecPicker}
+                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                    >
+                        <Plus size={16} className="mr-2" />
+                        选择规格
+                    </button>
+                )}
                 {isWeightProduct && (
                     <div className="text-xs font-bold text-amber-600">称重商品不支持多规格，已自动切换为统一规格</div>
                 )}
             </div>
             <div className="relative">
+                {specDisplayMode === 'multi' && specConfigRows.length === 0 ? (
+                    <div className="px-5 py-10">
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-[#FAFAFA] px-6 py-10 text-center">
+                            <div className="text-base font-bold text-[#1F2129]">暂未选择多规格</div>
+                            <div className="mt-2 text-sm text-gray-400">先选择需要添加的规格值，再按规格分别配置价格、库存和包装信息。</div>
+                            <button
+                                type="button"
+                                onClick={openSpecPicker}
+                                className="mt-5 inline-flex items-center rounded-xl bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
+                            >
+                                <Plus size={16} className="mr-2" />
+                                选择规格
+                            </button>
+                        </div>
+                    </div>
+                ) : (
                 <div className="overflow-x-auto">
                     <table className="min-w-[2860px] w-full border-collapse">
                         <thead className="bg-[#F7F8FA]">
@@ -2566,6 +2703,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </tbody>
                     </table>
                 </div>
+                )}
                 <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white via-white/90 to-transparent" />
             </div>
             <div className="px-5 py-3 border-t border-gray-100 bg-[#FAFAFA]">
@@ -2849,6 +2987,106 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
                     </div>
                 )}
+            </div>
+        );
+    };
+
+    const renderSpecPickerModal = () => {
+        if (!showSpecPickerModal) return null;
+        const activeGroup = SPEC_LIBRARY.find(group => group.id === activeSpecGroupId) || SPEC_LIBRARY[0];
+
+        return (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
+                <div className="w-full max-w-[1020px] h-[660px] rounded-[24px] bg-white shadow-2xl overflow-hidden flex flex-col">
+                    <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                        <div className="text-xl font-black text-[#1F2129]">添加规格</div>
+                        <button type="button" onClick={() => setShowSpecPickerModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200">
+                            <ChevronDown size={18} className="rotate-45" />
+                        </button>
+                    </div>
+                    <div className="flex-1 grid grid-cols-[220px_1fr_260px] min-h-0">
+                        <div className="border-r border-gray-100 p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>规格</span>
+                                <button type="button" className="text-[#00A35B]">新增规格</button>
+                            </div>
+                            <div className="space-y-1.5">
+                                {SPEC_LIBRARY.map(group => (
+                                    <button
+                                        key={group.id}
+                                        type="button"
+                                        onClick={() => setActiveSpecGroupId(group.id)}
+                                        className={`w-full rounded-xl px-4 py-3 text-left text-sm transition-colors ${
+                                            group.id === activeSpecGroupId ? 'bg-[#F0FDF4] font-bold text-[#00A35B]' : 'text-[#1F2129] hover:bg-[#F7F8FA]'
+                                        }`}
+                                    >
+                                        {group.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="border-r border-gray-100 p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>规格值</span>
+                                <button type="button" className="text-[#00A35B]">新增规格值</button>
+                            </div>
+                            <div className="space-y-3">
+                                <label className="flex items-center gap-3 text-sm font-medium text-[#1F2129]">
+                                    <input
+                                        type="checkbox"
+                                        checked={activeGroup.values.every(value => tempSpecSelections.includes(value))}
+                                        onChange={() => {
+                                            const groupValues = [...activeGroup.values];
+                                            const allChecked = groupValues.every(value => tempSpecSelections.includes(value));
+                                            setTempSpecSelections(prev => (
+                                                allChecked
+                                                    ? prev.filter(item => !groupValues.includes(item))
+                                                    : Array.from(new Set([...prev, ...groupValues]))
+                                            ));
+                                        }}
+                                        className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                    />
+                                    <span>全部</span>
+                                </label>
+                                {activeGroup.values.map(value => {
+                                    const checked = tempSpecSelections.includes(value);
+                                    return (
+                                        <label key={value} className="flex items-center gap-3 text-sm text-[#1F2129]">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => setTempSpecSelections(prev => checked ? prev.filter(item => item !== value) : [...prev, value])}
+                                                className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                            />
+                                            <span>{value}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>已选择({tempSpecSelections.length})</span>
+                                <button type="button" onClick={() => setTempSpecSelections([])} className="text-[#00A35B]">清空</button>
+                            </div>
+                            <div className="space-y-2">
+                                {tempSpecSelections.length > 0 ? tempSpecSelections.map(label => (
+                                    <div key={label} className="rounded-xl bg-[#FAFAFA] px-3 py-2 text-sm text-[#1F2129]">
+                                        {label}
+                                    </div>
+                                )) : <div className="text-sm text-gray-400">暂未选择规格</div>}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="px-8 py-5 border-t border-gray-100 bg-white flex justify-end gap-3">
+                        <button type="button" onClick={() => setShowSpecPickerModal(false)} className="px-5 py-2 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50">
+                            取消
+                        </button>
+                        <button type="button" onClick={confirmSpecPicker} className="px-5 py-2 rounded-lg bg-[#00C06B] text-sm font-bold text-white hover:bg-[#00A35B]">
+                            确定
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     };
@@ -3784,6 +4022,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                     }}
                 />
             )}
+            {renderSpecPickerModal()}
             {renderMethodPickerModal()}
             {renderAddonPickerModal()}
             <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }`}</style>

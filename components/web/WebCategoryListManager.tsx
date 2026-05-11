@@ -166,7 +166,7 @@ export const WebCategoryListManager: React.FC = () => {
                     <div className="pr-3">{renderTagList(cat.saleScopes, 'blue')}</div>
                     <div className="pr-3">{renderTagList(cat.saleTypes, 'orange')}</div>
                     <div className="pr-4 text-sm text-gray-600 break-all">{cat.remark || '-'}</div>
-                    <div className="sticky right-0 z-10 flex items-center space-x-4 pr-6 bg-white group-hover:bg-gray-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">
+                    <div className="sticky right-0 z-20 flex h-full w-[200px] items-center space-x-4 border-l border-gray-100 bg-white px-4 group-hover:bg-gray-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">
                         {level === 0 && (
                             <button onClick={() => handleCreateSub(cat)} className="text-sm font-bold text-[#00C06B] hover:text-[#00A35B]">新建二级分类</button>
                         )}
@@ -181,8 +181,8 @@ export const WebCategoryListManager: React.FC = () => {
     return (
         <div className="flex-1 bg-white m-4 rounded-xl shadow-sm flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex space-x-8">
-                <button onClick={() => setActiveTab('backend')} className={`text-base font-bold pb-4 -mb-4 border-b-2 transition-colors ${activeTab === 'backend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>后台分类</button>
                 <button onClick={() => setActiveTab('frontend')} className={`text-base font-bold pb-4 -mb-4 border-b-2 transition-colors ${activeTab === 'frontend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>前台分类</button>
+                <button onClick={() => setActiveTab('backend')} className={`text-base font-bold pb-4 -mb-4 border-b-2 transition-colors ${activeTab === 'backend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>后台分类</button>
             </div>
             
             <div className="p-4 bg-orange-50/50 text-orange-600 text-xs flex items-center px-6">
@@ -230,7 +230,7 @@ export const WebCategoryListManager: React.FC = () => {
                         <div className="pr-3">售卖桌道</div>
                         <div className="pr-3">售卖类型</div>
                         <div className="pr-4">备注</div>
-                        <div className="sticky right-0 z-20 pr-6 bg-gray-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">操作</div>
+                        <div className="sticky right-0 z-30 flex h-full w-[200px] items-center border-l border-gray-200 bg-gray-50 px-4 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">操作</div>
                     </div>
                     {/* Body */}
                     <div className="pb-20">

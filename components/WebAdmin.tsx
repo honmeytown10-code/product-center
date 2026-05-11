@@ -8,8 +8,16 @@ import { Category, CategoryFieldConfig } from '../types';
 import { SidebarItem } from './web/WebCommon';
 import { WebProductList } from './web/WebProductList';
 import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new component
+import { WebStoreCategoryList } from './web/WebStoreCategoryList';
 import { WebCategoryManager } from './web/WebCategoryManager';
 import { WebCategoryListManager } from './web/WebCategoryListManager';
+import { WebStoreAttributeManager } from './web/WebStoreAttributeManager';
+import { WebStoreRegionList } from './web/WebStoreRegionList';
+import { WebRequiredProductPolicyList } from './web/WebRequiredProductPolicyList';
+import { WebRequiredProductPolicyEditor } from './web/WebRequiredProductPolicyEditor';
+import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
+import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
+import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebImportModal, WebCategorySelectModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
 import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
@@ -17,6 +25,8 @@ import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
 import { WebProductSync } from './web/WebProductSync'; // Import new component
+import { WebProductAttributeManager } from './web/WebProductAttributeManager';
+import { WebPriceSystemList } from './web/WebPriceSystemList';
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
@@ -31,16 +41,21 @@ type StoreProductManagePreset = {
 
 const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_name', isRequired: true },
-  { id: 'p_alias', isRequired: false },
   { id: 'p_code', isRequired: false },
-  { id: 'p_cat', isRequired: true },
   { id: 'p_front_cat', isRequired: true },
-  { id: 'p_img', isRequired: true },
-  { id: 'p_unit', isRequired: false },
+  { id: 'p_back_cat', isRequired: false },
+  { id: 'p_cat', isRequired: true },
   { id: 'p_weight_flag', isRequired: false },
+  { id: 'p_unit', isRequired: false },
+  { id: 'p_display_type', isRequired: false },
+  { id: 'p_remark', isRequired: false },
+  { id: 'p_stat_tags', isRequired: false },
+  { id: 'p_tare_weight', isRequired: false },
+  { id: 'p_img', isRequired: true },
   { id: 's_specs', isRequired: false },
   { id: 'm_methods', isRequired: false },
   { id: 'a_addons', isRequired: false },
+  { id: 'p_points_exchange_rule', isRequired: false },
   { id: 's_price', isRequired: true },
   { id: 's_cost', isRequired: false },
   { id: 's_market_price', isRequired: false },
@@ -73,13 +88,17 @@ const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
 
 const DEFAULT_COMBO_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_name', isRequired: true },
-  { id: 'p_alias', isRequired: false },
   { id: 'p_code', isRequired: false },
-  { id: 'p_cat', isRequired: true },
   { id: 'p_front_cat', isRequired: false },
+  { id: 'p_back_cat', isRequired: false },
+  { id: 'p_cat', isRequired: true },
+  { id: 'p_display_type', isRequired: false },
+  { id: 'p_remark', isRequired: false },
+  { id: 'p_stat_tags', isRequired: false },
   { id: 'p_img', isRequired: true },
   { id: 'm_methods', isRequired: false },
   { id: 'a_addons', isRequired: false },
+  { id: 'p_points_exchange_rule', isRequired: false },
   { id: 's_price', isRequired: true },
   { id: 's_cost', isRequired: false },
   { id: 's_market_price', isRequired: false },
@@ -123,8 +142,11 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
 ];
 
 export const WebAdmin: React.FC = () => {
+  const { products } = useProducts();
   // Navigation State
   const [activeMenu, setActiveMenu] = useState('product_list');
+  const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
+  const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([
     'product_archives',
     'product_archives_recipe',
@@ -139,6 +161,9 @@ export const WebAdmin: React.FC = () => {
   const [creationType, setCreationType] = useState<'standard' | 'combo' | null>(null); // Triggers Category Modal
   const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category, mode?: 'create' | 'edit', product?: any } | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
+  const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(null);
+  const [storeRegionEditorContext, setStoreRegionEditorContext] = useState<any>(null);
+  const [attributeMutexEditorContext, setAttributeMutexEditorContext] = useState<{ mode: 'create' | 'edit'; rule?: any } | null>(null);
 
   // Category Manager State
   const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
@@ -171,6 +196,8 @@ export const WebAdmin: React.FC = () => {
                   categories={webCategories.filter(cat => cat.classification === creationContext.type)}
                   mode={creationContext.mode || 'create'}
                   initialProduct={creationContext.product || null}
+                  existingProductCount={products.length}
+                  previewPreferenceKey="web-admin-qimai-jingjing"
                   onClose={() => setCreationContext(null)} 
               />
           );
@@ -181,6 +208,35 @@ export const WebAdmin: React.FC = () => {
               <WebProductDetail 
                   product={detailContext} 
                   onClose={() => setDetailContext(null)} 
+              />
+          );
+      }
+
+      if (activeMenu === 'required_product_policy' && requiredPolicyEditorContext) {
+          return (
+              <WebRequiredProductPolicyEditor
+                  mode={requiredPolicyEditorContext.mode}
+                  policy={requiredPolicyEditorContext.policy}
+                  onBack={() => setRequiredPolicyEditorContext(null)}
+              />
+          );
+      }
+
+      if (activeMenu === 'store_region_list' && storeRegionEditorContext) {
+          return (
+              <WebStoreRegionEditor
+                  region={storeRegionEditorContext}
+                  onBack={() => setStoreRegionEditorContext(null)}
+              />
+          );
+      }
+
+      if (activeMenu === 'attribute_mutex_rules' && attributeMutexEditorContext) {
+          return (
+              <WebAttributeMutexRuleEditor
+                  mode={attributeMutexEditorContext.mode}
+                  rule={attributeMutexEditorContext.rule}
+                  onBack={() => setAttributeMutexEditorContext(null)}
               />
           );
       }
@@ -201,6 +257,44 @@ export const WebAdmin: React.FC = () => {
           );
       }
 
+      if (activeMenu === 'store_addon_list') {
+          return <WebStoreAttributeManager initialTab="addon" />;
+      }
+
+      if (activeMenu === 'store_method_list') {
+          return <WebStoreAttributeManager initialTab="method" />;
+      }
+
+      if (activeMenu === 'store_attribute_list') {
+          return <WebStoreAttributeManager initialTab="addon" />;
+      }
+
+      if (activeMenu === 'store_region_list') {
+          return <WebStoreRegionList onEditRegion={(region) => setStoreRegionEditorContext(region)} />;
+      }
+
+      if (activeMenu === 'required_product_policy') {
+          return (
+              <WebRequiredProductPolicyList
+                  onCreatePolicy={() => setRequiredPolicyEditorContext({ mode: 'create' })}
+                  onEditPolicy={(policy) => setRequiredPolicyEditorContext({ mode: 'edit', policy })}
+              />
+          );
+      }
+
+      if (activeMenu === 'attribute_mutex_rules') {
+          return (
+              <WebAttributeMutexRuleList
+                  onCreateRule={() => setAttributeMutexEditorContext({ mode: 'create' })}
+                  onEditRule={(rule) => setAttributeMutexEditorContext({ mode: 'edit', rule })}
+              />
+          );
+      }
+
+      if (activeMenu === 'store_category_list') {
+          return <WebStoreCategoryList />;
+      }
+
       if (activeMenu === 'categories') {
           return <WebCategoryListManager />;
       }
@@ -218,16 +312,41 @@ export const WebAdmin: React.FC = () => {
           );
       }
 
-      if (activeMenu === 'recipe_default') {
-          return <WebRecipeManager onNavigate={(path) => setActiveMenu(path)} />;
+      if (activeMenu === 'recipe_default' || activeMenu === 'recipe_legacy' || activeMenu === 'recipe_new') {
+          return (
+            <WebRecipeManager
+              onNavigate={(path) => {
+                setLastRecipeMenu(activeMenu === 'recipe_legacy' ? 'recipe_legacy' : 'recipe_new');
+                setActiveMenu(path);
+              }}
+              newRecipeEnabled={newRecipeEnabled}
+              onNewRecipeEnabledChange={(enabled) => {
+                setNewRecipeEnabled(enabled);
+                if (enabled) {
+                  setLastRecipeMenu('recipe_new');
+                  if (activeMenu === 'recipe_legacy') {
+                    setActiveMenu('recipe_new');
+                  }
+                }
+              }}
+            />
+          );
       }
 
       if (activeMenu === 'addon_group') {
-          return <WebAddonGroupManager onBack={() => setActiveMenu('recipe_default')} />;
+          return <WebAddonGroupManager onBack={() => setActiveMenu(lastRecipeMenu)} />;
       }
 
       if (activeMenu === 'general_settings') {
           return <WebGeneralSettings />;
+      }
+
+      if (activeMenu === 'product_attributes') {
+          return <WebProductAttributeManager />;
+      }
+
+      if (activeMenu === 'price_systems') {
+          return <WebPriceSystemList />;
       }
 
       if (activeMenu === 'product_sync') {
@@ -323,7 +442,7 @@ export const WebAdmin: React.FC = () => {
                  <div className="mt-1 space-y-0.5">
                     <SidebarItem label="商品管理" active={activeMenu === 'product_list' && !creationContext} onClick={() => { setActiveMenu('product_list'); setCreationContext(null); }} />
                     <SidebarItem label="商品分类" active={activeMenu === 'categories'} onClick={() => { setActiveMenu('categories'); setCreationContext(null); }} />
-                    <SidebarItem label="商品属性" />
+                    <SidebarItem label="商品属性" active={activeMenu === 'product_attributes'} onClick={() => { setActiveMenu('product_attributes'); setCreationContext(null); }} />
                     <div>
                        <div
                           className="flex items-center justify-between pl-6 pr-6 py-2.5 text-[13px] font-medium cursor-pointer text-[#666] hover:bg-gray-50 hover:text-[#333] transition-all"
@@ -338,10 +457,26 @@ export const WebAdmin: React.FC = () => {
                                 <SidebarItem label="配料库" />
                              </div>
                              <div className="pl-6">
-                                <SidebarItem label="商品配方" active={activeMenu === 'recipe_default' || activeMenu === 'addon_group'} onClick={() => { setActiveMenu('recipe_default'); setCreationContext(null); }} />
-                             </div>
-                             <div className="pl-6">
-                                <SidebarItem label="新商品配方" active={activeMenu === 'recipe_default' || activeMenu === 'addon_group'} onClick={() => { setActiveMenu('recipe_default'); setCreationContext(null); }} />
+                                {!newRecipeEnabled && (
+                                  <SidebarItem
+                                    label="商品配方"
+                                    active={activeMenu === 'recipe_legacy' || (activeMenu === 'addon_group' && lastRecipeMenu === 'recipe_legacy')}
+                                    onClick={() => {
+                                      setLastRecipeMenu('recipe_legacy');
+                                      setActiveMenu('recipe_legacy');
+                                      setCreationContext(null);
+                                    }}
+                                  />
+                                )}
+                                <SidebarItem
+                                  label="新商品配方"
+                                  active={activeMenu === 'recipe_new' || (activeMenu === 'addon_group' && lastRecipeMenu === 'recipe_new')}
+                                  onClick={() => {
+                                    setLastRecipeMenu('recipe_new');
+                                    setActiveMenu('recipe_new');
+                                    setCreationContext(null);
+                                  }}
+                                />
                              </div>
                           </div>
                        )}
@@ -360,11 +495,12 @@ export const WebAdmin: React.FC = () => {
               </div>
               {expandedMenus.includes('chain_management') && (
                  <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="价格体系" />
-                    <SidebarItem label="商品推荐" />
-                    <SidebarItem label="属性互斥" />
                     <SidebarItem label="商品模板" />
                     <SidebarItem label="商品同步" active={activeMenu === 'product_sync'} onClick={() => { setActiveMenu('product_sync'); setCreationContext(null); }} />
+                    <SidebarItem label="价格策略" active={activeMenu === 'price_systems'} onClick={() => { setActiveMenu('price_systems'); setCreationContext(null); }} />
+                    <SidebarItem label="商品推荐" />
+                    <SidebarItem label="属性互斥" active={activeMenu === 'attribute_mutex_rules'} onClick={() => { setActiveMenu('attribute_mutex_rules'); setCreationContext(null); setAttributeMutexEditorContext(null); }} />
+                    <SidebarItem label="必选商品" active={activeMenu === 'required_product_policy'} onClick={() => { setActiveMenu('required_product_policy'); setCreationContext(null); setRequiredPolicyEditorContext(null); }} />
                  </div>
               )}
            </div>
@@ -380,12 +516,11 @@ export const WebAdmin: React.FC = () => {
               </div>
               {expandedMenus.includes('store_products') && (
                  <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="商品管理" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setStoreProductManagePreset(null); setCreationContext(null); }} />
-                    <SidebarItem label="售卖门店" active={activeMenu === 'store_product_coverage'} onClick={() => { setActiveMenu('store_product_coverage'); setCreationContext(null); }} />
-                    <SidebarItem label="门店加料" />
-                    <SidebarItem label="门店做法" />
-                    <SidebarItem label="门店区域" />
-                    <SidebarItem label="必选商品" />
+                    <SidebarItem label="门店商品管理" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setStoreProductManagePreset(null); setCreationContext(null); }} />
+                    <SidebarItem label="商品在售门店" active={activeMenu === 'store_product_coverage'} onClick={() => { setActiveMenu('store_product_coverage'); setCreationContext(null); }} />
+                    <SidebarItem label="门店分类" active={activeMenu === 'store_category_list'} onClick={() => { setActiveMenu('store_category_list'); setCreationContext(null); }} />
+                    <SidebarItem label="门店商品属性" active={['store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu)} onClick={() => { setActiveMenu('store_attribute_list'); setCreationContext(null); }} />
+                    <SidebarItem label="区域商品" active={activeMenu === 'store_region_list'} onClick={() => { setActiveMenu('store_region_list'); setCreationContext(null); setStoreRegionEditorContext(null); }} />
                  </div>
               )}
            </div>

@@ -1,12 +1,13 @@
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Settings, Printer, 
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, AlertTriangle, Clock3,
-  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat
+  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical
 } from 'lucide-react';
 import { Category, AVAILABLE_DYNAMIC_FIELDS, DynamicFieldConfig } from '../../types';
 import { Switch, SectionHeader, FormRow } from './WebCommon';
+import { WebCategorySelectModal } from './WebModals';
 
 interface WebProductFormProps {
     type: 'standard' | 'combo';
@@ -15,6 +16,8 @@ interface WebProductFormProps {
     onClose: () => void;
     mode?: 'create' | 'edit';
     initialProduct?: Record<string, any> | null;
+    existingProductCount?: number;
+    previewPreferenceKey?: string;
 }
 
 const DEFAULT_RESET_FIELD_IDS = new Set(['p_weight_flag', 'st_member']);
@@ -76,10 +79,26 @@ type SpecConfigRow = {
 };
 type MethodConfigRow = {
     id: string;
+    groupName: string;
     m_method_name: string;
+    m_method_sync: boolean;
     m_method_markup: string;
     m_method_code: string;
+    m_method_remark: string;
+    m_method_tip: string;
 };
+type AddonConfigRow = {
+    id: string;
+    groupName: string;
+    addonName: string;
+    addonCode: string;
+    addonLimit: string;
+    addonPrice: string;
+    addonSpecPrice: string;
+    addonStatus: 'on' | 'off';
+};
+type PreviewDisplayPreference = 'expanded' | 'collapsed';
+type DisplayTypeOption = { key: string; label: string; desc: string };
 
 const PREP_UNIT_OPTIONS: PrepUnit[] = ['分钟', '小时', '天'];
 const SECTION_LABELS: Record<SectionId, string> = {
@@ -97,6 +116,59 @@ const CHANNEL_OPTIONS: Array<{ key: ChannelKey; label: string; icon: React.React
     { key: 'meituan', label: '美团外卖', icon: <Store size={16} /> },
 ];
 const RECOMMENDED_FIELD_IDS = ['p_img', 'p_list_desc'];
+const PREVIEW_PREFERENCE_STORAGE_PREFIX = 'pc-product-form-preview:';
+const MONEY_FIELD_IDS = new Set([
+    's_price',
+    's_cost',
+    's_market_price',
+    's_pack_fee',
+    'm_method_markup',
+]);
+const DISPLAY_TYPE_OPTIONS: DisplayTypeOption[] = [
+    { key: 'display_product', label: '展示商品', desc: '开启后，展示商品在前端只作为展示，不支持直接下单结算。' },
+    { key: 'group_meal', label: '团餐商品', desc: '开启后，可用于团餐或统一套餐业务场景。' },
+    { key: 'pos_edit_price', label: 'POS 临时改价', desc: '开启后，可用于门店 POS 端临时改价场景。' },
+    { key: 'temp_product', label: '是否为临时商品', desc: '开启后，可用于临时菜品或按次上新的商品。' },
+    { key: 'market_price_product', label: '是否时价商品', desc: '开启后，可在 POS 端按实时价格售卖。' },
+    { key: 'children_meal', label: '是否为儿童餐', desc: '开启后，小程序可按儿童餐场景进行展示。' },
+];
+const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_remark', 'p_stat_tags', 'p_tare_weight'] as const;
+const COLLAPSIBLE_SALES_FIELDS = [
+    { id: 's_jump_third_mini_program', label: '是否跳转三方小程序' },
+    { id: 's_third_mini_program_path', label: '三方小程序页面路径' },
+    { id: 's_sales_commission_amount', label: '销售提成金额' },
+] as const;
+const COLLAPSIBLE_OTHER_SECTIONS = [
+    { id: 'o_base_sales', label: '基础销量' },
+    { id: 'o_more_barcodes', label: '更多条码' },
+    { id: 'o_product_share', label: '商品分享' },
+] as const;
+const WEIGHT_UNIT_OPTIONS = ['克', '千克', '斤', '两'] as const;
+const DEFAULT_FRONT_CATEGORY_OPTIONS = ['热销推荐', '奶茶系列', '咖啡系列', '果茶系列'];
+const DEFAULT_BACK_CATEGORY_OPTIONS = ['常规商品', '新品商品', '活动商品', '原料商品'];
+const METHOD_LIBRARY = [
+    { id: 'method-group-1', name: '温度哎', values: ['热', '少冰', '多冰'] },
+    { id: 'method-group-2', name: '自建做法组', values: ['做法1', '做法2'] },
+    { id: 'method-group-3', name: '口味默认', values: ['标准糖', '七分糖'] },
+] as const;
+const ADDON_LIBRARY = [
+    {
+        id: 'addon-group-1',
+        name: '小料',
+        items: [
+            { id: 'addon-item-1', name: '小料1', code: '1210585227812483072', price: '0', status: 'on' as const },
+            { id: 'addon-item-2', name: '小料2', code: '1210585270384668672', price: '0', status: 'on' as const },
+        ],
+    },
+    {
+        id: 'addon-group-2',
+        name: '蛋糕夹心',
+        items: [
+            { id: 'addon-item-3', name: '草莓夹心', code: '1210585270384668673', price: '6', status: 'on' as const },
+            { id: 'addon-item-4', name: '芒果夹心', code: '1210585270384668674', price: '8', status: 'off' as const },
+        ],
+    },
+] as const;
 const PREVIEW_FIELD_TITLES: Record<PreviewField, { title: string; desc: string }> = {
     default: { title: '商品展示效果', desc: '点击表单中的关键字段，可查看其在小程序端的展示位置。' },
     p_name: { title: '商品名称效果', desc: '用于突出商品标题，帮助用户快速识别商品。' },
@@ -106,6 +178,8 @@ const PREVIEW_FIELD_TITLES: Record<PreviewField, { title: string; desc: string }
     m_methods: { title: '做法展示效果', desc: '做法会作为可选项展示，可配置加价信息。' },
     a_addons: { title: '加料展示效果', desc: '加料会在详情页作为附加选项展示，便于用户搭配。' },
 };
+const DISPLAY_DESC_TAG_OPTIONS = ['店长推荐', '新品首发', '无糖低脂', '人气爆款'];
+const DISPLAY_BADGE_OPTIONS = ['新品', '招牌', '限时', '热卖'];
 
 const createDefaultPrepRule = (overrides: Partial<PrepRule> = {}): PrepRule => ({
     duration: '0',
@@ -146,12 +220,24 @@ const formatPrepRuleSummary = (rule: PrepRule) => {
     return `${duration}${rule.unit}，${windowText}${deferText}`;
 };
 
-export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, categories, onClose, mode = 'create', initialProduct = null }) => {
+const getStoredPreviewPreference = (key: string): PreviewDisplayPreference | null => {
+    if (typeof window === 'undefined') return null;
+    const rawValue = window.localStorage.getItem(`${PREVIEW_PREFERENCE_STORAGE_PREFIX}${key}`);
+    return rawValue === 'expanded' || rawValue === 'collapsed' ? rawValue : null;
+};
+
+export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, categories, onClose, mode = 'create', initialProduct = null, existingProductCount = 0, previewPreferenceKey = 'default-account' }) => {
+    const defaultPreviewPreference: PreviewDisplayPreference = existingProductCount > 10 ? 'collapsed' : 'expanded';
     const [dynamicFormData, setDynamicFormData] = useState<Record<string, any>>(() => initialProduct ? {
         p_name: initialProduct.name || '',
         p_front_cat: initialProduct.category || '',
         p_img: initialProduct.image || '',
-    } : {});
+        p_weight_flag: false,
+        p_unit: '',
+    } : {
+        p_weight_flag: false,
+        p_unit: '',
+    });
     const formContentRef = useRef<HTMLDivElement | null>(null);
     const stickyToolbarRef = useRef<HTMLDivElement | null>(null);
     const [activeFormSection, setActiveFormSection] = useState('basic');
@@ -159,11 +245,41 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [currentCategory, setCurrentCategory] = useState(category);
     const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
     const [showCategoryImpactModal, setShowCategoryImpactModal] = useState(false);
+    const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
     const [prepEnabled, setPrepEnabled] = useState(true);
     const [prepScope, setPrepScope] = useState<PrepScope>('spu');
     const [splitByStockState, setSplitByStockState] = useState(false);
     const [specDisplayMode, setSpecDisplayMode] = useState<'single' | 'multi'>('multi');
     const [activePreviewField, setActivePreviewField] = useState<PreviewField>('default');
+    const [previewPreference, setPreviewPreference] = useState<PreviewDisplayPreference | null>(() => getStoredPreviewPreference(previewPreferenceKey));
+    const [showPreviewPreferenceMenu, setShowPreviewPreferenceMenu] = useState(false);
+    const [expandedBasicFields, setExpandedBasicFields] = useState<string[]>([]);
+    const [expandedSalesFields, setExpandedSalesFields] = useState<string[]>([]);
+    const [expandedOtherSections, setExpandedOtherSections] = useState<string[]>([]);
+    const [isPointsRuleCollapsed, setIsPointsRuleCollapsed] = useState(true);
+    const [activeCategorySelector, setActiveCategorySelector] = useState<'p_front_cat' | 'p_back_cat' | null>(null);
+    const [frontCategoryOptions, setFrontCategoryOptions] = useState<string[]>(DEFAULT_FRONT_CATEGORY_OPTIONS);
+    const [backCategoryOptions, setBackCategoryOptions] = useState<string[]>(DEFAULT_BACK_CATEGORY_OPTIONS);
+    const [showMethodPickerModal, setShowMethodPickerModal] = useState(false);
+    const [showAddonPickerModal, setShowAddonPickerModal] = useState(false);
+    const [activeMethodGroupId, setActiveMethodGroupId] = useState<string>(METHOD_LIBRARY[0].id);
+    const [activeAddonGroupId, setActiveAddonGroupId] = useState<string>(ADDON_LIBRARY[0].id);
+    const [tempMethodSelections, setTempMethodSelections] = useState<string[]>([]);
+    const [tempAddonSelections, setTempAddonSelections] = useState<string[]>([]);
+    const [attrGroupSortEnabled, setAttrGroupSortEnabled] = useState(false);
+    const [attrPanelOrder, setAttrPanelOrder] = useState<string[]>(['spec', 'addon:小料', 'method:温度哎', 'method:自建做法组']);
+    const [attrDefaultSelections, setAttrDefaultSelections] = useState<Record<string, string>>({
+        spec: '8寸',
+        'method:温度哎': '热',
+        'method:自建做法组': '做法1',
+        'addon:小料': '小料1',
+    });
+    const [draggingAttrPanelId, setDraggingAttrPanelId] = useState<string | null>(null);
+    const [draggingAttrItem, setDraggingAttrItem] = useState<{ groupId: string; item: string } | null>(null);
+    const [showAttrSortTip, setShowAttrSortTip] = useState(false);
+    const effectivePreviewPreference = previewPreference ?? defaultPreviewPreference;
+    const isCompactPreview = effectivePreviewPreference === 'collapsed';
+    const [isPreviewPanelOpen, setIsPreviewPanelOpen] = useState(effectivePreviewPreference === 'expanded');
     const [saveAttempted, setSaveAttempted] = useState(false);
     const [draftSaved, setDraftSaved] = useState(false);
     const [hasSavedProduct, setHasSavedProduct] = useState(mode === 'edit');
@@ -186,8 +302,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         { id: 'spec-3', s_spec_name: '12寸', s_spec_price: '228', s_spec_cost: '132', s_spec_market: '258', s_spec_barcode: '690000000803', s_spec_mark: '大份', s_spec_sku_code: 'SKU-12', s_spec_amount: '2.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'unlimited', s_spec_initial_stock: '0', s_spec_max_stock: '9999', s_spec_warning_stock: '0', s_spec_sale_status: 'off', s_spec_channels: ['mini_take'], s_spec_store_pack_fee: '2', s_spec_store_pack_mark: '生日套装', s_spec_take_pack_fee: '4', s_spec_take_pack_mark: '加固包装', s_spec_img: '', s_spec_code: 'CAKE-12' },
     ]);
     const [methodConfigRows, setMethodConfigRows] = useState<MethodConfigRow[]>([
-        { id: 'method-1', m_method_name: '生日牌', m_method_markup: '10', m_method_code: 'METHOD-01' },
-        { id: 'method-2', m_method_name: '蜡烛套装', m_method_markup: '5', m_method_code: 'METHOD-02' },
+        { id: 'method-1', groupName: '温度哎', m_method_name: '热', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+        { id: 'method-2', groupName: '温度哎', m_method_name: '少冰', m_method_sync: true, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+        { id: 'method-3', groupName: '温度哎', m_method_name: '多冰', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+        { id: 'method-4', groupName: '自建做法组', m_method_name: '做法1', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+        { id: 'method-5', groupName: '自建做法组', m_method_name: '做法2', m_method_sync: false, m_method_markup: '0', m_method_code: '/', m_method_remark: '/', m_method_tip: '/' },
+    ]);
+    const [addonConfigRows, setAddonConfigRows] = useState<AddonConfigRow[]>([
+        { id: 'addon-1', groupName: '小料', addonName: '小料1', addonCode: '1210585227812483072', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
+        { id: 'addon-2', groupName: '小料', addonName: '小料2', addonCode: '1210585270384668672', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
     ]);
 
     const getStickyOffset = () => {
@@ -418,6 +541,35 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         const total = validationItems.filter(item => item.type === 'required').length;
         return { total, completed: total - requiredMissingItems.length };
     }, [requiredMissingItems.length, validationItems]);
+    const primaryBasicFields = useMemo(
+        () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
+            visibleFieldIds.has(field.id)
+            && field.module === 'base'
+            && !COLLAPSIBLE_BASIC_FIELD_IDS.includes(field.id as typeof COLLAPSIBLE_BASIC_FIELD_IDS[number])
+        )),
+        [visibleFieldIds]
+    );
+    const optionalBasicFields = useMemo(
+        () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
+            visibleFieldIds.has(field.id)
+            && field.module === 'base'
+            && COLLAPSIBLE_BASIC_FIELD_IDS.includes(field.id as typeof COLLAPSIBLE_BASIC_FIELD_IDS[number])
+        )),
+        [visibleFieldIds]
+    );
+    const isWeightProduct = !!dynamicFormData.p_weight_flag;
+
+    useEffect(() => {
+        if (isWeightProduct && specDisplayMode !== 'single') {
+            setSpecDisplayMode('single');
+        }
+    }, [isWeightProduct, specDisplayMode]);
+    const getFieldDescription = (field: DynamicFieldConfig) => {
+        if (field.id === 'p_unit') {
+            return isWeightProduct ? '称重商品的价格单位，单位设置建议与电子秤单位一致' : undefined;
+        }
+        return field.description;
+    };
 
     const renderSectionMeta = (sectionId: SectionId) => {
         const info = sectionProgress[sectionId];
@@ -430,8 +582,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     };
 
 
-    const handleCategoryChangeRequest = (categoryId: string) => {
-        const targetCategory = categories.find(item => item.id === categoryId);
+    const handleCategoryChangeRequest = (targetCategory: Category) => {
         if (!targetCategory || targetCategory.id === currentCategory.id) return;
         const nextImpactedFields = getImpactedFieldsForCategory(targetCategory);
         if (nextImpactedFields.resetFields.length === 0 && nextImpactedFields.clearFields.length === 0) {
@@ -493,6 +644,324 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         formContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     };
 
+    const updatePreviewPreference = (nextPreference: PreviewDisplayPreference) => {
+        setPreviewPreference(nextPreference);
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(`${PREVIEW_PREFERENCE_STORAGE_PREFIX}${previewPreferenceKey}`, nextPreference);
+        }
+        setShowPreviewPreferenceMenu(false);
+        setIsPreviewPanelOpen(nextPreference === 'expanded');
+    };
+
+    const togglePreviewPanel = () => {
+        setShowPreviewPreferenceMenu(false);
+        setIsPreviewPanelOpen(prev => !prev);
+    };
+
+    const handleInlineCategoryCreate = (fieldId: 'p_front_cat' | 'p_back_cat') => {
+        const nextLabel = fieldId === 'p_front_cat'
+            ? `新建前台分类${frontCategoryOptions.length + 1}`
+            : `新建后台分类${backCategoryOptions.length + 1}`;
+        if (fieldId === 'p_front_cat') {
+            setFrontCategoryOptions(prev => [...prev, nextLabel]);
+        } else {
+            setBackCategoryOptions(prev => [...prev, nextLabel]);
+        }
+        setDynamicFormData(prev => ({ ...prev, [fieldId]: nextLabel }));
+        setActiveCategorySelector(null);
+    };
+
+    const openMethodPicker = () => {
+        setActivePreviewField('m_methods');
+        setActiveMethodGroupId(METHOD_LIBRARY[0].id);
+        setTempMethodSelections(methodConfigRows.map(row => `${row.groupName}:${row.m_method_name}`));
+        setShowMethodPickerModal(true);
+    };
+
+    const confirmMethodPicker = () => {
+        const existingMap = new Map(methodConfigRows.map(row => [`${row.groupName}:${row.m_method_name}`, row]));
+        const nextRows = tempMethodSelections.map((selection, index) => {
+            const [groupName, methodName] = selection.split(':');
+            const existingRow = existingMap.get(selection);
+            return existingRow || {
+                id: `method-${index + 1}`,
+                groupName,
+                m_method_name: methodName,
+                m_method_sync: groupName === '温度哎',
+                m_method_markup: '0',
+                m_method_code: '/',
+                m_method_remark: '/',
+                m_method_tip: '/',
+            };
+        });
+        setMethodConfigRows(nextRows);
+        setShowMethodPickerModal(false);
+    };
+
+    const openAddonPicker = () => {
+        setActivePreviewField('a_addons');
+        setActiveAddonGroupId(ADDON_LIBRARY[0].id);
+        setTempAddonSelections(addonConfigRows.map(row => `${row.groupName}:${row.addonName}`));
+        setShowAddonPickerModal(true);
+    };
+
+    const confirmAddonPicker = () => {
+        const existingMap = new Map(addonConfigRows.map(row => [`${row.groupName}:${row.addonName}`, row]));
+        const nextRows = tempAddonSelections.map((selection, index) => {
+            const [groupName, addonName] = selection.split(':');
+            const existingRow = existingMap.get(selection);
+            const addonMeta = ADDON_LIBRARY.flatMap(group => group.items.map(item => ({ groupName: group.name, ...item })))
+                .find(item => item.groupName === groupName && item.name === addonName);
+            return existingRow || {
+                id: `addon-${index + 1}`,
+                groupName,
+                addonName,
+                addonCode: addonMeta?.code || '/',
+                addonLimit: '',
+                addonPrice: addonMeta?.price || '0',
+                addonSpecPrice: '',
+                addonStatus: addonMeta?.status || 'on',
+            };
+        });
+        setAddonConfigRows(nextRows);
+        setDynamicFormData(prev => ({ ...prev, a_addons: nextRows.length ? 'selected' : '' }));
+        setShowAddonPickerModal(false);
+    };
+
+    const reorderAttrPanels = (fromPanelId: string, toPanelId: string) => {
+        if (fromPanelId === toPanelId) return;
+        setAttrPanelOrder(prev => {
+            const next = [...prev];
+            const fromIndex = next.indexOf(fromPanelId);
+            const toIndex = next.indexOf(toPanelId);
+            if (fromIndex === -1 || toIndex === -1) return prev;
+            const [moved] = next.splice(fromIndex, 1);
+            next.splice(toIndex, 0, moved);
+            return next;
+        });
+    };
+
+    const moveAttrRows = <T,>(rows: T[], fromItem: string, toItem: string, getItemLabel: (row: T) => string) => {
+        const next = [...rows];
+        const fromIndex = next.findIndex(row => getItemLabel(row) === fromItem);
+        const toIndex = next.findIndex(row => getItemLabel(row) === toItem);
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return rows;
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        return next;
+    };
+
+    const reorderAttrItems = (groupId: string, fromItem: string, toItem: string) => {
+        if (fromItem === toItem) return;
+
+        if (groupId === 'spec') {
+            setSpecConfigRows(prev => moveAttrRows(prev, fromItem, toItem, row => row.s_spec_name));
+            return;
+        }
+
+        if (groupId.startsWith('method:')) {
+            const groupName = groupId.slice('method:'.length);
+            setMethodConfigRows(prev => {
+                const reorderedRows = moveAttrRows(
+                    prev.filter(row => row.groupName === groupName),
+                    fromItem,
+                    toItem,
+                    row => row.m_method_name
+                );
+                let cursor = 0;
+                return prev.map(row => (row.groupName === groupName ? reorderedRows[cursor++] : row));
+            });
+            return;
+        }
+
+        if (groupId.startsWith('addon:')) {
+            const groupName = groupId.slice('addon:'.length);
+            setAddonConfigRows(prev => {
+                const reorderedRows = moveAttrRows(
+                    prev.filter(row => row.groupName === groupName),
+                    fromItem,
+                    toItem,
+                    row => row.addonName
+                );
+                let cursor = 0;
+                return prev.map(row => (row.groupName === groupName ? reorderedRows[cursor++] : row));
+            });
+        }
+    };
+
+    const renderAttributeSortPanel = () => {
+        const hasSpecAttr = specDisplayMode === 'multi';
+        const hasMethodAttr = methodConfigRows.length > 0;
+        const hasAddonAttr = addonConfigRows.length > 0;
+        const shouldShow = hasSpecAttr || hasMethodAttr || hasAddonAttr;
+
+        if (!shouldShow) return null;
+
+        const methodGroupNames = Array.from(new Set(methodConfigRows.map(row => row.groupName)));
+        const addonGroupNames = Array.from(new Set(addonConfigRows.map(row => row.groupName)));
+        const rawGroups = [
+            ...(hasSpecAttr ? [{
+                id: 'spec',
+                title: '规格',
+                tag: '规格',
+                items: specConfigRows.map(row => row.s_spec_name),
+                defaultKey: 'spec',
+            }] : []),
+            ...addonGroupNames.map(groupName => ({
+                id: `addon:${groupName}`,
+                title: groupName,
+                tag: '加料',
+                items: addonConfigRows.filter(row => row.groupName === groupName).map(row => row.addonName),
+                defaultKey: `addon:${groupName}`,
+            })),
+            ...methodGroupNames.map(groupName => ({
+                id: `method:${groupName}`,
+                title: groupName,
+                tag: '做法',
+                items: methodConfigRows.filter(row => row.groupName === groupName).map(row => row.m_method_name),
+                defaultKey: `method:${groupName}`,
+            })),
+        ];
+
+        const orderedIds = [...attrPanelOrder.filter(id => rawGroups.some(group => group.id === id)), ...rawGroups.map(group => group.id).filter(id => !attrPanelOrder.includes(id))];
+        const activeGroups = orderedIds.map(id => rawGroups.find(group => group.id === id)).filter(Boolean) as typeof rawGroups;
+
+        return (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div className="text-lg font-black text-[#1F2129]">商品属性排序</div>
+                        <div className="mt-1 text-sm text-gray-400">
+                            标<span className="mx-1 inline-block h-3 w-3 rounded-sm bg-[#00C06B]" />为默认属性，可自定义设置默认规格；规格需必选默认值，属性值支持直接拖动排序
+                        </div>
+                    </div>
+                    <div className="relative flex items-center gap-3">
+                        <span className="text-sm font-bold text-[#1F2129]">自定义属性组排序</span>
+                        <button
+                            type="button"
+                            onClick={() => setShowAttrSortTip(prev => !prev)}
+                            className="text-gray-400 hover:text-[#00A35B]"
+                        >
+                            <CircleAlert size={16} />
+                        </button>
+                        <Switch active={attrGroupSortEnabled} onClick={() => setAttrGroupSortEnabled(prev => !prev)} />
+                        {showAttrSortTip && (
+                            <div className="absolute right-0 top-full mt-2 w-[260px] rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs leading-5 text-gray-500 shadow-lg">
+                                开启后可在下方统一调整属性组顺序
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    {activeGroups.map(group => {
+                        const defaultValue = attrDefaultSelections[group.defaultKey];
+                        const isSpecGroup = group.id === 'spec';
+                        return (
+                            <div
+                                key={group.id}
+                                draggable={attrGroupSortEnabled}
+                                onDragStart={() => setDraggingAttrPanelId(group.id)}
+                                onDragOver={e => {
+                                    if (!attrGroupSortEnabled || !draggingAttrPanelId || draggingAttrPanelId === group.id) return;
+                                    e.preventDefault();
+                                }}
+                                onDrop={e => {
+                                    e.preventDefault();
+                                    if (attrGroupSortEnabled && draggingAttrPanelId) {
+                                        reorderAttrPanels(draggingAttrPanelId, group.id);
+                                    }
+                                    setDraggingAttrPanelId(null);
+                                }}
+                                onDragEnd={() => setDraggingAttrPanelId(null)}
+                                className={`rounded-2xl bg-[#FAFAFA] px-5 py-4 transition-shadow ${draggingAttrPanelId === group.id ? 'shadow-lg ring-2 ring-[#BBF7D0]' : ''}`}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        {attrGroupSortEnabled && (
+                                            <button
+                                                type="button"
+                                                draggable
+                                                onDragStart={() => setDraggingAttrPanelId(group.id)}
+                                                className="cursor-grab rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-[#00A35B]"
+                                            >
+                                                <GripVertical size={18} />
+                                            </button>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                        <div className="text-[16px] font-black text-[#1F2129]">{group.title}</div>
+                                        <span className="inline-flex rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-2.5 py-1 text-xs font-bold text-[#00A35B]">
+                                            {group.tag}
+                                        </span>
+                                    </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {group.items.map(item => {
+                                        const isDefault = defaultValue === item;
+                                        const isDraggingItem = draggingAttrItem?.groupId === group.id && draggingAttrItem.item === item;
+                                        return (
+                                            <button
+                                                key={item}
+                                                type="button"
+                                                draggable
+                                                onDragStart={e => {
+                                                    e.stopPropagation();
+                                                    setDraggingAttrItem({ groupId: group.id, item });
+                                                }}
+                                                onDragOver={e => {
+                                                    if (!draggingAttrItem || draggingAttrItem.groupId !== group.id || draggingAttrItem.item === item) return;
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                }}
+                                                onDrop={e => {
+                                                    if (!draggingAttrItem || draggingAttrItem.groupId !== group.id) return;
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    reorderAttrItems(group.id, draggingAttrItem.item, item);
+                                                    setDraggingAttrItem(null);
+                                                }}
+                                                onDragEnd={e => {
+                                                    e.stopPropagation();
+                                                    setDraggingAttrItem(null);
+                                                }}
+                                                onClick={() => {
+                                                    setAttrDefaultSelections(prev => {
+                                                        if (isSpecGroup) return { ...prev, [group.defaultKey]: item };
+                                                        if (isDefault) {
+                                                            const next = { ...prev };
+                                                            delete next[group.defaultKey];
+                                                            return next;
+                                                        }
+                                                        return { ...prev, [group.defaultKey]: item };
+                                                    });
+                                                }}
+                                                className={`flex items-center justify-between rounded-xl border px-4 py-4 text-left text-sm transition-colors ${
+                                                    isDefault ? 'border-[#BBF7D0] bg-[#F0FDF4] text-[#1F2129]' : 'border-transparent bg-white text-[#1F2129] hover:border-gray-200'
+                                                } ${isDraggingItem ? 'cursor-grabbing shadow-lg ring-2 ring-[#BBF7D0]' : 'cursor-grab'}`}
+                                            >
+                                                <span className="flex items-center">
+                                                    <span className={`mr-3 h-5 w-5 rounded-[4px] border ${isDefault ? 'border-[#00C06B] bg-[#00C06B]' : 'border-gray-300 bg-white'}`} />
+                                                    <span className="font-bold">
+                                                        {isDefault ? `默认${item}` : item}
+                                                    </span>
+                                                </span>
+                                                <span className={`ml-3 rounded-md p-1 ${isDraggingItem ? 'text-[#00A35B]' : 'text-gray-300'}`}>
+                                                    <GripVertical size={16} />
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
     // Form Renderer Helper
     const renderDynamicInput = (field: DynamicFieldConfig & { isRequiredConfig: boolean }) => {
         const value = dynamicFormData[field.id] || '';
@@ -505,24 +974,176 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         if (field.id === 'p_cat') {
              return (
                  <div className="relative">
-                     <select
-                        className="q-form-select"
-                        value={currentCategory.id}
-                        onChange={e => handleCategoryChangeRequest(e.target.value)}
+                     <button
+                        type="button"
+                        onClick={() => setShowCategoryPickerModal(true)}
+                        className="q-form-select text-left text-[#1F2129] hover:border-[#00C06B]"
                      >
-                        {categories.map(option => (
-                            <option key={option.id} value={option.id}>{option.name}</option>
-                        ))}
-                     </select>
+                        {currentCategory.name}
+                     </button>
                      <p className="text-[11px] text-gray-400 mt-2">切换类目后，不适用字段会在保存时被清空或恢复默认值。</p>
                  </div>
              );
         }
 
+        if (field.id === 'p_weight_flag') {
+            const weightValue = !!dynamicFormData.p_weight_flag;
+            return (
+                <select
+                    onFocus={setPreview}
+                    className="q-form-select"
+                    value={weightValue ? 'yes' : 'no'}
+                    onChange={e => {
+                        const nextIsWeight = e.target.value === 'yes';
+                        setDynamicFormData(prev => ({
+                            ...prev,
+                            p_weight_flag: nextIsWeight,
+                            p_unit: nextIsWeight ? (prev.p_unit || '千克') : prev.p_unit || '',
+                        }));
+                    }}
+                >
+                    <option value="no">否</option>
+                    <option value="yes">是</option>
+                </select>
+            );
+        }
+
+        if (field.id === 'p_unit') {
+            if (isWeightProduct) {
+                return (
+                    <select
+                        onFocus={setPreview}
+                        className="q-form-select"
+                        value={value || '千克'}
+                        onChange={e => setValue(e.target.value)}
+                    >
+                        {WEIGHT_UNIT_OPTIONS.map(option => (
+                            <option key={option} value={option}>{option}</option>
+                        ))}
+                    </select>
+                );
+            }
+
+            return (
+                <div className="relative">
+                    <input
+                        onFocus={setPreview}
+                        className="q-form-input pr-14"
+                        placeholder="请输入计量单位"
+                        value={value}
+                        maxLength={30}
+                        onChange={e => setValue(e.target.value.slice(0, 30))}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">{String(value).length}/30</span>
+                </div>
+            );
+        }
+
+        if (field.id === 'p_display_type') {
+            const selectedTypes = (value as string[]) || [];
+            return (
+                <div className="rounded-2xl bg-[#FAFAFA] border border-gray-200 p-4 space-y-4">
+                    {DISPLAY_TYPE_OPTIONS.map(option => {
+                        const active = selectedTypes.includes(option.key);
+                        return (
+                            <label key={option.key} className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                    checked={active}
+                                    onChange={() => {
+                                        const nextValue = active
+                                            ? selectedTypes.filter(item => item !== option.key)
+                                            : [...selectedTypes, option.key];
+                                        setValue(nextValue);
+                                    }}
+                                />
+                                <div className="min-w-0">
+                                    <div className="text-sm font-bold text-[#1F2129]">{option.label}</div>
+                                    <div className="mt-1 text-xs leading-5 text-gray-400">{option.desc}</div>
+                                </div>
+                            </label>
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        if (field.id === 'p_tare_weight') {
+            return (
+                <div className="relative">
+                    <input
+                        onFocus={setPreview}
+                        type="number"
+                        className="q-form-input pr-10"
+                        placeholder="请输入去皮重量"
+                        value={value}
+                        onChange={e => setValue(e.target.value)}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">克</span>
+                </div>
+            );
+        }
+
+        if (field.id === 'p_front_cat' || field.id === 'p_back_cat') {
+            const options = field.id === 'p_front_cat' ? frontCategoryOptions : backCategoryOptions;
+            const createLabel = field.id === 'p_front_cat' ? '新增前台分类' : '新增后台分类';
+            const helperText = field.id === 'p_front_cat' ? '新增完成后会自动带回当前商品表单' : '可先补建后台分类，再继续完成当前商品创建';
+            const isOpen = activeCategorySelector === field.id;
+
+            return (
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setPreview();
+                            setActiveCategorySelector(prev => prev === field.id ? null : field.id);
+                        }}
+                        className="q-form-select text-left text-[#1F2129] hover:border-[#00C06B]"
+                    >
+                        {value || `请选择${field.label}...`}
+                    </button>
+                    {isOpen && (
+                        <div className="absolute z-20 mt-2 w-full rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
+                            <div className="max-h-56 overflow-y-auto p-2">
+                                {options.map(option => (
+                                    <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => {
+                                            setValue(option);
+                                            setActiveCategorySelector(null);
+                                        }}
+                                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                                            value === option ? 'bg-[#F0FDF4] font-bold text-[#00A35B]' : 'text-[#1F2129] hover:bg-[#F7F8FA]'
+                                        }`}
+                                    >
+                                        <span>{option}</span>
+                                        {value === option && <Check size={14} className="text-[#00A35B]" />}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="border-t border-gray-100 bg-[#FAFAFA] px-3 py-3">
+                                <button
+                                    type="button"
+                                    onClick={() => handleInlineCategoryCreate(field.id)}
+                                    className="inline-flex items-center text-sm font-bold text-[#00A35B] hover:text-[#008A4D]"
+                                >
+                                    <Plus size={14} className="mr-1.5" />
+                                    {createLabel}
+                                </button>
+                                <div className="mt-1 text-[11px] text-gray-400">{helperText}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
         switch (field.type) {
-           case 'input': return (<div className="relative"><input onFocus={setPreview} className="q-form-input" placeholder={field.placeholder || `请输入${field.label}`} value={value} onChange={e => setValue(e.target.value)} />{field.id === 'p_name' && <span className="absolute right-4 top-3 text-xs text-gray-400">{value.length}/70</span>}</div>);
-           case 'number': return (<div className="relative"><input onFocus={setPreview} type="number" className="q-form-input pl-8" placeholder="0.00" value={value} onChange={e => setValue(e.target.value)} /><span className="absolute left-3 top-3 text-gray-400">¥</span></div>);
-           case 'selector': return (<select onFocus={setPreview} className="q-form-select" value={value} onChange={e => setValue(e.target.value)}><option value="">请选择{field.label}...</option><option value="opt1">选项一</option><option value="opt2">选项二</option></select>);
+           case 'input': return (<div className="relative"><input onFocus={setPreview} className="q-form-input" placeholder={field.placeholder || `请输入${field.label}`} value={value} onChange={e => setValue(e.target.value)} />{['p_name', 'p_code'].includes(field.id) && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">{String(value).length}/70</span>}</div>);
+           case 'number': return MONEY_FIELD_IDS.has(field.id) ? (<div className="relative"><input onFocus={setPreview} type="number" className="q-form-input pl-8" placeholder="0.00" value={value} onChange={e => setValue(e.target.value)} /><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">¥</span></div>) : (<input onFocus={setPreview} type="number" className="q-form-input" placeholder={field.placeholder || `请输入${field.label}`} value={value} onChange={e => setValue(e.target.value)} />);
+           case 'selector': return (<select onFocus={setPreview} className="q-form-select" value={value} onChange={e => setValue(e.target.value)}><option value="">请选择{field.label}...</option>{(field.presetValues || ['选项一', '选项二']).map(option => <option key={option} value={option}>{option}</option>)}</select>);
            case 'switch': return (<div className="flex items-center space-x-3"><Switch active={!!value} onClick={() => setValue(!value)}/><span className="text-sm text-gray-600">{value ? '已开启' : '已关闭'}</span></div>);
            case 'radio_group': {
                const radioVal = value || {};
@@ -693,6 +1314,218 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         setMethodConfigRows(prev => prev.map(item => item.id === rowId ? { ...item, [key]: value } : item));
     };
 
+    const renderDisplaySettingsSection = () => {
+        const listDescValue = dynamicFormData.p_list_desc || '';
+        const detailVideoValue = dynamicFormData.p_video || '';
+        const badgeStartDate = dynamicFormData.p_badge_start_date || '';
+        const badgeEndDate = dynamicFormData.p_badge_end_date || '';
+        const detailContent = dynamicFormData.p_rich_desc || '';
+
+        const renderDisplayUploadField = ({
+            fieldId,
+            label,
+            tip,
+            widthClass = 'h-28 w-28',
+            previewField = 'default',
+            extraAction,
+        }: {
+            fieldId: string;
+            label: string;
+            tip: string;
+            widthClass?: string;
+            previewField?: PreviewField;
+            extraAction?: React.ReactNode;
+        }) => {
+            const uploaded = !!dynamicFormData[fieldId];
+            return (
+                <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                    <div className="pt-2 text-sm font-bold text-[#1F2129]">{label}</div>
+                    <div className="space-y-3">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActivePreviewField(previewField);
+                                setDynamicFormData(prev => ({
+                                    ...prev,
+                                    [fieldId]: prev[fieldId] ? '' : `${fieldId}-mock`,
+                                }));
+                            }}
+                            className={`${widthClass} flex items-center justify-center rounded-2xl border-2 border-dashed transition-colors ${
+                                uploaded
+                                    ? 'border-[#00C06B] bg-[#F0FDF4] text-[#00A35B]'
+                                    : 'border-gray-200 bg-[#FAFAFA] text-gray-400 hover:border-[#00C06B] hover:text-[#00A35B]'
+                            }`}
+                        >
+                            <div className="flex flex-col items-center justify-center">
+                                {uploaded ? <ImageIcon size={24} /> : <Plus size={24} />}
+                                <span className="mt-2 text-xs font-bold">{uploaded ? '已上传' : '添加图片'}</span>
+                            </div>
+                        </button>
+                        <div className="flex flex-wrap items-center gap-2 text-xs leading-5 text-gray-400">
+                            <span>{tip}</span>
+                            {extraAction}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const renderSelectField = (label: string, fieldId: string, options: string[], placeholder: string) => (
+            <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                <div className="pt-2 text-sm font-bold text-[#1F2129]">{label}</div>
+                <select
+                    className="q-form-select"
+                    value={dynamicFormData[fieldId] || ''}
+                    onChange={e => setDynamicFormData(prev => ({ ...prev, [fieldId]: e.target.value }))}
+                >
+                    <option value="">{placeholder}</option>
+                    {options.map(option => (
+                        <option key={option} value={option}>
+                            {option}
+                        </option>
+                    ))}
+                </select>
+            </div>
+        );
+
+        return (
+            <div className="space-y-6">
+                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-5 space-y-5">
+                    <div>
+                        <div className="text-base font-black text-[#1F2129]">列表页展示</div>
+                        <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品列表页。</div>
+                    </div>
+
+                    <div className="space-y-5 rounded-2xl bg-white p-5">
+                        {renderDisplayUploadField({
+                            fieldId: 'p_img',
+                            label: '商品主图',
+                            tip: '建议尺寸：1:1，单张大小不超过 300K，最多可上传 10 张；可拖拽调整图片顺序。',
+                            previewField: 'p_img',
+                        })}
+
+                        {renderDisplayUploadField({
+                            fieldId: 'p_cover_img',
+                            label: '商品封面',
+                            tip: '建议尺寸：265*132.5PX，单张大小不超过 300K，上传后展示商品列表封面。',
+                            extraAction: (
+                                <button
+                                    type="button"
+                                    onClick={() => setActivePreviewField('p_img')}
+                                    className="font-bold text-[#00A35B] hover:text-[#008A4D]"
+                                >
+                                    查看示例
+                                </button>
+                            ),
+                        })}
+
+                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                            <div className="pt-2 text-sm font-bold text-[#1F2129]">商品列表简述</div>
+                            <div>
+                                <textarea
+                                    className="q-form-input min-h-[92px] py-3"
+                                    placeholder="请输入商品列表页简述"
+                                    value={listDescValue}
+                                    onFocus={() => setActivePreviewField('p_list_desc')}
+                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_list_desc: e.target.value.slice(0, 100) }))}
+                                />
+                                <div className="mt-2 text-right text-xs text-gray-400">{String(listDescValue).length}/100</div>
+                            </div>
+                        </div>
+
+                        {renderSelectField('描述标签', 'p_desc_tags', DISPLAY_DESC_TAG_OPTIONS, '请选择')}
+                        {renderSelectField('商品角标', 'p_badge', DISPLAY_BADGE_OPTIONS, '请选择角标')}
+
+                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                            <div className="pt-2 text-sm font-bold text-[#1F2129]">角标展示日期</div>
+                            <div className="grid grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] gap-3">
+                                <input
+                                    type="date"
+                                    className="q-form-input"
+                                    value={badgeStartDate}
+                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_start_date: e.target.value }))}
+                                />
+                                <div className="flex items-center justify-center text-sm font-bold text-gray-400">至</div>
+                                <input
+                                    type="date"
+                                    className="q-form-input"
+                                    value={badgeEndDate}
+                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_end_date: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-5 space-y-5">
+                    <div>
+                        <div className="text-base font-black text-[#1F2129]">详情页展示</div>
+                        <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品详情页。</div>
+                    </div>
+
+                    <div className="space-y-5 rounded-2xl bg-white p-5">
+                        {renderDisplayUploadField({
+                            fieldId: 'p_detail_imgs',
+                            label: '商品详情图',
+                            tip: '建议尺寸：800*450PX，单张大小不超过 1M，详情图展示在商品详情页顶部，最多可上传 10 张；可拖拽调整顺序。',
+                            widthClass: 'h-28 w-40',
+                        })}
+
+                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                            <div className="pt-2 text-sm font-bold text-[#1F2129]">商品详情</div>
+                            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 text-sm text-gray-400">
+                                    {['B', 'I', 'A', '默认字号', '撤销', '重做', '全屏'].map(tool => (
+                                        <button
+                                            key={tool}
+                                            type="button"
+                                            onClick={() => setActivePreviewField('default')}
+                                            className="rounded-lg px-2 py-1 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
+                                        >
+                                            {tool}
+                                        </button>
+                                    ))}
+                                </div>
+                                <textarea
+                                    className="min-h-[180px] w-full resize-none border-0 px-4 py-3 text-sm text-[#1F2129] focus:outline-none"
+                                    placeholder="请输入商品详情内容"
+                                    value={detailContent}
+                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_rich_desc: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+
+                        {renderDisplayUploadField({
+                            fieldId: 'p_detail_bottom_img',
+                            label: '商品详情页底图',
+                            tip: '图片将在规格做法加料区下方展示，建议尺寸：高度不限，宽度建议 690。',
+                            widthClass: 'h-28 w-36',
+                        })}
+
+                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                            <div className="pt-2 text-sm font-bold text-[#1F2129]">商品视频</div>
+                            <div className="space-y-3">
+                                <input
+                                    className="q-form-input"
+                                    placeholder="请输入商品视频路径"
+                                    value={detailVideoValue}
+                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_video: e.target.value }))}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setDynamicFormData(prev => ({ ...prev, p_video: prev.p_video || 'https://video.example.com/product-demo.mp4' }))}
+                                    className="text-sm font-bold text-[#00A35B] hover:text-[#008A4D]"
+                                >
+                                    点我查看视频转换链接教程
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderSalesAttributePanel = () => {
         const minPurchaseEnabled = !!dynamicFormData.s_min_purchase_toggle;
         const maxPurchaseEnabled = !!dynamicFormData.s_max_purchase_toggle;
@@ -701,6 +1534,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         const saleSettings = dynamicFormData.s_sale_settings || {};
         const takeoutRule = dynamicFormData.s_takeout_rule || '正常售卖';
         const taxRate = dynamicFormData.s_tax_rate || '';
+        const thirdMiniProgramEnabled = !!dynamicFormData.s_jump_third_mini_program;
+        const thirdMiniProgramPath = dynamicFormData.s_third_mini_program_path || '';
+        const salesCommissionAmount = dynamicFormData.s_sales_commission_amount || '';
+        const invoiceItemName = dynamicFormData.s_invoice_item_name || '';
+        const invoiceCustomUnit = dynamicFormData.s_invoice_custom_unit || '';
+        const optionalSalesFields = COLLAPSIBLE_SALES_FIELDS;
 
         const renderSwitchRow = (label: string, toggleId: string, valueId?: string, placeholder?: string) => {
             const enabled = !!dynamicFormData[toggleId];
@@ -747,6 +1586,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                     }
                 };
             });
+        };
+
+        const updateSalesCommissionAmount = (delta: number) => {
+            const current = Number(salesCommissionAmount || 0);
+            const next = Math.max(0, current + delta);
+            setDynamicFormData(prev => ({ ...prev, s_sales_commission_amount: String(next) }));
         };
 
         return (
@@ -799,6 +1644,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             desc: '开启后，外卖单点该商品无法下单，需配合其他商品才可下单，常用于饮料等底价小件商品'
                                         },
                                         {
+                                            key: '点餐场景',
+                                            desc: '用于补充商品适用的点餐场景，可在后续配置对应场景入口'
+                                        },
+                                        {
                                             key: '关联档口',
                                             desc: '可用于关联商品档口，方便按档口出品和管理'
                                         },
@@ -819,7 +1668,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
                                                         <span>{item.key}</span>
-                                                        {item.key === '关联档口' && <ChevronRight size={14} className="text-gray-400" />}
+                                                        {(item.key === '点餐场景' || item.key === '关联档口') && <ChevronRight size={14} className="text-gray-400" />}
                                                     </div>
                                                     <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>
                                                 </div>
@@ -866,33 +1715,345 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
                         {isFieldEnabled('s_tax_rate') && (
                             <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                                <div className="grid grid-cols-[120px_1fr] gap-4 items-center">
-                                    <div className="text-sm font-bold text-[#1F2129]">税率</div>
-                                    <div className="max-w-[260px]">
-                                        <select
-                                            className="q-form-select"
-                                            value={taxRate}
-                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_tax_rate: e.target.value }))}
-                                        >
-                                            <option value="">选择税率</option>
-                                            <option value="0%">0%</option>
-                                            <option value="1%">1%</option>
-                                            <option value="3%">3%</option>
-                                            <option value="6%">6%</option>
-                                            <option value="9%">9%</option>
-                                            <option value="13%">13%</option>
-                                        </select>
+                                <div className="grid grid-cols-[120px_1fr] gap-4 items-start">
+                                    <div className="pt-1 text-sm font-bold text-[#1F2129]">税率</div>
+                                    <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
+                                        <div className="max-w-[260px]">
+                                            <div className="mb-2 text-sm font-bold text-[#1F2129]">选择税率</div>
+                                            <select
+                                                className="q-form-select"
+                                                value={taxRate}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_tax_rate: e.target.value }))}
+                                            >
+                                                <option value="">请选择</option>
+                                                <option value="0%">0%</option>
+                                                <option value="1%">1%</option>
+                                                <option value="3%">3%</option>
+                                                <option value="6%">6%</option>
+                                                <option value="9%">9%</option>
+                                                <option value="13%">13%</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="max-w-[520px]">
+                                            <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
+                                            <input
+                                                className="q-form-input"
+                                                placeholder="请输入内容"
+                                                value={invoiceItemName}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
+                                            />
+                                            <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
+                                        </div>
+
+                                        <div className="max-w-[520px]">
+                                            <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
+                                            <input
+                                                className="q-form-input"
+                                                placeholder="请输入内容"
+                                                value={invoiceCustomUnit}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
                     </>
                 )}
+
+                <div className="pt-1">
+                    {expandedSalesFields.length === 0 ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setExpandedSalesFields(optionalSalesFields.map(field => field.id))}
+                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                            >
+                                展开
+                                <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                            </button>
+                            {optionalSalesFields.map(field => (
+                                <button
+                                    key={field.id}
+                                    type="button"
+                                    onClick={() => setExpandedSalesFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
+                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+                                >
+                                    {field.label}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-6">
+                                {expandedSalesFields.includes('s_jump_third_mini_program') && (
+                                    <div className="grid grid-cols-[140px_1fr] gap-4 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">是否跳转三方小程序</div>
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                active={thirdMiniProgramEnabled}
+                                                onClick={() => setDynamicFormData(prev => ({ ...prev, s_jump_third_mini_program: !thirdMiniProgramEnabled }))}
+                                            />
+                                            <span className="text-sm text-gray-400">{thirdMiniProgramEnabled ? '已开启' : '未开启'}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {expandedSalesFields.includes('s_third_mini_program_path') && (
+                                    <div className="grid grid-cols-[140px_1fr] gap-4 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">三方小程序页面路径</div>
+                                        <div>
+                                            <input
+                                                className="q-form-input"
+                                                placeholder="请输入页面路径"
+                                                value={thirdMiniProgramPath}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_third_mini_program_path: e.target.value.slice(0, 150) }))}
+                                            />
+                                            <div className="mt-2 text-right text-xs text-gray-400">{String(thirdMiniProgramPath).length}/150</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {expandedSalesFields.includes('s_sales_commission_amount') && (
+                                    <div className="grid grid-cols-[140px_1fr] gap-4 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">销售提成金额</div>
+                                        <div className="max-w-[260px]">
+                                            <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateSalesCommissionAmount(-1)}
+                                                    className="flex h-11 w-12 items-center justify-center text-gray-400 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
+                                                >
+                                                    -
+                                                </button>
+                                                <input
+                                                    type="number"
+                                                    className="h-11 flex-1 border-x border-gray-200 px-3 text-center text-sm font-bold text-[#1F2129] focus:outline-none"
+                                                    value={salesCommissionAmount}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_sales_commission_amount: e.target.value }))}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateSalesCommissionAmount(1)}
+                                                    className="flex h-11 w-12 items-center justify-center text-gray-400 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandedSalesFields([])}
+                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                >
+                                    收起
+                                    <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         );
     };
 
-    const renderPreviewPanel = () => {
+    const renderOthersAttributePanel = () => {
+        const optionalSections = COLLAPSIBLE_OTHER_SECTIONS;
+        const baseSales = dynamicFormData.o_base_sales || '0';
+        const moreBarcodes = dynamicFormData.o_more_barcodes || '';
+        const shareTitle = dynamicFormData.o_share_title || '';
+        const shareImage = dynamicFormData.o_share_image || '';
+        const moreSettings = [
+            {
+                key: 'o_need_prep_time',
+                label: '需要预留备货时间',
+                desc: '',
+            },
+            {
+                key: 'o_advance_kitchen_print',
+                label: '是否提前厨打',
+                desc: '开启后，商品支持提前厨打，用于预制商品提前下单制作',
+            },
+            {
+                key: 'o_non_operating_income',
+                label: '营业外收入',
+                desc: '开启后，该商品在 POS 上不可与大厅商品同时下单，订单收入记为营业外收入，适用于线下 POS 临时售卖不记名卡券并统计为营业外收入场景',
+            },
+            {
+                key: 'o_set_as_staple',
+                label: '设为主食',
+                desc: '开启后，小程序点单提交订单时，若主食商品，则提示顾客，避免漏点主食',
+            },
+        ];
+
+        const updateBaseSales = (delta: number) => {
+            const current = Number(baseSales || 0);
+            const next = Math.max(0, current + delta);
+            setDynamicFormData(prev => ({ ...prev, o_base_sales: String(next) }));
+        };
+
+        return (
+            <div className="space-y-6">
+                <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-1 text-sm font-bold text-[#1F2129]">更多设置</div>
+                        <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
+                            {moreSettings.map(item => (
+                                <label key={item.key} className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                        checked={!!dynamicFormData[item.key]}
+                                        onChange={() => setDynamicFormData(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-bold text-[#1F2129]">{item.label}</div>
+                                        {item.desc && <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>}
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="pt-1">
+                    {expandedOtherSections.length === 0 ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setExpandedOtherSections(optionalSections.map(section => section.id))}
+                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                            >
+                                展开
+                                <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                            </button>
+                            {optionalSections.map(section => (
+                                <button
+                                    key={section.id}
+                                    type="button"
+                                    onClick={() => setExpandedOtherSections(prev => prev.includes(section.id) ? prev : [...prev, section.id])}
+                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+                                >
+                                    {section.label}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-6">
+                                {expandedOtherSections.includes('o_base_sales') && (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">基础销量</div>
+                                        <div className="max-w-[220px]">
+                                            <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateBaseSales(-1)}
+                                                    className="flex h-11 w-12 items-center justify-center text-gray-400 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
+                                                >
+                                                    -
+                                                </button>
+                                                <input
+                                                    type="number"
+                                                    className="h-11 flex-1 border-x border-gray-200 px-3 text-center text-sm font-bold text-[#1F2129] focus:outline-none"
+                                                    value={baseSales}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, o_base_sales: e.target.value }))}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateBaseSales(1)}
+                                                    className="flex h-11 w-12 items-center justify-center text-gray-400 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {expandedOtherSections.includes('o_more_barcodes') && (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">更多条码</div>
+                                        <div className="max-w-[520px]">
+                                            <input
+                                                className="q-form-input"
+                                                placeholder="请输入更多条码"
+                                                value={moreBarcodes}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, o_more_barcodes: e.target.value }))}
+                                            />
+                                            <div className="mt-2 text-xs text-gray-400">多个条码请用英文模式下逗号隔开</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {expandedOtherSections.includes('o_product_share') && (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">商品分享</div>
+                                        <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
+                                            <div>
+                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">分享标题</div>
+                                                <input
+                                                    className="q-form-input"
+                                                    placeholder="请输入分享标题"
+                                                    value={shareTitle}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, o_share_title: e.target.value.slice(0, 20) }))}
+                                                />
+                                                <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+                                                    <span>未设置则默认取商品名称</span>
+                                                    <span>{String(shareTitle).length}/20</span>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">分享图片</div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setActivePreviewField('p_img');
+                                                        setDynamicFormData(prev => ({ ...prev, o_share_image: prev.o_share_image ? '' : 'o_share_image-mock' }));
+                                                    }}
+                                                    className={`h-28 w-40 flex items-center justify-center rounded-2xl border-2 border-dashed transition-colors ${
+                                                        shareImage
+                                                            ? 'border-[#00C06B] bg-[#F0FDF4] text-[#00A35B]'
+                                                            : 'border-gray-200 bg-white text-gray-400 hover:border-[#00C06B] hover:text-[#00A35B]'
+                                                    }`}
+                                                >
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        {shareImage ? <ImageIcon size={24} /> : <Plus size={24} />}
+                                                        <span className="mt-2 text-xs font-bold">{shareImage ? '已上传' : '添加图片'}</span>
+                                                    </div>
+                                                </button>
+                                                <div className="mt-2 text-xs text-gray-400">建议尺寸：300*240px，未设置则默认取商品图片</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandedOtherSections([])}
+                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                >
+                                    收起
+                                    <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderPreviewPanel = (compact = false) => {
         const previewTitle = PREVIEW_FIELD_TITLES[activePreviewField];
         const productName = dynamicFormData.p_name || '商品名称';
         const listDesc = dynamicFormData.p_list_desc || '用于补充口味、卖点或份量信息';
@@ -905,17 +2066,74 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
             ? activeSpecLabels.slice(0, 3)
             : (specDisplayMode === 'single' ? ['标准规格'] : ['中杯 480ml', '大杯 600ml +4']);
         const primarySpecPrice = visibleSpecRows[0]?.s_spec_price || '26';
-        const primarySpecLabel = previewSpecChips[0] || '中杯 480ml';
+        const currentPreviewPreference = previewPreference ?? defaultPreviewPreference;
 
         return (
-            <div className="w-full min-w-0 bg-white border-r border-[#E8E8E8] p-4 overflow-y-auto">
+            <div className={compact ? 'w-[320px] max-w-[calc(100vw-32px)] rounded-[28px] border border-gray-200 bg-white p-4 shadow-2xl overflow-y-auto max-h-[calc(100vh-128px)]' : 'w-full min-w-0 bg-white border-r border-[#E8E8E8] p-4 overflow-y-auto'}>
                 <div className="rounded-2xl overflow-hidden border border-[#12B76A]/20 shadow-sm">
                     <div className="bg-[#12B76A] px-4 py-3 text-white">
-                        <div className="text-xl font-black">效果示例</div>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="text-xl font-black">效果示例</div>
+                                {compact && <div className="mt-1 text-xs text-white/80">{previewTitle.title}</div>}
+                            </div>
+                            <div className="relative flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPreviewPreferenceMenu(prev => !prev)}
+                                    className="inline-flex items-center rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20 transition-colors"
+                                >
+                                    <Sliders size={13} className="mr-1.5" />
+                                    个性化设置
+                                </button>
+                                {compact && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowPreviewPreferenceMenu(false);
+                                            setIsPreviewPanelOpen(false);
+                                        }}
+                                        className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20 transition-colors"
+                                    >
+                                        收起
+                                    </button>
+                                )}
+                                {showPreviewPreferenceMenu && (
+                                    <div className="absolute right-0 top-[42px] z-20 w-[196px] rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
+                                        {[
+                                            { value: 'expanded' as PreviewDisplayPreference, label: '默认展开' },
+                                            { value: 'collapsed' as PreviewDisplayPreference, label: '默认收起' },
+                                        ].map(option => {
+                                            const active = currentPreviewPreference === option.value;
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => updatePreviewPreference(option.value)}
+                                                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${active ? 'bg-[#F0FDF4] text-[#00A35B]' : 'text-gray-500 hover:bg-gray-50 hover:text-[#1F2129]'}`}
+                                                >
+                                                    <span>{option.label}</span>
+                                                    {active && <Check size={14} />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                     <div className="p-4 bg-[#F8FAFC]">
-                        <div className="text-sm font-bold text-[#1F2129]">{previewTitle.title}</div>
-                        <div className="text-xs text-gray-500 mt-2 leading-5">{previewTitle.desc}</div>
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="text-sm font-bold text-[#1F2129]">{previewTitle.title}</div>
+                                <div className="text-xs text-gray-500 mt-2 leading-5">{previewTitle.desc}</div>
+                            </div>
+                            {!compact && (
+                                <div className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-gray-400 border border-gray-200">
+                                    {currentPreviewPreference === 'collapsed' ? '默认收起' : '默认展开'}
+                                </div>
+                            )}
+                        </div>
                         <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
                             {['p_img', 'p_name', 'p_list_desc'].includes(activePreviewField) && (
                                 <>
@@ -932,7 +2150,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                     <div className="mt-3">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className={`leading-5 ${activePreviewField === 'p_name' ? 'font-black text-[#12B76A]' : 'font-black text-[#1F2129]'}`}>{productName}</div>
-                                            <div className="text-[#12B76A] text-xs font-black">¥9.9起</div>
+                                            <div className="text-[#12B76A] text-xs font-black">¥{primarySpecPrice}起</div>
                                         </div>
                                         <div className={`mt-1 text-xs leading-5 ${activePreviewField === 'p_list_desc' ? 'text-[#12B76A] font-bold' : 'text-gray-500'}`}>{listDesc}</div>
                                         <div className="mt-3 flex flex-wrap gap-2">
@@ -989,10 +2207,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             { key: 'single' as const, label: '统一规格' },
                             { key: 'multi' as const, label: '多规格' },
                         ].map(option => (
-                            <label key={option.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <label
+                                key={option.key}
+                                className={`flex items-center gap-2 text-sm ${isWeightProduct && option.key === 'multi' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                            >
                                 <input
                                     type="radio"
                                     checked={specDisplayMode === option.key}
+                                    disabled={isWeightProduct && option.key === 'multi'}
                                     onChange={() => {
                                         setSpecDisplayMode(option.key);
                                         setActivePreviewField('s_specs');
@@ -1004,196 +2226,165 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         ))}
                     </div>
                 </div>
+                {isWeightProduct && (
+                    <div className="text-xs font-bold text-amber-600">称重商品不支持多规格，已自动切换为统一规格</div>
+                )}
             </div>
             <div className="relative">
-            <div className="overflow-x-auto">
-                        <table className="min-w-[3440px] w-full border-collapse">
-                    <thead className="bg-[#F7F8FA]">
-                        <tr className="text-left text-xs font-bold text-gray-500">
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[140px]">规格名称</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[190px]">基础价格</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[190px]">预估成本</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[190px]">市场价</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[220px]">商品条码</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[220px]">商品标识</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[220px]">商品规格码</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[220px]">商品编码</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[240px]">商品份量</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[260px]">库存设置</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[260px]">初始库存</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[180px]">库存预警</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[180px]">售卖状态</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[320px]">适用渠道</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[190px]">到店外带包装费</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[220px]">到店外带包装标识</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[190px]">外卖配送包装费</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[220px]">外卖配送包装标识</th>
-                            <th className="px-4 py-3 border-b border-gray-200 min-w-[130px]">规格图片</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {(specDisplayMode === 'single' ? specConfigRows.slice(0, 1) : specConfigRows).map((row, index) => (
-                            <tr key={row.id}>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <input onFocus={() => setActivePreviewField('s_specs')} value={specDisplayMode === 'single' ? '标准规格' : row.s_spec_name} onChange={e => updateSpecConfigRow(row.id, 's_spec_name', e.target.value)} className="q-form-input h-10" placeholder="规格名称" disabled={specDisplayMode === 'single' && index === 0} />
-                                </td>
-                                {(['s_spec_price', 's_spec_cost', 's_spec_market'] as const).map(key => (
-                                    <td key={key} className="px-4 py-4 border-b border-gray-100">
-                                        <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white h-12">
-                                            <button type="button" className="w-12 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, key, String(Math.max(0, Number(row[key] || 0) - 1)))}>-</button>
-                                            <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row[key]} onChange={e => updateSpecConfigRow(row.id, key, e.target.value)} className="flex-1 h-full text-center outline-none text-[#1F2129] font-bold border-x border-gray-100" />
-                                            <button type="button" className="w-12 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, key, String(Number(row[key] || 0) + 1))}>+</button>
-                                            <div className="w-12 h-full flex items-center justify-center text-gray-500 border-l border-gray-100">元</div>
-                                        </div>
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="relative">
-                                        <input maxLength={50} onFocus={() => setActivePreviewField('s_specs')} value={row.s_spec_barcode} onChange={e => updateSpecConfigRow(row.id, 's_spec_barcode', e.target.value)} className="q-form-input h-12 pr-12" placeholder="0/50" />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row.s_spec_barcode.length}/50</span>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="relative">
-                                        <input maxLength={50} onFocus={() => setActivePreviewField('s_specs')} value={row.s_spec_mark} onChange={e => updateSpecConfigRow(row.id, 's_spec_mark', e.target.value)} className="q-form-input h-12 pr-12" placeholder="0/50" />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row.s_spec_mark.length}/50</span>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="relative">
-                                        <input maxLength={50} onFocus={() => setActivePreviewField('s_specs')} value={row.s_spec_sku_code} onChange={e => updateSpecConfigRow(row.id, 's_spec_sku_code', e.target.value)} className="q-form-input h-12 pr-12" placeholder="0/50" />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row.s_spec_sku_code.length}/50</span>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="relative">
-                                        <input maxLength={50} onFocus={() => setActivePreviewField('s_specs')} value={row.s_spec_code} onChange={e => updateSpecConfigRow(row.id, 's_spec_code', e.target.value)} className="q-form-input h-12 pr-12" placeholder="0/50" />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row.s_spec_code.length}/50</span>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white h-12 min-w-[140px]">
-                                            <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_amount', Math.max(0, Number(row.s_spec_amount || 0) - 0.5).toFixed(2))}>-</button>
-                                            <input onFocus={() => setActivePreviewField('s_specs')} type="number" step="0.01" value={row.s_spec_amount} onChange={e => updateSpecConfigRow(row.id, 's_spec_amount', e.target.value)} className="flex-1 h-full text-center outline-none font-bold border-x border-gray-100" />
-                                            <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_amount', (Number(row.s_spec_amount || 0) + 0.5).toFixed(2))}>+</button>
-                                        </div>
-                                        <select value={row.s_spec_amount_unit} onChange={e => updateSpecConfigRow(row.id, 's_spec_amount_unit', e.target.value)} className="q-form-select h-12 min-w-[110px]">
-                                            {['克', '千克', '份', '个'].map(option => <option key={option} value={option}>{option}</option>)}
-                                        </select>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                                            <input type="radio" checked={row.s_spec_inventory_mode === 'unlimited'} onChange={() => updateSpecConfigRow(row.id, 's_spec_inventory_mode', 'unlimited')} className="text-[#00C06B] focus:ring-[#00C06B]" />
-                                            不限库存
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                                            <input type="radio" checked={row.s_spec_inventory_mode === 'custom'} onChange={() => updateSpecConfigRow(row.id, 's_spec_inventory_mode', 'custom')} className="text-[#00C06B] focus:ring-[#00C06B]" />
-                                            自定义库存
-                                        </label>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white h-12 min-w-[130px]">
-                                            <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_initial_stock', String(Math.max(0, Number(row.s_spec_initial_stock || 0) - 1)))}>-</button>
-                                            <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row.s_spec_initial_stock} onChange={e => updateSpecConfigRow(row.id, 's_spec_initial_stock', e.target.value)} className="flex-1 h-full text-center outline-none font-bold border-x border-gray-100" />
-                                            <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_initial_stock', String(Number(row.s_spec_initial_stock || 0) + 1))}>+</button>
-                                        </div>
-                                        <span className="text-sm text-gray-400">最大:</span>
-                                        <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white h-12 min-w-[130px]">
-                                            <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_max_stock', String(Math.max(0, Number(row.s_spec_max_stock || 0) - 1)))}>-</button>
-                                            <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row.s_spec_max_stock} onChange={e => updateSpecConfigRow(row.id, 's_spec_max_stock', e.target.value)} className="flex-1 h-full text-center outline-none font-bold border-x border-gray-100" />
-                                            <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_max_stock', String(Number(row.s_spec_max_stock || 0) + 1))}>+</button>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white h-12 min-w-[120px]">
-                                        <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_warning_stock', String(Math.max(0, Number(row.s_spec_warning_stock || 0) - 1)))}>-</button>
-                                        <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row.s_spec_warning_stock} onChange={e => updateSpecConfigRow(row.id, 's_spec_warning_stock', e.target.value)} className="flex-1 h-full text-center outline-none font-bold border-x border-gray-100" />
-                                        <button type="button" className="w-10 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, 's_spec_warning_stock', String(Number(row.s_spec_warning_stock || 0) + 1))}>+</button>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => updateSpecConfigRow(row.id, 's_spec_sale_status', 'on')}
-                                            className={`px-3 py-2 rounded-xl text-xs font-bold border ${row.s_spec_sale_status === 'on' ? 'border-[#00C06B] bg-[#F0FDF4] text-[#00A35B]' : 'border-gray-200 text-gray-500'}`}
-                                        >
-                                            上架
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => updateSpecConfigRow(row.id, 's_spec_sale_status', 'off')}
-                                            className={`px-3 py-2 rounded-xl text-xs font-bold border ${row.s_spec_sale_status === 'off' ? 'border-[#111827] bg-[#F3F4F6] text-[#111827]' : 'border-gray-200 text-gray-500'}`}
-                                        >
-                                            下架
-                                        </button>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <div className="flex flex-wrap gap-2">
-                                        {CHANNEL_OPTIONS.map(channel => {
-                                            const active = row.s_spec_channels.includes(channel.key);
-                                            return (
-                                                <button
-                                                    key={channel.key}
-                                                    type="button"
-                                                    onClick={() => updateSpecConfigRow(
-                                                        row.id,
-                                                        's_spec_channels',
-                                                        active
-                                                            ? row.s_spec_channels.filter(item => item !== channel.key)
-                                                            : [...row.s_spec_channels, channel.key]
-                                                    )}
-                                                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${active ? 'border-[#00C06B] bg-[#F0FDF4] text-[#00A35B]' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                                                >
-                                                    {channel.label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </td>
-                                {(['s_spec_store_pack_fee', 's_spec_take_pack_fee'] as const).map(key => (
-                                    <td key={key} className="px-4 py-4 border-b border-gray-100">
-                                        <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white h-12">
-                                            <button type="button" className="w-12 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, key, String(Math.max(0, Number(row[key] || 0) - 1)))}>-</button>
-                                            <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row[key]} onChange={e => updateSpecConfigRow(row.id, key, e.target.value)} className="flex-1 h-full text-center outline-none text-[#1F2129] font-bold border-x border-gray-100" />
-                                            <button type="button" className="w-12 h-full text-gray-400 hover:bg-gray-50" onClick={() => updateSpecConfigRow(row.id, key, String(Number(row[key] || 0) + 1))}>+</button>
-                                            <div className="w-12 h-full flex items-center justify-center text-gray-500 border-l border-gray-100">元</div>
-                                        </div>
-                                    </td>
-                                ))}
-                                {(['s_spec_store_pack_mark', 's_spec_take_pack_mark'] as const).map(key => (
-                                    <td key={key} className="px-4 py-4 border-b border-gray-100">
-                                        <div className="relative">
-                                            <input maxLength={128} onFocus={() => setActivePreviewField('s_specs')} value={row[key]} onChange={e => updateSpecConfigRow(row.id, key, e.target.value)} className="q-form-input h-12 pr-14" placeholder="0/128" />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row[key].length}/128</span>
-                                        </div>
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 border-b border-gray-100">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setActivePreviewField('s_specs');
-                                            updateSpecConfigRow(row.id, 's_spec_img', row.s_spec_img ? '' : '已上传');
-                                        }}
-                                        className={`w-[84px] h-[68px] rounded-xl border text-xs font-bold ${row.s_spec_img ? 'border-[#00C06B] bg-[#F0FDF4] text-[#00A35B]' : 'border-dashed border-gray-200 text-gray-400 hover:border-[#00C06B]'}`}
-                                    >
-                                        {row.s_spec_img ? '已上传' : '上传图片'}
-                                    </button>
-                                </td>
+                <div className="overflow-x-auto">
+                    <table className="min-w-[2860px] w-full border-collapse">
+                        <thead className="bg-[#F7F8FA]">
+                            <tr className="text-left text-xs font-bold text-gray-500">
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[120px]">规格名称</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">基础价格</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">预估成本</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">市场价</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">商品条码</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">商品标识</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">商品规格码</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">商品编码</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">商品份量</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[190px]">库存设置</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[220px]">初始库存</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">到店外带包装费</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">到店外带包装标识</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[140px]">外卖配送包装费</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[180px]">外卖配送包装标识</th>
+                                <th className="px-3 py-3 border-b border-gray-200 min-w-[110px]">规格图片</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white via-white/90 to-transparent" />
+                        </thead>
+                        <tbody>
+                            {(specDisplayMode === 'single' ? specConfigRows.slice(0, 1) : specConfigRows).map((row, index) => (
+                                <tr key={row.id}>
+                                    <td className="px-3 py-3 border-b border-gray-100">
+                                        <input
+                                            onFocus={() => setActivePreviewField('s_specs')}
+                                            value={specDisplayMode === 'single' ? '标准规格' : row.s_spec_name}
+                                            onChange={e => updateSpecConfigRow(row.id, 's_spec_name', e.target.value)}
+                                            className="q-form-input h-10"
+                                            placeholder="规格名称"
+                                            disabled={specDisplayMode === 'single' && index === 0}
+                                        />
+                                    </td>
+                                    {(['s_spec_price', 's_spec_cost', 's_spec_market'] as const).map(key => (
+                                        <td key={key} className="px-3 py-3 border-b border-gray-100">
+                                            <div className="relative">
+                                                <input
+                                                    onFocus={() => setActivePreviewField('s_specs')}
+                                                    type="number"
+                                                    value={row[key]}
+                                                    onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
+                                                    className="q-form-input h-10 pr-8 text-center font-bold text-[#1F2129]"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">元</span>
+                                            </div>
+                                        </td>
+                                    ))}
+                                    {(['s_spec_barcode', 's_spec_mark', 's_spec_sku_code', 's_spec_code'] as const).map(key => (
+                                        <td key={key} className="px-3 py-3 border-b border-gray-100">
+                                            <div className="relative">
+                                                <input
+                                                    maxLength={50}
+                                                    onFocus={() => setActivePreviewField('s_specs')}
+                                                    value={row[key]}
+                                                    onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
+                                                    className="q-form-input h-10 pr-10"
+                                                    placeholder="请输入"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row[key].length}/50</span>
+                                            </div>
+                                        </td>
+                                    ))}
+                                    <td className="px-3 py-3 border-b border-gray-100">
+                                        <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-2">
+                                            <input
+                                                onFocus={() => setActivePreviewField('s_specs')}
+                                                type="number"
+                                                step="0.01"
+                                                value={row.s_spec_amount}
+                                                onChange={e => updateSpecConfigRow(row.id, 's_spec_amount', e.target.value)}
+                                                className="q-form-input h-10 text-center font-bold"
+                                            />
+                                            <select
+                                                value={row.s_spec_amount_unit}
+                                                onChange={e => updateSpecConfigRow(row.id, 's_spec_amount_unit', e.target.value)}
+                                                className="q-form-select h-10 min-w-[88px]"
+                                            >
+                                                {['克', '千克', '份', '个'].map(option => <option key={option} value={option}>{option}</option>)}
+                                            </select>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-3 border-b border-gray-100">
+                                        <div className="space-y-1.5">
+                                            <label className="flex items-center gap-2 text-xs text-gray-600">
+                                                <input type="radio" checked={row.s_spec_inventory_mode === 'unlimited'} onChange={() => updateSpecConfigRow(row.id, 's_spec_inventory_mode', 'unlimited')} className="text-[#00C06B] focus:ring-[#00C06B]" />
+                                                不限库存
+                                            </label>
+                                            <label className="flex items-center gap-2 text-xs text-gray-600">
+                                                <input type="radio" checked={row.s_spec_inventory_mode === 'custom'} onChange={() => updateSpecConfigRow(row.id, 's_spec_inventory_mode', 'custom')} className="text-[#00C06B] focus:ring-[#00C06B]" />
+                                                自定义库存
+                                            </label>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-3 border-b border-gray-100">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <div className="mb-1 text-[11px] text-gray-400">初始</div>
+                                                <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row.s_spec_initial_stock} onChange={e => updateSpecConfigRow(row.id, 's_spec_initial_stock', e.target.value)} className="q-form-input h-10 text-center font-bold" />
+                                            </div>
+                                            <div>
+                                                <div className="mb-1 text-[11px] text-gray-400">最大</div>
+                                                <input onFocus={() => setActivePreviewField('s_specs')} type="number" value={row.s_spec_max_stock} onChange={e => updateSpecConfigRow(row.id, 's_spec_max_stock', e.target.value)} className="q-form-input h-10 text-center font-bold" />
+                                            </div>
+                                        </div>
+                                    </td>
+                                    {(['s_spec_store_pack_fee', 's_spec_take_pack_fee'] as const).map(key => (
+                                        <td key={key} className="px-3 py-3 border-b border-gray-100">
+                                            <div className="relative">
+                                                <input
+                                                    onFocus={() => setActivePreviewField('s_specs')}
+                                                    type="number"
+                                                    value={row[key]}
+                                                    onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
+                                                    className="q-form-input h-10 pr-8 text-center font-bold text-[#1F2129]"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">元</span>
+                                            </div>
+                                        </td>
+                                    ))}
+                                    {(['s_spec_store_pack_mark', 's_spec_take_pack_mark'] as const).map(key => (
+                                        <td key={key} className="px-3 py-3 border-b border-gray-100">
+                                            <div className="relative">
+                                                <input
+                                                    maxLength={128}
+                                                    onFocus={() => setActivePreviewField('s_specs')}
+                                                    value={row[key]}
+                                                    onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
+                                                    className="q-form-input h-10 pr-12"
+                                                    placeholder="请输入"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{row[key].length}/128</span>
+                                            </div>
+                                        </td>
+                                    ))}
+                                    <td className="px-3 py-3 border-b border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setActivePreviewField('s_specs');
+                                                updateSpecConfigRow(row.id, 's_spec_img', row.s_spec_img ? '' : '已上传');
+                                            }}
+                                            className={`w-[72px] h-[56px] rounded-xl border text-xs font-bold ${row.s_spec_img ? 'border-[#00C06B] bg-[#F0FDF4] text-[#00A35B]' : 'border-dashed border-gray-200 text-gray-400 hover:border-[#00C06B]'}`}
+                                        >
+                                            {row.s_spec_img ? '已上传' : '上传图片'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white via-white/90 to-transparent" />
             </div>
             <div className="px-5 py-3 border-t border-gray-100 bg-[#FAFAFA]">
                 <div className="rounded-xl border border-[#D1FAE5] bg-[#F0FDF4] px-4 py-3 text-xs font-bold text-[#166534]">
@@ -1203,53 +2394,455 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         </div>
     );
 
-    const renderMethodAddonPanel = () => (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {isFieldEnabled('m_methods') && (
-                <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="text-sm font-bold text-[#1F2129]">做法配置</div>
-                            <div className="text-xs text-gray-400 mt-1">可配置做法名称、加价和编码，保存后展示在商品详情页。</div>
+    const renderMethodAddonPanel = () => {
+        const addonEmptyTipEnabled = !!dynamicFormData.a_addon_empty_tip_enabled;
+        const pointsExchangeEnabled = !!dynamicFormData.p_points_exchange_rule;
+        const selectedMethodCount = methodConfigRows.length;
+        const selectedAddonCount = addonConfigRows.length;
+        const methodGroups = Array.from(new Set(methodConfigRows.map(row => row.groupName)));
+        const addonGroups = Array.from(new Set(addonConfigRows.map(row => row.groupName)));
+
+        const updateMethodRow = (id: string, key: keyof MethodConfigRow, value: string | boolean) => {
+            setMethodConfigRows(prev => prev.map(row => row.id === id ? { ...row, [key]: value } : row));
+        };
+
+        const removeMethodRow = (id: string) => {
+            setMethodConfigRows(prev => prev.filter(row => row.id !== id));
+        };
+
+        const updateAddonRow = (id: string, key: keyof AddonConfigRow, value: string) => {
+            setAddonConfigRows(prev => prev.map(row => row.id === id ? { ...row, [key]: value } : row));
+        };
+
+        const removeAddonRow = (id: string) => {
+            setAddonConfigRows(prev => prev.filter(row => row.id !== id));
+        };
+
+        return (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-6">
+                {isFieldEnabled('m_methods') && (
+                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">做法</div>
+                        <div className="space-y-4">
+                            <button
+                                type="button"
+                                onClick={openMethodPicker}
+                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                            >
+                                <Plus size={16} className="mr-2" />
+                                选择做法
+                            </button>
+                            {selectedMethodCount > 0 && (
+                                <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                                    <table className="w-full border-collapse table-fixed">
+                                        <thead className="bg-[#F7F8FA]">
+                                            <tr className="text-left text-xs font-bold text-gray-500">
+                                                <th className="w-[100px] px-3 py-3 border-b border-gray-200">做法</th>
+                                                <th className="w-[90px] px-3 py-3 border-b border-gray-200">做法值</th>
+                                                <th className="w-[76px] px-3 py-3 border-b border-gray-200">同步</th>
+                                                <th className="w-[96px] px-3 py-3 border-b border-gray-200">价格</th>
+                                                <th className="w-[100px] px-3 py-3 border-b border-gray-200">标识码</th>
+                                                <th className="w-[100px] px-3 py-3 border-b border-gray-200">备注</th>
+                                                <th className="w-[110px] px-3 py-3 border-b border-gray-200">温馨提示</th>
+                                                <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {methodGroups.map(groupName => {
+                                                const groupRows = methodConfigRows.filter(row => row.groupName === groupName);
+                                                return groupRows.map((row, index) => (
+                                                    <tr key={row.id} className="align-top text-[13px] text-[#1F2129]">
+                                                        {index === 0 && (
+                                                            <td rowSpan={groupRows.length} className="px-3 py-3 border-b border-gray-100 font-bold bg-white">
+                                                                {groupName}
+                                                            </td>
+                                                        )}
+                                                        <td className="px-3 py-3 border-b border-gray-100">{row.m_method_name}</td>
+                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                            <Switch active={row.m_method_sync} onClick={() => updateMethodRow(row.id, 'm_method_sync', !row.m_method_sync)} />
+                                                        </td>
+                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                            <div className="relative">
+                                                                <input
+                                                                    value={row.m_method_markup}
+                                                                    onChange={e => updateMethodRow(row.id, 'm_method_markup', e.target.value)}
+                                                                    className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                                                                />
+                                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">元</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                            <input
+                                                                value={row.m_method_code}
+                                                                onChange={e => updateMethodRow(row.id, 'm_method_code', e.target.value)}
+                                                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                            <input
+                                                                value={row.m_method_remark}
+                                                                onChange={e => updateMethodRow(row.id, 'm_method_remark', e.target.value)}
+                                                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                            <input
+                                                                value={row.m_method_tip}
+                                                                onChange={e => updateMethodRow(row.id, 'm_method_tip', e.target.value)}
+                                                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                            <button type="button" onClick={() => removeMethodRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">
+                                                                删除
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
-                        <button type="button" onClick={() => setActivePreviewField('m_methods')} className="text-xs font-bold text-[#00A35B]">查看效果</button>
                     </div>
-                    <div className="mt-4 space-y-3">
-                        {methodConfigRows.map(row => (
-                            <div key={row.id} className="grid grid-cols-3 gap-3">
-                                <input onFocus={() => setActivePreviewField('m_methods')} className="q-form-input" value={row.m_method_name} onChange={e => updateMethodConfigRow(row.id, 'm_method_name', e.target.value)} placeholder="做法名称" />
-                                <input onFocus={() => setActivePreviewField('m_methods')} type="number" className="q-form-input" value={row.m_method_markup} onChange={e => updateMethodConfigRow(row.id, 'm_method_markup', e.target.value)} placeholder="做法加价" />
-                                <input onFocus={() => setActivePreviewField('m_methods')} className="q-form-input" value={row.m_method_code} onChange={e => updateMethodConfigRow(row.id, 'm_method_code', e.target.value)} placeholder="做法编码" />
+                )}
+
+                {isFieldEnabled('a_addons') && (
+                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">加料</div>
+                        <div className="space-y-4">
+                            <button
+                                type="button"
+                                onClick={openAddonPicker}
+                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                            >
+                                <Plus size={16} className="mr-2" />
+                                选择加料
+                            </button>
+                            <div className="flex flex-wrap items-center gap-4">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm text-[#1F2129]">加料配置:</span>
+                                    <select className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2129] outline-none focus:border-[#00C06B]">
+                                        <option>限制所有加料购买总量</option>
+                                        <option>限制单个加料购买量</option>
+                                    </select>
+                                </div>
+                                <label className="flex items-center gap-2 text-sm text-[#00A35B] font-bold">
+                                    <input type="radio" name="addonRule" defaultChecked className="accent-[#00C06B]" />
+                                    点餐时数量不限
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-gray-500">
+                                    <input type="radio" name="addonRule" className="accent-[#00C06B]" />
+                                    点餐时起购限购数
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-gray-500">
+                                    <input type="radio" name="addonRule" className="accent-[#00C06B]" />
+                                    点餐时必选
+                                </label>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-            {isFieldEnabled('a_addons') && (
-                <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="text-sm font-bold text-[#1F2129]">加料配置</div>
-                            <div className="text-xs text-gray-400 mt-1">加料会作为附加选项展示，支持单独配置与复用已有加料库。</div>
+                            {selectedAddonCount > 0 && (
+                                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                                    {addonGroups.map(groupName => (
+                                        <div key={groupName} className="space-y-3">
+                                            <div className="text-sm font-bold text-[#1F2129]">加料商品类型：{groupName}</div>
+                                            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                                                <table className="w-full border-collapse table-fixed">
+                                                    <thead className="bg-[#F7F8FA]">
+                                                        <tr className="text-left text-xs font-bold text-gray-500">
+                                                            <th className="w-[180px] px-3 py-3 border-b border-gray-200">加料商品名称</th>
+                                                            <th className="w-[150px] px-3 py-3 border-b border-gray-200">加料商品编码</th>
+                                                            <th className="w-[88px] px-3 py-3 border-b border-gray-200">限购</th>
+                                                            <th className="w-[88px] px-3 py-3 border-b border-gray-200">初始价格</th>
+                                                            <th className="w-[92px] px-3 py-3 border-b border-gray-200">规格加价</th>
+                                                            <th className="w-[104px] px-3 py-3 border-b border-gray-200">商品状态</th>
+                                                            <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {addonConfigRows.filter(row => row.groupName === groupName).map(row => (
+                                                            <tr key={row.id} className="align-top text-[13px] text-[#1F2129]">
+                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                    <div className="font-bold">{row.addonName}</div>
+                                                                    <div className="mt-1 text-[11px] leading-5 text-gray-400">ID: {row.addonCode}</div>
+                                                                </td>
+                                                                <td className="px-3 py-3 border-b border-gray-100 text-gray-400 break-all">{row.addonCode || '/'}</td>
+                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                    <input value={row.addonLimit} onChange={e => updateAddonRow(row.id, 'addonLimit', e.target.value)} placeholder="/" className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
+                                                                </td>
+                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                    <input value={row.addonPrice} onChange={e => updateAddonRow(row.id, 'addonPrice', e.target.value)} className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
+                                                                </td>
+                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                    <button type="button" className="text-[13px] font-bold text-[#2563EB] hover:text-[#1D4ED8]">
+                                                                        {row.addonSpecPrice ? row.addonSpecPrice : '未设置'}
+                                                                    </button>
+                                                                </td>
+                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
+                                                                        {row.addonStatus === 'on' ? '启用中' : '已停用'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                    <button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">
+                                                                        删除
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm text-[#1F2129]">加料未点提示:</span>
+                                    <Switch active={addonEmptyTipEnabled} onClick={() => setDynamicFormData(prev => ({ ...prev, a_addon_empty_tip_enabled: !addonEmptyTipEnabled }))} />
+                                    <span className="text-sm text-gray-400">当加料未点时，将展示该提示信息</span>
+                                </div>
+                                <div className="rounded-xl bg-[#FAFAFA] px-4 py-3 text-xs leading-6 text-gray-400">
+                                    <div>说明：</div>
+                                    <div>1、如果单个加料类型的加料多于 7 个，在小程序商品详情页会折叠显示，可前往加料折叠设置中调整。</div>
+                                    <div>2、如果单个加料类型下所有加料都设置限购一份，该加料类型下加料在小程序端将不展示加料“+ -”选择。</div>
+                                    <div>3、如果品牌下所有加料都限购一份，可快速统一设置加料小程序显示设置后，小程序端所有加料将不展示加料“+ -”选择。</div>
+                                </div>
+                            </div>
                         </div>
-                        <button type="button" onClick={() => setActivePreviewField('a_addons')} className="text-xs font-bold text-[#00A35B]">查看效果</button>
                     </div>
-                    <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setActivePreviewField('a_addons');
-                                setDynamicFormData(prev => ({ ...prev, a_addons: prev.a_addons ? '' : '奶油顶, 巧克力牌' }));
-                            }}
-                            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm text-gray-500 hover:border-[#00C06B] hover:text-[#00C06B] transition-colors"
-                        >
-                            {dynamicFormData.a_addons ? '已选择 2 项加料，点击可清空' : '点击选择加料'}
+                )}
+
+                {(specDisplayMode === 'multi' || selectedMethodCount > 0 || selectedAddonCount > 0) && (
+                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">属性排序</div>
+                        <div>{renderAttributeSortPanel()}</div>
+                    </div>
+                )}
+
+                {isFieldEnabled('p_points_exchange_rule') && (
+                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">
+                            {isPointsRuleCollapsed ? '' : '积分兑换规则'}
+                        </div>
+                        <div className="space-y-4">
+                            {isPointsRuleCollapsed ? (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPointsRuleCollapsed(false)}
+                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                    >
+                                        展开
+                                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                                    </button>
+                                    <span className="inline-flex items-center rounded-full bg-[#F0FDF4] px-3 py-1 text-sm font-bold text-[#00A35B]">
+                                        积分兑换规则
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-4 space-y-3">
+                                        <div className="flex items-center gap-3">
+                                            <Switch active={pointsExchangeEnabled} onClick={() => setDynamicFormData(prev => ({ ...prev, p_points_exchange_rule: !pointsExchangeEnabled }))} />
+                                            <span className={`text-sm font-medium ${pointsExchangeEnabled ? 'text-[#1F2129]' : 'text-gray-400'}`}>
+                                                {pointsExchangeEnabled ? '已开启积分兑换规则' : '未开启积分兑换规则'}
+                                            </span>
+                                        </div>
+                                        <div className="text-sm leading-6 text-gray-400">
+                                            积分商城可选择该商品，如果商品同步到门店，点单页支持纯积分/积分+金额购买商品。
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPointsRuleCollapsed(true)}
+                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                    >
+                                        收起
+                                        <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderMethodPickerModal = () => {
+        if (!showMethodPickerModal) return null;
+        const activeGroup = METHOD_LIBRARY.find(group => group.id === activeMethodGroupId) || METHOD_LIBRARY[0];
+        const selectedMethodLabels = tempMethodSelections.map(item => item.split(':')[1]);
+
+        return (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
+                <div className="w-full max-w-[1020px] h-[660px] rounded-[24px] bg-white shadow-2xl overflow-hidden flex flex-col">
+                    <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                        <div className="text-xl font-black text-[#1F2129]">选择做法</div>
+                        <button type="button" onClick={() => setShowMethodPickerModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200">
+                            <ChevronDown size={18} className="rotate-45" />
+                        </button>
+                    </div>
+                    <div className="flex-1 grid grid-cols-[220px_1fr_260px] min-h-0">
+                        <div className="border-r border-gray-100 p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>做法</span>
+                                <button type="button" className="text-[#00A35B]">新增做法</button>
+                            </div>
+                            <div className="space-y-1.5">
+                                {METHOD_LIBRARY.map(group => (
+                                    <button
+                                        key={group.id}
+                                        type="button"
+                                        onClick={() => setActiveMethodGroupId(group.id)}
+                                        className={`w-full rounded-xl px-4 py-3 text-left text-sm transition-colors ${
+                                            group.id === activeMethodGroupId ? 'bg-[#F0FDF4] font-bold text-[#00A35B]' : 'text-[#1F2129] hover:bg-[#F7F8FA]'
+                                        }`}
+                                    >
+                                        {group.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="border-r border-gray-100 p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>做法值</span>
+                                <button type="button" className="text-[#00A35B]">新增做法值</button>
+                            </div>
+                            <div className="space-y-3">
+                                {activeGroup.values.map(value => {
+                                    const selectionKey = `${activeGroup.name}:${value}`;
+                                    const checked = tempMethodSelections.includes(selectionKey);
+                                    return (
+                                        <label key={selectionKey} className="flex items-center gap-3 text-sm text-[#1F2129]">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => setTempMethodSelections(prev => checked ? prev.filter(item => item !== selectionKey) : [...prev, selectionKey])}
+                                                className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                            />
+                                            <span>{value}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>已选择({selectedMethodLabels.length})</span>
+                                <button type="button" onClick={() => setTempMethodSelections([])} className="text-[#00A35B]">清空</button>
+                            </div>
+                            <div className="space-y-2">
+                                {selectedMethodLabels.length > 0 ? selectedMethodLabels.map(label => (
+                                    <div key={label} className="rounded-xl bg-[#FAFAFA] px-3 py-2 text-sm text-[#1F2129]">
+                                        {label}
+                                    </div>
+                                )) : <div className="text-sm text-gray-400">暂未选择做法</div>}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="px-8 py-5 border-t border-gray-100 bg-white flex justify-end gap-3">
+                        <button type="button" onClick={() => setShowMethodPickerModal(false)} className="px-5 py-2 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50">
+                            取消
+                        </button>
+                        <button type="button" onClick={confirmMethodPicker} className="px-5 py-2 rounded-lg bg-[#00C06B] text-sm font-bold text-white hover:bg-[#00A35B]">
+                            确定
                         </button>
                     </div>
                 </div>
-            )}
-        </div>
-    );
+            </div>
+        );
+    };
+
+    const renderAddonPickerModal = () => {
+        if (!showAddonPickerModal) return null;
+        const activeGroup = ADDON_LIBRARY.find(group => group.id === activeAddonGroupId) || ADDON_LIBRARY[0];
+        const selectedAddonLabels = tempAddonSelections.map(item => item.split(':')[1]);
+
+        return (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
+                <div className="w-full max-w-[1020px] h-[660px] rounded-[24px] bg-white shadow-2xl overflow-hidden flex flex-col">
+                    <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                        <div className="text-xl font-black text-[#1F2129]">添加加料商品</div>
+                        <button type="button" onClick={() => setShowAddonPickerModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200">
+                            <ChevronDown size={18} className="rotate-45" />
+                        </button>
+                    </div>
+                    <div className="flex-1 grid grid-cols-[220px_1fr_260px] min-h-0">
+                        <div className="border-r border-gray-100 p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>加料组</span>
+                                <button type="button" className="text-[#00A35B]">新增加料组</button>
+                            </div>
+                            <div className="space-y-1.5">
+                                {ADDON_LIBRARY.map(group => (
+                                    <button
+                                        key={group.id}
+                                        type="button"
+                                        onClick={() => setActiveAddonGroupId(group.id)}
+                                        className={`w-full rounded-xl px-4 py-3 text-left text-sm transition-colors ${
+                                            group.id === activeAddonGroupId ? 'bg-[#F0FDF4] font-bold text-[#00A35B]' : 'text-[#1F2129] hover:bg-[#F7F8FA]'
+                                        }`}
+                                    >
+                                        {group.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="border-r border-gray-100 p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>加料商品</span>
+                                <button type="button" className="text-[#00A35B]">新增加料商品</button>
+                            </div>
+                            <div className="space-y-3">
+                                {activeGroup.items.map(item => {
+                                    const selectionKey = `${activeGroup.name}:${item.name}`;
+                                    const checked = tempAddonSelections.includes(selectionKey);
+                                    return (
+                                        <label key={selectionKey} className="flex items-start gap-3 text-sm text-[#1F2129]">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => setTempAddonSelections(prev => checked ? prev.filter(row => row !== selectionKey) : [...prev, selectionKey])}
+                                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                            />
+                                            <div>
+                                                <div>{item.name}</div>
+                                                <div className="mt-1 text-xs text-gray-400">价格：{item.price}</div>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="p-4 overflow-y-auto">
+                            <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
+                                <span>已选择({selectedAddonLabels.length})</span>
+                                <button type="button" onClick={() => setTempAddonSelections([])} className="text-[#00A35B]">清空</button>
+                            </div>
+                            <div className="space-y-2">
+                                {selectedAddonLabels.length > 0 ? selectedAddonLabels.map(label => (
+                                    <div key={label} className="rounded-xl bg-[#FAFAFA] px-3 py-2 text-sm text-[#1F2129]">
+                                        {label}
+                                    </div>
+                                )) : <div className="text-sm text-gray-400">暂未选择加料</div>}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="px-8 py-5 border-t border-gray-100 bg-white flex justify-end gap-3">
+                        <button type="button" onClick={() => setShowAddonPickerModal(false)} className="px-5 py-2 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50">
+                            取消
+                        </button>
+                        <button type="button" onClick={confirmAddonPicker} className="px-5 py-2 rounded-lg bg-[#00C06B] text-sm font-bold text-white hover:bg-[#00A35B]">
+                            确定
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const [selectedTemplateId, setSelectedTemplateId] = useState('template-1');
 
@@ -1582,6 +3175,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                 <div className="ml-4 flex shrink-0 items-center space-x-3">
                     {pageView === 'form' ? (
                         <>
+                            {isCompactPreview && (
+                                <button
+                                    type="button"
+                                    onClick={togglePreviewPanel}
+                                    className="px-4 py-2 border border-gray-200 bg-white text-gray-600 font-bold rounded-lg hover:bg-gray-50 hover:border-[#00C06B] hover:text-[#00A35B] transition-colors text-sm flex items-center"
+                                >
+                                    <ImageIcon size={15} className="mr-2" />
+                                    {isPreviewPanelOpen ? '收起小程序效果' : '查看小程序效果'}
+                                </button>
+                            )}
                             <button onClick={onClose} className="px-5 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm">
                                 取消
                             </button>
@@ -1596,10 +3199,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                 </div>
             </div>
 
-            <div className="flex-1 flex overflow-hidden min-w-0">
-                {pageView === 'form' && (
+            <div className="relative flex-1 flex overflow-hidden min-w-0">
+                {pageView === 'form' && !isCompactPreview && (
                     <div className="w-[300px] bg-white border-r border-[#E8E8E8] shrink-0 flex flex-col">
                         {renderPreviewPanel()}
+                    </div>
+                )}
+
+                {pageView === 'form' && isCompactPreview && isPreviewPanelOpen && (
+                    <div className="pointer-events-none fixed right-6 top-[92px] bottom-6 z-30 flex items-start">
+                        <div className="pointer-events-auto">
+                            {renderPreviewPanel(true)}
+                        </div>
                     </div>
                 )}
 
@@ -1697,29 +3308,26 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                         ))}
                                     </div>
                                 </div>
-                                <div className="px-5 py-3 bg-[#FCFCFD]">
-                                    <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-                                        <div className="min-w-0">
-                                            <div className="text-sm font-black text-[#1F2129]">创建进度</div>
-                                            <div className="text-xs text-gray-400 mt-0.5">先补齐必填项，再按需完善展示配置。</div>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                                            <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-[#1F2129]">
-                                                已完成 {completionSummary.completed}/{completionSummary.total}
+                                <div className="px-5 py-2.5 bg-[#FCFCFD]">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
+                                            <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-[#1F2129]">
+                                                {completionSummary.completed}/{completionSummary.total}
                                             </div>
                                             {requiredMissingItems.length > 0 ? (
-                                                <div className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700">
+                                                <div className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">
                                                     待完善 {requiredMissingItems.length} 项
                                                 </div>
                                             ) : (
-                                                <div className="inline-flex items-center rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-2.5 py-1.5 text-xs font-bold text-[#166534]">
-                                                    <CheckCircle2 size={12} className="mr-1.5" />
-                                                    可以直接保存
+                                                <div className="inline-flex items-center rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-2 py-1 text-[11px] font-bold text-[#166534]">
+                                                    <CheckCircle2 size={12} className="mr-1" />
+                                                    可保存
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-                                    <div className="mt-2.5 flex items-center gap-3">
+                                    <div className="mt-2 flex items-center gap-2">
                                         <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
                                             <div
                                                 className="h-full rounded-full bg-[#00C06B] transition-all"
@@ -1730,7 +3338,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             {completionSummary.total === 0 ? '100%' : `${Math.round((completionSummary.completed / completionSummary.total) * 100)}%`}
                                         </div>
                                     </div>
-                                    <div className="mt-2.5 flex flex-wrap gap-2">
+                                    <div className="mt-2 flex flex-wrap gap-2">
                                         {requiredMissingItems.length > 0 ? requiredMissingItems.slice(0, 3).map(item => (
                                             <button
                                                 key={item.key}
@@ -1759,8 +3367,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                         )}
                                     </div>
                                     {saveAttempted && requiredMissingItems.length > 0 && (
-                                        <div className="mt-2.5 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
-                                            仍有 {requiredMissingItems.length} 项必填信息未完成，保存前请先补齐。
+                                        <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
+                                            仍有 {requiredMissingItems.length} 项必填信息未完成。
                                         </div>
                                     )}
                                 </div>
@@ -1768,16 +3376,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Basic Section */}
-                        <div id="basic" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6">
+                        <div id="basic" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-5">
                             <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
-                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => visibleFieldIds.has(f.id) && f.module === 'base').map(field => {
-                                    const isFullWidth = ['p_rich_desc', 'p_list_desc', 'p_img', 'p_desc_tags', 'p_order_tags'].includes(field.id) || field.type === 'textarea' || field.type === 'rich_text';
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
+                                {primaryBasicFields.map(field => {
+                                    const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
                                     const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
                                     return (
                                         <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
                                             <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
-                                                <FormRow label={field.label} required={isRequired} description={field.description}>
+                                                <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
                                                     {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
                                                 </FormRow>
                                             </div>
@@ -1785,6 +3393,58 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                     );
                                 })}
                             </div>
+                            {optionalBasicFields.length > 0 && (
+                                <div className="pt-2">
+                                    {expandedBasicFields.length === 0 ? (
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedBasicFields(optionalBasicFields.map(field => field.id))}
+                                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                            >
+                                                展开
+                                                <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                                            </button>
+                                            {optionalBasicFields.map(field => (
+                                                <button
+                                                    key={field.id}
+                                                    type="button"
+                                                    onClick={() => setExpandedBasicFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
+                                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+                                                >
+                                                    {field.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
+                                                {optionalBasicFields.filter(field => expandedBasicFields.includes(field.id)).map(field => {
+                                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                                    const isFullWidth = ['p_remark'].includes(field.id) || field.type === 'rich_text';
+                                                    return (
+                                                        <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
+                                                            <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
+                                                                {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                                            </FormRow>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedBasicFields([])}
+                                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                                >
+                                                    收起
+                                                    <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Product Attr Section */}
@@ -1793,71 +3453,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             <div id="field-s_specs">
                                 {renderSpecConfigTable()}
                             </div>
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => f.module === 'product_attr' && visibleFieldIds.has(f.id) && !['s_specs', 'm_methods', 'a_addons'].includes(f.id)).map(field => {
-                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                    return (
-                                        <div id={`field-${field.id}`}>
-                                        <FormRow key={field.id} label={field.label} required={isRequired}>
-                                            {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                        </FormRow>
-                                        </div>
-                                    );
-                                })}
-                            </div>
                             {renderMethodAddonPanel()}
-                            <div className="rounded-2xl border border-dashed border-gray-200 bg-[#FAFAFA] p-5">
-                                <div className="text-sm font-bold text-[#1F2129]">属性扩展字段</div>
-                                <div className="text-xs text-gray-400 mt-1">可继续承接系统里的口味、标签、做法提示和组合属性配置。</div>
-                                <div className="mt-4 flex flex-wrap gap-3">
-                                    {['口味标签', '规格备注', '做法说明', '加料分组', '默认推荐做法'].map(tag => (
-                                        <button
-                                            key={tag}
-                                            type="button"
-                                            onClick={() => setActivePreviewField('default')}
-                                            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-500 hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                        >
-                                            {tag}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
 
                         {/* Display Section */}
                         <div id="display" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6">
                             <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
-                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => f.module === 'display' && visibleFieldIds.has(f.id)).map(field => {
-                                    const isFullWidth = ['p_rich_desc', 'p_list_desc', 'p_desc_tags', 'p_order_tags'].includes(field.id) || field.type === 'textarea' || field.type === 'rich_text';
-                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                    return (
-                                        <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
-                                            <div onClick={() => setActivePreviewField((['p_img', 'p_list_desc'].includes(field.id) ? field.id : 'default') as PreviewField)}>
-                                                <FormRow label={field.label} required={isRequired} description={field.description}>
-                                                    {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                                </FormRow>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            <div className="rounded-2xl border border-dashed border-gray-200 bg-[#FAFAFA] p-5">
-                                <div className="text-sm font-bold text-[#1F2129]">扩展展示字段</div>
-                                <div className="text-xs text-gray-400 mt-1">按系统常用配置补充展示类信息，便于继续扩展列表标签、视频和详情描述。</div>
-                                <div className="mt-4 flex flex-wrap gap-3">
-                                    {['统计标签', '描述标签', '点单标签', '商品角标', '商品视频', '详情页描述'].map(tag => (
-                                        <button
-                                            key={tag}
-                                            type="button"
-                                            onClick={() => setActivePreviewField('default')}
-                                            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-500 hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                        >
-                                            {tag}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                            {renderDisplaySettingsSection()}
                         </div>
 
                         {/* Sales Section */}
@@ -1870,6 +3472,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                     && visibleFieldIds.has(f.id)
                                     && ![
                                         's_price',
+                                        's_cost',
+                                        's_market_price',
                                         's_pack_fee',
                                         's_stock',
                                         's_specs',
@@ -1901,256 +3505,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         {/* Others Section */}
                         <div id="settings" className="scroll-mt-[220px] bg-white rounded-2xl p-6 xl:p-8 border border-gray-200 shadow-sm space-y-6 min-w-0 overflow-hidden">
                             <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
-                            <div className="rounded-2xl border border-[#DCFCE7] bg-gradient-to-br from-[#F7FFF9] to-white p-6 space-y-5 min-w-0">
-                                <div className="space-y-4">
-                                    <div className="max-w-[720px]">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-9 h-9 rounded-xl bg-[#00C06B]/10 text-[#00C06B] flex items-center justify-center">
-                                                <Clock3 size={18} />
-                                            </div>
-                                            <div>
-                                                <div className="text-base font-black text-[#1F2129]">备货时间设置</div>
-                                                <div className="text-xs text-gray-400 mt-1">按商品制作方式设置下单后的备货规则，支持统一配置或按规格分别设置。</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className={`flex justify-end ${prepScope === 'spec' ? 'pr-4 xl:pr-6' : ''}`}>
-                                        <div className="flex items-center rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                                        <Switch active={prepEnabled} onClick={() => setPrepEnabled(prev => !prev)} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {!prepEnabled ? (
-                                    <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-5 py-6 text-sm text-gray-400">
-                                        当前商品无需预留备货时间；如需控制不同规格或不同库存状态的制作节奏，可重新开启后进行设置。
-                                    </div>
-                                ) : (
-                                    <div className="space-y-5">
-                                        <div className={`grid grid-cols-1 gap-5 w-full 2xl:grid-cols-2 ${prepScope === 'spec' ? 'pr-4 xl:pr-6' : ''}`}>
-                                            <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                                                <div className="text-sm font-bold text-[#1F2129] mb-3">配置方式</div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {[
-                                                        { value: 'spu' as PrepScope, label: '统一设置', desc: '适用于各规格备货规则一致的商品' },
-                                                        { value: 'spec' as PrepScope, label: '按规格设置', desc: '适用于不同规格备货规则不一致的商品' },
-                                                    ].map(option => {
-                                                        const active = prepScope === option.value;
-                                                        return (
-                                                            <button
-                                                                key={option.value}
-                                                                type="button"
-                                                                onClick={() => setPrepScope(option.value)}
-                                                                className={`rounded-xl border px-4 py-4 text-left transition-all ${active ? 'border-[#00C06B] bg-[#F0FDF4]' : 'border-gray-200 hover:border-gray-300'}`}
-                                                            >
-                                                                <div className={`text-sm font-bold ${active ? 'text-[#00C06B]' : 'text-[#1F2129]'}`}>{option.label}</div>
-                                                                <div className="text-xs text-gray-400 mt-1 leading-5">{option.desc}</div>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                                                <div className="text-sm font-bold text-[#1F2129] mb-3">现货状态</div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {[
-                                                        { value: false, label: '不区分现货/非现货', desc: '无论是否有现货，都使用同一套规则' },
-                                                        { value: true, label: '区分现货/非现货', desc: '现货与非现货分别设置备货时间' },
-                                                    ].map(option => {
-                                                        const active = splitByStockState === option.value;
-                                                        return (
-                                                            <button
-                                                                key={option.label}
-                                                                type="button"
-                                                                onClick={() => handleStockSplitChange(option.value)}
-                                                                className={`rounded-xl border px-4 py-4 text-left transition-all ${active ? 'border-[#00C06B] bg-[#F0FDF4]' : 'border-gray-200 hover:border-gray-300'}`}
-                                                            >
-                                                                <div className={`text-sm font-bold ${active ? 'text-[#00C06B]' : 'text-[#1F2129]'}`}>{option.label}</div>
-                                                                <div className="text-xs text-gray-400 mt-1 leading-5">{option.desc}</div>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {prepScope === 'spu' ? (
-                                            splitByStockState ? (
-                                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                                    {renderPrepRuleEditor(
-                                                        '现货规则',
-                                                        '适用于有现货、可快速出餐的商品。',
-                                                        uniformStockRules.inStock,
-                                                        (key, value) => updateStockRuleValue(setUniformStockRules, 'inStock', key, value),
-                                                        delta => handleStockRuleNumberStep(uniformStockRules, setUniformStockRules, 'inStock', delta)
-                                                    )}
-                                                    {renderPrepRuleEditor(
-                                                        '非现货规则',
-                                                        '适用于需提前生产、解冻、预加工的商品。',
-                                                        uniformStockRules.nonStock,
-                                                        (key, value) => updateStockRuleValue(setUniformStockRules, 'nonStock', key, value),
-                                                        delta => handleStockRuleNumberStep(uniformStockRules, setUniformStockRules, 'nonStock', delta)
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                renderPrepRuleEditor(
-                                                    '统一备货规则',
-                                                    '适用于商品下各规格使用同一套备货规则的场景。',
-                                                    uniformPrepRule,
-                                                    (key, value) => updatePrepRuleValue(setUniformPrepRule, key, value),
-                                                    delta => handleRuleNumberStep(uniformPrepRule, setUniformPrepRule, delta)
-                                                )
-                                            )
-                                        ) : (
-                                            <div className="space-y-5">
-                                                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                                                    <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                                                        <div>
-                                                            <div className="text-sm font-bold text-[#1F2129]">规格规则明细</div>
-                                                        </div>
-                                                        <div className="text-xs text-gray-400">如规格较多，可左右滚动查看完整内容</div>
-                                                    </div>
-                                                    <div className="overflow-x-auto">
-                                                        <table className="min-w-[980px] w-full border-collapse">
-                                                            <thead className="bg-[#F7F8FA]">
-                                                                <tr className="text-left text-xs font-bold text-gray-500">
-                                                                    <th className="px-4 py-3 border-b border-gray-200 w-[140px]">商品规格</th>
-                                                                    {splitByStockState && <th className="px-4 py-3 border-b border-gray-200 w-[100px]">库存状态</th>}
-                                                                    <th className="px-4 py-3 border-b border-gray-200 w-[220px]">备货时长</th>
-                                                                    <th className="px-4 py-3 border-b border-gray-200 w-[220px]">备货时段</th>
-                                                                    <th className="px-4 py-3 border-b border-gray-200 min-w-[260px]">制作顺延设置</th>
-                                                                </tr>
-                                                            </thead>
-                                                            {specPrepRules.map(specRule => (
-                                                                <tbody key={specRule.specId}>
-                                                                    {[
-                                                                        { key: 'inStock' as const, label: '现货', rule: specRule.inStock },
-                                                                        ...(splitByStockState ? [{ key: 'nonStock' as const, label: '非现货', rule: specRule.nonStock }] : []),
-                                                                    ].map((item, index) => (
-                                                                        <tr key={`${specRule.specId}-${item.key}`} className="align-top">
-                                                                            {index === 0 && (
-                                                                                <td rowSpan={splitByStockState ? 2 : 1} className="px-4 py-4 border-b border-gray-100 bg-white">
-                                                                                    <div className="font-bold text-[#1F2129]">{specRule.specName}</div>
-                                                                                </td>
-                                                                            )}
-                                                                            {splitByStockState && (
-                                                                                <td className="px-4 py-4 border-b border-gray-100">
-                                                                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold ${item.key === 'inStock' ? 'bg-[#E6F8F0] text-[#00A35B]' : 'bg-[#FFF7E6] text-[#C77A00]'}`}>
-                                                                                        {item.label}
-                                                                                    </span>
-                                                                                </td>
-                                                                            )}
-                                                                            <td className="px-4 py-4 border-b border-gray-100">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <div className="flex items-center overflow-hidden rounded-lg border border-gray-200 bg-white">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleSpecRuleNumberStep(specRule.specId, item.key, item.rule, -1)}
-                                                                                            className="w-9 h-9 text-gray-500 hover:bg-gray-50 transition-colors"
-                                                                                        >
-                                                                                            -
-                                                                                        </button>
-                                                                                        <input
-                                                                                            type="number"
-                                                                                            min="0"
-                                                                                            value={item.rule.duration}
-                                                                                            onChange={e => updateSpecRuleValue(specRule.specId, item.key, 'duration', e.target.value)}
-                                                                                            className="w-14 h-9 text-center text-sm font-bold text-[#1F2129] outline-none border-x border-gray-100"
-                                                                                        />
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleSpecRuleNumberStep(specRule.specId, item.key, item.rule, 1)}
-                                                                                            className="w-9 h-9 text-gray-500 hover:bg-gray-50 transition-colors"
-                                                                                        >
-                                                                                            +
-                                                                                        </button>
-                                                                                    </div>
-                                                                                    <select
-                                                                                        value={item.rule.unit}
-                                                                                        onChange={e => updateSpecRuleValue(specRule.specId, item.key, 'unit', e.target.value)}
-                                                                                        className="q-form-select h-9 min-w-[88px]"
-                                                                                    >
-                                                                                        {PREP_UNIT_OPTIONS.map(option => (
-                                                                                            <option key={option} value={option}>{option}</option>
-                                                                                        ))}
-                                                                                    </select>
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-4 py-4 border-b border-gray-100">
-                                                                                <div className="flex items-center gap-4">
-                                                                                    {[
-                                                                                        { value: 'same_day' as PrepWindow, label: '当天备货' },
-                                                                                        { value: 'advance' as PrepWindow, label: '提前备货' },
-                                                                                    ].map(option => (
-                                                                                        <label key={option.value} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                                                                                            <input
-                                                                                                type="radio"
-                                                                                                name={`window-${specRule.specId}-${item.key}`}
-                                                                                                checked={item.rule.window === option.value}
-                                                                                                onChange={() => updateSpecRuleValue(specRule.specId, item.key, 'window', option.value)}
-                                                                                                className="text-[#00C06B] focus:ring-[#00C06B]"
-                                                                                            />
-                                                                                            <span>{option.label}</span>
-                                                                                        </label>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-4 py-4 border-b border-gray-100">
-                                                                                {item.rule.window === 'advance' ? (
-                                                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                                                        <input
-                                                                                            type="checkbox"
-                                                                                            checked={item.rule.deferNextDay}
-                                                                                            onChange={e => updateSpecRuleValue(specRule.specId, item.key, 'deferNextDay', e.target.checked)}
-                                                                                            className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
-                                                                                        />
-                                                                                        <input
-                                                                                            type="time"
-                                                                                            value={item.rule.deferAfterTime}
-                                                                                            disabled={!item.rule.deferNextDay}
-                                                                                            onChange={e => updateSpecRuleValue(specRule.specId, item.key, 'deferAfterTime', e.target.value)}
-                                                                                            className="q-form-input h-9 w-[126px] disabled:bg-gray-100 disabled:text-gray-400"
-                                                                                        />
-                                                                                        <span className="text-sm text-gray-500">后顺延至次日制作</span>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <span className="text-sm text-gray-400">当天备货不支持顺延设置</span>
-                                                                                )}
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            ))}
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                    </div>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-3 xl:grid-cols-4 gap-6">
-                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => f.module === 'others' && visibleFieldIds.has(f.id)).map(field => {
-                                    const isFullWidth = field.type === 'radio_group' || field.type === 'checkbox_group' || field.type === 'textarea';
-                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                    return (
-                                         <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
-                                             <div className={`rounded-xl ${isFullWidth && field.type !== 'textarea' ? 'bg-gray-50/20 border border-gray-100 p-6 shadow-sm mt-4' : 'border-transparent'}`}>
-                                                 <FormRow 
-                                                     key={field.id} 
-                                                     label={field.label} 
-                                                     required={isRequired}
-                                                     isHorizontal={field.type === 'radio_group' || field.type === 'checkbox_group'}
-                                                 >
-                                                     {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                                 </FormRow>
-                                             </div>
-                                         </div>
-                                     );
-                                })}
-                            </div>
+                            {renderOthersAttributePanel()}
                         </div>
                         </>
                         )}
@@ -2215,6 +3570,19 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                     </div>
                 </div>
             )}
+            {showCategoryPickerModal && (
+                <WebCategorySelectModal
+                    type={type}
+                    onClose={() => setShowCategoryPickerModal(false)}
+                    categories={categories}
+                    onSelect={(nextCategory) => {
+                        setShowCategoryPickerModal(false);
+                        handleCategoryChangeRequest(nextCategory);
+                    }}
+                />
+            )}
+            {renderMethodPickerModal()}
+            {renderAddonPickerModal()}
             <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }`}</style>
         </div>
     );

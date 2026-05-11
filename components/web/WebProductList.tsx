@@ -126,7 +126,7 @@ export const WebProductList: React.FC<{
                 
                 {/* Direct Entry Points for Product Creation */}
                 <button onClick={() => onCreateClick('standard')} className="bg-[#00C06B] text-white px-4 h-[36px] rounded-md text-[13px] font-bold hover:bg-[#00A35B] shadow-sm transition-all flex items-center active:scale-95">
-                    <CupSoda size={16} className="mr-1.5"/> 新建标准商品
+                    <CupSoda size={16} className="mr-1.5"/> 新建商品
                 </button>
                 <button onClick={() => onCreateClick('combo')} className="bg-white border border-[#00C06B] text-[#00C06B] px-4 h-[36px] rounded-md text-[13px] font-bold hover:bg-[#E6F8F0] shadow-sm transition-all flex items-center active:scale-95">
                     <Utensils size={16} className="mr-1.5"/> 新建套餐商品

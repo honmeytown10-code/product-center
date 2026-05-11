@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { Search, Plus, Filter, ChevronRight, ChevronDown, Edit2, Info, ArrowRight, X, Minus, HelpCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Search, Plus, Filter, ChevronRight, ChevronDown, Info, X, Minus, HelpCircle } from 'lucide-react';
 
 interface DisplayCategory {
     id: string;
     name: string;
-    alias: string;
+    code: string;
     sort: number;
-    hasSub: boolean;
-    displayChannels: string[];
-    saleChannels: string[];
+    iconText: string;
+    tag: string;
+    requiredGroup: boolean;
+    displaySettings: string[];
+    saleScopes: string[];
+    saleTypes: string[];
     remark: string;
     productCount: number;
     parentId?: string;
@@ -16,16 +19,17 @@ interface DisplayCategory {
 }
 
 const MOCK_DATA: DisplayCategory[] = [
-    { id: '1', name: '测试', alias: '-', sort: 1, hasSub: true, displayChannels: ['mini', 'pos'], saleChannels: ['dine_in', 'takeout'], remark: 'hshsbd', productCount: 0, children: [
-        { id: '1-1', name: '子测试1', alias: '-', sort: 1, hasSub: false, displayChannels: ['mini'], saleChannels: ['dine_in'], remark: '', productCount: 5, parentId: '1' }
+    { id: '1', name: '测试', code: '-', sort: 1, iconText: '测', tag: '推荐', requiredGroup: true, displaySettings: ['微信小程序', '企迈POS'], saleScopes: ['堂食', '外带'], saleTypes: ['到店'], remark: '用于点单页首屏曝光', productCount: 0, children: [
+        { id: '1-1', name: '子测试1', code: 'child-test-1', sort: 1, iconText: '子', tag: '', requiredGroup: false, displaySettings: ['微信小程序'], saleScopes: ['堂食'], saleTypes: ['到店'], remark: '二级分类示例', productCount: 5, parentId: '1' }
     ] },
-    { id: '2', name: '精品套餐', alias: '-', sort: 1, hasSub: false, displayChannels: ['mini', 'pos', 'kiosk'], saleChannels: ['dine_in', 'takeout'], remark: '', productCount: 12 },
-    { id: '3', name: '蛋糕', alias: '-', sort: 2, hasSub: false, displayChannels: ['mini', 'pos'], saleChannels: ['dine_in', 'takeout'], remark: '', productCount: 8 },
-    { id: '4', name: '0318分类', alias: '0318', sort: 2, hasSub: false, displayChannels: ['mini', 'pos', 'kiosk', 'douyin'], saleChannels: ['dine_in', 'takeout'], remark: '', productCount: 45 },
-    { id: '5', name: '酒水', alias: '-', sort: 3, hasSub: false, displayChannels: ['mini', 'pos', 'kiosk'], saleChannels: ['dine_in'], remark: '', productCount: 20 },
+    { id: '2', name: '精品套餐', code: 'combo', sort: 1, iconText: '套', tag: '热门', requiredGroup: false, displaySettings: ['微信小程序', '企迈POS', '企迈H5'], saleScopes: ['堂食', '外带'], saleTypes: ['到店', '自提'], remark: '套餐类统一归档', productCount: 12 },
+    { id: '3', name: '蛋糕', code: 'cake', sort: 2, iconText: '糕', tag: '新品', requiredGroup: false, displaySettings: ['微信小程序', '支付宝小程序'], saleScopes: ['堂食', '外带'], saleTypes: ['到店', '外送'], remark: '生日蛋糕单独展示', productCount: 8 },
+    { id: '4', name: '0318分类', code: '0318', sort: 2, iconText: '03', tag: '活动', requiredGroup: false, displaySettings: ['微信小程序', '企迈POS', '企迈H5', '抖音小程序'], saleScopes: ['堂食', '外带', '外卖'], saleTypes: ['到店', '外送'], remark: '0318活动期间专用分类', productCount: 45 },
+    { id: '5', name: '酒水', code: 'drink', sort: 3, iconText: '饮', tag: '', requiredGroup: false, displaySettings: ['微信小程序', '企迈POS'], saleScopes: ['堂食'], saleTypes: ['到店'], remark: '仅堂食场景展示', productCount: 20 },
 ];
 
 export const WebCategoryListManager: React.FC = () => {
+    const tableGridClassName = 'grid grid-cols-[56px_100px_110px_220px_140px_120px_130px_220px_180px_180px_220px_200px] items-center';
     const [activeTab, setActiveTab] = useState<'backend' | 'frontend'>('frontend');
     const [categories, setCategories] = useState<DisplayCategory[]>(MOCK_DATA);
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['1']));
@@ -58,37 +62,111 @@ export const WebCategoryListManager: React.FC = () => {
         setIsModalOpen(false);
     };
 
+    const filteredCategories = useMemo(() => {
+        const keyword = search.trim().toLowerCase();
+        if (!keyword) return categories;
+
+        const filterTree = (items: DisplayCategory[]): DisplayCategory[] => {
+            return items.reduce<DisplayCategory[]>((acc, item) => {
+                const matchedChildren = item.children ? filterTree(item.children) : undefined;
+                const selfMatched = [
+                    item.name,
+                    item.code,
+                    item.tag,
+                    item.remark,
+                    ...item.displaySettings,
+                    ...item.saleScopes,
+                    ...item.saleTypes,
+                ].some(field => field.toLowerCase().includes(keyword));
+
+                if (selfMatched || (matchedChildren && matchedChildren.length > 0)) {
+                    acc.push({
+                        ...item,
+                        children: matchedChildren,
+                    });
+                }
+
+                return acc;
+            }, []);
+        };
+
+        return filterTree(categories);
+    }, [categories, search]);
+
+    const renderTagList = (items: string[], tone: 'green' | 'blue' | 'orange' = 'green') => {
+        const toneClassMap = {
+            green: 'bg-[#F0FDF4] text-[#00A35B]',
+            blue: 'bg-[#EEF4FF] text-[#2563EB]',
+            orange: 'bg-[#FFF7ED] text-[#EA580C]',
+        };
+
+        if (!items.length) {
+            return <span className="text-sm text-gray-400">-</span>;
+        }
+
+        return (
+            <div className="flex flex-wrap gap-2">
+                {items.map(item => (
+                    <span
+                        key={item}
+                        className={`inline-flex px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${toneClassMap[tone]}`}
+                    >
+                        {item}
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
     const renderRow = (cat: DisplayCategory, level: number = 0) => {
         const isExpanded = expandedIds.has(cat.id);
         const hasChildren = cat.children && cat.children.length > 0;
 
         return (
             <React.Fragment key={cat.id}>
-                <div className="flex items-center py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div className="w-[100px] pl-6 text-sm text-gray-600">{cat.sort}</div>
-                    <div className="w-[200px] flex items-center">
-                        <div style={{ width: level * 24 }} className="shrink-0"></div>
-                        {hasChildren ? (
-                            <button onClick={() => toggleExpand(cat.id)} className="mr-2 text-gray-400 hover:text-[#00C06B]">
-                                {isExpanded ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
-                            </button>
+                <div className={`${tableGridClassName} group py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors`}>
+                    <div className="pl-4 pr-2">
+                        <div className="flex items-center">
+                            <div style={{ width: level * 16 }} className="shrink-0"></div>
+                            {hasChildren ? (
+                                <button onClick={() => toggleExpand(cat.id)} className="shrink-0 text-gray-400 hover:text-[#00C06B]">
+                                    {isExpanded ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
+                                </button>
+                            ) : (
+                                <div className="w-4 shrink-0"></div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="pl-6 pr-3 text-sm text-gray-600">{cat.sort}</div>
+                    <div className="px-2">
+                        <div className="w-10 h-10 rounded-xl bg-[#F0FDF4] text-[#00C06B] font-black flex items-center justify-center text-sm">
+                            {cat.iconText}
+                        </div>
+                    </div>
+                    <div className="pr-3">
+                        <div className="flex items-center min-w-0">
+                            <span className="min-w-0 truncate text-sm font-bold text-gray-800">{cat.name}</span>
+                            {cat.productCount > 0 && level === 0 && (!cat.children || cat.children.length === 0) && (
+                                <span className="ml-2 shrink-0 text-[10px] bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded font-bold">含商品</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="pr-3 text-sm text-gray-600 truncate">{cat.code}</div>
+                    <div className="pr-3">
+                        {cat.tag ? (
+                            <span className="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-[#FFF7ED] text-[#EA580C]">
+                                {cat.tag}
+                            </span>
                         ) : (
-                            <div className="w-6 shrink-0"></div>
-                        )}
-                        <span className="text-sm font-bold text-gray-800 truncate">{cat.name}</span>
-                        {cat.productCount > 0 && level === 0 && (!cat.children || cat.children.length === 0) && (
-                            <span className="ml-2 text-[10px] bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded font-bold">含商品</span>
+                            <span className="text-sm text-gray-400">-</span>
                         )}
                     </div>
-                    <div className="w-[120px] text-sm text-gray-600">{cat.alias}</div>
-                    <div className="w-[120px] text-sm text-gray-600">-</div>
-                    <div className="w-[100px] text-sm text-gray-600">{cat.hasSub ? '是' : '否'}</div>
-                    <div className="w-[120px] flex space-x-1">
-                        {cat.displayChannels.map(c => <span key={c} className="w-5 h-5 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center text-[10px] font-bold">{c[0].toUpperCase()}</span>)}
-                    </div>
-                    <div className="w-[150px] text-sm text-gray-600 truncate">{cat.saleChannels.join(', ')}</div>
-                    <div className="flex-1 text-sm text-gray-600 truncate">{cat.remark}</div>
-                    <div className="w-[200px] flex items-center space-x-4 pr-6">
+                    <div className="pr-3 text-sm text-gray-600">{cat.requiredGroup ? '是' : '否'}</div>
+                    <div className="pr-3">{renderTagList(cat.displaySettings, 'green')}</div>
+                    <div className="pr-3">{renderTagList(cat.saleScopes, 'blue')}</div>
+                    <div className="pr-3">{renderTagList(cat.saleTypes, 'orange')}</div>
+                    <div className="pr-4 text-sm text-gray-600 break-all">{cat.remark || '-'}</div>
+                    <div className="sticky right-0 z-10 flex items-center space-x-4 pr-6 bg-white group-hover:bg-gray-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">
                         {level === 0 && (
                             <button onClick={() => handleCreateSub(cat)} className="text-sm font-bold text-[#00C06B] hover:text-[#00A35B]">新建二级分类</button>
                         )}
@@ -138,22 +216,25 @@ export const WebCategoryListManager: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto">
-                <div className="min-w-[1000px]">
+                <div className="min-w-[1716px]">
                     {/* Header */}
-                    <div className="flex items-center py-3 bg-gray-50 border-y border-gray-100 font-bold text-gray-500 text-xs">
-                        <div className="w-[100px] pl-6">分类排序</div>
-                        <div className="w-[200px]">分类名称</div>
-                        <div className="w-[120px]">分类别名</div>
-                        <div className="w-[120px]">分类图片</div>
-                        <div className="w-[100px]">是否有子级</div>
-                        <div className="w-[120px]">展示渠道</div>
-                        <div className="w-[150px]">售卖渠道</div>
-                        <div className="flex-1">备注</div>
-                        <div className="w-[200px] pr-6">操作</div>
+                    <div className={`${tableGridClassName} py-3 bg-gray-50 border-y border-gray-100 font-bold text-gray-500 text-xs`}>
+                        <div className="pl-4 pr-2"></div>
+                        <div className="pl-6 pr-3">分类排序</div>
+                        <div className="px-2">分类图标</div>
+                        <div className="pr-3">分类名称</div>
+                        <div className="pr-3">分类标识</div>
+                        <div className="pr-3">分类标签</div>
+                        <div className="pr-3">是否必选分组</div>
+                        <div className="pr-3">展示设置</div>
+                        <div className="pr-3">售卖桌道</div>
+                        <div className="pr-3">售卖类型</div>
+                        <div className="pr-4">备注</div>
+                        <div className="sticky right-0 z-20 pr-6 bg-gray-50 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">操作</div>
                     </div>
                     {/* Body */}
                     <div className="pb-20">
-                        {categories.map(cat => renderRow(cat))}
+                        {filteredCategories.map(cat => renderRow(cat))}
                     </div>
                 </div>
             </div>

@@ -113,13 +113,18 @@ export interface DynamicFieldConfig {
 
 export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   // 1. 基础属性 (base)
-  { id: 'p_name', label: '商品名称', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 10, isRequired: true },
-  { id: 'p_alias', label: '商品别名', module: 'base', type: 'input', sortOrder: 20 },
-  { id: 'p_code', label: '数字助记码', module: 'base', type: 'input', sortOrder: 30 },
-  { id: 'p_front_cat', label: '前台分类', module: 'base', type: 'selector', applyToBrands: ['b_1', 'b_2'], sortOrder: 40 },
+  { id: 'p_name', label: '商品名称', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 10, isRequired: true, placeholder: '请输入商品名称' },
+  { id: 'p_alias', label: '商品别名', module: 'base', type: 'input', sortOrder: 20, placeholder: '请输入商品别名' },
+  { id: 'p_code', label: '数字助记码', module: 'base', type: 'input', sortOrder: 30, description: '便于仓边收银使用助记码查找商品', placeholder: '请输入商品助记码' },
+  { id: 'p_front_cat', label: '前台分类', module: 'base', type: 'selector', applyToBrands: ['b_1', 'b_2'], sortOrder: 40, isRequired: true, description: '用于前台展示，如小程序、美团、淘宝闪购等渠道的分类展示', presetValues: ['热销推荐', '奶茶系列', '咖啡系列', '果茶系列'] },
+  { id: 'p_back_cat', label: '后台分类', module: 'base', type: 'selector', sortOrder: 45, description: '用于店铺内部经营管理和数据统计等，不在前台展示', presetValues: ['常规商品', '新品商品', '活动商品', '原料商品'] },
   { id: 'p_cat', label: '商品类目', module: 'base', type: 'selector', isBase: true, isSystem: true, sortOrder: 50, isRequired: false },
-  { id: 'p_unit', label: '计量单位', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 60, isRequired: false },
-  { id: 'p_weight_flag', label: '是否为称重商品', module: 'base', type: 'switch', sortOrder: 70 },
+  { id: 'p_weight_flag', label: '是否称重商品', module: 'base', type: 'switch', sortOrder: 52, description: '用于企迈 POS 端称重商品业务，开启后商品不支持多规格' },
+  { id: 'p_unit', label: '计量单位', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 53, isRequired: false },
+  { id: 'p_display_type', label: '商品展示类型', module: 'base', type: 'checkbox_group', sortOrder: 55, description: '为商品配置特殊标识用于个性化业务场景' },
+  { id: 'p_remark', label: '备注', module: 'base', type: 'textarea', sortOrder: 60, description: '用于标记商品，以便识别同名商品', placeholder: '请输入备注' },
+  { id: 'p_stat_tags', label: '统计标签', module: 'base', type: 'selector', sortOrder: 70, description: '用于商品报表统计，最多支持 4 个', presetValues: ['销量统计', '活动统计', '成本统计', '渠道统计'] },
+  { id: 'p_tare_weight', label: '去皮重量', module: 'base', type: 'number', sortOrder: 80, description: '用于称重商品去除包装重量' },
 
   // 2. 商品属性 (product_attr)
   { 
@@ -143,6 +148,7 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
     ]
   },
   { id: 'a_addons', label: '加料配置', module: 'product_attr', type: 'ref_selector', sortOrder: 30 },
+  { id: 'p_points_exchange_rule', label: '积分兑换规则', module: 'product_attr', type: 'switch', sortOrder: 35 },
   { id: 'c_groups', label: '套餐分组', module: 'product_attr', type: 'tag_group', presetValues: ['主食区', '加餐小食', '饮品区'], sortOrder: 40 },
 
   // 3. 销售信息 (sales)
@@ -167,7 +173,6 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   // 4. 展示信息 (display)
   { id: 'p_img', label: '商品主图', module: 'display', type: 'image', isBase: true, sortOrder: 10 },
   { id: 'p_list_desc', label: '列表页简述', module: 'display', type: 'textarea', sortOrder: 20 },
-  { id: 'p_stat_tags', label: '统计标签', module: 'display', type: 'tag_group', sortOrder: 30 },
   { id: 'p_desc_tags', label: '描述标签', module: 'display', type: 'tag_group', presetValues: ['店长推荐', '新品', '无糖低脂'], sortOrder: 40 },
   { id: 'p_order_tags', label: '点单标签', module: 'display', type: 'tag_group', applyToBrands: ['b_1'], sortOrder: 50 },
   { id: 'p_badge', label: '商品角标', module: 'display', type: 'image', sortOrder: 60 },
@@ -201,6 +206,7 @@ export interface Category {
   comboFields: CategoryFieldConfig[];
   children?: Category[];
   source?: 'system' | 'brand'; 
+  classification?: 'standard' | 'combo';
 }
 
 export interface TimeRule {

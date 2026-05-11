@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   FileSpreadsheet, Store, ShoppingBag, Database, Layers, CheckCircle2, 
-  Info, Download, FileUp, ChevronRight, X, Check, ArrowLeft, 
+  Info, Download, FileUp, ChevronRight, X, ArrowLeft, 
   CupSoda, Utensils, Scale, CakeSlice, Flame, Loader2, CloudUpload, FileText
 } from 'lucide-react';
 import { Category } from '../../types';
@@ -153,7 +153,6 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
   );
 };
 
-// ... Category Selection Modal (unchanged) ...
 export const WebCategorySelectModal = ({ 
     type, 
     onClose, 
@@ -165,15 +164,6 @@ export const WebCategorySelectModal = ({
     onSelect: (category: Category) => void,
     categories: Category[] 
 }) => {
-    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-
-    // Auto-select first category if available
-    useEffect(() => {
-        if (categories.length > 0 && !selectedCategory) {
-            setSelectedCategory(categories[0]);
-        }
-    }, [categories]);
-
     const getCategoryIcon = (name: string) => {
         if (name.includes('饮品') || name.includes('咖啡') || name.includes('茶')) return <CupSoda size={28} strokeWidth={1.5} />;
         if (name.includes('火锅')) return <Flame size={28} strokeWidth={1.5} />;
@@ -199,6 +189,21 @@ export const WebCategorySelectModal = ({
         return '暂无描述';
     };
 
+    const visibleCategories = categories.filter(cat => {
+        const classification = cat.classification;
+
+        if (type === 'standard') {
+            if (classification && classification !== 'standard') return false;
+            if (cat.name.includes('套餐')) return false;
+            if (cat.name.includes('称重')) return false;
+            return true;
+        }
+
+        if (classification && classification !== 'combo') return false;
+        if (!cat.name.includes('套餐') && !cat.name.includes('火锅')) return false;
+        return true;
+    });
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className={`bg-white rounded-[24px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 w-[900px] h-[600px]`}>
@@ -220,49 +225,28 @@ export const WebCategorySelectModal = ({
                 <div className="flex-1 p-8 bg-[#F8FAFB] overflow-y-auto no-scrollbar">
                     <div className="flex items-start bg-[#00C06B]/5 border border-[#00C06B]/20 rounded-xl p-4 mb-6">
                         <Info size={16} className="text-[#00C06B] mt-0.5 mr-2 shrink-0"/>
-                        <span className="text-sm text-[#00C06B] font-medium">请选择您要创建的商品类目，不同类目可管理不同的商品属性</span>
+                        <span className="text-sm text-[#00C06B] font-medium">点击一个类目后将直接进入商品创建表单，不同类目可管理不同的商品属性</span>
                     </div>
 
                     <div className="grid grid-cols-4 gap-4">
-                        {categories.map(cat => {
-                            const isSelected = selectedCategory?.id === cat.id;
-                            return (
-                                <div 
+                        {visibleCategories.map(cat => (
+                                <button
                                     key={cat.id}
-                                    onClick={() => setSelectedCategory(cat)}
-                                    className={`
-                                        cursor-pointer flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all relative h-40
-                                        ${isSelected ? 'bg-white border-[#00C06B] shadow-md' : 'bg-white border-transparent hover:border-gray-200 hover:shadow-sm'}
-                                    `}
+                                    type="button"
+                                    onClick={() => onSelect(cat)}
+                                    className="group cursor-pointer flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all relative h-40 bg-white border-transparent hover:border-[#00C06B] hover:shadow-md hover:-translate-y-0.5 text-left"
                                 >
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 transition-colors ${isSelected ? (type === 'standard' ? 'bg-green-50 text-[#00C06B]' : 'bg-orange-50 text-orange-500') : 'bg-gray-50 text-gray-400'}`}>
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 transition-colors bg-gray-50 text-gray-400 ${type === 'standard' ? 'group-hover:bg-green-50 group-hover:text-[#00C06B]' : 'group-hover:bg-orange-50 group-hover:text-orange-500'}`}>
                                         {getCategoryIcon(cat.name)}
                                     </div>
-                                    <span className={`text-sm font-bold ${isSelected ? 'text-[#1F2129]' : 'text-gray-600'}`}>{cat.name}</span>
-                                    <span className="text-[10px] text-gray-400 mt-1">{getCategoryDesc(cat.name)}</span>
-                                    
-                                    {isSelected && (
-                                        <div className="absolute top-0 right-0 w-8 h-8">
-                                            <div className="absolute top-0 right-0 w-0 h-0 border-t-[32px] border-l-[32px] border-t-[#00C06B] border-l-transparent rounded-tr-xl"></div>
-                                            <Check size={14} className="absolute top-1 right-1 text-white" strokeWidth={3}/>
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
+                                    <span className="text-sm font-bold text-gray-600 transition-colors group-hover:text-[#1F2129]">{cat.name}</span>
+                                    <span className="text-[10px] text-gray-400 mt-1 transition-colors group-hover:text-gray-500">{getCategoryDesc(cat.name)}</span>
+                                </button>
+                        ))}
                     </div>
                 </div>
-
-                {/* Footer */}
-                <div className="px-8 py-5 border-t border-gray-100 bg-white flex justify-end gap-3 shrink-0">
+                <div className="px-8 py-4 border-t border-gray-100 bg-white flex justify-end shrink-0">
                     <button onClick={onClose} className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-all text-sm">取消</button>
-                    <button 
-                        onClick={() => { if(selectedCategory) onSelect(selectedCategory); }} 
-                        disabled={!selectedCategory}
-                        className={`px-8 py-2.5 rounded-xl text-white font-bold text-sm shadow-lg transition-all active:scale-95 ${selectedCategory ? 'bg-[#00C06B] hover:bg-[#00A35B]' : 'bg-gray-300 cursor-not-allowed'}`}
-                    >
-                        下一步
-                    </button>
                 </div>
             </div>
         </div>

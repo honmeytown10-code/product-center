@@ -1,268 +1,305 @@
+import React, { useMemo, useState } from 'react';
+import { Info, Search, Square, CheckSquare, X } from 'lucide-react';
 
-import React, { useState, useMemo } from 'react';
-import { Search, Info, CheckCircle, CheckSquare, Ban, Zap, PowerOff, Circle, CheckCircle2, Square } from 'lucide-react';
-import { CategoryButton } from './PosCommon';
+type StoreOption = {
+  id: string;
+  name: string;
+};
 
-const MOCK_METHOD_GROUPS = ['全部', '甜度', '温度', '加料', '口味'];
-const INITIAL_METHOD_ITEMS = [
-    { id: 'm1', name: '标准糖', group: '甜度', status: 'available' },
-    { id: 'm2', name: '七分糖', group: '甜度', status: 'available' },
-    { id: 'm3', name: '五分糖', group: '甜度', status: 'available' },
-    { id: 'm4', name: '三分糖', group: '甜度', status: 'available' },
-    { id: 'm5', name: '不加糖', group: '甜度', status: 'available' },
-    { id: 'm6', name: '正常冰', group: '温度', status: 'available' },
-    { id: 'm7', name: '少冰', group: '温度', status: 'available' },
-    { id: 'm8', name: '去冰', group: '温度', status: 'available' },
-    { id: 'm9', name: '温热', group: '温度', status: 'disabled' },
-    { id: 'm10', name: '热饮', group: '温度', status: 'disabled' },
-    { id: 'm11', name: '珍珠', group: '加料', status: 'available' },
-    { id: 'm12', name: '椰果', group: '加料', status: 'available' },
-    { id: 'm13', name: '布丁', group: '加料', status: 'disabled' },
-    { id: 'm14', name: '红豆', group: '加料', status: 'available' },
-    { id: 'm15', name: '芋圆', group: '加料', status: 'available' },
-    { id: 'm16', name: '微辣', group: '口味', status: 'available' },
-    { id: 'm17', name: '中辣', group: '口味', status: 'available' },
-    { id: 'm18', name: '特辣', group: '口味', status: 'available' },
-    { id: 'm19', name: '免葱', group: '口味', status: 'available' },
-    { id: 'm20', name: '免蒜', group: '口味', status: 'available' },
+type MethodRow = {
+  id: string;
+  storeId: string;
+  methodName: string;
+  methodValue: string;
+  methodCode: string;
+  remark: string;
+  prompt: string;
+  multiValue: boolean;
+  optionType: '必选' | '非必选';
+  enabled: boolean;
+};
+
+const STORE_OPTIONS: StoreOption[] = [
+  { id: 's1', name: '测试-bcz' },
+  { id: 's2', name: '南山万象店' },
+  { id: 's3', name: '福田卓悦店' },
+];
+
+const INITIAL_METHOD_ROWS: MethodRow[] = [
+  { id: 'r1', storeId: 's1', methodName: '温度哒', methodValue: '热', methodCode: '', remark: '', prompt: '', multiValue: false, optionType: '必选', enabled: true },
+  { id: 'r2', storeId: 's1', methodName: '温度哒', methodValue: '少冰', methodCode: '', remark: '', prompt: '', multiValue: false, optionType: '必选', enabled: true },
+  { id: 'r3', storeId: 's1', methodName: '温度哒', methodValue: '多冰', methodCode: '', remark: '', prompt: '', multiValue: false, optionType: '必选', enabled: true },
+  { id: 'r4', storeId: 's1', methodName: '温度1111', methodValue: '冷', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r5', storeId: 's1', methodName: '温度1111', methodValue: '热', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r6', storeId: 's1', methodName: '温度1111', methodValue: '温', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r7', storeId: 's1', methodName: '温度1111', methodValue: '冰', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r8', storeId: 's1', methodName: '温度1111', methodValue: '少冰', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r9', storeId: 's1', methodName: '温度1111', methodValue: '多冰', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r10', storeId: 's1', methodName: '温度1111', methodValue: '正常冰', methodCode: '1', remark: '', prompt: '', multiValue: true, optionType: '非必选', enabled: true },
+  { id: 'r11', storeId: 's2', methodName: '甜度', methodValue: '七分糖', methodCode: 'sweet-7', remark: '区域门店自定义', prompt: '糖度调整后口感更佳', multiValue: false, optionType: '必选', enabled: false },
 ];
 
 export const PosMethodView: React.FC = () => {
-  const [methodItems, setMethodItems] = useState(INITIAL_METHOD_ITEMS);
-  const [selectedMethodGroup, setSelectedMethodGroup] = useState('全部');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [methodRows, setMethodRows] = useState(INITIAL_METHOD_ROWS);
+  const [activeStoreId, setActiveStoreId] = useState('s1');
+  const [draftStoreId, setDraftStoreId] = useState('s1');
+  const [keyword, setKeyword] = useState('');
+  const [draftKeyword, setDraftKeyword] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
-  // Left Panel Batch Mode
-  const [isLeftBatchMode, setIsLeftBatchMode] = useState(false);
-  const [leftSelectedIds, setLeftSelectedIds] = useState<Set<string>>(new Set());
 
-  const [methodActionModal, setMethodActionModal] = useState<{ open: boolean; item: any | null; type: 'enable' | 'disable' }>({ open: false, item: null, type: 'disable' });
+  const filteredRows = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    return methodRows.filter(row => {
+      const matchStore = !activeStoreId || row.storeId === activeStoreId;
+      const matchKeyword = !normalizedKeyword || [row.methodName, row.methodValue, row.methodCode, row.remark]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedKeyword);
+      return matchStore && matchKeyword;
+    });
+  }, [activeStoreId, keyword, methodRows]);
 
-  const displayMethodItems = useMemo(() => {
-      return methodItems.filter(m => {
-          const matchGroup = selectedMethodGroup === '全部' || m.group === selectedMethodGroup;
-          const matchSearch = m.name.includes(searchQuery);
-          return matchGroup && matchSearch;
+  const allChecked = filteredRows.length > 0 && filteredRows.every(row => selectedIds.has(row.id));
+
+  const currentStore = STORE_OPTIONS.find(item => item.id === draftStoreId);
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allChecked) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredRows.forEach(row => next.delete(row.id));
+        return next;
       });
-  }, [methodItems, selectedMethodGroup, searchQuery]);
-
-  const disabledMethodItems = useMemo(() => methodItems.filter(m => m.status === 'disabled'), [methodItems]);
-
-  const handleItemClick = (item: any) => {
-    if (isBatchMode) {
-      const newSet = new Set(selectedIds);
-      if (newSet.has(item.id)) newSet.delete(item.id);
-      else newSet.add(item.id);
-      setSelectedIds(newSet);
-    } else {
-        setMethodActionModal({
-            open: true,
-            item: item,
-            type: item.status === 'available' ? 'disable' : 'enable'
-        });
+      return;
     }
+
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      filteredRows.forEach(row => next.add(row.id));
+      return next;
+    });
   };
 
-  const handleMethodActionConfirm = () => {
-      if (!methodActionModal.item) return;
-      const newStatus = methodActionModal.type === 'enable' ? 'available' : 'disabled';
-      setMethodItems(prev => prev.map(m => m.id === methodActionModal.item.id ? { ...m, status: newStatus } : m));
-      setMethodActionModal({ open: false, item: null, type: 'disable' });
+  const handleApplyFilters = () => {
+    setActiveStoreId(draftStoreId);
+    setKeyword(draftKeyword);
+    setSelectedIds(new Set());
   };
 
-  const handleBatchMethodToggle = (action: 'enable' | 'disable') => {
-      setMethodItems(prev => prev.map(m => {
-          if (selectedIds.has(m.id)) return { ...m, status: action === 'enable' ? 'available' : 'disabled' };
-          return m;
-      }));
-      setIsBatchMode(false);
-      setSelectedIds(new Set());
+  const handleResetFilters = () => {
+    setDraftStoreId('');
+    setActiveStoreId('');
+    setDraftKeyword('');
+    setKeyword('');
+    setSelectedIds(new Set());
+  };
+
+  const updateEnabled = (ids: string[], enabled: boolean) => {
+    const idSet = new Set(ids);
+    setMethodRows(prev => prev.map(row => (idSet.has(row.id) ? { ...row, enabled } : row)));
+  };
+
+  const handleBatchUpdate = (enabled: boolean) => {
+    if (selectedIds.size === 0) return;
+    updateEnabled([...selectedIds], enabled);
+    setSelectedIds(new Set());
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Disabled List */}
-        <div className="w-[340px] bg-white border-r border-gray-200 flex flex-col z-10 shrink-0">
-            <div className="h-14 border-b border-gray-100 flex items-center justify-between px-5 bg-white shrink-0">
-                <div className="flex items-center">
-                    <span className="font-bold text-gray-800 text-[16px] mr-2">已停用做法</span>
-                    <span className="bg-red-50 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{disabledMethodItems.length}</span>
-                </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-                {disabledMethodItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-40 text-gray-400 mt-10">
-                        <CheckCircle size={48} className="mb-2 text-gray-200"/>
-                        <span className="text-sm font-bold">暂无停用做法</span>
-                    </div>
-                ) : (
-                    disabledMethodItems.map(m => (
-                        <div 
-                            key={m.id} 
-                            onClick={() => {
-                                if (isLeftBatchMode) {
-                                    const newSet = new Set(leftSelectedIds);
-                                    if (newSet.has(m.id)) newSet.delete(m.id);
-                                    else newSet.add(m.id);
-                                    setLeftSelectedIds(newSet);
-                                } else {
-                                    handleItemClick(m);
-                                }
-                            }} 
-                            className={`px-5 py-4 border-b border-gray-50 cursor-pointer transition-all flex items-center group ${isLeftBatchMode && leftSelectedIds.has(m.id) ? 'bg-[#00C06B]/5 border-l-4 border-l-[#00C06B]' : 'hover:bg-red-50/50 border-l-4 border-l-transparent'}`}
-                        >
-                            {isLeftBatchMode && (
-                                <div className="mr-3 shrink-0">
-                                    {leftSelectedIds.has(m.id) ? <CheckCircle2 size={20} className="text-[#00C06B] fill-white"/> : <Circle size={20} className="text-gray-200 fill-transparent"/>}
-                                </div>
-                            )}
-                            <div className="flex-1 flex justify-between items-center min-w-0">
-                                <div>
-                                    <div className="font-bold text-[14px] text-gray-700 group-hover:text-red-600 transition-colors truncate pr-2">{m.name}</div>
-                                    <div className="text-[10px] text-gray-400 mt-1">{m.group}</div>
-                                </div>
-                                {!isLeftBatchMode && (
-                                    <div className="px-2 py-1 rounded bg-white border border-gray-200 text-xs font-bold text-gray-500 shadow-sm group-hover:border-red-200 group-hover:text-red-500 shrink-0">启用</div>
-                                )}
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-            
-            {/* Left Panel Batch Action Footer */}
-            <div className="bg-white border-t border-gray-200 h-16 flex items-center justify-between px-4 z-20 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-                {!isLeftBatchMode ? (
-                    <button 
-                        onClick={() => setIsLeftBatchMode(true)}
-                        className="w-full py-2.5 rounded-lg bg-gray-50 text-gray-600 font-bold hover:bg-gray-100 transition-all flex items-center justify-center text-sm"
+    <div className="flex-1 overflow-auto bg-[#F5F6FA] p-6">
+      <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+        <div className="border-b border-gray-100 bg-[#FAFAFA] px-6 py-5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+            <FilterLabel label="机构门店">
+              <div className="flex min-h-[42px] min-w-[320px] items-center rounded-lg border border-gray-200 bg-white px-3">
+                {currentStore ? (
+                  <div className="flex items-center rounded-md border border-[#D9F7E7] bg-[#F3FCF7] px-3 py-1 text-sm text-[#1F9D55]">
+                    <span>{currentStore.name}</span>
+                    <button
+                      onClick={() => setDraftStoreId('')}
+                      className="ml-2 text-gray-400 hover:text-gray-600"
+                      aria-label="清除机构门店"
                     >
-                        <CheckSquare size={16} className="mr-2"/> 批量操作
+                      <X size={14} />
                     </button>
-                ) : (
-                    <>
-                        <button 
-                            onClick={() => {
-                                if (leftSelectedIds.size === disabledMethodItems.length) {
-                                    setLeftSelectedIds(new Set());
-                                } else {
-                                    setLeftSelectedIds(new Set(disabledMethodItems.map(i => i.id)));
-                                }
-                            }}
-                            className="flex items-center text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            <div className="mr-2">
-                                {leftSelectedIds.size > 0 ? (
-                                    <CheckSquare size={18} className="text-[#00C06B]" />
-                                ) : (
-                                    <Square size={18} className="text-gray-300" />
-                                )}
-                            </div>
-                            全选
-                        </button>
-                        <div className="flex items-center space-x-2">
-                            <button 
-                                disabled={leftSelectedIds.size === 0} 
-                                onClick={() => {
-                                    setMethodItems(prev => prev.map(m => {
-                                        if (leftSelectedIds.has(m.id)) return { ...m, status: 'available' };
-                                        return m;
-                                    }));
-                                    setIsLeftBatchMode(false);
-                                    setLeftSelectedIds(new Set());
-                                }}
-                                className="px-3 py-1.5 rounded bg-[#00C06B] text-white font-bold disabled:opacity-50 transition-all text-xs hover:bg-[#00A35B]"
-                            >
-                                启用
-                            </button>
-                            <button 
-                                onClick={() => { setIsLeftBatchMode(false); setLeftSelectedIds(new Set()); }}
-                                className="px-3 py-1.5 rounded text-gray-400 hover:bg-gray-100 font-bold transition-all text-xs"
-                            >
-                                退出
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
-
-        {/* Right Area */}
-        <div className="flex-1 flex flex-col bg-[#F5F6FA] relative min-w-0">
-            <div className="bg-white border-b border-gray-200 flex flex-col shrink-0 shadow-sm z-10">
-                <div className="h-16 flex items-center px-8 justify-between">
-                    <div className="flex space-x-4 overflow-x-auto no-scrollbar py-2">
-                        {MOCK_METHOD_GROUPS.map(group => (
-                            <CategoryButton key={group} label={group} active={selectedMethodGroup === group} onClick={() => setSelectedMethodGroup(group)} />
-                        ))}
-                    </div>
-                    <div className="flex items-center ml-6">
-                        <div className="relative w-64">
-                            <Search className="absolute left-4 top-3 text-gray-400" size={18} />
-                            <input className="w-full pl-12 pr-4 py-2.5 bg-[#333]/5 border border-transparent rounded-[6px] text-sm outline-none focus:bg-white focus:border-blue-500 transition-all font-medium" placeholder="搜索做法名称..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 pb-24 no-scrollbar">
-                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 content-start">
-                    {displayMethodItems.map(item => {
-                        const isSelected = selectedIds.has(item.id);
-                        const isDisabled = item.status === 'disabled';
-                        return (
-                            <div key={item.id} onClick={() => handleItemClick(item)} className={`relative bg-white rounded-xl shadow-sm cursor-pointer transition-all border flex flex-col p-4 h-[120px] group hover:shadow-md overflow-hidden select-none ${isBatchMode && isSelected ? 'border-blue-600 bg-blue-50' : isDisabled ? 'border-gray-100 bg-gray-50' : 'border-gray-100 hover:border-blue-200'}`}>
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isDisabled ? 'bg-gray-200 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>{item.group}</span>
-                                    {isDisabled && <Ban size={16} className="text-gray-400"/>}
-                                </div>
-                                <h3 className={`font-bold text-[18px] mt-1 ${isDisabled ? 'text-gray-400' : 'text-gray-800'}`}>{item.name}</h3>
-                                <div className="mt-auto flex items-center justify-between">
-                                    <div className={`text-xs font-bold flex items-center ${isDisabled ? 'text-gray-400' : 'text-green-600'}`}>
-                                        <div className={`w-2 h-2 rounded-full mr-1.5 ${isDisabled ? 'bg-gray-400' : 'bg-green-500'}`}></div>
-                                        {isDisabled ? '已停用' : '使用中'}
-                                    </div>
-                                </div>
-                                {isBatchMode && <div className="absolute top-2 right-2 z-30"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white'}`}>{isSelected && <CheckSquare size={12} className="text-white"/>}</div></div>}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-20 flex items-center justify-between px-8 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-                <div className="flex items-center space-x-4">
-                    {!isBatchMode ? (
-                        <button onClick={() => setIsBatchMode(true)} className="px-8 py-3 rounded-[6px] bg-blue-600 text-white font-bold hover:bg-blue-700 text-sm transition-all shadow-sm active:scale-95">批量管理</button>
-                    ) : (
-                        <div className="flex space-x-4">
-                            <button onClick={() => selectedIds.size > 0 && handleBatchMethodToggle('enable')} disabled={selectedIds.size === 0} className={`px-6 py-3 rounded-[6px] text-white font-bold shadow text-sm ${selectedIds.size > 0 ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 cursor-not-allowed'}`}>批量启用</button>
-                            <button onClick={() => selectedIds.size > 0 && handleBatchMethodToggle('disable')} disabled={selectedIds.size === 0} className={`px-6 py-3 rounded-[6px] text-white font-bold shadow text-sm ${selectedIds.size > 0 ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}>批量禁用</button>
-                            <button onClick={() => { setIsBatchMode(false); setSelectedIds(new Set()); }} className="px-6 py-3 rounded-[6px] border border-gray-200 font-bold text-gray-500 hover:bg-gray-50 text-sm">取消</button>
-                        </div>
-                    )}
-                </div>
-                <div className="flex items-center space-x-6 text-sm text-gray-500 font-medium"><span>共 {displayMethodItems.length} 条</span><span className="text-gray-300">|</span><span className="text-gray-500">1/1 页</span></div>
-            </div>
-        </div>
-
-        {methodActionModal.open && methodActionModal.item && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
-               <div className="bg-white rounded-[16px] shadow-2xl w-[400px] overflow-hidden animate-in zoom-in-95 font-sans">
-                  <div className="p-8 text-center">
-                     <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 ${methodActionModal.type === 'disable' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'}`}>{methodActionModal.type === 'disable' ? <PowerOff size={32}/> : <Zap size={32}/>}</div>
-                     <h3 className="text-xl font-bold text-gray-900 mb-2">确认{methodActionModal.type === 'disable' ? '停用' : '启用'}此做法？</h3>
-                     <p className="text-sm text-gray-500 mb-6">{methodActionModal.type === 'disable' ? `停用后，前台点单将无法选择 [${methodActionModal.item.name}]。` : `启用 [${methodActionModal.item.name}] 后，前台点单将恢复可选状态。`}</p>
-                     <div className="flex gap-3">
-                        <button onClick={() => setMethodActionModal({ open: false, item: null, type: 'disable' })} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">取消</button>
-                        <button onClick={handleMethodActionConfirm} className={`flex-1 py-3 rounded-xl text-white font-bold transition-all shadow-md active:scale-95 ${methodActionModal.type === 'disable' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}>确认{methodActionModal.type === 'disable' ? '停用' : '启用'}</button>
-                     </div>
                   </div>
-               </div>
+                ) : (
+                  <select
+                    value={draftStoreId}
+                    onChange={e => setDraftStoreId(e.target.value)}
+                    className="w-full bg-transparent text-sm text-gray-500 outline-none"
+                  >
+                    <option value="">请选择机构门店</option>
+                    {STORE_OPTIONS.map(store => (
+                      <option key={store.id} value={store.id}>{store.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </FilterLabel>
+
+            <FilterLabel label="做法名称">
+              <div className="relative min-w-[280px]">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={draftKeyword}
+                  onChange={e => setDraftKeyword(e.target.value)}
+                  placeholder="请输入做法名称"
+                  className="h-[42px] w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none focus:border-[#00C06B]"
+                />
+              </div>
+            </FilterLabel>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleApplyFilters}
+                className="h-[42px] rounded-lg bg-[#00C06B] px-6 text-sm font-bold text-white hover:bg-[#00A35B]"
+              >
+                筛选
+              </button>
+              <button
+                onClick={handleResetFilters}
+                className="text-sm font-bold text-[#00C06B] hover:text-[#00A35B]"
+              >
+                清空筛选条件
+              </button>
             </div>
-        )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => handleBatchUpdate(true)}
+              disabled={selectedIds.size === 0}
+              className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B] disabled:cursor-not-allowed disabled:bg-[#9DDDBB]"
+            >
+              批量启用
+            </button>
+            <button
+              onClick={() => handleBatchUpdate(false)}
+              disabled={selectedIds.size === 0}
+              className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B] disabled:cursor-not-allowed disabled:bg-[#9DDDBB]"
+            >
+              批量禁用
+            </button>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-[#F6FFFA] px-3 py-2 text-xs text-[#1F9D55]">
+            <Info size={14} />
+            <span>门店做法启用/禁用默认对该门店全部渠道生效，不区分渠道配置</span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-[1380px] w-full border-collapse text-left">
+            <thead className="bg-[#F7F8FA] text-sm font-bold text-[#333]">
+              <tr>
+                <th className="w-14 border-y border-gray-100 px-3 py-4">
+                  <button onClick={toggleSelectAll} className="text-gray-400 hover:text-[#00C06B]">
+                    {allChecked ? <CheckSquare size={18} className="text-[#00C06B]" /> : <Square size={18} />}
+                  </button>
+                </th>
+                <th className="min-w-[130px] border-y border-gray-100 px-4 py-4">做法名称</th>
+                <th className="min-w-[100px] border-y border-gray-100 px-4 py-4">做法值</th>
+                <th className="min-w-[120px] border-y border-gray-100 px-4 py-4">做法标识码</th>
+                <th className="min-w-[110px] border-y border-gray-100 px-4 py-4">备注</th>
+                <th className="min-w-[120px] border-y border-gray-100 px-4 py-4">温馨提示</th>
+                <th className="min-w-[120px] border-y border-gray-100 px-4 py-4">做法值多选</th>
+                <th className="min-w-[110px] border-y border-gray-100 px-4 py-4">做法选项</th>
+                <th className="min-w-[140px] border-y border-gray-100 px-4 py-4 text-center">是否启用</th>
+                <th className="sticky right-0 z-20 min-w-[160px] border-y border-gray-100 bg-[#F7F8FA] px-4 py-4 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.24)]">操作</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm text-[#333]">
+              {filteredRows.map(row => {
+                const checked = selectedIds.has(row.id);
+                return (
+                  <tr key={row.id} className="group border-b border-gray-100 hover:bg-[#FCFFFD]">
+                    <td className="px-3 py-4">
+                      <button onClick={() => toggleSelected(row.id)} className="text-gray-400 hover:text-[#00C06B]">
+                        {checked ? <CheckSquare size={18} className="text-[#00C06B]" /> : <Square size={18} />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 text-[15px] text-gray-700">{row.methodName}</td>
+                    <td className="px-4 py-4 text-[15px] text-gray-700">{row.methodValue}</td>
+                    <td className="px-4 py-4 text-[15px] text-gray-700">{row.methodCode || '-'}</td>
+                    <td className="px-4 py-4 text-[15px] text-gray-500">{row.remark || '-'}</td>
+                    <td className="px-4 py-4 text-[15px] text-gray-500">{row.prompt || '-'}</td>
+                    <td className="px-4 py-4 text-[15px] text-gray-700">{row.multiValue ? '已开启' : '已关闭'}</td>
+                    <td className="px-4 py-4 text-[15px] text-gray-700">{row.optionType}</td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center justify-center">
+                        <ToggleSwitch checked={row.enabled} onChange={checkedState => updateEnabled([row.id], checkedState)} />
+                      </div>
+                    </td>
+                    <td className="sticky right-0 z-10 bg-white px-4 py-4 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.24)] group-hover:bg-[#FCFFFD]">
+                      <button className="text-[15px] font-medium text-[#00C06B] hover:text-[#00A35B]">
+                        查看关联商品
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredRows.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-4 py-14 text-center text-sm text-gray-400">
+                    暂无符合条件的门店做法数据
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };
+
+const FilterLabel = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div className="flex items-center gap-3">
+    <span className="shrink-0 text-sm font-medium text-gray-700">{label}：</span>
+    {children}
+  </div>
+);
+
+const ToggleSwitch = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) => (
+  <button
+    onClick={() => onChange(!checked)}
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={checked ? '禁用做法' : '启用做法'}
+    className={`relative inline-flex h-7 w-[46px] items-center rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#00C06B]/20 ${
+      checked
+        ? 'border-[#00C06B] bg-[#00C06B]'
+        : 'border-[#D9DDE3] bg-[#EEF1F4]'
+    }`}
+  >
+    <span
+      className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-[0_1px_3px_rgba(15,23,42,0.18)] transition-transform duration-200 ${
+        checked ? 'translate-x-[18px]' : 'translate-x-0'
+      }`}
+    />
+  </button>
+);

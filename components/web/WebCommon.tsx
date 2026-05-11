@@ -18,7 +18,7 @@ export const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode; me
   </div>
 );
 
-export const FormRow: React.FC<{ label: string; required?: boolean; description?: string; children: React.ReactNode; isHorizontal?: boolean }> = ({ label, required, description, children, isHorizontal }) => {
+export const FormRow: React.FC<{ label: string; required?: boolean; description?: string; children: React.ReactNode; isHorizontal?: boolean; descriptionPlacement?: 'top' | 'bottom' }> = ({ label, required, description, children, isHorizontal, descriptionPlacement = 'top' }) => {
   if (isHorizontal) {
       return (
           <div className="flex items-start">
@@ -42,9 +42,10 @@ export const FormRow: React.FC<{ label: string; required?: boolean; description?
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
-        {description && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
+        {description && descriptionPlacement === 'top' && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
       </div>
       {children}
+      {description && descriptionPlacement === 'bottom' && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
     </div>
   );
 };

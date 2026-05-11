@@ -26,10 +26,47 @@ const MOCK_POLICIES = [
   { id: 'p2', name: '测试门店特殊物料配方', storeCount: 1, productCount: 1, status: 'inactive', updateTime: '2026-03-19 10:15:00' },
 ];
 
+type RecipeBaseSettings = {
+  printSeparatorMode: 'system' | 'custom';
+  printSeparatorValue: string;
+  enableRecipeCode: boolean;
+  enableRecipeImage: boolean;
+  enableAddonRecipe: boolean;
+  addonMatchMode: 'strict' | 'group';
+  enableNewRecipe: boolean;
+  enableSweetness: boolean;
+  sweetnessMode: 'custom' | 'formula';
+};
+
+const DEFAULT_RECIPE_BASE_SETTINGS: RecipeBaseSettings = {
+  printSeparatorMode: 'system',
+  printSeparatorValue: '#',
+  enableRecipeCode: true,
+  enableRecipeImage: true,
+  enableAddonRecipe: true,
+  addonMatchMode: 'group',
+  enableNewRecipe: true,
+  enableSweetness: true,
+  sweetnessMode: 'formula',
+};
+
 // --- MAIN COMPONENT ---
-export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavigate }) => {
+export const WebRecipeManager: React.FC<{
+  onNavigate?: (path: string) => void;
+  newRecipeEnabled?: boolean;
+  onNewRecipeEnabledChange?: (enabled: boolean) => void;
+}> = ({ onNavigate, newRecipeEnabled = true, onNewRecipeEnabledChange }) => {
   // Add top-level tab state for switching between Default Recipes and Policies
   const [activeTab, setActiveTab] = useState<'default' | 'policy'>('default');
+  const [showBaseSettings, setShowBaseSettings] = useState(false);
+  const [recipeBaseSettings, setRecipeBaseSettings] = useState<RecipeBaseSettings>({
+    ...DEFAULT_RECIPE_BASE_SETTINGS,
+    enableNewRecipe: newRecipeEnabled,
+  });
+  const [draftRecipeBaseSettings, setDraftRecipeBaseSettings] = useState<RecipeBaseSettings>({
+    ...DEFAULT_RECIPE_BASE_SETTINGS,
+    enableNewRecipe: newRecipeEnabled,
+  });
   
   const [currentView, setCurrentView] = useState<'list' | 'detail' | 'policy_list' | 'policy_detail' | 'policy_products'>('list');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -40,8 +77,24 @@ export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }>
     setCurrentView(activeTab === 'default' ? 'list' : 'policy_list');
   }, [activeTab]);
 
+  React.useEffect(() => {
+    setRecipeBaseSettings(prev => ({ ...prev, enableNewRecipe: newRecipeEnabled }));
+    setDraftRecipeBaseSettings(prev => ({ ...prev, enableNewRecipe: newRecipeEnabled }));
+  }, [newRecipeEnabled]);
+
+  const openBaseSettings = () => {
+    setDraftRecipeBaseSettings(recipeBaseSettings);
+    setShowBaseSettings(true);
+  };
+
+  const saveBaseSettings = () => {
+    setRecipeBaseSettings(draftRecipeBaseSettings);
+    onNewRecipeEnabledChange?.(draftRecipeBaseSettings.enableNewRecipe);
+    setShowBaseSettings(false);
+  };
+
   return (
-    <div className="flex flex-col h-full w-full bg-[#F5F6FA] overflow-hidden">
+    <div className="relative flex flex-col h-full w-full bg-[#F5F6FA] overflow-hidden">
       
       {/* Top Level Tabs for New Recipe System */}
       <div className="h-12 bg-white border-b border-[#E8E8E8] flex items-center px-4 space-x-6 shrink-0 z-20">
@@ -63,6 +116,7 @@ export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }>
         <RecipeList 
           onViewDetail={(p) => { setSelectedProduct(p); setCurrentView('detail'); }} 
           onNavigate={onNavigate}
+          onOpenBaseSettings={openBaseSettings}
         />
       )}
       {currentView === 'detail' && (
@@ -91,6 +145,155 @@ export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }>
           onConfigProduct={(p) => { setSelectedProduct(p); setCurrentView('detail'); }}
         />
       )}
+
+      {showBaseSettings && (
+        <div className="absolute inset-0 z-30 flex justify-end bg-black/20">
+          <div className="h-full w-[500px] bg-white shadow-2xl flex flex-col">
+            <div className="px-6 py-5 border-b border-[#E8E8E8] flex items-center justify-between">
+              <div>
+                <h3 className="text-[18px] font-bold text-[#333]">基础配置</h3>
+              </div>
+              <button onClick={() => setShowBaseSettings(false)} className="text-[#999] hover:text-[#333]">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+              <div>
+                <div className="text-sm font-bold text-[#333] mb-3">打印分隔符</div>
+                <div className="flex items-center gap-6 mb-3">
+                  <label className="flex items-center gap-2 text-sm text-[#333] cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={draftRecipeBaseSettings.printSeparatorMode === 'system'}
+                      onChange={() => setDraftRecipeBaseSettings(prev => ({ ...prev, printSeparatorMode: 'system' }))}
+                      className="text-[#00C06B] focus:ring-[#00C06B]"
+                    />
+                    <span>系统默认</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-[#333] cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={draftRecipeBaseSettings.printSeparatorMode === 'custom'}
+                      onChange={() => setDraftRecipeBaseSettings(prev => ({ ...prev, printSeparatorMode: 'custom' }))}
+                      className="text-[#00C06B] focus:ring-[#00C06B]"
+                    />
+                    <span>自定义</span>
+                  </label>
+                </div>
+                {draftRecipeBaseSettings.printSeparatorMode === 'custom' && (
+                  <input
+                    value={draftRecipeBaseSettings.printSeparatorValue}
+                    onChange={e => setDraftRecipeBaseSettings(prev => ({ ...prev, printSeparatorValue: e.target.value.slice(0, 10) }))}
+                    placeholder="请输入打印分隔符"
+                    className="w-full rounded-md border border-[#E8E8E8] px-3 py-2 text-sm focus:border-[#00C06B] focus:outline-none"
+                  />
+                )}
+              </div>
+
+              <div className="space-y-5">
+                <SettingSwitchRow
+                  title="启用配方编码"
+                  desc="开启后，可以针对商品组合设置配方编码，适用于部分场景和对接商品。"
+                  checked={draftRecipeBaseSettings.enableRecipeCode}
+                  onChange={(checked) => setDraftRecipeBaseSettings(prev => ({ ...prev, enableRecipeCode: checked }))}
+                />
+                <SettingSwitchRow
+                  title="启用配方图片"
+                  desc="开启后，可以针对商品组合设置配方图片，设置完成后可在打印单中引用。"
+                  checked={draftRecipeBaseSettings.enableRecipeImage}
+                  onChange={(checked) => setDraftRecipeBaseSettings(prev => ({ ...prev, enableRecipeImage: checked }))}
+                />
+
+                <div className="border-b border-[#F2F2F2] pb-5">
+                  <SettingSwitchRow
+                    title="加料参与配方"
+                    desc="开启后，加料在成品商品组合时将参与商品配方生成，支持按加料完全匹配或按加料分组匹配生成商品组合。"
+                    checked={draftRecipeBaseSettings.enableAddonRecipe}
+                    onChange={(checked) => setDraftRecipeBaseSettings(prev => ({ ...prev, enableAddonRecipe: checked }))}
+                    borderless
+                  />
+                  {draftRecipeBaseSettings.enableAddonRecipe && (
+                    <div className="mt-3 pl-1">
+                      <div className="flex items-center gap-6">
+                        <label className="flex items-center gap-2 text-sm text-[#666] cursor-pointer">
+                          <input
+                            type="radio"
+                            checked={draftRecipeBaseSettings.addonMatchMode === 'strict'}
+                            onChange={() => setDraftRecipeBaseSettings(prev => ({ ...prev, addonMatchMode: 'strict' }))}
+                            className="text-[#00C06B] focus:ring-[#00C06B]"
+                          />
+                          <span>按加料完全匹配</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-[#00A35B] cursor-pointer font-medium">
+                          <input
+                            type="radio"
+                            checked={draftRecipeBaseSettings.addonMatchMode === 'group'}
+                            onChange={() => setDraftRecipeBaseSettings(prev => ({ ...prev, addonMatchMode: 'group' }))}
+                            className="text-[#00C06B] focus:ring-[#00C06B]"
+                          />
+                          <span>按加料分组匹配</span>
+                        </label>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-red-500">
+                        可根据实际场景创建多个分组，用户下单加配料时按加料组匹配配方；默认仅加方式后，现有官方方式失效，请谨慎切换。
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <SettingSwitchRow
+                  title="启用新版本配方"
+                  desc="开启此配置后，所有商品配方打印跟调逻辑将默认为新版配方数据。关闭后走旧版配方数据，请务必检查商品配方满足使用条件后再进行启用。"
+                  checked={draftRecipeBaseSettings.enableNewRecipe}
+                  onChange={(checked) => setDraftRecipeBaseSettings(prev => ({ ...prev, enableNewRecipe: checked }))}
+                />
+
+                <div className="border-b border-[#F2F2F2] pb-5">
+                  <SettingSwitchRow
+                    title="启用甜度"
+                    desc="开启此配置后，在生成配方时可以根据公式自动计算甜度。"
+                    checked={draftRecipeBaseSettings.enableSweetness}
+                    onChange={(checked) => setDraftRecipeBaseSettings(prev => ({ ...prev, enableSweetness: checked }))}
+                    borderless
+                  />
+                  {draftRecipeBaseSettings.enableSweetness && (
+                    <div className="mt-3 pl-1 flex items-center gap-6">
+                      <label className="flex items-center gap-2 text-sm text-[#666] cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={draftRecipeBaseSettings.sweetnessMode === 'custom'}
+                          onChange={() => setDraftRecipeBaseSettings(prev => ({ ...prev, sweetnessMode: 'custom' }))}
+                          className="text-[#00C06B] focus:ring-[#00C06B]"
+                        />
+                        <span>自定义输入</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#00A35B] cursor-pointer font-medium">
+                        <input
+                          type="radio"
+                          checked={draftRecipeBaseSettings.sweetnessMode === 'formula'}
+                          onChange={() => setDraftRecipeBaseSettings(prev => ({ ...prev, sweetnessMode: 'formula' }))}
+                          className="text-[#00C06B] focus:ring-[#00C06B]"
+                        />
+                        <span>公式计算</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-[#E8E8E8] flex justify-end gap-3 bg-white">
+              <button onClick={() => setShowBaseSettings(false)} className="px-5 py-2 border border-[#E8E8E8] rounded text-sm text-[#666] hover:bg-gray-50">
+                取消
+              </button>
+              <button onClick={saveBaseSettings} className="px-5 py-2 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -98,7 +301,7 @@ export const WebRecipeManager: React.FC<{ onNavigate?: (path: string) => void }>
 // --- SUB-COMPONENTS ---
 
 // 1. 默认配方列表页
-const RecipeList = ({ onViewDetail, onNavigate }: { onViewDetail: (p: any) => void, onNavigate?: (path: string) => void }) => {
+const RecipeList = ({ onViewDetail, onNavigate, onOpenBaseSettings }: { onViewDetail: (p: any) => void, onNavigate?: (path: string) => void, onOpenBaseSettings?: () => void }) => {
   return (
     <div className="flex-1 flex flex-col m-4 bg-white rounded-md shadow-sm overflow-hidden">
       {/* Toolbar */}
@@ -119,7 +322,7 @@ const RecipeList = ({ onViewDetail, onNavigate }: { onViewDetail: (p: any) => vo
           </button>
           <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">甜度计算公式</button>
           <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">配料库</button>
-          <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">基础设置</button>
+          <button onClick={onOpenBaseSettings} className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">基础设置</button>
           <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">添加商品</button>
         </div>
       </div>
@@ -186,6 +389,36 @@ const RecipeList = ({ onViewDetail, onNavigate }: { onViewDetail: (p: any) => vo
     </div>
   );
 };
+
+const SettingSwitchRow = ({
+  title,
+  desc,
+  checked,
+  onChange,
+  borderless = false,
+}: {
+  title: string;
+  desc: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  borderless?: boolean;
+}) => (
+  <div className={borderless ? '' : 'border-b border-[#F2F2F2] pb-5'}>
+    <div className="flex items-start justify-between gap-4">
+      <div className="pr-6">
+        <div className="text-sm font-bold text-[#333]">{title}</div>
+        <div className="mt-1 text-xs leading-5 text-[#999]">{desc}</div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-[#00C06B]' : 'bg-gray-300'}`}
+      >
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      </button>
+    </div>
+  </div>
+);
 
 // 2. 配方详情配置页 (含降维方案)
 const RecipeDetail = ({ product, onBack, isOverrideMode }: { product: any, onBack: () => void, isOverrideMode: boolean }) => {

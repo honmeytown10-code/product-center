@@ -24,10 +24,12 @@ import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
+import { WebNutritionManager } from './web/WebNutritionManager';
 import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
 import { WebProductSync } from './web/WebProductSync'; // Import new component
 import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
+import { WebProductTemplateManager } from './web/WebProductTemplateManager';
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
@@ -337,6 +339,10 @@ export const WebAdmin: React.FC = () => {
           return <WebIngredientLibraryManager />;
       }
 
+      if (activeMenu === 'nutrition_manager') {
+          return <WebNutritionManager />;
+      }
+
       if (activeMenu === 'addon_group') {
           return <WebAddonGroupManager onBack={() => setActiveMenu(lastRecipeMenu)} />;
       }
@@ -355,6 +361,10 @@ export const WebAdmin: React.FC = () => {
 
       if (activeMenu === 'product_sync') {
           return <WebProductSync />;
+      }
+
+      if (activeMenu === 'product_template') {
+          return <WebProductTemplateManager />;
       }
 
       // Default: Product List
@@ -473,6 +483,16 @@ export const WebAdmin: React.FC = () => {
                                 />
                              </div>
                              <div className="pl-6">
+                                <SidebarItem
+                                  label="营养成分"
+                                  active={activeMenu === 'nutrition_manager'}
+                                  onClick={() => {
+                                    setActiveMenu('nutrition_manager');
+                                    setCreationContext(null);
+                                  }}
+                                />
+                             </div>
+                             <div className="pl-6">
                                 {!newRecipeEnabled && (
                                   <SidebarItem
                                     label="商品配方"
@@ -511,7 +531,7 @@ export const WebAdmin: React.FC = () => {
               </div>
               {expandedMenus.includes('chain_management') && (
                  <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="商品模板" />
+                    <SidebarItem label="商品模板" active={activeMenu === 'product_template'} onClick={() => { setActiveMenu('product_template'); setCreationContext(null); }} />
                     <SidebarItem label="商品同步" active={activeMenu === 'product_sync'} onClick={() => { setActiveMenu('product_sync'); setCreationContext(null); }} />
                     <SidebarItem label="价格策略" active={activeMenu === 'price_systems'} onClick={() => { setActiveMenu('price_systems'); setCreationContext(null); }} />
                     <SidebarItem label="商品推荐" />
@@ -534,7 +554,7 @@ export const WebAdmin: React.FC = () => {
                  <div className="mt-1 space-y-0.5">
                     <SidebarItem label="门店商品管理" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setStoreProductManagePreset(null); setCreationContext(null); }} />
                     <SidebarItem label="商品在售门店" active={activeMenu === 'store_product_coverage'} onClick={() => { setActiveMenu('store_product_coverage'); setCreationContext(null); }} />
-                    <SidebarItem label="门店分类" active={activeMenu === 'store_category_list'} onClick={() => { setActiveMenu('store_category_list'); setCreationContext(null); }} />
+                    <SidebarItem label="门店商品分类" active={activeMenu === 'store_category_list'} onClick={() => { setActiveMenu('store_category_list'); setCreationContext(null); }} />
                     <SidebarItem label="门店商品属性" active={['store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu)} onClick={() => { setActiveMenu('store_attribute_list'); setCreationContext(null); }} />
                     <SidebarItem label="区域商品" active={activeMenu === 'store_region_list'} onClick={() => { setActiveMenu('store_region_list'); setCreationContext(null); setStoreRegionEditorContext(null); }} />
                  </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, ChevronDown, FileUp, ArrowUpDown, ChevronLeft,
-  ChevronRight, GripVertical, CheckCircle2, X, PencilLine, Eye, MoreHorizontal
+  ChevronRight, GripVertical, CheckCircle2, X, Eye
 } from 'lucide-react';
 
 type StoreCategoryRecord = {
@@ -15,6 +15,22 @@ type StoreCategoryRecord = {
   code: string;
   tag: string;
   requiredGroup: boolean;
+};
+
+type StoreCategoryEditorDraft = StoreCategoryRecord & {
+  categoryLabel: string;
+  description: string;
+  remark: string;
+  shelfChannels: string[];
+  saleTypes: string[];
+  displayChannels: string[];
+  shelfTime: 'all_day' | 'custom';
+  limitTop: boolean;
+  onlyBackstageGroup: boolean;
+  classicMenuHidden: boolean;
+  notOrderAlone: boolean;
+  queueSetting: 'join' | 'skip';
+  orderLimit: 'participate' | 'not_participate';
 };
 
 const STORE_OPTIONS = [
@@ -114,8 +130,8 @@ export const WebStoreCategoryList: React.FC = () => {
   const [categories, setCategories] = useState(MOCK_STORE_CATEGORIES);
   const [isSorting, setIsSorting] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [editingCategory, setEditingCategory] = useState<StoreCategoryRecord | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<StoreCategoryEditorDraft | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const tabs = useMemo(() => [{ id: 'all', label: '全部渠道' }, ...DEFAULT_CHANNELS], []);
 
@@ -153,6 +169,27 @@ export const WebStoreCategoryList: React.FC = () => {
     return () => clearTimeout(timer);
   }, [notification]);
 
+  const canSortCurrentScope = activeStoreId !== 'all';
+
+  const openEditor = (item: StoreCategoryRecord) => {
+    setEditingCategory({
+      ...item,
+      categoryLabel: item.tag,
+      description: `${item.name} 分类描述`,
+      remark: `${item.name} 备注`,
+      shelfChannels: ['mini_dine', 'meituan', 'taobao', 'pos'],
+      saleTypes: ['dine', 'takeout'],
+      displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'],
+      shelfTime: 'all_day',
+      limitTop: false,
+      onlyBackstageGroup: false,
+      classicMenuHidden: false,
+      notOrderAlone: false,
+      queueSetting: 'join',
+      orderLimit: 'participate',
+    });
+  };
+
   const moveCategory = (fromId: string, toId: string) => {
     if (fromId === toId) return;
 
@@ -174,38 +211,296 @@ export const WebStoreCategoryList: React.FC = () => {
 
   const saveSort = () => {
     setIsSorting(false);
-    setNotification(
-      activeTabId === 'all'
-        ? '门店分类排序已保存'
+    setNotification({
+      type: 'success',
+      message: activeTabId === 'all'
+        ? '门店商品分类排序已保存'
         : `${CHANNEL_DEFS[activeTabId]?.label || '当前渠道'} 分类排序保存成功`
-    );
+    });
   };
 
-  const updateEditingField = (field: keyof StoreCategoryRecord, value: string | boolean) => {
+  const updateEditingField = (field: keyof StoreCategoryEditorDraft, value: string | boolean | string[]) => {
     if (!editingCategory) return;
-    setEditingCategory({ ...editingCategory, [field]: value } as StoreCategoryRecord);
+    setEditingCategory({ ...editingCategory, [field]: value } as StoreCategoryEditorDraft);
   };
 
   const saveEditing = () => {
     if (!editingCategory) return;
-    setCategories(prev => prev.map(item => item.id === editingCategory.id ? editingCategory : item));
+    setCategories(prev => prev.map(item => item.id === editingCategory.id ? {
+      ...item,
+      name: editingCategory.name,
+      code: editingCategory.code,
+      tag: editingCategory.categoryLabel || editingCategory.tag,
+      requiredGroup: editingCategory.requiredGroup,
+    } : item));
     setEditingCategory(null);
-    setNotification('分类编辑已保存');
+    setNotification({ type: 'success', message: '分类编辑已保存' });
   };
 
-  return (
-    <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4 relative">
+  const renderNotification = () => (
+    <>
       {notification && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in">
-          <div className="bg-[#1F2129] text-white px-5 py-3 rounded-xl shadow-2xl flex items-center border border-gray-700">
-            <CheckCircle2 size={18} className="mr-3 text-[#00C06B]" />
-            <span className="text-sm font-bold">{notification}</span>
-            <button onClick={() => setNotification(null)} className="ml-4 text-gray-500 hover:text-white">
+          <div className={`${notification.type === 'error' ? 'bg-[#FDECEC] border-[#F7C6C6] text-[#FF5C5C]' : 'bg-[#1F2129] border-gray-700 text-white'} px-5 py-3 rounded-xl shadow-2xl flex items-center border`}>
+            <CheckCircle2 size={18} className={`mr-3 ${notification.type === 'error' ? 'text-[#FF5C5C]' : 'text-[#00C06B]'}`} />
+            <span className="text-sm font-bold">{notification.message}</span>
+            <button onClick={() => setNotification(null)} className={`ml-4 ${notification.type === 'error' ? 'text-[#E58A8A] hover:text-[#FF5C5C]' : 'text-gray-500 hover:text-white'}`}>
               <X size={14} />
             </button>
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (editingCategory) {
+    return (
+      <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4 relative">
+        {renderNotification()}
+        <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden min-w-0">
+          <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-6 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setEditingCategory(null)}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#E8E8E8] text-[#666] transition-colors hover:border-[#00C06B] hover:text-[#00C06B]"
+                >
+                  <ChevronRight size={16} className="rotate-180" />
+                </button>
+                <div>
+                  <div className="text-lg font-bold text-[#1F2129]">编辑分类</div>
+                  <div className="mt-1 text-xs text-[#999]">
+                    当前门店：{editingCategory.storeName}，当前渠道：{CHANNEL_DEFS[editingCategory.channelId]?.label || editingCategory.channelId}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setEditingCategory(null)}
+                  className="px-5 py-2 rounded-lg border border-[#E8E8E8] text-sm text-[#333] hover:bg-gray-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveEditing}
+                  className="px-5 py-2 rounded-lg bg-[#00C06B] text-white text-sm font-bold hover:bg-[#00A35B]"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto bg-[#F8FAFB] px-6 py-6">
+            <div className="rounded-2xl bg-white border border-[#E8E8E8] p-6">
+              <div className="space-y-8">
+                <div>
+                  <div className="mb-5 text-lg font-bold text-[#1F2129]">基础信息</div>
+                  <div className="grid grid-cols-[1fr_420px] gap-10">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>分类名称</div>
+                        <div>
+                          <input value={editingCategory.name} onChange={e => updateEditingField('name', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
+                          <div className="mt-1 text-right text-xs text-[#999]">{editingCategory.name.length}/10</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">分类标识</div>
+                        <div>
+                          <input value={editingCategory.code} onChange={e => updateEditingField('code', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
+                          <div className="mt-1 text-xs text-[#999]">用于外部对接的分类标识</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">分类标签</div>
+                        <select value={editingCategory.categoryLabel} onChange={e => updateEditingField('categoryLabel', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm focus:border-[#00C06B] focus:outline-none">
+                          <option value="">请选择</option>
+                          <option value="热销">热销</option>
+                          <option value="推荐">推荐</option>
+                          <option value="新品">新品</option>
+                          <option value="早餐">早餐</option>
+                          <option value="夜宵">夜宵</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">分类描述</div>
+                        <input value={editingCategory.description} onChange={e => updateEditingField('description', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">分类备注</div>
+                        <div>
+                          <input value={editingCategory.remark} onChange={e => updateEditingField('remark', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
+                          <div className="mt-1 text-right text-xs text-[#999]">{editingCategory.remark.length}/10</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">图标</div>
+                        <div>
+                          <div className="flex h-[88px] w-[88px] items-center justify-center rounded-xl bg-[#F7F8FA] text-3xl text-[#999]">+</div>
+                          <div className="mt-2 text-xs text-[#999]">备注：建议图标尺寸：180px * 180px</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">分类banner</div>
+                        <div>
+                          <div className="flex h-[88px] w-[88px] items-center justify-center rounded-xl bg-[#F7F8FA] text-3xl text-[#999]">+</div>
+                          <div className="mt-2 text-xs text-[#999]">备注：建议图标尺寸：530px * 150px</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-3 text-base font-bold text-[#333]">小程序端预览</div>
+                      <div className="rounded-2xl bg-[#F6F7FB] p-4">
+                        <div className="flex h-[340px] gap-4 rounded-2xl bg-[#F2F3F7] p-4">
+                          <div className="w-[92px] space-y-3">
+                            <div className="h-[84px] rounded-xl bg-white/70 p-2 text-xs text-[#666] shadow-sm">
+                              <div className="mb-2 h-10 w-10 rounded-lg bg-[#D1D5DB]" />
+                              <div className="truncate">{editingCategory.name}</div>
+                            </div>
+                            <div className="h-[84px] rounded-xl bg-white/40" />
+                          </div>
+                          <div className="flex-1 rounded-xl bg-white p-4 shadow-sm">
+                            <div className="mb-4 text-lg font-bold text-[#333]">{editingCategory.name}</div>
+                            <div className="space-y-4">
+                              <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                              <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                              <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-5 text-lg font-bold text-[#1F2129]">分类设置</div>
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-[88px_1fr] gap-3">
+                      <div className="pt-1 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>售卖渠道</div>
+                      <div className="flex flex-wrap gap-6 rounded-xl bg-[#F7F8FA] px-5 py-4">
+                        {DEFAULT_CHANNELS.map(channel => (
+                          <label key={channel.id} className="flex items-center text-sm text-[#00B96B]">
+                            <input type="checkbox" checked={editingCategory.shelfChannels.includes(channel.id)} onChange={e => updateEditingField('shelfChannels', e.target.checked ? [...editingCategory.shelfChannels, channel.id] : editingCategory.shelfChannels.filter(item => item !== channel.id))} className="mr-2 h-4 w-4 rounded border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                            {channel.label.replace('-', '')}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[88px_1fr] gap-3">
+                      <div className="pt-1 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>售卖类型</div>
+                      <div className="flex flex-wrap gap-6 rounded-xl bg-[#F7F8FA] px-5 py-4">
+                        {[{ id: 'dine', label: '堂食' }, { id: 'takeout', label: '外卖' }, { id: 'mall', label: '商城' }].map(option => (
+                          <label key={option.id} className={`flex items-center text-sm ${editingCategory.saleTypes.includes(option.id) ? 'text-[#00B96B]' : 'text-[#999]'}`}>
+                            <input type="checkbox" checked={editingCategory.saleTypes.includes(option.id)} onChange={e => updateEditingField('saleTypes', e.target.checked ? [...editingCategory.saleTypes, option.id] : editingCategory.saleTypes.filter(item => item !== option.id))} className="mr-2 h-4 w-4 rounded border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[88px_1fr] gap-3">
+                      <div className="pt-1 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>展示渠道</div>
+                      <div className="flex flex-wrap gap-6 rounded-xl bg-[#F7F8FA] px-5 py-4">
+                        {[{ id: 'wechat_mini', label: '微信小程序' }, { id: 'alipay_mini', label: '支付宝小程序' }, { id: 'douyin_mini', label: '抖音小程序' }, { id: 'qimai_app', label: '企迈数店 app&企迈数店POS' }, { id: 'qimai_h5', label: '企迈H5' }].map(option => (
+                          <label key={option.id} className={`flex items-center text-sm ${editingCategory.displayChannels.includes(option.id) ? 'text-[#00B96B]' : 'text-[#999]'}`}>
+                            <input type="checkbox" checked={editingCategory.displayChannels.includes(option.id)} onChange={e => updateEditingField('displayChannels', e.target.checked ? [...editingCategory.displayChannels, option.id] : editingCategory.displayChannels.filter(item => item !== option.id))} className="mr-2 h-4 w-4 rounded border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[88px_1fr] gap-3">
+                      <div className="pt-1 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>上架时间</div>
+                      <div className="flex items-center gap-8 py-2 text-sm">
+                        <label className="flex items-center text-[#00B96B]">
+                          <input type="radio" checked={editingCategory.shelfTime === 'all_day'} onChange={() => updateEditingField('shelfTime', 'all_day')} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                          全时段售卖
+                        </label>
+                        <label className="flex items-center text-[#666]">
+                          <input type="radio" checked={editingCategory.shelfTime === 'custom'} onChange={() => updateEditingField('shelfTime', 'custom')} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                          自定义时间
+                        </label>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[88px_1fr] gap-3">
+                      <div className="pt-1 text-sm text-[#333]">限时置顶</div>
+                      <label className="flex items-center py-2">
+                        <input type="checkbox" checked={editingCategory.limitTop} onChange={e => updateEditingField('limitTop', e.target.checked)} className="h-5 w-9 rounded-full border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-[88px_1fr] gap-3">
+                      <div className="pt-1 text-sm text-[#333]">其他设置</div>
+                      <div className="rounded-xl bg-[#F7F8FA] px-5 py-4 text-sm">
+                        <div className="space-y-5">
+                          <label className="flex items-center justify-between max-w-[280px]">
+                            <span>仅在后台展示此分组</span>
+                            <input type="checkbox" checked={editingCategory.onlyBackstageGroup} onChange={e => updateEditingField('onlyBackstageGroup', e.target.checked)} className="h-5 w-9 rounded-full border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                          </label>
+                          <label className="flex items-center justify-between max-w-[280px]">
+                            <span>经典菜单隐藏</span>
+                            <input type="checkbox" checked={editingCategory.classicMenuHidden} onChange={e => updateEditingField('classicMenuHidden', e.target.checked)} className="h-5 w-9 rounded-full border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                          </label>
+                          <label className="flex items-center justify-between max-w-[280px]">
+                            <span>必选分组</span>
+                            <input type="checkbox" checked={editingCategory.requiredGroup} onChange={e => updateEditingField('requiredGroup', e.target.checked)} className="h-5 w-9 rounded-full border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]" />
+                          </label>
+                          <div className="space-y-2">
+                            <div className="font-medium text-[#333]">不可单独下单</div>
+                            <div className="flex items-center gap-8">
+                              <label className="flex items-center text-[#00B96B]">
+                                <input type="radio" checked={!editingCategory.notOrderAlone} onChange={() => updateEditingField('notOrderAlone', false)} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                                不启用
+                              </label>
+                              <label className="flex items-center text-[#666]">
+                                <input type="radio" checked={editingCategory.notOrderAlone} onChange={() => updateEditingField('notOrderAlone', true)} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                                启用
+                              </label>
+                            </div>
+                            <div className="text-xs text-[#999]">若启用，则小程序下单时选购的商品仅包含该分组的商品时，则不可下单</div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="font-medium text-[#333]">排队取餐</div>
+                            <div className="flex items-center gap-8">
+                              <label className="flex items-center text-[#00B96B]">
+                                <input type="radio" checked={editingCategory.queueSetting === 'join'} onChange={() => updateEditingField('queueSetting', 'join')} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                                进入排队
+                              </label>
+                              <label className="flex items-center text-[#666]">
+                                <input type="radio" checked={editingCategory.queueSetting === 'skip'} onChange={() => updateEditingField('queueSetting', 'skip')} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                                不进入排队
+                              </label>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="font-medium text-[#333]">订单购买限制</div>
+                            <div className="flex items-center gap-8">
+                              <label className="flex items-center text-[#00B96B]">
+                                <input type="radio" checked={editingCategory.orderLimit === 'participate'} onChange={() => updateEditingField('orderLimit', 'participate')} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                                参与
+                              </label>
+                              <label className="flex items-center text-[#666]">
+                                <input type="radio" checked={editingCategory.orderLimit === 'not_participate'} onChange={() => updateEditingField('orderLimit', 'not_participate')} className="mr-2 h-4 w-4 accent-[#00C06B]" />
+                                不参与
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4 relative">
+      {renderNotification()}
 
       <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden min-w-0">
         <div className="p-5 border-b border-[#E8E8E8] bg-white space-y-4 shrink-0 z-20">
@@ -273,8 +568,18 @@ export const WebStoreCategoryList: React.FC = () => {
               </>
             ) : (
               <button
-                onClick={() => setIsSorting(true)}
-                className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium"
+                onClick={() => {
+                  if (!canSortCurrentScope) {
+                    setNotification({ type: 'error', message: '请选择一个门店' });
+                    return;
+                  }
+                  setIsSorting(true);
+                }}
+                className={`flex items-center px-3 py-1.5 border rounded text-xs font-medium transition-colors ${
+                  canSortCurrentScope
+                    ? 'border-[#E8E8E8] text-[#333] hover:bg-gray-50'
+                    : 'border-[#E8E8E8] text-[#B5B5B5] bg-[#FAFAFA]'
+                }`}
               >
                 <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
               </button>
@@ -282,6 +587,12 @@ export const WebStoreCategoryList: React.FC = () => {
             <FieldSettingTrigger />
           </div>
         </div>
+
+        {isSorting && activeTabId === 'all' && (
+          <div className="mx-5 mt-4 rounded-lg border border-[#DDEFE4] bg-[#F3FCF7] px-4 py-3 text-sm text-[#1B9B5F]">
+            全局排序：保存后分类排序将同步至所有渠道
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto no-scrollbar">
           <table className="w-full text-left border-collapse min-w-[1160px]">
@@ -348,15 +659,12 @@ export const WebStoreCategoryList: React.FC = () => {
                     <div className="mt-1 text-[11px] text-[#999]">{item.storeId.toUpperCase()}</div>
                   </td>
                   <td className="sticky right-0 py-4 px-4 text-center bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
-                    <div className="flex items-center justify-center space-x-3 text-sm">
+                    <div className="flex items-center justify-center text-sm">
                       <button
-                        onClick={() => setEditingCategory(item)}
+                        onClick={() => openEditor(item)}
                         className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline"
                       >
                         编辑分类
-                      </button>
-                      <button className="text-[#999] hover:text-[#333]">
-                        <MoreHorizontal size={16} />
                       </button>
                     </div>
                   </td>
@@ -364,7 +672,7 @@ export const WebStoreCategoryList: React.FC = () => {
               ))}
               {filteredCategories.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-[#999]">暂无门店分类数据</td>
+                  <td colSpan={8} className="py-10 text-center text-[#999]">暂无门店商品分类数据</td>
                 </tr>
               )}
             </tbody>
@@ -392,80 +700,6 @@ export const WebStoreCategoryList: React.FC = () => {
         </div>
       </div>
 
-      {editingCategory && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45">
-          <div className="w-[560px] rounded-2xl bg-white shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#E8E8E8] flex items-center justify-between">
-              <div className="text-lg font-bold text-[#1F2129]">编辑分类</div>
-              <button onClick={() => setEditingCategory(null)} className="text-[#999] hover:text-[#333]">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <label className="block">
-                  <div className="mb-2 text-sm font-medium text-[#333]">分类名称</div>
-                  <input
-                    value={editingCategory.name}
-                    onChange={e => updateEditingField('name', e.target.value)}
-                    className="w-full h-10 px-3 border border-[#E8E8E8] rounded-lg text-sm focus:border-[#00C06B] focus:outline-none"
-                  />
-                </label>
-                <label className="block">
-                  <div className="mb-2 text-sm font-medium text-[#333]">分类标识</div>
-                  <input
-                    value={editingCategory.code}
-                    onChange={e => updateEditingField('code', e.target.value)}
-                    className="w-full h-10 px-3 border border-[#E8E8E8] rounded-lg text-sm focus:border-[#00C06B] focus:outline-none"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <label className="block">
-                  <div className="mb-2 text-sm font-medium text-[#333]">分类标签</div>
-                  <input
-                    value={editingCategory.tag}
-                    onChange={e => updateEditingField('tag', e.target.value)}
-                    className="w-full h-10 px-3 border border-[#E8E8E8] rounded-lg text-sm focus:border-[#00C06B] focus:outline-none"
-                  />
-                </label>
-                <label className="block">
-                  <div className="mb-2 text-sm font-medium text-[#333]">是否必选分组</div>
-                  <select
-                    value={editingCategory.requiredGroup ? 'yes' : 'no'}
-                    onChange={e => updateEditingField('requiredGroup', e.target.value === 'yes')}
-                    className="w-full h-10 px-3 border border-[#E8E8E8] rounded-lg text-sm bg-white focus:border-[#00C06B] focus:outline-none"
-                  >
-                    <option value="no">否</option>
-                    <option value="yes">是</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] px-4 py-3 text-sm text-[#666]">
-                当前门店：{editingCategory.storeName}，当前渠道：{CHANNEL_DEFS[editingCategory.channelId]?.label || editingCategory.channelId}
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-[#E8E8E8] flex justify-end gap-3">
-              <button
-                onClick={() => setEditingCategory(null)}
-                className="px-5 py-2 rounded-lg border border-[#E8E8E8] text-sm text-[#333] hover:bg-gray-50"
-              >
-                取消
-              </button>
-              <button
-                onClick={saveEditing}
-                className="px-5 py-2 rounded-lg bg-[#00C06B] text-white text-sm font-bold hover:bg-[#00A35B]"
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

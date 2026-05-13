@@ -1,10 +1,46 @@
-import React, { useState } from 'react';
-import { ArrowLeft, FileText, Utensils, LayoutGrid, Check, Plus, Trash2, Settings, GripVertical, Info, Sparkles, ChevronDown, ChevronRight, X, Search, Filter, Edit2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, FileText, Utensils, LayoutGrid, Plus, Trash2, Settings, GripVertical, Info, Sparkles, ChevronDown, ChevronUp, X, Search, ImageIcon, Clock3 } from 'lucide-react';
 import { Category } from '../../types';
 import { SectionHeader, FormRow, Switch } from './WebCommon';
 
 // --- Types ---
 type GroupType = 'fixed' | 'optional' | 'free';
+type SectionId = 'basic' | 'combo' | 'display' | 'sales' | 'settings';
+
+type ComboFormState = {
+    name: string;
+    price: string;
+    frontCategory: string;
+    backCategory: string;
+    unit: string;
+    remark: string;
+    image: string;
+    listDesc: string;
+    descTags: string;
+    badge: string;
+    badgeDate: string;
+    detailImages: string;
+    richDesc: string;
+    detailBottomImage: string;
+    video: string;
+    minPurchaseEnabled: boolean;
+    minPurchaseValue: string;
+    maxPurchaseEnabled: boolean;
+    maxPurchaseValue: string;
+    timeSaleEnabled: boolean;
+    timeSaleRule: string;
+    saleMode: 'all' | 'store' | 'takeout';
+    takeoutRule: 'inherit' | 'visible' | 'hidden';
+    saleSettings: string;
+    pointsExchangeEnabled: boolean;
+    taxRate: string;
+    prepEnabled: boolean;
+    prepTime: string;
+    stapleEnabled: boolean;
+    baseSales: string;
+    shareTitle: string;
+    shareDesc: string;
+};
 
 interface ComboItem {
     id: string;
@@ -45,14 +81,77 @@ const MOCK_PRODUCTS = [
     { id: 'p4', name: '0330标品-5', spec: '默认', price: 10 },
 ];
 
+const DISPLAY_COLLAPSIBLE_FIELDS = [
+    { id: 'badge', label: '商品角标' },
+    { id: 'badgeDate', label: '角标展示日期' },
+    { id: 'detailBottomImage', label: '商品详情页底图' },
+    { id: 'video', label: '商品视频' },
+] as const;
+
+const SALES_COLLAPSIBLE_FIELDS = [
+    { id: 'saleSettings', label: '售卖设置' },
+    { id: 'pointsExchange', label: '积分兑换规则' },
+    { id: 'taxRate', label: '税率' },
+] as const;
+
+const OTHER_COLLAPSIBLE_FIELDS = [
+    { id: 'prep', label: '预留备货时间' },
+    { id: 'staple', label: '设为主食' },
+    { id: 'baseSales', label: '基础销量' },
+    { id: 'share', label: '商品分享' },
+] as const;
+
+const DEFAULT_FORM_STATE: ComboFormState = {
+    name: '',
+    price: '',
+    frontCategory: '',
+    backCategory: '',
+    unit: '份',
+    remark: '',
+    image: '',
+    listDesc: '',
+    descTags: '',
+    badge: '',
+    badgeDate: '',
+    detailImages: '',
+    richDesc: '',
+    detailBottomImage: '',
+    video: '',
+    minPurchaseEnabled: false,
+    minPurchaseValue: '',
+    maxPurchaseEnabled: false,
+    maxPurchaseValue: '',
+    timeSaleEnabled: false,
+    timeSaleRule: '',
+    saleMode: 'all',
+    takeoutRule: 'inherit',
+    saleSettings: '',
+    pointsExchangeEnabled: false,
+    taxRate: '',
+    prepEnabled: false,
+    prepTime: '',
+    stapleEnabled: false,
+    baseSales: '',
+    shareTitle: '',
+    shareDesc: '',
+};
+
 interface Props {
     category: Category;
     onClose: () => void;
 }
 
 export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) => {
-    const [activeSection, setActiveSection] = useState('basic');
+    const [activeSection, setActiveSection] = useState<SectionId>('basic');
     const [groups, setGroups] = useState<ComboGroup[]>([]);
+    const [formState, setFormState] = useState<ComboFormState>({
+        ...DEFAULT_FORM_STATE,
+        frontCategory: category.name,
+    });
+    const [isBasicExpanded, setIsBasicExpanded] = useState(false);
+    const [expandedDisplayFields, setExpandedDisplayFields] = useState<string[]>([]);
+    const [expandedSalesFields, setExpandedSalesFields] = useState<string[]>([]);
+    const [expandedOtherFields, setExpandedOtherFields] = useState<string[]>([]);
     const [isFreeModalOpen, setIsFreeModalOpen] = useState(false);
 
     // 可选分组弹窗状态
@@ -74,10 +173,58 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
     // 拖拽相关状态
     const [draggedGroupIdx, setDraggedGroupIdx] = useState<number | null>(null);
 
-    const scrollToSection = (id: string) => {
+    const scrollToSection = (id: SectionId) => {
         setActiveSection(id);
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const updateFormState = <K extends keyof ComboFormState>(key: K, value: ComboFormState[K]) => {
+        setFormState(prev => ({ ...prev, [key]: value }));
+    };
+
+    const progress = useMemo(() => {
+        const items = [
+            Boolean(formState.name && formState.image),
+            groups.length > 0,
+            Boolean(formState.listDesc || formState.richDesc || formState.detailImages),
+            Boolean(formState.minPurchaseEnabled || formState.maxPurchaseEnabled || formState.timeSaleEnabled || formState.saleSettings || formState.pointsExchangeEnabled || formState.taxRate),
+        ];
+        return {
+            completed: items.filter(Boolean).length,
+            total: items.length,
+        };
+    }, [formState, groups.length]);
+
+    const renderCollapseActions = (
+        items: readonly { id: string; label: string }[],
+        expandedIds: string[],
+        setExpandedIds: React.Dispatch<React.SetStateAction<string[]>>
+    ) => {
+        const allExpanded = items.length > 0 && items.every(item => expandedIds.includes(item.id));
+
+        return (
+            <div className="flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => setExpandedIds(allExpanded ? [] : items.map(item => item.id))}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-[#666] transition-colors hover:border-[#00C06B]/30 hover:text-[#00A35B]"
+                >
+                    {allExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {allExpanded ? '收起' : '展开'}
+                </button>
+                {!allExpanded && items.map(item => (
+                    <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setExpandedIds(prev => (prev.includes(item.id) ? prev : [...prev, item.id]))}
+                        className="rounded-full bg-[#F5F7FA] px-3 py-1 text-xs font-medium text-[#4E5969] transition-colors hover:bg-[#ECFDF3] hover:text-[#00A35B]"
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </div>
+        );
     };
 
     // --- Actions ---
@@ -237,14 +384,15 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                     </button>
                     <div>
                         <div className="flex items-center space-x-2">
-                            <span className="font-bold text-gray-800 text-lg">创建套餐商品 (全新重构)</span>
+                            <span className="font-bold text-gray-800 text-lg">填写套餐商品资料</span>
                             <span className="text-[10px] bg-[#00C06B]/10 text-[#00C06B] px-2 py-0.5 rounded-full font-bold border border-[#00C06B]/20">类目: {category.name}</span>
                         </div>
+                        <div className="text-xs text-gray-400">套餐创建页已补充为和新建商品页相近的模块结构，套餐不支持加料配置。</div>
                     </div>
                 </div>
                 <div className="flex space-x-3">
                     <button onClick={onClose} className="px-6 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 border border-gray-200 transition-colors">取消</button>
-                    <button className="px-6 py-2 rounded-lg text-sm font-bold text-white bg-[#00C06B] hover:bg-[#00A35B] shadow-md shadow-[#00C06B]/20 transition-all active:scale-95">保存商品</button>
+                    <button className="px-6 py-2 rounded-lg text-sm font-bold text-white bg-[#00C06B] hover:bg-[#00A35B] shadow-md shadow-[#00C06B]/20 transition-all active:scale-95">保存套餐</button>
                 </div>
             </div>
 
@@ -252,7 +400,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                 {/* Left Navigation */}
                 <div className="w-48 bg-white border-r border-[#E8E8E8] py-6 flex flex-col space-y-1 overflow-y-auto shrink-0">
                     <div className="px-6 text-xs font-black text-gray-400 uppercase tracking-widest mb-4">填写导航</div>
-                    {['basic', 'combo'].map(section => (
+                    {(['basic', 'combo', 'display', 'sales', 'settings'] as SectionId[]).map(section => (
                         <div 
                             key={section}
                             onClick={() => scrollToSection(section)}
@@ -260,6 +408,9 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                         >
                             {section === 'basic' && '基础信息'}
                             {section === 'combo' && '套餐商品配置'}
+                            {section === 'display' && '展示设置'}
+                            {section === 'sales' && '销售属性'}
+                            {section === 'settings' && '其他属性'}
                         </div>
                     ))}
                 </div>
@@ -269,17 +420,116 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                     <div className="max-w-[1000px] mx-auto space-y-6 pb-32">
                         
                         {/* Section: Basic */}
-                        <div id="basic" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6">
+                        <div id="basic" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-4">
                             <SectionHeader title="基础信息" icon={<FileText size={20}/>} />
-                            <div className="grid grid-cols-2 gap-8">
-                                <FormRow label="套餐名称" required><input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]" placeholder="请输入套餐名称"/></FormRow>
-                                <FormRow label="基础价格" required><input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]" placeholder="0.00"/></FormRow>
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                <FormRow label="套餐名称" required>
+                                    <input
+                                        value={formState.name}
+                                        onChange={(e) => updateFormState('name', e.target.value)}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                        placeholder="请输入套餐名称"
+                                    />
+                                </FormRow>
+                                <FormRow label="基础价格" required>
+                                    <input
+                                        value={formState.price}
+                                        onChange={(e) => updateFormState('price', e.target.value)}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                        placeholder="0.00"
+                                    />
+                                </FormRow>
+                                <FormRow label="前台分类" required>
+                                    <input
+                                        value={formState.frontCategory}
+                                        onChange={(e) => updateFormState('frontCategory', e.target.value)}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                        placeholder="请选择前台分类"
+                                    />
+                                </FormRow>
+                                <FormRow label="商品类目" required>
+                                    <input
+                                        value={category.name}
+                                        readOnly
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 outline-none"
+                                    />
+                                </FormRow>
+                                <FormRow label="计量单位">
+                                    <input
+                                        value={formState.unit}
+                                        onChange={(e) => updateFormState('unit', e.target.value)}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                        placeholder="请输入计量单位"
+                                    />
+                                </FormRow>
+                                <FormRow label="商品主图" required description="支持填写图片链接预览效果">
+                                    <div className="rounded-xl border border-dashed border-[#8BE1B2] bg-[#F2FFF8] p-3">
+                                        <div className="flex items-center justify-center bg-white rounded-lg min-h-[88px]">
+                                            {formState.image ? (
+                                                <img src={formState.image} alt="套餐主图" className="max-h-[88px] object-cover rounded-md" />
+                                            ) : (
+                                                <div className="text-center">
+                                                    <ImageIcon size={22} className="mx-auto text-[#00C06B] opacity-70" />
+                                                    <div className="mt-1 text-xs text-gray-500">未上传主图</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <input
+                                            value={formState.image}
+                                            onChange={(e) => updateFormState('image', e.target.value)}
+                                            className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                            placeholder="请输入主图链接"
+                                        />
+                                    </div>
+                                </FormRow>
                             </div>
+                            <div className="pt-1 flex items-center gap-2 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsBasicExpanded(prev => !prev)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-[#666] transition-colors hover:border-[#00C06B]/30 hover:text-[#00A35B]"
+                                >
+                                    {isBasicExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    {isBasicExpanded ? '收起' : '展开'}
+                                </button>
+                                {!isBasicExpanded && (
+                                    <>
+                                        <button type="button" onClick={() => setIsBasicExpanded(true)} className="rounded-full bg-[#F5F7FA] px-3 py-1 text-xs font-medium text-[#4E5969] hover:bg-[#ECFDF3] hover:text-[#00A35B]">后台分类</button>
+                                        <button type="button" onClick={() => setIsBasicExpanded(true)} className="rounded-full bg-[#F5F7FA] px-3 py-1 text-xs font-medium text-[#4E5969] hover:bg-[#ECFDF3] hover:text-[#00A35B]">备注</button>
+                                    </>
+                                )}
+                            </div>
+                            {isBasicExpanded && (
+                                <div className="rounded-xl bg-[#FAFBFC] border border-gray-200/70 p-4 space-y-4">
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                        <FormRow label="后台分类">
+                                            <input
+                                                value={formState.backCategory}
+                                                onChange={(e) => updateFormState('backCategory', e.target.value)}
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入后台分类"
+                                            />
+                                        </FormRow>
+                                        <FormRow label="备注">
+                                            <input
+                                                value={formState.remark}
+                                                onChange={(e) => updateFormState('remark', e.target.value)}
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入备注"
+                                            />
+                                        </FormRow>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Section: Combo */}
                         <div id="combo" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-6 min-h-[400px]">
-                            <SectionHeader title="套餐商品配置" icon={<Utensils size={20}/>} />
+                            <SectionHeader
+                                title="套餐商品配置"
+                                icon={<Utensils size={20}/>}
+                                meta={<span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#FFF7E8] text-[#D46B08]">套餐不支持加料</span>}
+                            />
                             
                             <div className="flex items-center space-x-4 mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200 border-dashed">
                                 <span className="text-sm font-bold text-gray-600 mr-2">添加配置:</span>
@@ -466,6 +716,280 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div id="display" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-4">
+                            <SectionHeader title="展示设置" icon={<LayoutGrid size={20}/>} />
+                            <div className="space-y-4">
+                                <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                                    <div className="text-sm font-bold text-gray-800">列表页展示</div>
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                        <FormRow label="商品列表简述">
+                                            <input
+                                                value={formState.listDesc}
+                                                onChange={(e) => updateFormState('listDesc', e.target.value)}
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入商品列表简述"
+                                            />
+                                        </FormRow>
+                                        <FormRow label="描述标签">
+                                            <input
+                                                value={formState.descTags}
+                                                onChange={(e) => updateFormState('descTags', e.target.value)}
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="如：双人套餐 / 人气推荐"
+                                            />
+                                        </FormRow>
+                                    </div>
+                                    {renderCollapseActions(DISPLAY_COLLAPSIBLE_FIELDS.slice(0, 2), expandedDisplayFields, setExpandedDisplayFields)}
+                                    {(expandedDisplayFields.includes('badge') || expandedDisplayFields.includes('badgeDate')) && (
+                                        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                            {expandedDisplayFields.includes('badge') && (
+                                                <FormRow label="商品角标">
+                                                    <input
+                                                        value={formState.badge}
+                                                        onChange={(e) => updateFormState('badge', e.target.value)}
+                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                        placeholder="如：新品 / 限时"
+                                                    />
+                                                </FormRow>
+                                            )}
+                                            {expandedDisplayFields.includes('badgeDate') && (
+                                                <FormRow label="角标展示日期">
+                                                    <input
+                                                        value={formState.badgeDate}
+                                                        onChange={(e) => updateFormState('badgeDate', e.target.value)}
+                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                        placeholder="如：2026-05-01 ~ 2026-05-31"
+                                                    />
+                                                </FormRow>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                                    <div className="text-sm font-bold text-gray-800">详情页展示</div>
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                        <FormRow label="商品详情图">
+                                            <textarea
+                                                value={formState.detailImages}
+                                                onChange={(e) => updateFormState('detailImages', e.target.value)}
+                                                className="w-full min-h-[88px] resize-none border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入详情图链接，多个链接可换行输入"
+                                            />
+                                        </FormRow>
+                                        <FormRow label="商品详情">
+                                            <textarea
+                                                value={formState.richDesc}
+                                                onChange={(e) => updateFormState('richDesc', e.target.value)}
+                                                className="w-full min-h-[88px] resize-none border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入套餐详情描述"
+                                            />
+                                        </FormRow>
+                                    </div>
+                                    {renderCollapseActions(DISPLAY_COLLAPSIBLE_FIELDS.slice(2), expandedDisplayFields, setExpandedDisplayFields)}
+                                    {(expandedDisplayFields.includes('detailBottomImage') || expandedDisplayFields.includes('video')) && (
+                                        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                            {expandedDisplayFields.includes('detailBottomImage') && (
+                                                <FormRow label="商品详情页底图">
+                                                    <input
+                                                        value={formState.detailBottomImage}
+                                                        onChange={(e) => updateFormState('detailBottomImage', e.target.value)}
+                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                        placeholder="请输入详情页底图链接"
+                                                    />
+                                                </FormRow>
+                                            )}
+                                            {expandedDisplayFields.includes('video') && (
+                                                <FormRow label="商品视频">
+                                                    <input
+                                                        value={formState.video}
+                                                        onChange={(e) => updateFormState('video', e.target.value)}
+                                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                        placeholder="请输入视频链接"
+                                                    />
+                                                </FormRow>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="sales" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-4">
+                            <SectionHeader title="销售属性" icon={<Settings size={20}/>} />
+                            <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+                                <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                    <FormRow label="起购数量">
+                                        <div className="flex items-center gap-3">
+                                            <Switch active={formState.minPurchaseEnabled} onClick={() => updateFormState('minPurchaseEnabled', !formState.minPurchaseEnabled)} />
+                                            {formState.minPurchaseEnabled && (
+                                                <input
+                                                    value={formState.minPurchaseValue}
+                                                    onChange={(e) => updateFormState('minPurchaseValue', e.target.value)}
+                                                    className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                    placeholder="请输入数量"
+                                                />
+                                            )}
+                                        </div>
+                                    </FormRow>
+                                    <FormRow label="限购数量">
+                                        <div className="flex items-center gap-3">
+                                            <Switch active={formState.maxPurchaseEnabled} onClick={() => updateFormState('maxPurchaseEnabled', !formState.maxPurchaseEnabled)} />
+                                            {formState.maxPurchaseEnabled && (
+                                                <input
+                                                    value={formState.maxPurchaseValue}
+                                                    onChange={(e) => updateFormState('maxPurchaseValue', e.target.value)}
+                                                    className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                    placeholder="请输入数量"
+                                                />
+                                            )}
+                                        </div>
+                                    </FormRow>
+                                    <FormRow label="分时段销售">
+                                        <div className="flex items-center gap-3">
+                                            <Switch active={formState.timeSaleEnabled} onClick={() => updateFormState('timeSaleEnabled', !formState.timeSaleEnabled)} />
+                                            {formState.timeSaleEnabled && (
+                                                <input
+                                                    value={formState.timeSaleRule}
+                                                    onChange={(e) => updateFormState('timeSaleRule', e.target.value)}
+                                                    className="w-[260px] border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                    placeholder="如：10:00-14:00,17:00-20:00"
+                                                />
+                                            )}
+                                        </div>
+                                    </FormRow>
+                                    <FormRow label="售卖方式">
+                                        <div className="flex flex-wrap items-center gap-5 pt-1 text-sm text-gray-700">
+                                            {[
+                                                { key: 'all', label: '全部渠道' },
+                                                { key: 'store', label: '仅门店' },
+                                                { key: 'takeout', label: '仅外卖' },
+                                            ].map(item => (
+                                                <label key={item.key} className="flex items-center gap-2 cursor-pointer">
+                                                    <input type="radio" checked={formState.saleMode === item.key} onChange={() => updateFormState('saleMode', item.key as ComboFormState['saleMode'])} className="accent-[#00C06B]" />
+                                                    <span>{item.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </FormRow>
+                                    <FormRow label="外带设置">
+                                        <div className="flex flex-wrap items-center gap-5 pt-1 text-sm text-gray-700">
+                                            {[
+                                                { key: 'inherit', label: '跟随门店' },
+                                                { key: 'visible', label: '允许外带' },
+                                                { key: 'hidden', label: '不支持外带' },
+                                            ].map(item => (
+                                                <label key={item.key} className="flex items-center gap-2 cursor-pointer">
+                                                    <input type="radio" checked={formState.takeoutRule === item.key} onChange={() => updateFormState('takeoutRule', item.key as ComboFormState['takeoutRule'])} className="accent-[#00C06B]" />
+                                                    <span>{item.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </FormRow>
+                                </div>
+                            </div>
+
+                            {renderCollapseActions(SALES_COLLAPSIBLE_FIELDS, expandedSalesFields, setExpandedSalesFields)}
+                            {expandedSalesFields.length > 0 && (
+                                <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                                    {expandedSalesFields.includes('saleSettings') && (
+                                        <FormRow label="售卖设置">
+                                            <textarea
+                                                value={formState.saleSettings}
+                                                onChange={(e) => updateFormState('saleSettings', e.target.value)}
+                                                className="w-full min-h-[88px] resize-none border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入套餐售卖设置说明"
+                                            />
+                                        </FormRow>
+                                    )}
+                                    {expandedSalesFields.includes('pointsExchange') && (
+                                        <FormRow label="积分兑换规则" description="套餐支持配置纯积分或积分+金额兑换规则。" descriptionPlacement="bottom">
+                                            <div className="flex items-center gap-3">
+                                                <Switch active={formState.pointsExchangeEnabled} onClick={() => updateFormState('pointsExchangeEnabled', !formState.pointsExchangeEnabled)} />
+                                                <span className="text-sm text-gray-600">开启后可同步到积分商城套餐商品</span>
+                                            </div>
+                                        </FormRow>
+                                    )}
+                                    {expandedSalesFields.includes('taxRate') && (
+                                        <FormRow label="税率">
+                                            <input
+                                                value={formState.taxRate}
+                                                onChange={(e) => updateFormState('taxRate', e.target.value)}
+                                                className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="如：6%"
+                                            />
+                                        </FormRow>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div id="settings" className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm space-y-4">
+                            <SectionHeader title="其他属性" icon={<Clock3 size={20}/>} />
+                            {renderCollapseActions(OTHER_COLLAPSIBLE_FIELDS, expandedOtherFields, setExpandedOtherFields)}
+                            {expandedOtherFields.length > 0 ? (
+                                <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                                    {expandedOtherFields.includes('prep') && (
+                                        <FormRow label="预留备货时间" description="用于提前备货的套餐场景。" descriptionPlacement="bottom">
+                                            <div className="flex items-center gap-3">
+                                                <Switch active={formState.prepEnabled} onClick={() => updateFormState('prepEnabled', !formState.prepEnabled)} />
+                                                {formState.prepEnabled && (
+                                                    <input
+                                                        value={formState.prepTime}
+                                                        onChange={(e) => updateFormState('prepTime', e.target.value)}
+                                                        className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                        placeholder="如：30分钟"
+                                                    />
+                                                )}
+                                            </div>
+                                        </FormRow>
+                                    )}
+                                    {expandedOtherFields.includes('staple') && (
+                                        <FormRow label="设为主食">
+                                            <div className="flex items-center gap-3 text-sm text-gray-600">
+                                                <Switch active={formState.stapleEnabled} onClick={() => updateFormState('stapleEnabled', !formState.stapleEnabled)} />
+                                                <span>用于部分套餐主食展示场景</span>
+                                            </div>
+                                        </FormRow>
+                                    )}
+                                    {expandedOtherFields.includes('baseSales') && (
+                                        <FormRow label="基础销量">
+                                            <input
+                                                value={formState.baseSales}
+                                                onChange={(e) => updateFormState('baseSales', e.target.value)}
+                                                className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                placeholder="请输入基础销量"
+                                            />
+                                        </FormRow>
+                                    )}
+                                    {expandedOtherFields.includes('share') && (
+                                        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                                            <FormRow label="分享标题">
+                                                <input
+                                                    value={formState.shareTitle}
+                                                    onChange={(e) => updateFormState('shareTitle', e.target.value)}
+                                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                    placeholder="请输入分享标题"
+                                                />
+                                            </FormRow>
+                                            <FormRow label="分享描述">
+                                                <input
+                                                    value={formState.shareDesc}
+                                                    onChange={(e) => updateFormState('shareDesc', e.target.value)}
+                                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                                                    placeholder="请输入分享描述"
+                                                />
+                                            </FormRow>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] px-4 py-6 text-center text-sm text-gray-400">
+                                    当前模块以低频配置为主，按需展开填写即可。
                                 </div>
                             )}
                         </div>

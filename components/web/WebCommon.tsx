@@ -9,9 +9,9 @@ export const Switch: React.FC<{ active: boolean; onClick: () => void }> = ({ act
 );
 
 export const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode; meta?: React.ReactNode }> = ({ title, icon, meta }) => (
-  <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 gap-4">
+  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 gap-3">
     <div className="flex items-center min-w-0">
-      {icon && <div className="mr-3 text-[#00C06B] opacity-80">{icon}</div>}
+      {icon && <div className="mr-2.5 text-[#00C06B] opacity-80">{icon}</div>}
       <h3 className="text-lg font-bold text-gray-800">{title}</h3>
     </div>
     {meta && <div className="shrink-0">{meta}</div>}
@@ -22,13 +22,13 @@ export const FormRow: React.FC<{ label: string; required?: boolean; description?
   if (isHorizontal) {
       return (
           <div className="flex items-start">
-              <div className="w-[120px] shrink-0 mt-2.5 flex justify-end pr-6 items-baseline border-r border-gray-200/60 h-full min-h-[32px]">
+              <div className="w-[120px] shrink-0 mt-1.5 flex justify-end pr-4 items-baseline border-r border-gray-200/60 h-full min-h-[32px]">
                 <label className="text-[14px] font-bold text-gray-700 text-right">
                   {label}
                   {required && <span className="text-red-500 ml-1">*</span>}
                 </label>
               </div>
-              <div className="flex-1 flex flex-col space-y-2 pl-6">
+              <div className="flex-1 flex flex-col space-y-1 pl-4">
                   {children}
                   {description && <span className="text-[11px] text-gray-400 font-medium">{description}</span>}
               </div>
@@ -36,7 +36,7 @@ export const FormRow: React.FC<{ label: string; required?: boolean; description?
       );
   }
   return (
-    <div className="flex flex-col space-y-2">
+    <div className="flex flex-col space-y-1">
       <div className="flex justify-between items-baseline">
         <label className="text-[13px] font-bold text-gray-700">
           {label}

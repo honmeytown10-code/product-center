@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
     Search, ChevronRight, CheckCircle2, ChevronDown,
-    Layers, RefreshCw, FileUp, FileEdit, X
+    Layers, RefreshCw, FileUp, FileEdit, X, PackagePlus, Tickets, Tags, Copy, Trash2, SquarePen
 } from 'lucide-react';
 
 type ProductCategoryConfig = {
@@ -146,6 +146,16 @@ const getListTimeSaleSummary = (timeSale: TimeSaleConfig) => (
     timeSale.enabled ? '已开启分时段售卖' : '全时段售卖'
 );
 
+type ToolCardConfig = {
+    title: string;
+    desc: string;
+    icon: React.ReactNode;
+    iconWrapClass: string;
+    onClick?: () => void;
+    featured?: boolean;
+    disabled?: boolean;
+};
+
 const getDisplayCategory = (product: EditableProduct, selectedCategoryName: string) => {
     if (selectedCategoryName !== 'all') {
         return product.categories.find(category => category.name === selectedCategoryName);
@@ -288,63 +298,143 @@ export const WebProductSync: React.FC = () => {
         });
     };
 
-    const renderToolsMenu = () => (
-        <div className="p-8 h-full overflow-y-auto">
-            <div className="mb-8">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center before:content-[''] before:w-1 before:h-4 before:bg-[#00C06B] before:mr-2">商品同步</h3>
-                <div className="grid grid-cols-3 gap-6">
-                    <div
-                        onClick={() => setStep(1)}
-                        className="bg-white p-6 rounded-xl shadow-sm border border-[#00C06B] cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden group"
-                    >
-                        <div className="absolute top-0 left-0 w-1 h-full bg-[#00C06B]"></div>
-                        <div className="flex items-start">
-                            <div className="w-12 h-12 bg-orange-50 rounded-lg flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
-                                <RefreshCw size={24} className="text-orange-500" />
-                            </div>
-                            <div>
-                                <h4 className="text-base font-bold text-gray-800 mb-1">同步商品至门店</h4>
-                                <p className="text-xs text-gray-400">同步商品至门店</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow flex items-start">
-                        <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center mr-4">
-                            <FileUp size={24} className="text-[#00C06B]" />
-                        </div>
-                        <div>
-                            <h4 className="text-base font-bold text-gray-800 mb-1">同步套餐商品至门店</h4>
-                            <p className="text-xs text-gray-400">仅同步套餐商品至门店</p>
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow flex items-start">
-                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mr-4">
-                            <Layers size={24} className="text-blue-500" />
-                        </div>
-                        <div>
-                            <h4 className="text-base font-bold text-gray-800 mb-1">批量同步模板至门店</h4>
-                            <p className="text-xs text-gray-400">批量同步多个模板的商品至门店</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    const renderToolsMenu = () => {
+        const syncCards: ToolCardConfig[] = [
+            {
+                title: '同步商品至门店',
+                desc: '同步商品至门店',
+                icon: <RefreshCw size={24} className="text-orange-500" />,
+                iconWrapClass: 'bg-orange-50',
+                onClick: () => setStep(1),
+                featured: true,
+            },
+            {
+                title: '批量同步模板至门店',
+                desc: '批量同步多个模板的商品至门店',
+                icon: <Layers size={24} className="text-cyan-500" />,
+                iconWrapClass: 'bg-cyan-50',
+            },
+            {
+                title: '更新门店商品属性',
+                desc: '更新商品属性至门店',
+                icon: <SquarePen size={24} className="text-green-500" />,
+                iconWrapClass: 'bg-green-50',
+            },
+            {
+                title: '同步套餐商品至门店',
+                desc: '仅同步套餐商品至门店',
+                icon: <PackagePlus size={24} className="text-emerald-500" />,
+                iconWrapClass: 'bg-emerald-50',
+            },
+        ];
 
-            <div className="mb-8">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center before:content-[''] before:w-1 before:h-4 before:bg-[#00C06B] before:mr-2">批量修改</h3>
-                <div className="grid grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start opacity-70">
-                        <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mr-4">
-                            <FileEdit size={24} className="text-blue-500" />
+        const batchCards: ToolCardConfig[] = [
+            {
+                title: '批量修改标准商品',
+                desc: '批量修改商品库、模板、门店的商品信息',
+                icon: <FileEdit size={24} className="text-blue-500" />,
+                iconWrapClass: 'bg-blue-50',
+            },
+            {
+                title: '批量修改套餐商品',
+                desc: '批量修改商品库、模板、门店的商品信息',
+                icon: <PackagePlus size={24} className="text-emerald-500" />,
+                iconWrapClass: 'bg-emerald-50',
+            },
+            {
+                title: '批量修改加料商品',
+                desc: '批量修改门店商品信息',
+                icon: <Tickets size={24} className="text-violet-500" />,
+                iconWrapClass: 'bg-violet-50',
+            },
+            {
+                title: '批量修改商品关联加料',
+                desc: '修改部分商品库、模板、门店商品关联的加料',
+                icon: <Tags size={24} className="text-rose-500" />,
+                iconWrapClass: 'bg-rose-50',
+            },
+            {
+                title: '批量修改商品关联做法',
+                desc: '批量修改商品库、模板、门店商品的做法',
+                icon: <Layers size={24} className="text-lime-500" />,
+                iconWrapClass: 'bg-lime-50',
+            },
+            {
+                title: '批量启用/禁用门店做法',
+                desc: '批量启用或禁用门店对应的做法',
+                icon: <Layers size={24} className="text-yellow-500" />,
+                iconWrapClass: 'bg-yellow-50',
+            },
+        ];
+
+        const productToolCards: ToolCardConfig[] = [
+            {
+                title: '删除门店商品',
+                desc: '根据各种匹配配置信息从门店删除',
+                icon: <Trash2 size={24} className="text-red-500" />,
+                iconWrapClass: 'bg-red-50',
+            },
+            {
+                title: '删除门店加料',
+                desc: '根据各种匹配配置从门店删除加料',
+                icon: <Trash2 size={24} className="text-red-500" />,
+                iconWrapClass: 'bg-red-50',
+            },
+            {
+                title: '门店商品复制',
+                desc: '适用于将店开业等门店商品完整克隆至目标门店',
+                icon: <Copy size={24} className="text-emerald-500" />,
+                iconWrapClass: 'bg-emerald-50',
+            },
+        ];
+
+        const renderCardGrid = (cards: ToolCardConfig[]) => (
+            <div className="grid grid-cols-3 gap-4">
+                {cards.map(card => (
+                    <button
+                        key={card.title}
+                        type="button"
+                        onClick={card.onClick}
+                        className={`relative overflow-hidden rounded-xl border bg-white p-5 text-left transition-all ${
+                            card.featured
+                                ? 'border-[#00C06B] shadow-sm hover:shadow-md'
+                                : 'border-gray-100 shadow-sm hover:shadow-md'
+                        } ${card.disabled ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                        {card.featured && <div className="absolute left-0 top-0 h-full w-1 bg-[#00C06B]" />}
+                        <div className="flex items-start">
+                            <div className={`mr-4 flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${card.iconWrapClass}`}>
+                                {card.icon}
+                            </div>
+                            <div className="min-w-0">
+                                <h4 className="mb-1 text-base font-bold text-gray-800">{card.title}</h4>
+                                <p className="text-xs text-gray-400">{card.desc}</p>
+                            </div>
                         </div>
-                        <div>
-                            <h4 className="text-base font-bold text-gray-800 mb-1">批量修改标准商品</h4>
-                            <p className="text-xs text-gray-400">批量修改商品库、模板、门店的商品信息</p>
-                        </div>
-                    </div>
+                    </button>
+                ))}
+            </div>
+        );
+
+        return (
+            <div className="h-full overflow-y-auto p-8">
+                <div className="mb-8">
+                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">商品同步</h3>
+                    {renderCardGrid(syncCards)}
+                </div>
+
+                <div className="mb-8">
+                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">批量修改</h3>
+                    {renderCardGrid(batchCards)}
+                </div>
+
+                <div>
+                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">商品工具</h3>
+                    {renderCardGrid(productToolCards)}
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderEditorDrawer = () => {
         if (!editingProductId) return null;

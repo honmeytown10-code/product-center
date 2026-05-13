@@ -6,6 +6,8 @@ import {
   ArrowUpDown, Upload, PackageOpen
 } from 'lucide-react';
 import { useProducts } from '../../context';
+import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
+import { StockoutSpec, WebStockoutModal } from './WebStockoutModal';
 
 type StoreProductPageMode = 'manage' | 'coverage';
 type StoreProductManagePreset = {
@@ -26,6 +28,8 @@ type StoreProductRecord = {
   status: 'on_shelf' | 'off_shelf';
   stockStatus: 'normal' | 'low' | 'empty';
   stockCount: number;
+  isMultiSpec?: boolean;
+  specs?: StockoutSpec[];
   lastSync: string;
   sortIndex: number;
 };
@@ -68,6 +72,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     status: 'on_shelf',
     stockStatus: 'normal',
     stockCount: 128,
+    isMultiSpec: false,
     lastSync: '10分钟前',
     sortIndex: 0,
   },
@@ -85,6 +90,12 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     status: 'on_shelf',
     stockStatus: 'low',
     stockCount: 18,
+    isMultiSpec: true,
+    specs: [
+      { id: 's2-1', name: '标准杯', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+      { id: 's2-2', name: '大杯', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+      { id: 's2-3', name: '超大杯', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+    ],
     lastSync: '25分钟前',
     sortIndex: 1,
   },
@@ -102,6 +113,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     status: 'on_shelf',
     stockStatus: 'normal',
     stockCount: 76,
+    isMultiSpec: false,
     lastSync: '5分钟前',
     sortIndex: 1,
   },
@@ -119,6 +131,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     status: 'off_shelf',
     stockStatus: 'empty',
     stockCount: 0,
+    isMultiSpec: false,
     lastSync: '2小时前',
     sortIndex: 1,
   },
@@ -136,6 +149,12 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     status: 'on_shelf',
     stockStatus: 'normal',
     stockCount: 32,
+    isMultiSpec: true,
+    specs: [
+      { id: 's4-1', name: '规格1', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+      { id: 's4-2', name: '规格2', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+      { id: 's4-3', name: '规格3', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+    ],
     lastSync: '昨天 21:12',
     sortIndex: 2,
   },
@@ -153,6 +172,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     status: 'on_shelf',
     stockStatus: 'normal',
     stockCount: 45,
+    isMultiSpec: false,
     lastSync: '昨天 18:06',
     sortIndex: 3,
   },
@@ -194,6 +214,8 @@ export const WebStoreProductList: React.FC<{
   const config = brandConfigs[activeBrandId];
   const enableGrouping = config?.enableChannelGrouping ?? false;
   const groups = config?.channelGroups || [];
+  const isShelvesUnited = config?.features.shelves_unite ?? false;
+  const isStockShared = config?.features.stock_shared ?? false;
 
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeCategoryId, setActiveCategoryId] = useState('all');
@@ -205,6 +227,8 @@ export const WebStoreProductList: React.FC<{
   const [coverageStoreId, setCoverageStoreId] = useState('all');
   const [coverageChannelId, setCoverageChannelId] = useState('all');
   const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success'; subMessage?: string } | null>(null);
+  const [shelfDialog, setShelfDialog] = useState<StoreProductRecord | null>(null);
+  const [stockDialog, setStockDialog] = useState<StoreProductRecord | null>(null);
   const [categories, setCategories] = useState(MOCK_CATEGORIES.filter(c => c.id !== 'all'));
   const [isSorting, setIsSorting] = useState(false);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
@@ -332,39 +356,62 @@ export const WebStoreProductList: React.FC<{
       return;
     }
 
-    if (activeTabId === 'all') {
-      setNotification({
-        type: 'success',
-        message: `${action === 'shelf' ? '上下架' : '沽清'}操作成功`,
-        subMessage: '已应用至当前筛选范围内的门店商品',
-      });
+    if (action === 'shelf') {
+      setShelfDialog(product);
       return;
     }
 
-    let affectedChannels = [activeTabId];
-    let groupName = null;
-    if (enableGrouping) {
-      const group = groups.find(g => g.channels.includes(activeTabId));
-      if (group) {
-        affectedChannels = group.channels;
-        groupName = group.name;
-      }
+    if (action === 'stock') {
+      setStockDialog(product);
+      return;
     }
+  };
 
-    const actionName = action === 'shelf' ? '上下架' : '沽清';
-    if (groupName && affectedChannels.length > 1) {
-      const channelNames = affectedChannels.map(c => CHANNEL_DEFS[c]?.label || c).join('、');
+  const handleShelfConfirm = (payload: { action: 'on_shelf' | 'off_shelf'; channels: ShelfChannelId[] }) => {
+    if (!shelfDialog) return;
+
+    const actionLabel = payload.action === 'on_shelf' ? '上架' : '下架';
+    const selectedNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
+
+    if (activeTabId === 'all') {
       setNotification({
-        type: 'info',
-        message: `已触发“${groupName}”分组联动${actionName}`,
-        subMessage: `同步生效渠道：${channelNames}`,
+        type: 'success',
+        message: isShelvesUnited ? `已统一${actionLabel}全部渠道商品` : `已${actionLabel}所选渠道商品`,
+        subMessage: isShelvesUnited
+          ? '状态会同步到美饿平台'
+          : `已操作渠道：${selectedNames || '未选择渠道'}`,
       });
     } else {
       setNotification({
-        type: 'success',
-        message: `${CHANNEL_DEFS[activeTabId]?.label || activeTabId} ${actionName}成功`,
+        type: isShelvesUnited ? 'info' : 'success',
+        message: isShelvesUnited
+          ? `已统一${actionLabel}全部渠道商品`
+          : `${getShelfChannelLabel(activeTabId)} ${actionLabel}成功`,
+        subMessage: isShelvesUnited ? '状态会同步到美饿平台' : undefined,
       });
     }
+
+    setShelfDialog(null);
+  };
+
+  const handleStockConfirm = (payload: {
+    type: 'day' | 'long';
+    channels: ShelfChannelId[];
+    remainStock: string;
+    nextDayUnlimited: boolean;
+    nextDayStock: string;
+    specs: StockoutSpec[];
+  }) => {
+    if (!stockDialog) return;
+    const channelNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
+    setNotification({
+      type: isStockShared ? 'info' : 'success',
+      message: `${stockDialog.name} 沽清设置已保存`,
+      subMessage: isStockShared
+        ? `已同步更新所有选中渠道库存：${channelNames}`
+        : `已应用至渠道：${channelNames}`,
+    });
+    setStockDialog(null);
   };
 
   useEffect(() => {
@@ -621,7 +668,7 @@ export const WebStoreProductList: React.FC<{
                       <td className="sticky right-0 py-4 px-4 text-center bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
                         <div className="flex items-center justify-center space-x-3 text-sm">
                           <button onClick={() => handleAction(product, 'shelf')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">
-                            {product.status === 'on_shelf' ? '下架' : '上架'}
+                            {activeTabId === 'all' ? '上下架' : product.status === 'on_shelf' ? '下架' : '上架'}
                           </button>
                           <button onClick={() => handleAction(product, 'edit')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">编辑</button>
                           <button onClick={() => handleAction(product, 'stock')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">沽清</button>
@@ -658,6 +705,34 @@ export const WebStoreProductList: React.FC<{
           </div>
         </div>
       </div>
+      {shelfDialog && (
+        <WebShelfConfirmModal
+          entityLabel="商品"
+          itemName={shelfDialog.name}
+          availableChannels={shelfDialog.channels.filter((channel): channel is ShelfChannelId => Boolean(getShelfChannelLabel(channel))) as ShelfChannelId[]}
+          channelStatuses={Object.fromEntries(
+            shelfDialog.channels.map(channel => [channel, shelfDialog.status])
+          ) as Partial<Record<ShelfChannelId, 'on_shelf' | 'off_shelf'>>}
+          activeTabId={activeTabId}
+          isShelvesUnited={isShelvesUnited}
+          onClose={() => setShelfDialog(null)}
+          onConfirm={handleShelfConfirm}
+        />
+      )}
+      {stockDialog && (
+        <WebStockoutModal
+          itemName={stockDialog.name}
+          entityLabel="商品"
+          channels={stockDialog.channels.filter((channel): channel is ShelfChannelId => Boolean(getShelfChannelLabel(channel))) as ShelfChannelId[]}
+          isStockShared={isStockShared}
+          isMultiSpec={Boolean(stockDialog.isMultiSpec)}
+          specs={stockDialog.specs}
+          defaultRemainStock="0"
+          defaultNextDayUnlimited={!isStockShared}
+          onClose={() => setStockDialog(null)}
+          onConfirm={handleStockConfirm}
+        />
+      )}
     </div>
   );
 

@@ -134,11 +134,23 @@ const DISPLAY_TYPE_OPTIONS: DisplayTypeOption[] = [
 ];
 const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_code', 'p_display_type', 'p_remark', 'p_stat_tags', 'p_tare_weight'] as const;
 const COLLAPSIBLE_SALES_FIELDS = [
+    { id: 's_sale_settings', label: '售卖设置' },
+    { id: 's_tax_rate', label: '税率' },
+    { id: 'p_points_exchange_rule', label: '积分兑换规则' },
     { id: 's_jump_third_mini_program', label: '是否跳转三方小程序' },
     { id: 's_third_mini_program_path', label: '三方小程序页面路径' },
     { id: 's_sales_commission_amount', label: '销售提成金额' },
 ] as const;
+const COLLAPSIBLE_DISPLAY_LIST_FIELDS = [
+    { id: 'p_badge', label: '商品角标' },
+    { id: 'p_badge_date', label: '角标展示日期' },
+] as const;
+const COLLAPSIBLE_DISPLAY_DETAIL_FIELDS = [
+    { id: 'p_detail_bottom_img', label: '商品详情页底图' },
+    { id: 'p_video', label: '商品视频' },
+] as const;
 const COLLAPSIBLE_OTHER_SECTIONS = [
+    { id: 'o_more_settings', label: '更多设置' },
     { id: 'o_base_sales', label: '基础销量' },
     { id: 'o_more_barcodes', label: '更多条码' },
     { id: 'o_product_share', label: '商品分享' },
@@ -280,7 +292,7 @@ const createEmptySpecConfigRow = (id: string, name = ''): SpecConfigRow => ({
     s_spec_sku_code: '',
     s_spec_amount: '',
     s_spec_amount_unit: '份',
-    s_spec_inventory_mode: 'custom',
+    s_spec_inventory_mode: 'unlimited',
     s_spec_initial_stock: '',
     s_spec_max_stock: '',
     s_spec_warning_stock: '',
@@ -360,7 +372,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [expandedBasicFields, setExpandedBasicFields] = useState<string[]>([]);
     const [expandedSalesFields, setExpandedSalesFields] = useState<string[]>([]);
     const [expandedOtherSections, setExpandedOtherSections] = useState<string[]>([]);
-    const [isPointsRuleCollapsed, setIsPointsRuleCollapsed] = useState(true);
+    const [expandedDisplayListFields, setExpandedDisplayListFields] = useState<string[]>([]);
+    const [expandedDisplayDetailFields, setExpandedDisplayDetailFields] = useState<string[]>([]);
     const [activeCategorySelector, setActiveCategorySelector] = useState<'p_front_cat' | 'p_back_cat' | null>(null);
     const [frontCategoryOptions, setFrontCategoryOptions] = useState<string[]>(DEFAULT_FRONT_CATEGORY_OPTIONS);
     const [backCategoryOptions, setBackCategoryOptions] = useState<string[]>(DEFAULT_BACK_CATEGORY_OPTIONS);
@@ -463,7 +476,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
     const getStickyOffset = () => {
         const stickyHeight = stickyToolbarRef.current?.offsetHeight ?? 0;
-        return stickyHeight + 28;
+        return stickyHeight + 16;
     };
 
     const scrollToSection = (id: string) => {
@@ -526,6 +539,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     }, [pendingCategory, currentCategoryFieldIds, type]);
 
     const getFieldSection = (field: DynamicFieldConfig): SectionId => {
+        if (field.id === 'p_points_exchange_rule') return 'spec';
         if (field.module === 'base') return 'basic';
         if (field.module === 'display') return 'display';
         if (field.module === 'sales') return 'spec';
@@ -1602,6 +1616,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         const badgeStartDate = dynamicFormData.p_badge_start_date || '';
         const badgeEndDate = dynamicFormData.p_badge_end_date || '';
         const detailContent = dynamicFormData.p_rich_desc || '';
+        const listOptionalFields = COLLAPSIBLE_DISPLAY_LIST_FIELDS;
+        const detailOptionalFields = COLLAPSIBLE_DISPLAY_DETAIL_FIELDS;
 
         const renderDisplayUploadField = ({
             fieldId,
@@ -1671,14 +1687,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         );
 
         return (
-            <div className="space-y-5">
-                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+            <div className="space-y-2.5">
+                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
                     <div>
                         <div className="text-base font-black text-[#1F2129]">列表页展示</div>
                         <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品列表页。</div>
                     </div>
 
-                    <div className="space-y-4 rounded-2xl bg-white p-4">
+                    <div className="space-y-2 rounded-2xl bg-white p-3">
                         {renderDisplayUploadField({
                             fieldId: 'p_cover_img',
                             label: '商品封面',
@@ -1709,36 +1725,79 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {renderSelectField('描述标签', 'p_desc_tags', DISPLAY_DESC_TAG_OPTIONS, '请选择')}
-                        {renderSelectField('商品角标', 'p_badge', DISPLAY_BADGE_OPTIONS, '请选择角标')}
 
-                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                            <div className="pt-2 text-sm font-bold text-[#1F2129]">角标展示日期</div>
-                            <div className="grid grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] gap-3">
-                                <input
-                                    type="date"
-                                    className="q-form-input"
-                                    value={badgeStartDate}
-                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_start_date: e.target.value }))}
-                                />
-                                <div className="flex items-center justify-center text-sm font-bold text-gray-400">至</div>
-                                <input
-                                    type="date"
-                                    className="q-form-input"
-                                    value={badgeEndDate}
-                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_end_date: e.target.value }))}
-                                />
-                            </div>
+                        <div className="pt-1">
+                            {expandedDisplayListFields.length === 0 ? (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedDisplayListFields(listOptionalFields.map(field => field.id))}
+                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                    >
+                                        展开
+                                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                                    </button>
+                                    {listOptionalFields.map(field => (
+                                        <button
+                                            key={field.id}
+                                            type="button"
+                                            onClick={() => setExpandedDisplayListFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
+                                            className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+                                        >
+                                            {field.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-2.5">
+                                    {expandedDisplayListFields.includes('p_badge') && (
+                                        <>
+                                            {renderSelectField('商品角标', 'p_badge', DISPLAY_BADGE_OPTIONS, '请选择角标')}
+                                        </>
+                                    )}
+                                    {expandedDisplayListFields.includes('p_badge_date') && (
+                                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                            <div className="pt-2 text-sm font-bold text-[#1F2129]">角标展示日期</div>
+                                            <div className="grid grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] gap-3">
+                                                <input
+                                                    type="date"
+                                                    className="q-form-input"
+                                                    value={badgeStartDate}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_start_date: e.target.value }))}
+                                                />
+                                                <div className="flex items-center justify-center text-sm font-bold text-gray-400">至</div>
+                                                <input
+                                                    type="date"
+                                                    className="q-form-input"
+                                                    value={badgeEndDate}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_end_date: e.target.value }))}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setExpandedDisplayListFields([])}
+                                            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                        >
+                                            收起
+                                            <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
                     <div>
                         <div className="text-base font-black text-[#1F2129]">详情页展示</div>
                         <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品详情页。</div>
                     </div>
 
-                    <div className="space-y-4 rounded-2xl bg-white p-4">
+                    <div className="space-y-2 rounded-2xl bg-white p-3">
                         {renderDisplayUploadField({
                             fieldId: 'p_detail_imgs',
                             label: '商品详情图',
@@ -1770,30 +1829,72 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             </div>
                         </div>
 
-                        {renderDisplayUploadField({
-                            fieldId: 'p_detail_bottom_img',
-                            label: '商品详情页底图',
-                            tip: '图片将在规格做法加料区下方展示，建议尺寸：高度不限，宽度建议 690。',
-                            widthClass: 'h-28 w-36',
-                        })}
-
-                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                            <div className="pt-2 text-sm font-bold text-[#1F2129]">商品视频</div>
-                            <div className="space-y-3">
-                                <input
-                                    className="q-form-input"
-                                    placeholder="请输入商品视频路径"
-                                    value={detailVideoValue}
-                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_video: e.target.value }))}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setDynamicFormData(prev => ({ ...prev, p_video: prev.p_video || 'https://video.example.com/product-demo.mp4' }))}
-                                    className="text-sm font-bold text-[#00A35B] hover:text-[#008A4D]"
-                                >
-                                    点我查看视频转换链接教程
-                                </button>
-                            </div>
+                        <div className="pt-1">
+                            {expandedDisplayDetailFields.length === 0 ? (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedDisplayDetailFields(detailOptionalFields.map(field => field.id))}
+                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                    >
+                                        展开
+                                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                                    </button>
+                                    {detailOptionalFields.map(field => (
+                                        <button
+                                            key={field.id}
+                                            type="button"
+                                            onClick={() => setExpandedDisplayDetailFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
+                                            className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+                                        >
+                                            {field.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-2.5">
+                                    {expandedDisplayDetailFields.includes('p_detail_bottom_img') && (
+                                        <>
+                                            {renderDisplayUploadField({
+                                                fieldId: 'p_detail_bottom_img',
+                                                label: '商品详情页底图',
+                                                tip: '图片将在规格做法加料区下方展示，建议尺寸：高度不限，宽度建议 690。',
+                                                widthClass: 'h-28 w-36',
+                                            })}
+                                        </>
+                                    )}
+                                    {expandedDisplayDetailFields.includes('p_video') && (
+                                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                            <div className="pt-2 text-sm font-bold text-[#1F2129]">商品视频</div>
+                                            <div className="space-y-2">
+                                                <input
+                                                    className="q-form-input"
+                                                    placeholder="请输入商品视频路径"
+                                                    value={detailVideoValue}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_video: e.target.value }))}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDynamicFormData(prev => ({ ...prev, p_video: prev.p_video || 'https://video.example.com/product-demo.mp4' }))}
+                                                    className="text-sm font-bold text-[#00A35B] hover:text-[#008A4D]"
+                                                >
+                                                    点我查看视频转换链接教程
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setExpandedDisplayDetailFields([])}
+                                            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                        >
+                                            收起
+                                            <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1814,6 +1915,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         const salesCommissionAmount = dynamicFormData.s_sales_commission_amount || '';
         const invoiceItemName = dynamicFormData.s_invoice_item_name || '';
         const invoiceCustomUnit = dynamicFormData.s_invoice_custom_unit || '';
+        const pointsExchangeEnabled = !!dynamicFormData.p_points_exchange_rule;
         const optionalSalesFields = COLLAPSIBLE_SALES_FIELDS;
 
         const renderSwitchRow = (label: string, toggleId: string, valueId?: string, placeholder?: string) => {
@@ -1870,171 +1972,73 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         };
 
         return (
-            <div className="space-y-6">
+            <div className="space-y-2.5">
                 {(isFieldEnabled('s_min_purchase_toggle') || isFieldEnabled('s_max_purchase_toggle') || isFieldEnabled('s_time_sale_toggle')) && (
-                    <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-6">
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
                         {isFieldEnabled('s_min_purchase_toggle') && renderSwitchRow('起购数量', 's_min_purchase_toggle', 's_min_purchase_value', '请输入起购数量')}
                         {isFieldEnabled('s_max_purchase_toggle') && renderSwitchRow('限购数量', 's_max_purchase_toggle', 's_max_purchase_value', '请输入限购数量')}
                         {isFieldEnabled('s_time_sale_toggle') && renderSwitchRow('分时段销售', 's_time_sale_toggle', 's_time_sale_rule', '例如：工作日 10:00-14:00 / 17:00-21:00')}
                     </div>
                 )}
 
-                {(isFieldEnabled('s_sale_mode') || isFieldEnabled('s_sale_settings')) && (
-                    <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-6">
-                        {isFieldEnabled('s_sale_mode') && (
-                            <div className="grid grid-cols-[120px_1fr] gap-4 items-start">
-                                <div className="pt-1 text-sm font-bold text-[#1F2129]">售卖方式</div>
-                                <div>
-                                    <div className="flex flex-wrap gap-x-8 gap-y-3">
-                                        {['正常售卖', '仅在套餐售卖'].map(option => {
-                                            const active = saleMode === option;
-                                            return (
-                                                <label key={option} className="flex items-center gap-2 cursor-pointer">
-                                                    <input
-                                                        type="radio"
-                                                        className="hidden"
-                                                        checked={active}
-                                                        onChange={() => setDynamicFormData(prev => ({ ...prev, s_sale_mode: option }))}
-                                                    />
-                                                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${active ? 'border-[#00C06B]' : 'border-gray-300'}`}>
-                                                        {active && <span className="w-2 h-2 rounded-full bg-[#00C06B]" />}
-                                                    </span>
-                                                    <span className={`text-sm ${active ? 'text-[#00A35B] font-bold' : 'text-gray-600'}`}>{option}</span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="mt-2 text-xs text-gray-400">设置“仅在套餐中售卖”则顾客在门店中看不到此商品。</div>
-                                </div>
-                            </div>
-                        )}
-
-                        {isFieldEnabled('s_sale_settings') && (
-                            <div className="grid grid-cols-[120px_1fr] gap-4 items-start">
-                                <div className="pt-1 text-sm font-bold text-[#1F2129]">售卖设置</div>
-                                <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
-                                    {[
-                                        {
-                                            key: '单点不送',
-                                            desc: '开启后，外卖单点该商品无法下单，需配合其他商品才可下单，常用于饮料等底价小件商品'
-                                        },
-                                        {
-                                            key: '点餐场景',
-                                            desc: '用于补充商品适用的点餐场景，可在后续配置对应场景入口'
-                                        },
-                                        {
-                                            key: '关联档口',
-                                            desc: '可用于关联商品档口，方便按档口出品和管理'
-                                        },
-                                        {
-                                            key: '参与会员折扣',
-                                            desc: '开启后，指定商品在下单时可参与会员卡折扣优惠'
-                                        }
-                                    ].map(item => {
-                                        const active = !!saleSettings[item.key];
+                {isFieldEnabled('s_sale_mode') && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                        <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+                            <div className="pt-1 text-sm font-bold text-[#1F2129]">售卖方式</div>
+                            <div>
+                                <div className="flex flex-wrap gap-x-8 gap-y-2">
+                                    {['正常售卖', '仅在套餐售卖'].map(option => {
+                                        const active = saleMode === option;
                                         return (
-                                            <label key={item.key} className="flex items-start gap-3 cursor-pointer">
+                                            <label key={option} className="flex items-center gap-2 cursor-pointer">
                                                 <input
-                                                    type="checkbox"
-                                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                                    type="radio"
+                                                    className="hidden"
                                                     checked={active}
-                                                    onChange={() => toggleSaleSetting(item.key)}
+                                                    onChange={() => setDynamicFormData(prev => ({ ...prev, s_sale_mode: option }))}
                                                 />
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
-                                                        <span>{item.key}</span>
-                                                        {(item.key === '点餐场景' || item.key === '关联档口') && <ChevronRight size={14} className="text-gray-400" />}
-                                                    </div>
-                                                    <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>
-                                                </div>
+                                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${active ? 'border-[#00C06B]' : 'border-gray-300'}`}>
+                                                    {active && <span className="w-2 h-2 rounded-full bg-[#00C06B]" />}
+                                                </span>
+                                                <span className={`text-sm ${active ? 'text-[#00A35B] font-bold' : 'text-gray-600'}`}>{option}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                <div className="mt-2 text-xs text-gray-400">设置“仅在套餐中售卖”则顾客在门店中看不到此商品。</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isFieldEnabled('s_takeout_rule') && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                        <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+                            <div className="pt-1 text-sm font-bold text-[#1F2129]">外带设置</div>
+                            <div className="rounded-2xl bg-[#FAFAFA] p-3.5">
+                                <div className="text-sm font-bold text-[#1F2129]">外带显示规则</div>
+                                <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2">
+                                    {['正常售卖', '外带时隐藏', '仅外带显示'].map(option => {
+                                        const active = takeoutRule === option;
+                                        return (
+                                            <label key={option} className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    className="hidden"
+                                                    checked={active}
+                                                    onChange={() => setDynamicFormData(prev => ({ ...prev, s_takeout_rule: option }))}
+                                                />
+                                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${active ? 'border-[#00C06B]' : 'border-gray-300'}`}>
+                                                    {active && <span className="w-2 h-2 rounded-full bg-[#00C06B]" />}
+                                                </span>
+                                                <span className={`text-sm ${active ? 'text-[#00A35B] font-bold' : 'text-gray-600'}`}>{option}</span>
                                             </label>
                                         );
                                     })}
                                 </div>
                             </div>
-                        )}
+                        </div>
                     </div>
-                )}
-
-                {(isFieldEnabled('s_takeout_rule') || isFieldEnabled('s_tax_rate')) && (
-                    <>
-                        {isFieldEnabled('s_takeout_rule') && (
-                            <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                                <div className="grid grid-cols-[120px_1fr] gap-4 items-start">
-                                    <div className="pt-1 text-sm font-bold text-[#1F2129]">外带设置</div>
-                                    <div className="rounded-2xl bg-[#FAFAFA] p-5">
-                                        <div className="text-sm font-bold text-[#1F2129]">外带显示规则</div>
-                                        <div className="mt-4 flex flex-wrap gap-x-8 gap-y-3">
-                                            {['正常售卖', '外带时隐藏', '仅外带显示'].map(option => {
-                                                const active = takeoutRule === option;
-                                                return (
-                                                    <label key={option} className="flex items-center gap-2 cursor-pointer">
-                                                        <input
-                                                            type="radio"
-                                                            className="hidden"
-                                                            checked={active}
-                                                            onChange={() => setDynamicFormData(prev => ({ ...prev, s_takeout_rule: option }))}
-                                                        />
-                                                        <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${active ? 'border-[#00C06B]' : 'border-gray-300'}`}>
-                                                            {active && <span className="w-2 h-2 rounded-full bg-[#00C06B]" />}
-                                                        </span>
-                                                        <span className={`text-sm ${active ? 'text-[#00A35B] font-bold' : 'text-gray-600'}`}>{option}</span>
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {isFieldEnabled('s_tax_rate') && (
-                            <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                                <div className="grid grid-cols-[120px_1fr] gap-4 items-start">
-                                    <div className="pt-1 text-sm font-bold text-[#1F2129]">税率</div>
-                                    <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
-                                        <div className="max-w-[260px]">
-                                            <div className="mb-2 text-sm font-bold text-[#1F2129]">选择税率</div>
-                                            <select
-                                                className="q-form-select"
-                                                value={taxRate}
-                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_tax_rate: e.target.value }))}
-                                            >
-                                                <option value="">请选择</option>
-                                                <option value="0%">0%</option>
-                                                <option value="1%">1%</option>
-                                                <option value="3%">3%</option>
-                                                <option value="6%">6%</option>
-                                                <option value="9%">9%</option>
-                                                <option value="13%">13%</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="max-w-[520px]">
-                                            <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
-                                            <input
-                                                className="q-form-input"
-                                                placeholder="请输入内容"
-                                                value={invoiceItemName}
-                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
-                                            />
-                                            <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
-                                        </div>
-
-                                        <div className="max-w-[520px]">
-                                            <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
-                                            <input
-                                                className="q-form-input"
-                                                placeholder="请输入内容"
-                                                value={invoiceCustomUnit}
-                                                onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </>
                 )}
 
                 <div className="pt-1">
@@ -2060,10 +2064,118 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             ))}
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-6">
+                        <div className="space-y-2">
+                            <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
+                                {expandedSalesFields.includes('s_sale_settings') && isFieldEnabled('s_sale_settings') && (
+                                    <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">售卖设置</div>
+                                        <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
+                                            {[
+                                                {
+                                                    key: '单点不送',
+                                                    desc: '开启后，外卖单点该商品无法下单，需配合其他商品才可下单，常用于饮料等底价小件商品'
+                                                },
+                                                {
+                                                    key: '点餐场景',
+                                                    desc: '用于补充商品适用的点餐场景，可在后续配置对应场景入口'
+                                                },
+                                                {
+                                                    key: '关联档口',
+                                                    desc: '可用于关联商品档口，方便按档口出品和管理'
+                                                },
+                                                {
+                                                    key: '参与会员折扣',
+                                                    desc: '开启后，指定商品在下单时可参与会员卡折扣优惠'
+                                                }
+                                            ].map(item => {
+                                                const active = !!saleSettings[item.key];
+                                                return (
+                                                    <label key={item.key} className="flex items-start gap-3 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                                            checked={active}
+                                                            onChange={() => toggleSaleSetting(item.key)}
+                                                        />
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
+                                                                <span>{item.key}</span>
+                                                                {(item.key === '点餐场景' || item.key === '关联档口') && <ChevronRight size={14} className="text-gray-400" />}
+                                                            </div>
+                                                            <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {expandedSalesFields.includes('s_tax_rate') && isFieldEnabled('s_tax_rate') && (
+                                    <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">税率</div>
+                                        <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
+                                            <div className="max-w-[260px]">
+                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">选择税率</div>
+                                                <select
+                                                    className="q-form-select"
+                                                    value={taxRate}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_tax_rate: e.target.value }))}
+                                                >
+                                                    <option value="">请选择</option>
+                                                    <option value="0%">0%</option>
+                                                    <option value="1%">1%</option>
+                                                    <option value="3%">3%</option>
+                                                    <option value="6%">6%</option>
+                                                    <option value="9%">9%</option>
+                                                    <option value="13%">13%</option>
+                                                </select>
+                                            </div>
+
+                                            {taxRate && (
+                                                <>
+                                                    <div className="max-w-[520px]">
+                                                        <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
+                                                        <input
+                                                            className="q-form-input"
+                                                            placeholder="请输入内容"
+                                                            value={invoiceItemName}
+                                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
+                                                        />
+                                                        <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
+                                                    </div>
+
+                                                    <div className="max-w-[520px]">
+                                                        <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
+                                                        <input
+                                                            className="q-form-input"
+                                                            placeholder="请输入内容"
+                                                            value={invoiceCustomUnit}
+                                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {expandedSalesFields.includes('p_points_exchange_rule') && isFieldEnabled('p_points_exchange_rule') && (
+                                    <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">积分兑换规则</div>
+                                        <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] px-3.5 py-3.5 space-y-2">
+                                            <div className="flex items-center gap-3">
+                                                <Switch active={pointsExchangeEnabled} onClick={() => setDynamicFormData(prev => ({ ...prev, p_points_exchange_rule: !pointsExchangeEnabled }))} />
+                                                <span className={`text-sm font-medium ${pointsExchangeEnabled ? 'text-[#1F2129]' : 'text-gray-400'}`}>
+                                                    {pointsExchangeEnabled ? '已开启积分兑换规则' : '未开启积分兑换规则'}
+                                                </span>
+                                            </div>
+                                            <div className="text-sm leading-6 text-gray-400">
+                                                积分商城可选择该商品，如果商品同步到门店，点单页支持纯积分/积分+金额购买商品。
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                                 {expandedSalesFields.includes('s_jump_third_mini_program') && (
-                                    <div className="grid grid-cols-[140px_1fr] gap-4 items-start">
+                                    <div className="grid grid-cols-[140px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">是否跳转三方小程序</div>
                                         <div className="flex items-center gap-3">
                                             <Switch
@@ -2076,7 +2188,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 )}
 
                                 {expandedSalesFields.includes('s_third_mini_program_path') && (
-                                    <div className="grid grid-cols-[140px_1fr] gap-4 items-start">
+                                    <div className="grid grid-cols-[140px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">三方小程序页面路径</div>
                                         <div>
                                             <input
@@ -2091,7 +2203,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 )}
 
                                 {expandedSalesFields.includes('s_sales_commission_amount') && (
-                                    <div className="grid grid-cols-[140px_1fr] gap-4 items-start">
+                                    <div className="grid grid-cols-[140px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">销售提成金额</div>
                                         <div className="max-w-[260px]">
                                             <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -2174,29 +2286,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         };
 
         return (
-            <div className="space-y-6">
-                <div className="rounded-2xl border border-gray-200 bg-white p-6">
-                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                        <div className="pt-1 text-sm font-bold text-[#1F2129]">更多设置</div>
-                        <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
-                            {moreSettings.map(item => (
-                                <label key={item.key} className="flex items-start gap-3 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
-                                        checked={!!dynamicFormData[item.key]}
-                                        onChange={() => setDynamicFormData(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                                    />
-                                    <div className="min-w-0">
-                                        <div className="text-sm font-bold text-[#1F2129]">{item.label}</div>
-                                        {item.desc && <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>}
-                                    </div>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
+            <div className="space-y-2.5">
                 <div className="pt-1">
                     {expandedOtherSections.length === 0 ? (
                         <div className="flex flex-wrap items-center gap-3">
@@ -2220,10 +2310,31 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             ))}
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-6">
+                        <div className="space-y-2">
+                            <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
+                                {expandedOtherSections.includes('o_more_settings') && (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">更多设置</div>
+                                        <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
+                                            {moreSettings.map(item => (
+                                                <label key={item.key} className="flex items-start gap-3 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                                        checked={!!dynamicFormData[item.key]}
+                                                        onChange={() => setDynamicFormData(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-bold text-[#1F2129]">{item.label}</div>
+                                                        {item.desc && <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>}
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 {expandedOtherSections.includes('o_base_sales') && (
-                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">基础销量</div>
                                         <div className="max-w-[220px]">
                                             <div className="flex overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -2253,7 +2364,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 )}
 
                                 {expandedOtherSections.includes('o_more_barcodes') && (
-                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">更多条码</div>
                                         <div className="max-w-[520px]">
                                             <input
@@ -2268,9 +2379,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 )}
 
                                 {expandedOtherSections.includes('o_product_share') && (
-                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">商品分享</div>
-                                        <div className="rounded-2xl bg-[#FAFAFA] p-5 space-y-5">
+                                        <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
                                             <div>
                                                 <div className="mb-2 text-sm font-bold text-[#1F2129]">分享标题</div>
                                                 <input
@@ -2716,7 +2827,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
     const renderMethodAddonPanel = () => {
         const addonEmptyTipEnabled = !!dynamicFormData.a_addon_empty_tip_enabled;
-        const pointsExchangeEnabled = !!dynamicFormData.p_points_exchange_rule;
         const selectedMethodCount = methodConfigRows.length;
         const selectedAddonCount = addonConfigRows.length;
         const methodGroups = Array.from(new Set(methodConfigRows.map(row => row.groupName)));
@@ -2840,96 +2950,98 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 <Plus size={16} className="mr-2" />
                                 选择加料
                             </button>
-                            <div className="flex flex-wrap items-center gap-4">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm text-[#1F2129]">加料配置:</span>
-                                    <select className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2129] outline-none focus:border-[#00C06B]">
-                                        <option>限制所有加料购买总量</option>
-                                        <option>限制单个加料购买量</option>
-                                    </select>
-                                </div>
-                                <label className="flex items-center gap-2 text-sm text-[#00A35B] font-bold">
-                                    <input type="radio" name="addonRule" defaultChecked className="accent-[#00C06B]" />
-                                    点餐时数量不限
-                                </label>
-                                <label className="flex items-center gap-2 text-sm text-gray-500">
-                                    <input type="radio" name="addonRule" className="accent-[#00C06B]" />
-                                    点餐时起购限购数
-                                </label>
-                                <label className="flex items-center gap-2 text-sm text-gray-500">
-                                    <input type="radio" name="addonRule" className="accent-[#00C06B]" />
-                                    点餐时必选
-                                </label>
-                            </div>
                             {selectedAddonCount > 0 && (
-                                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
-                                    {addonGroups.map(groupName => (
-                                        <div key={groupName} className="space-y-3">
-                                            <div className="text-sm font-bold text-[#1F2129]">加料商品类型：{groupName}</div>
-                                            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                                                <table className="w-full border-collapse table-fixed">
-                                                    <thead className="bg-[#F7F8FA]">
-                                                        <tr className="text-left text-xs font-bold text-gray-500">
-                                                            <th className="w-[180px] px-3 py-3 border-b border-gray-200">加料商品名称</th>
-                                                            <th className="w-[150px] px-3 py-3 border-b border-gray-200">加料商品编码</th>
-                                                            <th className="w-[88px] px-3 py-3 border-b border-gray-200">限购</th>
-                                                            <th className="w-[88px] px-3 py-3 border-b border-gray-200">初始价格</th>
-                                                            <th className="w-[92px] px-3 py-3 border-b border-gray-200">规格加价</th>
-                                                            <th className="w-[104px] px-3 py-3 border-b border-gray-200">商品状态</th>
-                                                            <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {addonConfigRows.filter(row => row.groupName === groupName).map(row => (
-                                                            <tr key={row.id} className="align-top text-[13px] text-[#1F2129]">
-                                                                <td className="px-3 py-3 border-b border-gray-100">
-                                                                    <div className="font-bold">{row.addonName}</div>
-                                                                    <div className="mt-1 text-[11px] leading-5 text-gray-400">ID: {row.addonCode}</div>
-                                                                </td>
-                                                                <td className="px-3 py-3 border-b border-gray-100 text-gray-400 break-all">{row.addonCode || '/'}</td>
-                                                                <td className="px-3 py-3 border-b border-gray-100">
-                                                                    <input value={row.addonLimit} onChange={e => updateAddonRow(row.id, 'addonLimit', e.target.value)} placeholder="/" className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
-                                                                </td>
-                                                                <td className="px-3 py-3 border-b border-gray-100">
-                                                                    <input value={row.addonPrice} onChange={e => updateAddonRow(row.id, 'addonPrice', e.target.value)} className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
-                                                                </td>
-                                                                <td className="px-3 py-3 border-b border-gray-100">
-                                                                    <button type="button" className="text-[13px] font-bold text-[#2563EB] hover:text-[#1D4ED8]">
-                                                                        {row.addonSpecPrice ? row.addonSpecPrice : '未设置'}
-                                                                    </button>
-                                                                </td>
-                                                                <td className="px-3 py-3 border-b border-gray-100">
-                                                                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
-                                                                        {row.addonStatus === 'on' ? '启用中' : '已停用'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-3 border-b border-gray-100">
-                                                                    <button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">
-                                                                        删除
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                <>
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm text-[#1F2129]">加料配置:</span>
+                                            <select className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2129] outline-none focus:border-[#00C06B]">
+                                                <option>限制所有加料购买总量</option>
+                                                <option>限制单个加料购买量</option>
+                                            </select>
                                         </div>
-                                    ))}
-                                </div>
+                                        <label className="flex items-center gap-2 text-sm text-[#00A35B] font-bold">
+                                            <input type="radio" name="addonRule" defaultChecked className="accent-[#00C06B]" />
+                                            点餐时数量不限
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm text-gray-500">
+                                            <input type="radio" name="addonRule" className="accent-[#00C06B]" />
+                                            点餐时起购限购数
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm text-gray-500">
+                                            <input type="radio" name="addonRule" className="accent-[#00C06B]" />
+                                            点餐时必选
+                                        </label>
+                                    </div>
+                                    <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
+                                        {addonGroups.map(groupName => (
+                                            <div key={groupName} className="space-y-3">
+                                                <div className="text-sm font-bold text-[#1F2129]">加料商品类型：{groupName}</div>
+                                                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                                                    <table className="w-full border-collapse table-fixed">
+                                                        <thead className="bg-[#F7F8FA]">
+                                                            <tr className="text-left text-xs font-bold text-gray-500">
+                                                                <th className="w-[180px] px-3 py-3 border-b border-gray-200">加料商品名称</th>
+                                                                <th className="w-[150px] px-3 py-3 border-b border-gray-200">加料商品编码</th>
+                                                                <th className="w-[88px] px-3 py-3 border-b border-gray-200">限购</th>
+                                                                <th className="w-[88px] px-3 py-3 border-b border-gray-200">初始价格</th>
+                                                                <th className="w-[92px] px-3 py-3 border-b border-gray-200">规格加价</th>
+                                                                <th className="w-[104px] px-3 py-3 border-b border-gray-200">商品状态</th>
+                                                                <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {addonConfigRows.filter(row => row.groupName === groupName).map(row => (
+                                                                <tr key={row.id} className="align-top text-[13px] text-[#1F2129]">
+                                                                    <td className="px-3 py-3 border-b border-gray-100">
+                                                                        <div className="font-bold">{row.addonName}</div>
+                                                                        <div className="mt-1 text-[11px] leading-5 text-gray-400">ID: {row.addonCode}</div>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 border-b border-gray-100 text-gray-400 break-all">{row.addonCode || '/'}</td>
+                                                                    <td className="px-3 py-3 border-b border-gray-100">
+                                                                        <input value={row.addonLimit} onChange={e => updateAddonRow(row.id, 'addonLimit', e.target.value)} placeholder="/" className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
+                                                                    </td>
+                                                                    <td className="px-3 py-3 border-b border-gray-100">
+                                                                        <input value={row.addonPrice} onChange={e => updateAddonRow(row.id, 'addonPrice', e.target.value)} className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
+                                                                    </td>
+                                                                    <td className="px-3 py-3 border-b border-gray-100">
+                                                                        <button type="button" className="text-[13px] font-bold text-[#2563EB] hover:text-[#1D4ED8]">
+                                                                            {row.addonSpecPrice ? row.addonSpecPrice : '未设置'}
+                                                                        </button>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 border-b border-gray-100">
+                                                                        <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
+                                                                            {row.addonStatus === 'on' ? '启用中' : '已停用'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-3 py-3 border-b border-gray-100">
+                                                                        <button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">
+                                                                            删除
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm text-[#1F2129]">加料未点提示:</span>
+                                            <Switch active={addonEmptyTipEnabled} onClick={() => setDynamicFormData(prev => ({ ...prev, a_addon_empty_tip_enabled: !addonEmptyTipEnabled }))} />
+                                            <span className="text-sm text-gray-400">当加料未点时，将展示该提示信息</span>
+                                        </div>
+                                        <div className="rounded-xl bg-[#FAFAFA] px-4 py-3 text-xs leading-6 text-gray-400">
+                                            <div>说明：</div>
+                                            <div>1、如果单个加料类型的加料多于 7 个，在小程序商品详情页会折叠显示，可前往加料折叠设置中调整。</div>
+                                            <div>2、如果单个加料类型下所有加料都设置限购一份，该加料类型下加料在小程序端将不展示加料“+ -”选择。</div>
+                                            <div>3、如果品牌下所有加料都限购一份，可快速统一设置加料小程序显示设置后，小程序端所有加料将不展示加料“+ -”选择。</div>
+                                        </div>
+                                    </div>
+                                </>
                             )}
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm text-[#1F2129]">加料未点提示:</span>
-                                    <Switch active={addonEmptyTipEnabled} onClick={() => setDynamicFormData(prev => ({ ...prev, a_addon_empty_tip_enabled: !addonEmptyTipEnabled }))} />
-                                    <span className="text-sm text-gray-400">当加料未点时，将展示该提示信息</span>
-                                </div>
-                                <div className="rounded-xl bg-[#FAFAFA] px-4 py-3 text-xs leading-6 text-gray-400">
-                                    <div>说明：</div>
-                                    <div>1、如果单个加料类型的加料多于 7 个，在小程序商品详情页会折叠显示，可前往加料折叠设置中调整。</div>
-                                    <div>2、如果单个加料类型下所有加料都设置限购一份，该加料类型下加料在小程序端将不展示加料“+ -”选择。</div>
-                                    <div>3、如果品牌下所有加料都限购一份，可快速统一设置加料小程序显示设置后，小程序端所有加料将不展示加料“+ -”选择。</div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -2938,53 +3050,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">属性排序</div>
                         <div>{renderAttributeSortPanel()}</div>
-                    </div>
-                )}
-
-                {isFieldEnabled('p_points_exchange_rule') && (
-                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
-                        <div className="pt-2 text-sm font-bold text-[#1F2129]">
-                            {isPointsRuleCollapsed ? '' : '积分兑换规则'}
-                        </div>
-                        <div className="space-y-4">
-                            {isPointsRuleCollapsed ? (
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPointsRuleCollapsed(false)}
-                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                    >
-                                        展开
-                                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
-                                    </button>
-                                    <span className="inline-flex items-center rounded-full bg-[#F0FDF4] px-3 py-1 text-sm font-bold text-[#00A35B]">
-                                        积分兑换规则
-                                    </span>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] px-4 py-4 space-y-3">
-                                        <div className="flex items-center gap-3">
-                                            <Switch active={pointsExchangeEnabled} onClick={() => setDynamicFormData(prev => ({ ...prev, p_points_exchange_rule: !pointsExchangeEnabled }))} />
-                                            <span className={`text-sm font-medium ${pointsExchangeEnabled ? 'text-[#1F2129]' : 'text-gray-400'}`}>
-                                                {pointsExchangeEnabled ? '已开启积分兑换规则' : '未开启积分兑换规则'}
-                                            </span>
-                                        </div>
-                                        <div className="text-sm leading-6 text-gray-400">
-                                            积分商城可选择该商品，如果商品同步到门店，点单页支持纯积分/积分+金额购买商品。
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPointsRuleCollapsed(true)}
-                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                    >
-                                        收起
-                                        <ChevronUp size={16} className="ml-1.5 text-gray-400" />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
                     </div>
                 )}
             </div>
@@ -3640,7 +3705,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
                 {/* Form Content */}
                 <div ref={formContentRef} className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-8 scroll-smooth no-scrollbar lg:px-6 xl:px-8">
-                    <div className="w-full min-w-0 max-w-[1240px] mx-auto pt-5 pb-16 space-y-4">
+                    <div className="w-full min-w-0 max-w-[1240px] mx-auto pt-3 pb-12 space-y-2">
                         {pageView === 'success' ? (
                             <div className="space-y-5">
                                 <div className="rounded-[28px] border border-[#D7F0E1] bg-white p-8 shadow-sm">
@@ -3713,9 +3778,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         ) : (
                         <>
                         {isStarterReady && (
-                        <div ref={stickyToolbarRef} className="sticky top-0 z-10 -mx-2 px-2 pb-3 bg-[#FAFAFA]">
+                        <div ref={stickyToolbarRef} className="sticky top-0 z-10 -mx-1 px-1 pb-2 bg-[#FAFAFA]">
                             <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden">
-                                <div className="px-5 pt-3 pb-1.5 border-b border-gray-100">
+                                <div className="px-4 pt-2.5 pb-1.5 border-b border-gray-100">
                                     <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
                                         {SECTION_ORDER.map(section => (
                                             <button
@@ -3733,8 +3798,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                         ))}
                                     </div>
                                 </div>
-                                <div className="px-5 py-2.5 bg-[#FCFCFD]">
-                                    <div className="flex flex-col gap-2">
+                                <div className="px-4 py-2 bg-[#FCFCFD]">
+                                    <div className="flex flex-col gap-1.5">
                                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                                             <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
                                             <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-[#1F2129]">
@@ -3777,7 +3842,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="mt-2 flex items-center gap-2">
+                                    <div className="mt-1.5 flex items-center gap-2">
                                         <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
                                             <div
                                                 className="h-full rounded-full bg-[#00C06B] transition-all"
@@ -3789,7 +3854,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                         </div>
                                     </div>
                                     {saveAttempted && requiredMissingItems.length > 0 && (
-                                        <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
+                                        <div className="mt-1.5 rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
                                             仍有 {requiredMissingItems.length} 项必填信息未完成。
                                         </div>
                                     )}
@@ -3799,10 +3864,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         )}
 
                         {/* Basic Section */}
-                        <div id="basic" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-4">
+                        <div id="basic" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2">
                             <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
-                            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-5 gap-y-3">
+                            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5">
                                     {primaryBasicFields.map(field => {
                                         if (field.id === 'p_img') return null;
                                         if (isProgressiveCreateMode && !isStarterReady && field.id !== 'p_name') return null;
@@ -3854,8 +3919,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="space-y-3">
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-5 gap-y-3">
+                                        <div className="space-y-1.5">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5">
                                                 {optionalBasicFields.filter(field => expandedBasicFields.includes(field.id)).map(field => {
                                                     const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
                                                     const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || ['rich_text', 'checkbox_group'].includes(field.type);
@@ -3887,7 +3952,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         {isStarterReady && (
                         <>
                         {/* Product Attr Section */}
-                        <div id="method" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5">
+                        <div id="method" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5">
                             <SectionHeader title="商品属性" icon={<ChefHat size={20}/>} meta={renderSectionMeta('method')} />
                             <div id="field-s_specs">
                                 {renderSpecConfigTable()}
@@ -3896,16 +3961,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Display Section */}
-                        <div id="display" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5">
+                        <div id="display" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5">
                             <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
                             {renderDisplaySettingsSection()}
                         </div>
 
                         {/* Sales Section */}
-                        <div id="spec" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5">
+                        <div id="spec" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5">
                             <SectionHeader title="销售属性" icon={<Scale size={20}/>} meta={renderSectionMeta('spec')} />
                             {renderSalesAttributePanel()}
-                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-5">
+                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5">
                                 {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
                                     f.module === 'sales'
                                     && visibleFieldIds.has(f.id)
@@ -3942,7 +4007,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Others Section */}
-                        <div id="settings" className="scroll-mt-[220px] bg-white rounded-2xl p-5 xl:p-6 border border-gray-200 shadow-sm space-y-5 min-w-0 overflow-hidden">
+                        <div id="settings" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5 min-w-0 overflow-hidden">
                             <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
                             {renderOthersAttributePanel()}
                         </div>

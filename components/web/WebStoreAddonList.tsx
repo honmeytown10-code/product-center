@@ -1,8 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, ChevronDown, MoreHorizontal, FileUp,
-  ArrowUpDown, ChevronLeft, ChevronRight
+  ArrowUpDown, ChevronLeft, ChevronRight, Store, Bike, UtensilsCrossed, ShoppingBag
 } from 'lucide-react';
+import { useProducts } from '../../context';
+import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
+import { StockoutSpec, WebStockoutModal } from './WebStockoutModal';
+
+type ChannelId = 'mini_dine' | 'mini_take' | 'meituan' | 'taobao' | 'pos';
+type ShelfStatus = 'on_shelf' | 'off_shelf';
 
 type StoreAddonRecord = {
   id: string;
@@ -12,10 +18,11 @@ type StoreAddonRecord = {
   stockCount: number;
   storeName: string;
   storeId: string;
-  channels: string[];
-  status: 'on_shelf' | 'off_shelf';
+  channelStatuses: Partial<Record<ChannelId, ShelfStatus>>;
   independentSale: boolean;
   relatedProductCount: number;
+  isMultiSpec?: boolean;
+  specs?: StockoutSpec[];
 };
 
 const STORE_OPTIONS = [
@@ -26,13 +33,48 @@ const STORE_OPTIONS = [
   { id: 's4', name: '龙华红山店' },
 ];
 
-const CHANNEL_DEFS: Record<string, { label: string; color: string }> = {
-  pos: { label: 'POS', color: 'bg-blue-100 text-blue-700' },
-  mini_dine: { label: '小程序-堂食', color: 'bg-[#00C06B]/10 text-[#00C06B]' },
-  mini_take: { label: '小程序-外卖', color: 'bg-[#00C06B]/10 text-[#00C06B]' },
-  meituan: { label: '美团-外卖', color: 'bg-yellow-100 text-yellow-700' },
-  taobao: { label: '淘宝闪购', color: 'bg-orange-100 text-orange-700' },
-  eleme: { label: '饿了么', color: 'bg-blue-100 text-blue-600' },
+const CHANNEL_DEFS: Record<ChannelId, {
+  label: string;
+  shortLabel: string;
+  activeClass: string;
+  inactiveClass: string;
+  icon: React.ReactNode;
+}> = {
+  mini_dine: {
+    label: '小程序-堂食',
+    shortLabel: '堂',
+    activeClass: 'bg-[#FDEBD8] text-[#F59E0B]',
+    inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]',
+    icon: <Store size={16} strokeWidth={2.4} />,
+  },
+  mini_take: {
+    label: '小程序-外卖',
+    shortLabel: '外',
+    activeClass: 'bg-[#DDF5D8] text-[#84CC16]',
+    inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]',
+    icon: <Bike size={16} strokeWidth={2.4} />,
+  },
+  pos: {
+    label: 'POS',
+    shortLabel: 'POS',
+    activeClass: 'bg-[#DDEEFF] text-[#3B82F6]',
+    inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]',
+    icon: <span className="text-[10px] font-black leading-none">POS</span>,
+  },
+  meituan: {
+    label: '美团-外卖',
+    shortLabel: '美',
+    activeClass: 'bg-[#FCE9B9] text-[#EAB308]',
+    inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]',
+    icon: <UtensilsCrossed size={16} strokeWidth={2.4} />,
+  },
+  taobao: {
+    label: '淘宝闪购',
+    shortLabel: '淘',
+    activeClass: 'bg-[#FF7A18] text-white',
+    inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]',
+    icon: <ShoppingBag size={16} strokeWidth={2.4} />,
+  },
 };
 
 const DEFAULT_CHANNELS = [
@@ -41,7 +83,7 @@ const DEFAULT_CHANNELS = [
   { id: 'meituan', label: '美团-外卖' },
   { id: 'taobao', label: '淘宝闪购' },
   { id: 'pos', label: 'POS' },
-];
+] as const;
 
 const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
   {
@@ -52,10 +94,10 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
     stockCount: 56,
     storeName: '南山万象店',
     storeId: 's1',
-    channels: ['pos', 'mini_dine', 'mini_take'],
-    status: 'on_shelf',
+    channelStatuses: { mini_dine: 'on_shelf', mini_take: 'on_shelf', meituan: 'off_shelf', taobao: 'off_shelf', pos: 'on_shelf' },
     independentSale: true,
     relatedProductCount: 4,
+    isMultiSpec: false,
   },
   {
     id: '100801904739103',
@@ -65,10 +107,10 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
     stockCount: 12,
     storeName: '福田卓悦店',
     storeId: 's2',
-    channels: ['pos'],
-    status: 'on_shelf',
+    channelStatuses: { mini_dine: 'off_shelf', mini_take: 'off_shelf', meituan: 'off_shelf', taobao: 'off_shelf', pos: 'on_shelf' },
     independentSale: false,
     relatedProductCount: 1,
+    isMultiSpec: false,
   },
   {
     id: '926584425647788',
@@ -78,10 +120,15 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
     stockCount: 0,
     storeName: '宝安壹方城店',
     storeId: 's3',
-    channels: ['pos', 'meituan'],
-    status: 'off_shelf',
+    channelStatuses: { mini_dine: 'off_shelf', mini_take: 'off_shelf', meituan: 'on_shelf', taobao: 'on_shelf', pos: 'off_shelf' },
     independentSale: false,
     relatedProductCount: 0,
+    isMultiSpec: true,
+    specs: [
+      { id: 'a3-1', name: '规格1', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+      { id: 'a3-2', name: '规格2', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+      { id: 'a3-3', name: '规格3', currentStock: 9999, remainStock: '0', nextDayStock: '9999', nextDayUnlimited: false },
+    ],
   },
   {
     id: '105263118140852',
@@ -91,10 +138,10 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
     stockCount: 18,
     storeName: '龙华红山店',
     storeId: 's4',
-    channels: ['mini_take', 'pos', 'taobao'],
-    status: 'on_shelf',
+    channelStatuses: { mini_dine: 'off_shelf', mini_take: 'on_shelf', meituan: 'off_shelf', taobao: 'on_shelf', pos: 'on_shelf' },
     independentSale: true,
     relatedProductCount: 1,
+    isMultiSpec: false,
   },
   {
     id: '918497724793303',
@@ -104,10 +151,10 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
     stockCount: 0,
     storeName: '南山万象店',
     storeId: 's1',
-    channels: ['pos', 'mini_dine'],
-    status: 'on_shelf',
+    channelStatuses: { mini_dine: 'on_shelf', mini_take: 'off_shelf', meituan: 'off_shelf', taobao: 'off_shelf', pos: 'off_shelf' },
     independentSale: true,
     relatedProductCount: 2,
+    isMultiSpec: false,
   },
 ];
 
@@ -159,11 +206,40 @@ const FilterSelect = ({ label, placeholder }: { label: string; placeholder: stri
 );
 
 export const WebStoreAddonList: React.FC = () => {
+  const { activeBrandId, brandConfigs } = useProducts();
+  const config = brandConfigs[activeBrandId];
+  const isShelvesUnited = config?.features.shelves_unite ?? false;
+  const isStockShared = config?.features.stock_shared ?? false;
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeStoreId, setActiveStoreId] = useState('all');
   const [keyword, setKeyword] = useState('');
+  const [stockDialog, setStockDialog] = useState<StoreAddonRecord | null>(null);
+  const [shelfDialog, setShelfDialog] = useState<StoreAddonRecord | null>(null);
+  const [openMenu, setOpenMenu] = useState<{
+    id: string;
+    addon: StoreAddonRecord;
+    top: number;
+    left: number;
+  } | null>(null);
 
   const tabs = useMemo(() => [{ id: 'all', label: '全部渠道' }, ...DEFAULT_CHANNELS], []);
+
+  useEffect(() => {
+    setOpenMenu(null);
+  }, [activeTabId]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-addon-menu]') || target?.closest('[data-addon-menu-trigger]')) {
+        return;
+      }
+      setOpenMenu(null);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
 
   const filteredAddons = useMemo(() => {
     let filtered = MOCK_STORE_ADDONS;
@@ -173,7 +249,7 @@ export const WebStoreAddonList: React.FC = () => {
     }
 
     if (activeTabId !== 'all') {
-      filtered = filtered.filter(item => item.channels.includes(activeTabId));
+      filtered = filtered.filter(item => activeTabId in item.channelStatuses);
     }
 
     const trimKeyword = keyword.trim().toLowerCase();
@@ -186,13 +262,131 @@ export const WebStoreAddonList: React.FC = () => {
     return filtered;
   }, [activeStoreId, activeTabId, keyword]);
 
-  const handleAction = (addon: StoreAddonRecord, action: 'shelf' | 'edit' | 'stock') => {
+  const handleAction = (
+    addon: StoreAddonRecord,
+    action: 'shelf' | 'batch_shelf' | 'edit' | 'stock' | 'change_price' | 'print' | 'delete' | 'log'
+  ) => {
+    if (action === 'shelf' || action === 'batch_shelf') {
+      setShelfDialog(addon);
+      return;
+    }
+    if (action === 'stock') {
+      setStockDialog(addon);
+      return;
+    }
+    const channelLabel = activeTabId === 'all' ? '全部渠道' : (CHANNEL_DEFS[activeTabId as ChannelId]?.label || activeTabId);
     const labels = {
-      shelf: addon.status === 'on_shelf' ? '下架' : '上架',
+      shelf: addon.channelStatuses[activeTabId as ChannelId] === 'on_shelf' ? '下架' : '上架',
+      batch_shelf: '上下架',
       edit: '编辑',
       stock: '沽清',
+      change_price: '改价',
+      print: '打印设置',
+      delete: '删除商品',
+      log: '操作日志',
     };
-    window.alert(`${labels[action]}：${addon.name}`);
+    setOpenMenu(null);
+    window.alert(`${labels[action]}：${addon.name} (${channelLabel})`);
+  };
+
+  const handleShelfConfirm = (payload: { action: 'on_shelf' | 'off_shelf'; channels: ShelfChannelId[] }) => {
+    if (!shelfDialog) return;
+    const actionLabel = payload.action === 'on_shelf' ? '上架' : '下架';
+    const selectedNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
+
+    if (activeTabId === 'all') {
+      window.alert(
+        isShelvesUnited
+          ? `已统一${actionLabel}加料全部渠道，状态会同步到美饿平台`
+          : `已${actionLabel}加料所选渠道：${selectedNames || '未选择渠道'}`
+      );
+    } else {
+      window.alert(
+        isShelvesUnited
+          ? `已统一${actionLabel}加料全部渠道，状态会同步到美饿平台`
+          : `${getShelfChannelLabel(activeTabId)} ${actionLabel}成功`
+      );
+    }
+    setShelfDialog(null);
+  };
+
+  const handleStockConfirm = (payload: {
+    type: 'day' | 'long';
+    channels: ShelfChannelId[];
+    remainStock: string;
+    nextDayUnlimited: boolean;
+    nextDayStock: string;
+    specs: StockoutSpec[];
+  }) => {
+    if (!stockDialog) return;
+    const channelNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
+    window.alert(
+      isStockShared
+        ? `${stockDialog.name} 沽清设置已保存，并同步更新渠道库存：${channelNames}`
+        : `${stockDialog.name} 沽清设置已保存，已应用至渠道：${channelNames}`
+    );
+    setStockDialog(null);
+  };
+
+  const renderChannelIcon = (channelId: ChannelId, status: ShelfStatus) => {
+    const def = CHANNEL_DEFS[channelId];
+    const isActive = status === 'on_shelf';
+    const icon = channelId === 'taobao'
+      ? <span className="text-[10px] font-black leading-none">{def.shortLabel}</span>
+      : def.icon;
+
+    return (
+      <div
+        key={channelId}
+        title={`${def.label} - ${isActive ? '上架' : '下架'}`}
+        className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+          isActive ? def.activeClass : def.inactiveClass
+        }`}
+      >
+        {icon}
+      </div>
+    );
+  };
+
+  const renderActionMenu = (addon: StoreAddonRecord) => {
+    const rowKey = `${addon.id}-${addon.storeId}`;
+    const isOpen = openMenu?.id === rowKey;
+    const menuItems = activeTabId === 'all'
+      ? [
+          { key: 'change_price', label: '改价' },
+          { key: 'print', label: '打印设置' },
+          { key: 'delete', label: '删除商品', danger: true },
+        ]
+      : [
+          { key: 'change_price', label: '改价' },
+          { key: 'log', label: '操作日志' },
+          { key: 'print', label: '打印设置' },
+          { key: 'delete', label: '删除商品', danger: true },
+        ];
+
+    return (
+      <div className="relative">
+        <button
+          data-addon-menu-trigger
+          onClick={event => {
+            if (isOpen) {
+              setOpenMenu(null);
+              return;
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            setOpenMenu({
+              id: rowKey,
+              addon,
+              top: rect.bottom + 8,
+              left: rect.right - 136,
+            });
+          }}
+          className="text-[#999] transition-colors hover:text-[#333]"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -264,10 +458,12 @@ export const WebStoreAddonList: React.FC = () => {
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-24">价格</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-28">库存</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-36">门店名称</th>
-                <th className="py-3 px-4 border-b border-[#E8E8E8] w-[220px]">{activeTabId === 'all' ? '投放渠道' : '渠道'}</th>
+                <th className={`py-3 px-4 border-b border-[#E8E8E8] ${activeTabId === 'all' ? 'w-[220px]' : 'w-[72px]'}`}>
+                  {activeTabId === 'all' ? '渠道' : ''}
+                </th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-28">是否独立售卖</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-28">关联商品数</th>
-                <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-44 text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
+                <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-[220px] text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
@@ -289,19 +485,12 @@ export const WebStoreAddonList: React.FC = () => {
                     <div className="text-[11px] text-[#999]">{addon.storeId.toUpperCase()}</div>
                   </td>
                   <td className="py-4 px-4">
-                    {activeTabId === 'all' ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {addon.channels.map(ch => {
-                          const def = CHANNEL_DEFS[ch];
-                          return def ? (
-                            <div key={ch} className={`px-1.5 py-0.5 rounded-[4px] flex items-center text-[10px] font-bold ${def.color}`}>
-                              {def.label}
-                            </div>
-                          ) : null;
-                        })}
+                    {activeTabId === 'all' && (
+                      <div className="flex flex-wrap gap-2">
+                        {DEFAULT_CHANNELS.map(channel => channel.id).map(channelId =>
+                          renderChannelIcon(channelId, addon.channelStatuses[channelId] || 'off_shelf')
+                        )}
                       </div>
-                    ) : (
-                      <div className="text-[#333]">{CHANNEL_DEFS[activeTabId]?.label || activeTabId}</div>
                     )}
                   </td>
                   <td className="py-4 px-4 text-[#666]">{addon.independentSale ? '是' : '否'}</td>
@@ -312,12 +501,24 @@ export const WebStoreAddonList: React.FC = () => {
                   </td>
                   <td className="sticky right-0 py-4 px-4 text-center bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
                     <div className="flex items-center justify-center space-x-3 text-sm">
-                      <button onClick={() => handleAction(addon, 'shelf')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">
-                        {addon.status === 'on_shelf' ? '下架' : '上架'}
+                      <button
+                        onClick={() => handleAction(addon, activeTabId === 'all' ? 'batch_shelf' : 'shelf')}
+                        className="font-medium text-[#00C06B] hover:text-[#008f53] hover:underline"
+                      >
+                        {activeTabId === 'all'
+                          ? '上下架'
+                          : addon.channelStatuses[activeTabId as ChannelId] === 'on_shelf'
+                            ? '下架'
+                            : '上架'}
                       </button>
+                      {activeTabId !== 'all' && (
+                        <button onClick={() => handleAction(addon, 'edit')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">
+                          编辑
+                        </button>
+                      )}
                       <button onClick={() => handleAction(addon, 'stock')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">沽清</button>
                       <div className="h-3 w-px bg-gray-300" />
-                      <button className="text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
+                      {renderActionMenu(addon)}
                     </div>
                   </td>
                 </tr>
@@ -347,6 +548,62 @@ export const WebStoreAddonList: React.FC = () => {
           </div>
         </div>
       </div>
+      {openMenu && (
+        <div
+          data-addon-menu
+          className="fixed z-[90] min-w-[136px] rounded-xl border border-[#E8E8E8] bg-white py-2 text-left shadow-[0_12px_30px_rgba(15,23,42,0.12)]"
+          style={{ top: openMenu.top, left: Math.max(16, openMenu.left) }}
+        >
+          {(activeTabId === 'all'
+            ? [
+                { key: 'change_price', label: '改价' },
+                { key: 'print', label: '打印设置' },
+                { key: 'delete', label: '删除商品', danger: true },
+              ]
+            : [
+                { key: 'change_price', label: '改价' },
+                { key: 'log', label: '操作日志' },
+                { key: 'print', label: '打印设置' },
+                { key: 'delete', label: '删除商品', danger: true },
+              ]).map(item => (
+            <button
+              key={item.key}
+              onClick={() => handleAction(openMenu.addon, item.key as 'change_price' | 'print' | 'delete' | 'log')}
+              className={`block w-full px-4 py-2 text-left text-sm transition-colors hover:bg-[#F7F8FA] ${
+                item.danger ? 'text-[#EF4444]' : 'text-[#00C06B]'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {shelfDialog && (
+        <WebShelfConfirmModal
+          entityLabel="加料"
+          itemName={shelfDialog.name}
+          availableChannels={DEFAULT_CHANNELS.map(channel => channel.id) as ShelfChannelId[]}
+          channelStatuses={shelfDialog.channelStatuses}
+          activeTabId={activeTabId}
+          isShelvesUnited={isShelvesUnited}
+          onClose={() => setShelfDialog(null)}
+          onConfirm={handleShelfConfirm}
+        />
+      )}
+      {stockDialog && (
+        <WebStockoutModal
+          itemName={stockDialog.name}
+          entityLabel="加料"
+          channels={DEFAULT_CHANNELS.map(channel => channel.id) as ShelfChannelId[]}
+          isStockShared={isStockShared}
+          isMultiSpec={Boolean(stockDialog.isMultiSpec)}
+          specs={stockDialog.specs}
+          defaultRemainStock="0"
+          defaultNextDayUnlimited={!isStockShared}
+          onClose={() => setStockDialog(null)}
+          onConfirm={handleStockConfirm}
+        />
+      )}
     </div>
   );
 };

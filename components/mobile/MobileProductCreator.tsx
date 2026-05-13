@@ -1,12 +1,24 @@
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChevronLeft, CupSoda, Utensils, Camera, Mic, LayoutGrid, Layers, ImageIcon, ChevronRight, CheckCircle, Loader2, Box, Package, Scale, ShoppingBag, CakeSlice, Flame, ArrowRight, X, Info } from 'lucide-react';
 import { Category, AVAILABLE_DYNAMIC_FIELDS, DynamicFieldConfig } from '../../types';
 import { MobileComboProductCreator } from './MobileComboProductCreator';
 import { MobileStandardProductCreator } from './MobileStandardProductCreator';
 
-type CreateStep = 'type_select' | 'form' | 'ai_processing' | 'success';
+type CreateStep = 'type_select' | 'photo_intro' | 'voice_intro' | 'ai_processing' | 'ai_result' | 'form' | 'success';
 type CreateMode = 'manual' | 'scan' | 'voice';
+type ScanSource = 'camera' | 'upload' | null;
+
+interface AiDraftResult {
+  name: string;
+  basePrice: string;
+  confidence: 'high' | 'medium';
+  sourceMode: CreateMode;
+  sourceLabel: string;
+  sourceHint: string;
+  transcript?: string;
+  warnings: string[];
+}
 
 interface Props {
   onBack: () => void;
@@ -40,22 +52,92 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   const [creationCategory, setCreationCategory] = useState<{ id: string, name: string } | null>(null);
   const [creationFormData, setCreationFormData] = useState<Record<string, any>>({});
   const [aiProcessingState, setAiProcessingState] = useState<'idle' | 'listening' | 'scanning' | 'analyzing'>('idle');
+  const [scanSource, setScanSource] = useState<ScanSource>(null);
+  const [voiceExample, setVoiceExample] = useState('生椰拿铁，18元');
+  const [aiResult, setAiResult] = useState<AiDraftResult | null>(null);
 
   const handleStartCreation = (mode: CreateMode) => {
       setCreateMode(mode);
-      if (mode === 'manual') { /* No op */ } else {
-          setAiProcessingState(mode === 'voice' ? 'listening' : 'scanning');
-          setCreateStep('ai_processing');
-          setTimeout(() => {
-              setAiProcessingState('analyzing');
-              setTimeout(() => {
-                  const mockData = mode === 'voice' ? { p_name: '语音识别拿铁', s_price: '28', p_unit: '杯' } : { p_name: 'OCR识别菜单A', s_price: '58', p_unit: '份' };
-                  setCreationFormData(mockData);
-                  setCreationCategory({ id: 'sc_2', name: '现制饮品' });
-                  setCreateStep('form');
-              }, 1500);
-          }, 2000);
-      }
+      if (mode === 'manual') return;
+      setShowCategoryModal(false);
+      setAiResult(null);
+      setCreationFormData({});
+      setCreationCategory(null);
+      setCreateStep(mode === 'voice' ? 'voice_intro' : 'photo_intro');
+  };
+
+  const photoTips = [
+    '请拍摄商品名称和价格都清晰可见的一页菜单',
+    '建议正对菜单拍摄，避免反光、模糊和大角度倾斜',
+    '单次仅支持 1 张照片，若有多页菜单请分次上传',
+  ];
+
+  const voiceExamples = [
+    '生椰拿铁，18元',
+    '爆浆芝士蛋糕，26元',
+    '冰美式，大杯15元，中杯13元',
+  ];
+
+  const buildAiResult = (mode: CreateMode, source?: ScanSource): AiDraftResult => {
+    if (mode === 'voice') {
+      return {
+        name: voiceExample.includes('生椰') ? '生椰拿铁' : voiceExample.includes('蛋糕') ? '爆浆芝士蛋糕' : '冰美式',
+        basePrice: voiceExample.includes('26') ? '26' : voiceExample.includes('15') ? '15' : '18',
+        confidence: voiceExample.includes('大杯') ? 'medium' : 'high',
+        sourceMode: 'voice',
+        sourceLabel: '语音录入',
+        sourceHint: '已根据语音内容预填商品名称和基础售价，请重点确认价格和规格信息。',
+        transcript: voiceExample,
+        warnings: voiceExample.includes('大杯')
+          ? ['识别到多个规格表达，当前仅预填首个价格，建议后续补充规格']
+          : ['复杂做法、加料和套餐信息建议在表单中继续完善'],
+      };
+    }
+
+    return {
+      name: source === 'upload' ? '招牌手打柠檬茶' : '招牌杨枝甘露',
+      basePrice: source === 'upload' ? '16' : '18',
+      confidence: 'medium',
+      sourceMode: 'scan',
+      sourceLabel: source === 'upload' ? '上传照片识别' : '拍照识别',
+      sourceHint: '当前仅根据单张菜单图片预填商品名称和基础售价，复杂规格和做法请继续补充。',
+      warnings: [
+        '已按单张菜单识别，建议核对商品名称和价格是否完整',
+        '套餐、做法、加料等复杂信息暂不会自动补全',
+      ],
+    };
+  };
+
+  const startAiProcessing = (mode: CreateMode, source?: ScanSource) => {
+    setCreateMode(mode);
+    if (mode === 'scan') {
+      setScanSource(source || 'camera');
+      setAiProcessingState('scanning');
+    } else {
+      setAiProcessingState('listening');
+    }
+    setCreateStep('ai_processing');
+    setTimeout(() => {
+      setAiProcessingState('analyzing');
+      setTimeout(() => {
+        const result = buildAiResult(mode, source);
+        setAiResult(result);
+        setCreationFormData({
+          name: result.name,
+          basePrice: result.basePrice,
+          sourceMode: result.sourceMode,
+          sourceLabel: result.sourceLabel,
+          sourceHint: result.sourceHint,
+        });
+        setCreateStep('ai_result');
+      }, 1300);
+    }, mode === 'voice' ? 2200 : 1800);
+  };
+
+  const handleAiConfirm = () => {
+    setTargetProductType('standard');
+    setCreationCategory(null);
+    setCreateStep('form');
   };
 
   const handleTypeSelect = (type: 'standard' | 'combo') => {
@@ -75,8 +157,14 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
       } else if (createStep === 'form') {
           setCreateStep('type_select');
           setCreationFormData({});
+          setAiResult(null);
+          setScanSource(null);
+      } else if (createStep === 'photo_intro' || createStep === 'voice_intro' || createStep === 'ai_result') {
+          setCreateStep('type_select');
+          setAiResult(null);
+          setScanSource(null);
       } else {
-          onBack();
+          setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro');
       }
   };
 
@@ -224,12 +312,125 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
                 onBack={handleBack} 
                 categories={categories} 
                 categoryName={creationCategory?.name} 
+                initialData={creationFormData}
             />
         );
     }
 
     return null;
   };
+
+  const renderPhotoIntro = () => (
+    <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full animate-in slide-in-from-right duration-300">
+      <div className="px-5 pt-5 pb-3 bg-white border-b border-gray-100">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xl font-black text-[#1F2129]">拍照识别快速录入</div>
+            <div className="mt-1 text-xs leading-5 text-gray-500">支持拍照或上传照片，单次识别 1 张菜单图片，先生成商品草稿再继续编辑。</div>
+          </div>
+          <div className="w-11 h-11 shrink-0 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center">
+            <Camera size={22} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-[#1F2129] mb-3">选择录入方式</div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => startAiProcessing('scan', 'camera')} className="rounded-2xl border border-[#DCEBFF] bg-[#F4F9FF] p-4 text-left active:scale-[0.98] transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-white text-blue-500 flex items-center justify-center mb-3 shadow-sm">
+                <Camera size={18} />
+              </div>
+              <div className="text-sm font-black text-[#1F2129]">拍照识别</div>
+              <div className="mt-1 text-[11px] leading-4 text-gray-500">现场拍一张菜单照片进行识别</div>
+            </button>
+            <button onClick={() => startAiProcessing('scan', 'upload')} className="rounded-2xl border border-[#E4E7EC] bg-[#FAFBFC] p-4 text-left active:scale-[0.98] transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-white text-gray-600 flex items-center justify-center mb-3 shadow-sm">
+                <ImageIcon size={18} />
+              </div>
+              <div className="text-sm font-black text-[#1F2129]">上传照片</div>
+              <div className="mt-1 text-[11px] leading-4 text-gray-500">从相册选择 1 张菜单照片上传</div>
+            </button>
+          </div>
+          <div className="mt-3 rounded-xl bg-[#FFF8E8] px-3 py-2 text-[11px] leading-5 text-[#9A6B00]">
+            单次仅支持 1 张照片，识别后先生成草稿，确认无误再继续编辑商品。
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-[#1F2129] mb-3">这样拍更容易识别准确</div>
+          <div className="space-y-3">
+            {photoTips.map((tip, index) => (
+              <div key={tip} className="flex items-start text-[12px] leading-5 text-gray-600">
+                <div className="w-5 h-5 rounded-full bg-[#E6F8F0] text-[#00C06B] flex items-center justify-center text-[10px] font-black mr-3 mt-0.5 shrink-0">
+                  {index + 1}
+                </div>
+                <div>{tip}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-[#1F2129] mb-3">识别说明</div>
+          <div className="space-y-2 text-[12px] leading-5 text-gray-500">
+            <div>系统当前优先识别商品名称和基础售价。</div>
+            <div>规格、做法、加料、套餐等复杂信息需要进入表单后继续补充。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderVoiceIntro = () => (
+    <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full animate-in slide-in-from-right duration-300">
+      <div className="px-5 pt-5 pb-3 bg-white border-b border-gray-100">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xl font-black text-[#1F2129]">语音识别录入菜品</div>
+            <div className="mt-1 text-xs leading-5 text-gray-500">适合快速录入简单商品，请尽量按“商品名 + 价格”方式表达，复杂规格建议后续补充。</div>
+          </div>
+          <div className="w-11 h-11 shrink-0 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center">
+            <Mic size={22} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-[#1F2129] mb-3">推荐这样说</div>
+          <div className="space-y-3">
+            {voiceExamples.map((item) => (
+              <button
+                key={item}
+                onClick={() => setVoiceExample(item)}
+                className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${voiceExample === item ? 'border-purple-200 bg-purple-50' : 'border-[#EEF0F3] bg-[#FAFBFC]'}`}
+              >
+                <div className="text-[11px] font-bold text-gray-400 mb-1">示例话术</div>
+                <div className="text-sm font-bold text-[#1F2129]">{item}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-[#1F2129] mb-3">使用提示</div>
+          <div className="space-y-2 text-[12px] leading-5 text-gray-500">
+            <div>请直接说出商品名称和价格，语速尽量平稳。</div>
+            <div>如果包含多个规格，系统只会先预填一个价格，建议稍后补充规格设置。</div>
+            <div>移动端当前不做类目匹配，识别后会先进入商品编辑页继续完善。</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white border-t border-gray-100 p-4">
+        <button onClick={() => startAiProcessing('voice')} className="w-full rounded-2xl bg-[#1F2129] py-4 text-sm font-black text-white active:scale-[0.98] transition-transform">
+          开始语音录入
+        </button>
+      </div>
+    </div>
+  );
 
   const renderAiOverlay = () => ( 
     <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center animate-in fade-in"> 
@@ -238,12 +439,85 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
             {aiProcessingState === 'scanning' && ( <div className="w-64 h-40 border-2 border-blue-500/50 rounded-xl relative overflow-hidden bg-gray-800"> <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,1)] animate-[scan_2s_ease-in-out_infinite]"></div> <div className="flex items-center justify-center h-full text-gray-500"><ImageIcon size={32}/></div> </div> )} 
             {aiProcessingState === 'analyzing' && ( <div className="w-20 h-20"> <Loader2 size={80} className="text-[#00C06B] animate-spin"/> </div> )} 
         </div> 
-        <h3 className="text-white text-xl font-bold mb-2"> {aiProcessingState === 'listening' ? '正在聆听...' : aiProcessingState === 'scanning' ? '正在扫描...' : 'AI 智能解析中...'} </h3> 
-        <p className="text-gray-400 text-sm"> {aiProcessingState === 'listening' ? '请描述商品名称和价格' : aiProcessingState === 'scanning' ? '请对准菜单或小票' : '正在提取关键信息填入表单'} </p> 
+        <h3 className="text-white text-xl font-bold mb-2"> {aiProcessingState === 'listening' ? '正在聆听...' : aiProcessingState === 'scanning' ? (scanSource === 'upload' ? '正在读取照片...' : '正在扫描菜单...') : 'AI 智能解析中...'} </h3> 
+        <p className="text-gray-400 text-sm text-center px-10 leading-6"> {aiProcessingState === 'listening' ? '请按“商品名称 + 价格”方式描述，例如：生椰拿铁，18元' : aiProcessingState === 'scanning' ? (scanSource === 'upload' ? '正在识别您上传的菜单照片，请稍候' : '请保持菜单名称和价格清晰，系统正在提取文字内容') : '正在生成可编辑的商品草稿，识别完成后需要您确认'} </p> 
         <button onClick={() => setCreateStep('type_select')} className="mt-12 text-gray-500 text-sm">取消</button> 
         <style>{` @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } } `}</style> 
     </div> 
   );
+
+  const resultBadgeClass = useMemo(() => (
+    aiResult?.sourceMode === 'voice'
+      ? 'bg-purple-50 text-purple-600'
+      : 'bg-blue-50 text-blue-600'
+  ), [aiResult]);
+
+  const renderAiResult = () => {
+    if (!aiResult) return null;
+
+    return (
+      <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full animate-in slide-in-from-right duration-300">
+        <div className="bg-white px-5 py-4 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xl font-black text-[#1F2129]">识别结果确认</div>
+              <div className="mt-1 text-xs leading-5 text-gray-500">系统已生成 1 条商品草稿，请先确认商品名称和价格，再进入编辑页继续完善。</div>
+            </div>
+            <div className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold ${resultBadgeClass}`}>
+              {aiResult.sourceLabel}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-black text-[#1F2129]">商品草稿</div>
+              <div className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${aiResult.confidence === 'high' ? 'bg-[#E6F8F0] text-[#00A862]' : 'bg-[#FFF4E5] text-[#C27A00]'}`}>
+                {aiResult.confidence === 'high' ? '识别较稳定' : '建议重点确认'}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <InfoRow label="商品名称" value={aiResult.name} />
+              <InfoRow label="基础售价" value={`${aiResult.basePrice} 元`} />
+              {aiResult.transcript && <InfoRow label="识别原话" value={aiResult.transcript} />}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <div className="text-sm font-black text-[#1F2129] mb-3">识别提醒</div>
+            <div className="space-y-2">
+              {aiResult.warnings.map((warning) => (
+                <div key={warning} className="rounded-xl bg-[#FFF8E8] px-3 py-2 text-[11px] leading-5 text-[#9A6B00]">
+                  {warning}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm">
+            <div className="text-sm font-black text-[#1F2129] mb-2">进入编辑页后你还可以继续补充</div>
+            <div className="flex flex-wrap gap-2">
+              {['商品主图', '销售渠道', '规格价格', '做法/加料', '展示信息'].map((item) => (
+                <div key={item} className="rounded-full bg-[#F5F6FA] px-3 py-1.5 text-[11px] font-bold text-gray-500">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border-t border-gray-100 p-4 space-y-3">
+          <button onClick={handleAiConfirm} className="w-full rounded-2xl bg-[#00C06B] py-4 text-sm font-black text-white active:scale-[0.98] transition-transform">
+            确认并继续编辑
+          </button>
+          <button onClick={() => setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro')} className="w-full rounded-2xl bg-gray-100 py-4 text-sm font-black text-gray-600 active:scale-[0.98] transition-transform">
+            重新识别
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderSuccess = () => ( 
     <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 animate-in zoom-in-95"> 
@@ -271,6 +545,9 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
         )}
 
         {createStep === 'type_select' && renderTypeSelection()}
+        {createStep === 'photo_intro' && renderPhotoIntro()}
+        {createStep === 'voice_intro' && renderVoiceIntro()}
+        {createStep === 'ai_result' && renderAiResult()}
         {createStep === 'form' && renderCreationForm()}
         
         {renderCategoryModal()}
@@ -280,3 +557,10 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
     </div>
   );
 };
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-start justify-between gap-4 rounded-xl bg-[#FAFBFC] px-3 py-3">
+    <div className="text-[12px] font-bold text-gray-500">{label}</div>
+    <div className="text-right text-[13px] font-black text-[#1F2129] leading-5">{value}</div>
+  </div>
+);

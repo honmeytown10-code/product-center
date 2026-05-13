@@ -14,6 +14,14 @@ interface Props {
   onBack: () => void;
   categories: Category[];
   categoryName?: string;
+  initialData?: {
+    name?: string;
+    basePrice?: string;
+    stock?: string;
+    sourceMode?: 'scan' | 'voice';
+    sourceLabel?: string;
+    sourceHint?: string;
+  };
 }
 
 type TabType = 'basic' | 'attr' | 'sales' | 'display';
@@ -30,7 +38,7 @@ interface TimeSalesConfig {
   rules: TimeRule[];
 }
 
-export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, categoryName }) => {
+export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, categoryName, initialData }) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [showTimeSalesEditor, setShowTimeSalesEditor] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
@@ -46,12 +54,12 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
   };
 
   const [formData, setFormData] = useState({
-    name: '',
+    name: initialData?.name || '',
     category: categoryName || '通用菜品',
     channels: ['mini', 'pos', 'mini_dine', 'mini_take'],
     specType: 'single', // 'single' | 'multi'
-    basePrice: '',
-    stock: '',
+    basePrice: initialData?.basePrice || '',
+    stock: initialData?.stock || '',
     salesMode: 'normal', // 'normal' | 'combo_only'
     takeawayMode: 'normal', // 'normal' | 'hide' | 'only'
     settings: ['member_discount'],
@@ -143,6 +151,23 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
         {/* 1. 基本信息 */}
         <div ref={sectionRefs.basic} className="bg-white p-5 rounded-2xl shadow-sm space-y-5">
             <h3 className="font-black text-base text-gray-800">基本信息</h3>
+            {initialData?.sourceMode && (
+                <div className={`rounded-2xl border px-4 py-3 ${initialData.sourceMode === 'voice' ? 'border-purple-100 bg-purple-50/70' : 'border-blue-100 bg-blue-50/70'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <div className={`text-sm font-black ${initialData.sourceMode === 'voice' ? 'text-purple-700' : 'text-blue-700'}`}>
+                                已通过{initialData.sourceLabel || (initialData.sourceMode === 'voice' ? '语音录入' : '拍照识别')}预填基础信息
+                            </div>
+                            <div className="mt-1 text-[11px] leading-5 text-gray-500">
+                                {initialData.sourceHint || '系统已为您预填商品名称和基础售价，规格、做法、加料等复杂信息请继续补充。'}
+                            </div>
+                        </div>
+                        <div className={`mt-0.5 rounded-full px-2 py-1 text-[10px] font-bold ${initialData.sourceMode === 'voice' ? 'bg-white text-purple-600' : 'bg-white text-blue-600'}`}>
+                            AI 预填
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="flex justify-between items-center py-2 border-b border-gray-50">
                 <label className="text-sm font-bold text-gray-700">商品名称 <span className="text-red-500">*</span></label>
                 <input 

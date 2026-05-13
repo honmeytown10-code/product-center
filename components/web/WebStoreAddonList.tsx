@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Search, Plus, ChevronDown, MoreHorizontal, FileUp,
-  ArrowUpDown, ChevronLeft, ChevronRight, Store, Bike, UtensilsCrossed, ShoppingBag
+  Plus, Minus, ChevronDown, MoreHorizontal, FileUp, X, AlertTriangle,
+  ChevronLeft, ChevronRight, Store, Bike, UtensilsCrossed, ShoppingBag, CircleHelp
 } from 'lucide-react';
 import { useProducts } from '../../context';
 import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
@@ -23,6 +23,32 @@ type StoreAddonRecord = {
   relatedProductCount: number;
   isMultiSpec?: boolean;
   specs?: StockoutSpec[];
+};
+
+type AddonEditDraft = {
+  id: string;
+  name: string;
+  price: number;
+  costPrice: number;
+  stockMode: 'unlimited' | 'custom';
+  stockCount: number;
+  replenishMode: 'none' | 'max' | 'unlimited';
+};
+
+type AddonDeleteDialogState =
+  | { mode: 'single'; addon: StoreAddonRecord }
+  | { mode: 'batch'; count: number };
+
+type AddonBatchShelfDialogState = {
+  action: 'on_shelf' | 'off_shelf';
+  count: number;
+};
+
+type AddonBatchPriceDialogState = {
+  count: number;
+  priceType: 'increase' | 'decrease' | 'set';
+  valueType: 'amount' | 'percent';
+  amount: string;
 };
 
 const STORE_OPTIONS = [
@@ -210,11 +236,16 @@ export const WebStoreAddonList: React.FC = () => {
   const config = brandConfigs[activeBrandId];
   const isShelvesUnited = config?.features.shelves_unite ?? false;
   const isStockShared = config?.features.stock_shared ?? false;
+  const [addons, setAddons] = useState<StoreAddonRecord[]>(MOCK_STORE_ADDONS);
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeStoreId, setActiveStoreId] = useState('all');
-  const [keyword, setKeyword] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [stockDialog, setStockDialog] = useState<StoreAddonRecord | null>(null);
   const [shelfDialog, setShelfDialog] = useState<StoreAddonRecord | null>(null);
+  const [batchShelfDialog, setBatchShelfDialog] = useState<AddonBatchShelfDialogState | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<AddonDeleteDialogState | null>(null);
+  const [editDialog, setEditDialog] = useState<AddonEditDraft | null>(null);
+  const [batchPriceDialog, setBatchPriceDialog] = useState<AddonBatchPriceDialogState | null>(null);
   const [openMenu, setOpenMenu] = useState<{
     id: string;
     addon: StoreAddonRecord;
@@ -227,6 +258,10 @@ export const WebStoreAddonList: React.FC = () => {
   useEffect(() => {
     setOpenMenu(null);
   }, [activeTabId]);
+
+  useEffect(() => {
+    setSelectedRowKeys(new Set());
+  }, [activeTabId, activeStoreId]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -242,7 +277,7 @@ export const WebStoreAddonList: React.FC = () => {
   }, []);
 
   const filteredAddons = useMemo(() => {
-    let filtered = MOCK_STORE_ADDONS;
+    let filtered = addons;
 
     if (activeStoreId !== 'all') {
       filtered = filtered.filter(item => item.storeId === activeStoreId);
@@ -252,15 +287,8 @@ export const WebStoreAddonList: React.FC = () => {
       filtered = filtered.filter(item => activeTabId in item.channelStatuses);
     }
 
-    const trimKeyword = keyword.trim().toLowerCase();
-    if (trimKeyword) {
-      filtered = filtered.filter(item =>
-        item.name.toLowerCase().includes(trimKeyword) || item.id.includes(trimKeyword)
-      );
-    }
-
     return filtered;
-  }, [activeStoreId, activeTabId, keyword]);
+  }, [activeStoreId, activeTabId, addons]);
 
   const handleAction = (
     addon: StoreAddonRecord,
@@ -274,15 +302,31 @@ export const WebStoreAddonList: React.FC = () => {
       setStockDialog(addon);
       return;
     }
+    if (action === 'delete') {
+      setDeleteDialog({ mode: 'single', addon });
+      setOpenMenu(null);
+      return;
+    }
+    if (action === 'edit') {
+      setEditDialog({
+        id: addon.id,
+        name: addon.name,
+        price: addon.price,
+        costPrice: Number((addon.price * 0.45).toFixed(2)),
+        stockMode: addon.stockMode,
+        stockCount: addon.stockCount,
+        replenishMode: 'none',
+      });
+      return;
+    }
     const channelLabel = activeTabId === 'all' ? '全部渠道' : (CHANNEL_DEFS[activeTabId as ChannelId]?.label || activeTabId);
     const labels = {
       shelf: addon.channelStatuses[activeTabId as ChannelId] === 'on_shelf' ? '下架' : '上架',
       batch_shelf: '上下架',
-      edit: '编辑',
       stock: '沽清',
       change_price: '改价',
       print: '打印设置',
-      delete: '删除商品',
+      delete: '删除加料',
       log: '操作日志',
     };
     setOpenMenu(null);
@@ -328,6 +372,126 @@ export const WebStoreAddonList: React.FC = () => {
     setStockDialog(null);
   };
 
+  const getRowKey = (addon: StoreAddonRecord) => `${addon.id}-${addon.storeId}`;
+
+  const visibleRowKeys = filteredAddons.map(getRowKey);
+  const selectedAddons = filteredAddons.filter(item => selectedRowKeys.has(getRowKey(item)));
+  const selectedCount = visibleRowKeys.filter(key => selectedRowKeys.has(key)).length;
+  const allVisibleSelected = visibleRowKeys.length > 0 && selectedCount === visibleRowKeys.length;
+
+  const toggleRowSelection = (rowKey: string) => {
+    setSelectedRowKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedRowKeys(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleRowKeys.forEach(key => next.delete(key));
+      } else {
+        visibleRowKeys.forEach(key => next.add(key));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedRowKeys(new Set());
+
+  const handleBatchAction = (action: 'on_shelf' | 'off_shelf' | 'delete' | 'change_price') => {
+    if (!selectedCount) return;
+    if (action === 'on_shelf' || action === 'off_shelf') {
+      setBatchShelfDialog({ action, count: selectedCount });
+      return;
+    }
+    if (action === 'delete') {
+      setDeleteDialog({ mode: 'batch', count: selectedCount });
+      return;
+    }
+    if (action === 'change_price') {
+      setBatchPriceDialog({
+        count: selectedCount,
+        priceType: 'increase',
+        valueType: 'amount',
+        amount: '',
+      });
+    }
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteDialog) return;
+    if (deleteDialog.mode === 'single') {
+      setAddons(prev => prev.filter(item => !(item.id === deleteDialog.addon.id && item.storeId === deleteDialog.addon.storeId)));
+    } else {
+      setAddons(prev => prev.filter(item => !selectedRowKeys.has(getRowKey(item))));
+      setSelectedRowKeys(new Set());
+    }
+    setDeleteDialog(null);
+  };
+
+  const handleBatchShelfConfirm = (channels: ShelfChannelId[]) => {
+    if (!batchShelfDialog) return;
+    setAddons(prev => prev.map(item => {
+      if (!selectedRowKeys.has(getRowKey(item))) return item;
+      const nextStatuses = { ...item.channelStatuses };
+      channels.forEach(channelId => {
+        nextStatuses[channelId as ChannelId] = batchShelfDialog.action;
+      });
+      return { ...item, channelStatuses: nextStatuses };
+    }));
+    setBatchShelfDialog(null);
+    setSelectedRowKeys(new Set());
+  };
+
+  const handleBatchPriceConfirm = () => {
+    if (!batchPriceDialog) return;
+    const amountValue = Number(batchPriceDialog.amount || 0);
+    setAddons(prev => prev.map(item => {
+      if (!selectedRowKeys.has(getRowKey(item))) return item;
+      let nextPrice = item.price;
+      if (batchPriceDialog.priceType === 'set') {
+        nextPrice = amountValue;
+      } else if (batchPriceDialog.valueType === 'percent') {
+        const delta = item.price * (amountValue / 100);
+        nextPrice = batchPriceDialog.priceType === 'increase' ? item.price + delta : item.price - delta;
+      } else {
+        nextPrice = batchPriceDialog.priceType === 'increase' ? item.price + amountValue : item.price - amountValue;
+      }
+      return { ...item, price: Number(Math.max(0, nextPrice).toFixed(2)) };
+    }));
+    setBatchPriceDialog(null);
+    setSelectedRowKeys(new Set());
+  };
+
+  const handleEditNumberChange = (field: 'price' | 'costPrice' | 'stockCount', delta: number) => {
+    if (!editDialog) return;
+    const currentValue = editDialog[field];
+    const nextValue = Math.max(0, Number((currentValue + delta).toFixed(2)));
+    setEditDialog({
+      ...editDialog,
+      [field]: field === 'stockCount' ? Math.round(nextValue) : nextValue,
+    });
+  };
+
+  const handleEditSave = () => {
+    if (!editDialog) return;
+    setAddons(prev => prev.map(item => (
+      item.id === editDialog.id
+        ? {
+            ...item,
+            price: editDialog.price,
+            stockMode: editDialog.stockMode,
+            stockCount: editDialog.stockMode === 'unlimited' ? 0 : editDialog.stockCount,
+          }
+        : item
+    )));
+    setEditDialog(null);
+  };
+
   const renderChannelIcon = (channelId: ChannelId, status: ShelfStatus) => {
     const def = CHANNEL_DEFS[channelId];
     const isActive = status === 'on_shelf';
@@ -355,13 +519,13 @@ export const WebStoreAddonList: React.FC = () => {
       ? [
           { key: 'change_price', label: '改价' },
           { key: 'print', label: '打印设置' },
-          { key: 'delete', label: '删除商品', danger: true },
+          { key: 'delete', label: '删除加料', danger: true },
         ]
       : [
           { key: 'change_price', label: '改价' },
           { key: 'log', label: '操作日志' },
           { key: 'print', label: '打印设置' },
-          { key: 'delete', label: '删除商品', danger: true },
+          { key: 'delete', label: '删除加料', danger: true },
         ];
 
     return (
@@ -399,10 +563,6 @@ export const WebStoreAddonList: React.FC = () => {
             <FilterNativeSelect label="机构门店" options={STORE_OPTIONS} value={activeStoreId} onChange={setActiveStoreId} />
             <FilterSelect label="售卖状态" placeholder="全部" />
             <FilterSelect label="库存状态" placeholder="请选择" />
-            <FilterSelect label="是否独立售卖" placeholder="全部" />
-            <button className="h-[34px] px-3 border border-dashed border-[#AAA] text-[#666] rounded hover:border-[#00C06B] hover:text-[#00C06B] transition-colors text-xs flex items-center bg-white">
-              <Plus size={14} className="mr-1" /> 添加筛选
-            </button>
           </div>
 
           <div className="flex justify-between items-center gap-4">
@@ -417,17 +577,7 @@ export const WebStoreAddonList: React.FC = () => {
         </div>
 
         <div className="px-5 py-3 flex justify-between items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-4">
-          <div className="flex items-center space-x-4 min-w-0">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-2.5 text-[#999]" />
-              <input
-                value={keyword}
-                onChange={e => setKeyword(e.target.value)}
-                className="pl-9 pr-4 py-1.5 border border-[#E8E8E8] rounded w-56 text-sm focus:border-[#00C06B] focus:outline-none transition-colors"
-                placeholder="搜索加料名称/ID"
-              />
-            </div>
-
+          <div className="flex items-center space-x-4 min-w-0 flex-1">
             <div className="flex items-center space-x-1 overflow-x-auto max-w-[550px] no-scrollbar">
               {tabs.map(tab => (
                 <button
@@ -441,19 +591,42 @@ export const WebStoreAddonList: React.FC = () => {
               ))}
             </div>
           </div>
-
-          <div className="flex items-center space-x-3 shrink-0">
-            <button className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
-              <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
-            </button>
-          </div>
         </div>
+
+        {selectedCount > 0 && (
+          <div className="mx-5 mt-4 rounded-lg border border-[#BEE8CC] bg-[#F3FCF7] px-4 py-3">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <div className="font-medium text-[#5E7A67]">已选 {selectedCount} 条数据</div>
+              <div className="flex items-center gap-4 text-[#00A862]">
+                {activeTabId === 'all' ? (
+                  <>
+                    <button onClick={() => handleBatchAction('on_shelf')} className="font-medium hover:underline">上架</button>
+                    <button onClick={() => handleBatchAction('off_shelf')} className="font-medium hover:underline">下架</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => handleBatchAction('delete')} className="font-medium hover:underline">删除加料</button>
+                    <button onClick={() => handleBatchAction('change_price')} className="font-medium hover:underline">改价</button>
+                  </>
+                )}
+                <button onClick={clearSelection} className="font-medium hover:underline">取消选择</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto no-scrollbar">
           <table className="w-full text-left border-collapse min-w-[1020px]">
             <thead className="sticky top-0 bg-[#F7F8FA] z-10 text-xs font-bold text-[#333]">
               <tr>
-                <th className="w-12 py-3 pl-5 border-b border-[#E8E8E8]"><input type="checkbox" className="rounded border-gray-300" /></th>
+                <th className="w-12 py-3 pl-5 border-b border-[#E8E8E8]">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    className="rounded border-gray-300"
+                  />
+                </th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8]">加料名称</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-24">价格</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-28">库存</th>
@@ -467,9 +640,18 @@ export const WebStoreAddonList: React.FC = () => {
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
-              {filteredAddons.map(addon => (
+              {filteredAddons.map(addon => {
+                const rowKey = getRowKey(addon);
+                return (
                 <tr key={`${addon.id}-${addon.storeId}`} className="border-b border-[#F5F5F5] hover:bg-[#F9FFFC] transition-colors group">
-                  <td className="py-4 pl-5"><input type="checkbox" className="rounded border-gray-300" /></td>
+                  <td className="py-4 pl-5">
+                    <input
+                      type="checkbox"
+                      checked={selectedRowKeys.has(rowKey)}
+                      onChange={() => toggleRowSelection(rowKey)}
+                      className="rounded border-gray-300"
+                    />
+                  </td>
                   <td className="py-4 px-4">
                     <div className="font-bold text-[#333]">{addon.name}</div>
                     <div className="mt-1 text-[11px] text-[#999] font-mono">ID: {addon.id}</div>
@@ -522,7 +704,7 @@ export const WebStoreAddonList: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
               {filteredAddons.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-10 text-center text-[#999]">暂无加料数据</td>
@@ -558,13 +740,13 @@ export const WebStoreAddonList: React.FC = () => {
             ? [
                 { key: 'change_price', label: '改价' },
                 { key: 'print', label: '打印设置' },
-                { key: 'delete', label: '删除商品', danger: true },
+                { key: 'delete', label: '删除加料', danger: true },
               ]
             : [
                 { key: 'change_price', label: '改价' },
                 { key: 'log', label: '操作日志' },
                 { key: 'print', label: '打印设置' },
-                { key: 'delete', label: '删除商品', danger: true },
+                { key: 'delete', label: '删除加料', danger: true },
               ]).map(item => (
             <button
               key={item.key}
@@ -590,6 +772,16 @@ export const WebStoreAddonList: React.FC = () => {
           onConfirm={handleShelfConfirm}
         />
       )}
+      {batchShelfDialog && (
+        <AddonBatchShelfModal
+          action={batchShelfDialog.action}
+          count={batchShelfDialog.count}
+          availableChannels={DEFAULT_CHANNELS.map(channel => channel.id) as ShelfChannelId[]}
+          isShelvesUnited={isShelvesUnited}
+          onClose={() => setBatchShelfDialog(null)}
+          onConfirm={handleBatchShelfConfirm}
+        />
+      )}
       {stockDialog && (
         <WebStockoutModal
           itemName={stockDialog.name}
@@ -604,6 +796,358 @@ export const WebStoreAddonList: React.FC = () => {
           onConfirm={handleStockConfirm}
         />
       )}
+      {deleteDialog && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45">
+          <div className="w-[630px] rounded-2xl bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+            <div className="flex justify-end px-5 pt-5">
+              <button onClick={() => setDeleteDialog(null)} className="text-[#999] hover:text-[#333]">
+                <X size={22} />
+              </button>
+            </div>
+            <div className="px-10 pb-8 pt-2">
+              <div className="flex items-center">
+                <div className="mr-5 flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF2DA] text-[#D89B25]">
+                  <AlertTriangle size={22} />
+                </div>
+                <div className="text-[17px] leading-8 text-[#666]">
+                  {deleteDialog.mode === 'single'
+                    ? (activeTabId === 'all'
+                        ? '加料将从所有在售渠道中删除，删除后不可恢复请谨慎操作！确认删除该加料嘛？'
+                        : '确认删除该加料吗？删除后不可恢复请谨慎操作！')
+                    : (activeTabId === 'all'
+                        ? `加料将从所有在售渠道中删除，删除后不可恢复请谨慎操作！确认删除已选${deleteDialog.count}个加料嘛？`
+                        : `确认删除已选${deleteDialog.count}个加料吗？删除后不可恢复请谨慎操作！`)}
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end gap-3">
+                <button onClick={() => setDeleteDialog(null)} className="rounded-lg border border-[#D9D9D9] px-8 py-3 text-[15px] text-[#666] hover:bg-gray-50">
+                  取消
+                </button>
+                <button onClick={handleDeleteConfirm} className="rounded-lg bg-[#22C55E] px-8 py-3 text-[15px] font-bold text-white hover:bg-[#16A34A]">
+                  确认
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {batchPriceDialog && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45">
+          <div className="w-[980px] rounded-2xl bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+            <div className="flex items-center justify-between px-7 py-6">
+              <div className="text-[24px] font-medium text-[#333]">批量改价</div>
+              <button onClick={() => setBatchPriceDialog(null)} className="text-[#999] hover:text-[#333]">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="px-7 pb-8">
+              <div className="rounded bg-[#F7F8FA] px-5 py-4 text-[16px] leading-9 text-[#666]">
+                <div><span className="mr-2 text-[#FF2D20]">•</span>1、本次修改只针对价格范围内的生效，例如：原价1元，减价10元，则不生效</div>
+                <div><span className="mr-2 text-[#FF2D20]">•</span>2、多规格商品修改针对每个规格都生效</div>
+              </div>
+              <div className="mt-8 space-y-8">
+                <BatchEditRow label="改价商品">
+                  <div className="text-[18px] text-[#666]">已选<span className="mx-1 font-bold text-[#00C06B]">{batchPriceDialog.count}</span>个商品</div>
+                </BatchEditRow>
+                <BatchEditRow label="改价类型">
+                  <div className="flex gap-4">
+                    <select
+                      value={batchPriceDialog.priceType}
+                      onChange={e => setBatchPriceDialog({ ...batchPriceDialog, priceType: e.target.value as AddonBatchPriceDialogState['priceType'] })}
+                      className="h-[46px] w-[340px] rounded-lg border border-[#D9D9D9] px-4 text-[16px] text-[#666] outline-none"
+                    >
+                      <option value="increase">加价</option>
+                      <option value="decrease">减价</option>
+                      <option value="set">定价</option>
+                    </select>
+                    <select
+                      value={batchPriceDialog.valueType}
+                      onChange={e => setBatchPriceDialog({ ...batchPriceDialog, valueType: e.target.value as AddonBatchPriceDialogState['valueType'] })}
+                      className="h-[46px] w-[340px] rounded-lg border border-[#D9D9D9] px-4 text-[16px] text-[#666] outline-none"
+                    >
+                      <option value="amount">按金额</option>
+                      <option value="percent">按百分比</option>
+                    </select>
+                  </div>
+                </BatchEditRow>
+                <BatchEditRow label="改价幅度">
+                  <div className="flex items-center">
+                    <NumberStepper
+                      value={batchPriceDialog.amount || '请输入'}
+                      onMinus={() => setBatchPriceDialog(prev => prev ? ({ ...prev, amount: `${Math.max(0, Number(prev.amount || 0) - 1)}` }) : prev)}
+                      onPlus={() => setBatchPriceDialog(prev => prev ? ({ ...prev, amount: `${Number(prev.amount || 0) + 1}` }) : prev)}
+                    />
+                    <input
+                      value={batchPriceDialog.amount}
+                      onChange={e => setBatchPriceDialog({ ...batchPriceDialog, amount: e.target.value.replace(/[^\d.]/g, '') })}
+                      placeholder={batchPriceDialog.valueType === 'amount' ? '请输入改价金额' : '请输入百分比'}
+                      className="ml-4 h-[46px] w-[220px] rounded-lg border border-[#D9D9D9] px-4 text-[16px] text-[#666] outline-none"
+                    />
+                  </div>
+                </BatchEditRow>
+              </div>
+              <div className="mt-12 flex justify-end gap-4">
+                <button onClick={() => setBatchPriceDialog(null)} className="h-[50px] rounded-md border border-[#D9D9D9] px-10 text-[18px] text-[#666] hover:bg-[#FAFAFA]">
+                  取消
+                </button>
+                <button onClick={handleBatchPriceConfirm} className="h-[50px] rounded-md bg-[#11B45C] px-10 text-[18px] font-medium text-white hover:bg-[#0D9D50]">
+                  确定
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {editDialog && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45">
+          <div className="w-[640px] rounded-2xl bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+            <div className="flex items-center justify-between border-b border-[#EFEFEF] px-7 py-5">
+              <div className="text-[18px] font-bold text-[#333]">加料编辑</div>
+              <button onClick={() => setEditDialog(null)} className="text-[#999] hover:text-[#333]">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-6 px-7 py-7">
+              <EditRow label="加料名称">
+                <input
+                  value={editDialog.name}
+                  disabled
+                  className="h-[44px] w-[312px] rounded-lg border border-[#E5E7EB] bg-[#F5F6FA] px-4 text-[15px] text-[#999] outline-none"
+                />
+              </EditRow>
+              <EditRow label="价格">
+                <NumberStepper value={editDialog.price.toFixed(2)} onMinus={() => handleEditNumberChange('price', -1)} onPlus={() => handleEditNumberChange('price', 1)} />
+              </EditRow>
+              <EditRow label="成本价">
+                <NumberStepper value={editDialog.costPrice.toFixed(2)} onMinus={() => handleEditNumberChange('costPrice', -1)} onPlus={() => handleEditNumberChange('costPrice', 1)} />
+              </EditRow>
+              <EditRow label="库存设置" required>
+                <div className="flex items-center gap-8 text-[16px] text-[#666]">
+                  <label className="flex cursor-pointer items-center">
+                    <input
+                      type="radio"
+                      checked={editDialog.stockMode === 'unlimited'}
+                      onChange={() => setEditDialog({ ...editDialog, stockMode: 'unlimited' })}
+                      className="mr-3 h-5 w-5 accent-[#00C06B]"
+                    />
+                    无限库存
+                  </label>
+                  <label className="flex cursor-pointer items-center text-[#00C06B]">
+                    <input
+                      type="radio"
+                      checked={editDialog.stockMode === 'custom'}
+                      onChange={() => setEditDialog({ ...editDialog, stockMode: 'custom' })}
+                      className="mr-3 h-5 w-5 accent-[#00C06B]"
+                    />
+                    自定义库存
+                  </label>
+                </div>
+              </EditRow>
+              {editDialog.stockMode === 'custom' && (
+                <>
+                  <EditRow label="库存">
+                    <NumberStepper value={`${editDialog.stockCount}`} onMinus={() => handleEditNumberChange('stockCount', -1)} onPlus={() => handleEditNumberChange('stockCount', 1)} />
+                  </EditRow>
+                  <EditRow label="">
+                    <div className="space-y-3 text-[16px]">
+                      <label className="flex cursor-pointer items-center text-[#00C06B]">
+                        <input
+                          type="radio"
+                          checked={editDialog.replenishMode === 'none'}
+                          onChange={() => setEditDialog({ ...editDialog, replenishMode: 'none' })}
+                          className="mr-3 h-5 w-5 accent-[#00C06B]"
+                        />
+                        不自动补足库存
+                      </label>
+                      <label className="flex cursor-pointer items-center text-[#666]">
+                        <input
+                          type="radio"
+                          checked={editDialog.replenishMode === 'max'}
+                          onChange={() => setEditDialog({ ...editDialog, replenishMode: 'max' })}
+                          className="mr-3 h-5 w-5 accent-[#00C06B]"
+                        />
+                        自动补足库存为最大值
+                      </label>
+                      <label className="flex cursor-pointer items-center text-[#666]">
+                        <input
+                          type="radio"
+                          checked={editDialog.replenishMode === 'unlimited'}
+                          onChange={() => setEditDialog({ ...editDialog, replenishMode: 'unlimited' })}
+                          className="mr-3 h-5 w-5 accent-[#00C06B]"
+                        />
+                        自动补足库存为无限库存
+                      </label>
+                    </div>
+                    <CircleHelp size={18} className="ml-4 mt-1 text-[#999]" />
+                  </EditRow>
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-[#EFEFEF] px-7 py-5">
+              <button onClick={() => setEditDialog(null)} className="rounded-lg border border-[#D9D9D9] px-8 py-3 text-[15px] text-[#666] hover:bg-gray-50">
+                取消
+              </button>
+              <button onClick={handleEditSave} className="rounded-lg bg-[#22C55E] px-8 py-3 text-[15px] font-bold text-white hover:bg-[#16A34A]">
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const EditRow = ({
+  label,
+  required = false,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) => (
+  <div className="flex items-start">
+    <div className="w-[118px] pt-2 text-right text-[16px] text-[#666]">
+      {required && <span className="mr-1 text-[#FF4D4F]">*</span>}
+      {label}
+      {label ? '：' : ''}
+    </div>
+    <div className="ml-5 flex flex-1 items-start">{children}</div>
+  </div>
+);
+
+const NumberStepper = ({
+  value,
+  onMinus,
+  onPlus,
+}: {
+  value: string;
+  onMinus: () => void;
+  onPlus: () => void;
+}) => (
+  <div className="flex h-[48px] overflow-hidden rounded-lg border border-[#D9D9D9]">
+    <button type="button" onClick={onMinus} className="flex w-[48px] items-center justify-center bg-[#F8F8F8] text-[#999] hover:bg-[#F1F5F9]">
+      <Minus size={18} />
+    </button>
+    <div className="flex w-[96px] items-center justify-center border-x border-[#D9D9D9] text-[18px] text-[#666]">
+      {value}
+    </div>
+    <button type="button" onClick={onPlus} className="flex w-[48px] items-center justify-center bg-[#F8F8F8] text-[#666] hover:bg-[#F1F5F9]">
+      <Plus size={18} />
+    </button>
+  </div>
+);
+
+const BatchEditRow = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div className="flex items-center">
+    <div className="w-[140px] shrink-0 text-[18px] text-[#666]">{label}：</div>
+    <div className="flex-1">{children}</div>
+  </div>
+);
+
+const AddonBatchShelfModal = ({
+  action,
+  count,
+  availableChannels,
+  isShelvesUnited,
+  onClose,
+  onConfirm,
+}: {
+  action: 'on_shelf' | 'off_shelf';
+  count: number;
+  availableChannels: ShelfChannelId[];
+  isShelvesUnited: boolean;
+  onClose: () => void;
+  onConfirm: (channels: ShelfChannelId[]) => void;
+}) => {
+  const [selectedChannels, setSelectedChannels] = useState<ShelfChannelId[]>(availableChannels);
+  const allChecked = selectedChannels.length === availableChannels.length;
+
+  const toggleChannel = (channelId: ShelfChannelId) => {
+    setSelectedChannels(prev =>
+      prev.includes(channelId) ? prev.filter(item => item !== channelId) : [...prev, channelId]
+    );
+  };
+
+  const toggleAll = () => {
+    setSelectedChannels(allChecked ? [] : availableChannels);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+      <div className="w-[1020px] max-w-[calc(100vw-48px)] rounded-[18px] bg-white shadow-2xl">
+        <div className="flex items-center justify-between px-8 pt-8">
+          <h3 className="text-[22px] font-bold text-[#333]">确认{action === 'on_shelf' ? '上架' : '下架'}加料吗?</h3>
+          <button onClick={onClose} className="text-[#999] transition-colors hover:text-[#333]">
+            <X size={22} />
+          </button>
+        </div>
+        <div className="px-8 pb-8 pt-6">
+          <div className="text-[18px] text-[#333]">
+            {action === 'on_shelf' ? '上架' : '下架'}加料: <span className="font-bold">已选择 <span className="text-[#00C06B]">{count}</span> 个加料</span>
+          </div>
+
+          {!isShelvesUnited && (
+            <div className="mt-5 rounded-xl bg-[#F7F8FA] px-8 py-6">
+              <div className="mb-6 text-[18px] font-bold text-[#333]">选择渠道</div>
+              <label className="mb-8 flex cursor-pointer items-center text-[15px] text-[#00A862]">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={toggleAll}
+                  className="mr-3 h-5 w-5 rounded border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]"
+                />
+                全选
+              </label>
+              <div className="flex flex-wrap">
+                {availableChannels.map(channelId => (
+                  <label key={channelId} className="mr-10 mb-5 flex cursor-pointer items-center text-[15px] text-[#00A862]">
+                    <input
+                      type="checkbox"
+                      checked={selectedChannels.includes(channelId)}
+                      onChange={() => toggleChannel(channelId)}
+                      className="mr-3 h-5 w-5 rounded border border-[#D9D9D9] text-[#00C06B] focus:ring-[#00C06B]"
+                    />
+                    {getShelfChannelLabel(channelId)}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 text-[18px] leading-[32px] text-[#666]">
+            {isShelvesUnited ? (
+              <>
+                大批量门店加料批量{action === 'on_shelf' ? '上架' : '下架'}商品，
+                <span className="text-[#00C06B]">点击跳转操作</span>
+              </>
+            ) : null}
+          </div>
+
+          <div className="mt-11 flex justify-end gap-4">
+            <button
+              onClick={onClose}
+              className="h-[50px] rounded-md border border-[#D9D9D9] px-10 text-[18px] text-[#666] transition-colors hover:bg-[#FAFAFA]"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => onConfirm(isShelvesUnited ? availableChannels : selectedChannels)}
+              disabled={!isShelvesUnited && selectedChannels.length === 0}
+              className="h-[50px] rounded-md bg-[#11B45C] px-10 text-[18px] font-medium text-white transition-colors hover:bg-[#0D9D50] disabled:cursor-not-allowed disabled:bg-[#A7DDBE]"
+            >
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

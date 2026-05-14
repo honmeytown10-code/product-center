@@ -14,10 +14,13 @@ interface Props {
   onBack: () => void;
   categories: Category[];
   categoryName?: string;
+  saveMode?: 'default' | 'ai_confirm';
+  onSaveDraft?: (data: { name: string; basePrice: string; category: string }) => void;
   initialData?: {
     name?: string;
     basePrice?: string;
     stock?: string;
+    category?: string;
     sourceMode?: 'scan' | 'voice';
     sourceLabel?: string;
     sourceHint?: string;
@@ -38,7 +41,7 @@ interface TimeSalesConfig {
   rules: TimeRule[];
 }
 
-export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, categoryName, initialData }) => {
+export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, categoryName, initialData, saveMode = 'default', onSaveDraft }) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [showTimeSalesEditor, setShowTimeSalesEditor] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
@@ -55,7 +58,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
 
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
-    category: categoryName || '通用菜品',
+    category: initialData?.category || categoryName || '通用菜品',
     channels: ['mini', 'pos', 'mini_dine', 'mini_take'],
     specType: 'single', // 'single' | 'multi'
     basePrice: initialData?.basePrice || '',
@@ -124,11 +127,11 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full relative overflow-hidden font-sans select-none animate-in slide-in-from-right duration-300">
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F5F6FA] h-full relative overflow-hidden font-sans select-none animate-in slide-in-from-right duration-300">
       {/* Header */}
       <div className="h-[50px] bg-white border-b border-gray-100 flex items-center px-4 shrink-0 z-30">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-600"><ChevronLeft size={24} /></button>
-        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">创建标准商品</span>
+        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">{saveMode === 'ai_confirm' ? '编辑商品' : '创建标准商品'}</span>
       </div>
 
       {/* 顶部 Tab 导航 */}
@@ -146,7 +149,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
       </div>
 
       {/* 主表单区域 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 pb-40 scroll-smooth">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 pb-40 scroll-smooth">
         
         {/* 1. 基本信息 */}
         <div ref={sectionRefs.basic} className="bg-white p-5 rounded-2xl shadow-sm space-y-5">
@@ -502,8 +505,19 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
 
       {/* 底部按钮 (固定悬浮) */}
       <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8 flex gap-3 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-        <button className="flex-1 h-12 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 text-sm active:bg-gray-50 active:scale-95 transition-all">保存</button>
-        <button className="flex-[1.5] h-12 bg-[#00C06B] text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98] transition-all">保存并继续添加</button>
+        {saveMode === 'ai_confirm' ? (
+          <button
+            onClick={() => onSaveDraft?.({ name: formData.name, basePrice: formData.basePrice, category: formData.category })}
+            className="w-full h-12 bg-[#00C06B] text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98] transition-all"
+          >
+            保存
+          </button>
+        ) : (
+          <>
+            <button className="flex-1 h-12 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 text-sm active:bg-gray-50 active:scale-95 transition-all">保存</button>
+            <button className="flex-[1.5] h-12 bg-[#00C06B] text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98] transition-all">保存并继续添加</button>
+          </>
+        )}
       </div>
 
       {/* 分时段销售编辑器 */}

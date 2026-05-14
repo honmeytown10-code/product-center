@@ -1,566 +1,946 @@
 
-import React, { useMemo, useState } from 'react';
-import { ChevronLeft, CupSoda, Utensils, Camera, Mic, LayoutGrid, Layers, ImageIcon, ChevronRight, CheckCircle, Loader2, Box, Package, Scale, ShoppingBag, CakeSlice, Flame, ArrowRight, X, Info } from 'lucide-react';
-import { Category, AVAILABLE_DYNAMIC_FIELDS, DynamicFieldConfig } from '../../types';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowRight,
+  Camera,
+  CakeSlice,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  CupSoda,
+  Flame,
+  ImageIcon,
+  Loader2,
+  Mic,
+  Scale,
+  ShoppingBag,
+  Trash2,
+  Utensils,
+  X,
+} from 'lucide-react';
+import { Category } from '../../types';
 import { MobileComboProductCreator } from './MobileComboProductCreator';
 import { MobileStandardProductCreator } from './MobileStandardProductCreator';
 
-type CreateStep = 'type_select' | 'photo_intro' | 'voice_intro' | 'ai_processing' | 'ai_result' | 'form' | 'success';
+type CreateStep = 'type_select' | 'photo_intro' | 'voice_intro' | 'voice_recording' | 'ai_processing' | 'ai_confirm' | 'form' | 'success';
 type CreateMode = 'manual' | 'scan' | 'voice';
 type ScanSource = 'camera' | 'upload' | null;
 
-interface AiDraftResult {
+type AiDraftItem = {
+  id: string;
   name: string;
   basePrice: string;
+  category: string;
+  imageVariant: number;
   confidence: 'high' | 'medium';
-  sourceMode: CreateMode;
-  sourceLabel: string;
-  sourceHint: string;
-  transcript?: string;
   warnings: string[];
-}
+};
+
+type VoiceExample = {
+  id: string;
+  label: string;
+  transcript: string;
+  items: AiDraftItem[];
+};
 
 interface Props {
   onBack: () => void;
   categories: Category[];
 }
 
-// Optimized Category Definitions with Descriptions
 const CREATION_CATEGORIES = {
   standard: [
-    { id: 'sc_1', name: '通用菜品', icon: <Utensils/>, desc: '热菜、凉菜、小吃' },
-    { id: 'sc_2', name: '现制饮品', icon: <CupSoda/>, desc: '奶茶、咖啡、果汁' },
-    { id: 'sc_3', name: '称重商品', icon: <Scale/>, desc: '海鲜、麻辣烫' },
-    { id: 'sc_4', name: '蛋糕/烘焙', icon: <CakeSlice/>, desc: '面包、甜点、整糕' },
-    { id: 'sc_5', name: '零售商品', icon: <ShoppingBag/>, desc: '预包装零食、饮料' },
+    { id: 'sc_1', name: '通用菜品', icon: <Utensils />, desc: '热菜、凉菜、小吃' },
+    { id: 'sc_2', name: '现制饮品', icon: <CupSoda />, desc: '奶茶、咖啡、果汁' },
+    { id: 'sc_3', name: '称重商品', icon: <Scale />, desc: '海鲜、麻辣烫' },
+    { id: 'sc_4', name: '蛋糕/烘焙', icon: <CakeSlice />, desc: '面包、甜点、整糕' },
+    { id: 'sc_5', name: '零售商品', icon: <ShoppingBag />, desc: '预包装零食、饮料' },
   ],
   combo: [
-    { id: 'cc_1', name: '通用套餐', icon: <Utensils/>, desc: '超值午餐、多人餐' },
-    { id: 'cc_2', name: '饮品套餐', icon: <CupSoda/>, desc: '双杯优惠、下午茶' },
-    { id: 'cc_3', name: '烘焙套餐', icon: <CakeSlice/>, desc: '甜点搭配' },
-    { id: 'cc_4', name: '零售套餐', icon: <ShoppingBag/>, desc: '礼盒、组合装' },
-    { id: 'cc_5', name: '火锅锅底', icon: <Flame/>, desc: '鸳鸯锅、九宫格' },
-  ]
+    { id: 'cc_1', name: '通用套餐', icon: <Utensils />, desc: '超值午餐、多人餐' },
+    { id: 'cc_2', name: '饮品套餐', icon: <CupSoda />, desc: '双杯优惠、下午茶' },
+    { id: 'cc_3', name: '烘焙套餐', icon: <CakeSlice />, desc: '甜点搭配' },
+    { id: 'cc_4', name: '零售套餐', icon: <ShoppingBag />, desc: '礼盒、组合装' },
+    { id: 'cc_5', name: '火锅锅底', icon: <Flame />, desc: '鸳鸯锅、九宫格' },
+  ],
 };
+
+const PHOTO_POSITIVE_TIPS = ['菜单平整', '正对拍摄', '清晰无遮挡'];
+const PHOTO_NEGATIVE_TIPS = ['倾斜或颠倒', '被遮挡', '有反光', '有褶皱'];
+
+const PHOTO_CAMERA_ITEMS: AiDraftItem[] = [
+  { id: 'p1', name: '速溶咖啡', basePrice: '10', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p2', name: '五粮香', basePrice: '25', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p3', name: '歪嘴', basePrice: '20', category: '', imageVariant: 0, confidence: 'medium', warnings: ['建议核对名称是否完整'] },
+  { id: 'p4', name: '江小白', basePrice: '20', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p5', name: '红牛', basePrice: '10', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p6', name: '雪碧', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p7', name: '可乐', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p8', name: '冰红茶', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p9', name: '苏打水', basePrice: '6', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+];
+
+const PHOTO_UPLOAD_ITEMS: AiDraftItem[] = [
+  { id: 'u1', name: '满杯水果茶', basePrice: '22', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u2', name: '冰红茶', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u3', name: '牛肉饭', basePrice: '20', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u4', name: '可乐', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u5', name: '奶茶', basePrice: '30', category: '', imageVariant: 0, confidence: 'medium', warnings: ['建议补充商品图片'] },
+  { id: 'u6', name: '各种酒水', basePrice: '20', category: '', imageVariant: 0, confidence: 'medium', warnings: ['名称较泛，建议保存后再完善'] },
+];
+
+const VOICE_EXAMPLES: VoiceExample[] = [
+  {
+    id: 'v1',
+    label: '单个商品',
+    transcript: '生椰拿铁，18元',
+    items: [{ id: 'v1-1', name: '生椰拿铁', basePrice: '18', category: '', imageVariant: 0, confidence: 'high', warnings: [] }],
+  },
+  {
+    id: 'v3',
+    label: '小批量录入',
+    transcript: '奶茶30元，草莓蛋糕26元，牛肉饭20元',
+    items: [
+      { id: 'v3-1', name: '奶茶', basePrice: '30', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+      { id: 'v3-2', name: '草莓蛋糕', basePrice: '26', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+      { id: 'v3-3', name: '牛肉饭', basePrice: '20', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+    ],
+  },
+];
 
 export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) => {
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
   const [targetProductType, setTargetProductType] = useState<'standard' | 'combo'>('standard');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  
-  const [creationCategory, setCreationCategory] = useState<{ id: string, name: string } | null>(null);
+  const [showPhotoActionSheet, setShowPhotoActionSheet] = useState(false);
+  const [creationCategory, setCreationCategory] = useState<{ id: string; name: string } | null>(null);
   const [creationFormData, setCreationFormData] = useState<Record<string, any>>({});
-  const [aiProcessingState, setAiProcessingState] = useState<'idle' | 'listening' | 'scanning' | 'analyzing'>('idle');
+  const [formEntrySource, setFormEntrySource] = useState<'manual' | 'ai_confirm'>('manual');
   const [scanSource, setScanSource] = useState<ScanSource>(null);
-  const [voiceExample, setVoiceExample] = useState('生椰拿铁，18元');
-  const [aiResult, setAiResult] = useState<AiDraftResult | null>(null);
+  const [selectedVoiceExampleId, setSelectedVoiceExampleId] = useState('v3');
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
+  const [voiceInputError, setVoiceInputError] = useState('');
+  const [recognitionQueue, setRecognitionQueue] = useState<AiDraftItem[]>([]);
+  const [recognizedItems, setRecognizedItems] = useState<AiDraftItem[]>([]);
+  const [processingDone, setProcessingDone] = useState(false);
+  const [successSummary, setSuccessSummary] = useState({ savedCount: 0, pendingCount: 0 });
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [processingBaseItems, setProcessingBaseItems] = useState<AiDraftItem[]>([]);
+  const timerRefs = useRef<number[]>([]);
+  const voiceHoldingRef = useRef(false);
+  const voiceAppendRef = useRef(false);
+  const aiDefaultCategory = categories[0]?.name || '通用菜品';
+
+  const selectedVoiceExample = VOICE_EXAMPLES.find(item => item.id === selectedVoiceExampleId) || VOICE_EXAMPLES[0];
+  const validDrafts = recognizedItems.filter(item => item.name.trim() && item.basePrice.trim());
+  const invalidDrafts = recognizedItems.filter(item => !item.name.trim() || !item.basePrice.trim());
+
+  const clearTimers = () => {
+    timerRefs.current.forEach(timer => window.clearTimeout(timer));
+    timerRefs.current = [];
+  };
+
+  useEffect(() => () => clearTimers(), []);
+
+  useEffect(() => {
+    if (createStep !== 'ai_processing' || recognitionQueue.length === 0) return;
+    clearTimers();
+    setRecognizedItems(processingBaseItems);
+    setProcessingDone(false);
+
+    recognitionQueue.forEach((item, index) => {
+      const timer = window.setTimeout(() => {
+        setRecognizedItems(prev => [...prev, item]);
+        if (index === recognitionQueue.length - 1) {
+          setProcessingDone(true);
+          const finishTimer = window.setTimeout(() => {
+            setCreateStep('ai_confirm');
+          }, 550);
+          timerRefs.current.push(finishTimer);
+        }
+      }, 380 * (index + 1));
+      timerRefs.current.push(timer);
+    });
+  }, [createStep, recognitionQueue, processingBaseItems]);
+
+  useEffect(() => {
+    if (createStep !== 'voice_recording') return;
+
+    const handleRelease = () => {
+      if (!voiceHoldingRef.current) return;
+      voiceHoldingRef.current = false;
+      beginRecognition('voice', null, voiceAppendRef.current);
+    };
+
+    window.addEventListener('mouseup', handleRelease);
+    window.addEventListener('touchend', handleRelease);
+    window.addEventListener('touchcancel', handleRelease);
+
+    return () => {
+      window.removeEventListener('mouseup', handleRelease);
+      window.removeEventListener('touchend', handleRelease);
+      window.removeEventListener('touchcancel', handleRelease);
+    };
+  }, [createStep, selectedVoiceExample]);
+
+  const resetAiFlow = () => {
+    clearTimers();
+    setRecognitionQueue([]);
+    setRecognizedItems([]);
+    setProcessingBaseItems([]);
+    setProcessingDone(false);
+    setScanSource(null);
+    setVoiceRecordingStartedAt(null);
+    setSuccessSummary({ savedCount: 0, pendingCount: 0 });
+    setVoiceInputError('');
+    voiceHoldingRef.current = false;
+    voiceAppendRef.current = false;
+  };
 
   const handleStartCreation = (mode: CreateMode) => {
-      setCreateMode(mode);
-      if (mode === 'manual') return;
-      setShowCategoryModal(false);
-      setAiResult(null);
-      setCreationFormData({});
-      setCreationCategory(null);
-      setCreateStep(mode === 'voice' ? 'voice_intro' : 'photo_intro');
-  };
-
-  const photoTips = [
-    '请拍摄商品名称和价格都清晰可见的一页菜单',
-    '建议正对菜单拍摄，避免反光、模糊和大角度倾斜',
-    '单次仅支持 1 张照片，若有多页菜单请分次上传',
-  ];
-
-  const voiceExamples = [
-    '生椰拿铁，18元',
-    '爆浆芝士蛋糕，26元',
-    '冰美式，大杯15元，中杯13元',
-  ];
-
-  const buildAiResult = (mode: CreateMode, source?: ScanSource): AiDraftResult => {
-    if (mode === 'voice') {
-      return {
-        name: voiceExample.includes('生椰') ? '生椰拿铁' : voiceExample.includes('蛋糕') ? '爆浆芝士蛋糕' : '冰美式',
-        basePrice: voiceExample.includes('26') ? '26' : voiceExample.includes('15') ? '15' : '18',
-        confidence: voiceExample.includes('大杯') ? 'medium' : 'high',
-        sourceMode: 'voice',
-        sourceLabel: '语音录入',
-        sourceHint: '已根据语音内容预填商品名称和基础售价，请重点确认价格和规格信息。',
-        transcript: voiceExample,
-        warnings: voiceExample.includes('大杯')
-          ? ['识别到多个规格表达，当前仅预填首个价格，建议后续补充规格']
-          : ['复杂做法、加料和套餐信息建议在表单中继续完善'],
-      };
-    }
-
-    return {
-      name: source === 'upload' ? '招牌手打柠檬茶' : '招牌杨枝甘露',
-      basePrice: source === 'upload' ? '16' : '18',
-      confidence: 'medium',
-      sourceMode: 'scan',
-      sourceLabel: source === 'upload' ? '上传照片识别' : '拍照识别',
-      sourceHint: '当前仅根据单张菜单图片预填商品名称和基础售价，复杂规格和做法请继续补充。',
-      warnings: [
-        '已按单张菜单识别，建议核对商品名称和价格是否完整',
-        '套餐、做法、加料等复杂信息暂不会自动补全',
-      ],
-    };
-  };
-
-  const startAiProcessing = (mode: CreateMode, source?: ScanSource) => {
     setCreateMode(mode);
-    if (mode === 'scan') {
-      setScanSource(source || 'camera');
-      setAiProcessingState('scanning');
-    } else {
-      setAiProcessingState('listening');
-    }
-    setCreateStep('ai_processing');
-    setTimeout(() => {
-      setAiProcessingState('analyzing');
-      setTimeout(() => {
-        const result = buildAiResult(mode, source);
-        setAiResult(result);
-        setCreationFormData({
-          name: result.name,
-          basePrice: result.basePrice,
-          sourceMode: result.sourceMode,
-          sourceLabel: result.sourceLabel,
-          sourceHint: result.sourceHint,
-        });
-        setCreateStep('ai_result');
-      }, 1300);
-    }, mode === 'voice' ? 2200 : 1800);
-  };
-
-  const handleAiConfirm = () => {
-    setTargetProductType('standard');
+    if (mode === 'manual') return;
+    setShowCategoryModal(false);
+    setCreationFormData({});
     setCreationCategory(null);
-    setCreateStep('form');
+    resetAiFlow();
+    setCreateStep(mode === 'voice' ? 'voice_intro' : 'photo_intro');
   };
 
   const handleTypeSelect = (type: 'standard' | 'combo') => {
-      setTargetProductType(type);
-      setShowCategoryModal(true);
+    setTargetProductType(type);
+    setShowCategoryModal(true);
   };
 
-  const handleCategorySelect = (cat: any) => {
-      setCreationCategory({ id: cat.id, name: cat.name });
-      setShowCategoryModal(false);
-      setCreateStep('form');
+  const handleCategorySelect = (cat: { id: string; name: string }) => {
+    setCreationCategory({ id: cat.id, name: cat.name });
+    setShowCategoryModal(false);
+    setCreateStep('form');
+  };
+
+  const normalizeAiItems = (items: AiDraftItem[]) =>
+    items.map((item, index) => ({
+      ...item,
+      id: `${item.id}_${Date.now()}_${index}`,
+      category: item.category || aiDefaultCategory,
+    }));
+
+  const isVoiceTranscriptValid = (transcript: string) => {
+    const normalized = transcript.trim();
+    if (!normalized) return false;
+    if (!/\d+(\.\d+)?元/.test(normalized)) return false;
+    return normalized.length >= 4;
+  };
+
+  const beginRecognition = (mode: CreateMode, source?: ScanSource | null, append = false) => {
+    setCreateMode(mode);
+    if (mode === 'scan') {
+      resetAiFlow();
+      setScanSource(source || 'camera');
+      setProcessingBaseItems([]);
+      setRecognitionQueue(normalizeAiItems(source === 'upload' ? PHOTO_UPLOAD_ITEMS : PHOTO_CAMERA_ITEMS));
+      setShowPhotoActionSheet(false);
+    } else {
+      if (!isVoiceTranscriptValid(selectedVoiceExample.transcript)) {
+        voiceHoldingRef.current = false;
+        voiceAppendRef.current = false;
+        setVoiceRecordingStartedAt(null);
+        setVoiceInputError('未识别到有效商品，请按“商品名 + 价格”重新说一遍，例如：奶茶30元、宫保鸡丁28元');
+        setCreateStep('voice_intro');
+        return;
+      }
+      clearTimers();
+      setVoiceInputError('');
+      setVoiceTranscript(selectedVoiceExample.transcript);
+      setProcessingBaseItems(append ? recognizedItems : []);
+      setRecognitionQueue(normalizeAiItems(selectedVoiceExample.items));
+      setProcessingDone(false);
+      setScanSource(null);
+      setVoiceRecordingStartedAt(null);
+    }
+    setCreateStep('ai_processing');
+  };
+
+  const beginVoiceHold = (append = false) => {
+    if (voiceHoldingRef.current) return;
+    setCreateMode('voice');
+    setVoiceInputError('');
+    setVoiceRecordingStartedAt(Date.now());
+    voiceHoldingRef.current = true;
+    voiceAppendRef.current = append;
+    setCreateStep('voice_recording');
+  };
+
+  const handleStopRecognition = () => {
+    clearTimers();
+    setProcessingDone(true);
+    if (recognizedItems.length > 0) {
+      setCreateStep('ai_confirm');
+    } else {
+      setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro');
+    }
+  };
+
+  const handleDraftChange = (id: string, field: 'name' | 'basePrice' | 'category', value: string) => {
+    setRecognizedItems(prev =>
+      prev.map(item => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const handleDraftEditMore = (item: AiDraftItem) => {
+    setFormEntrySource('ai_confirm');
+    setEditingDraftId(item.id);
+    setTargetProductType('standard');
+    setCreationCategory(null);
+    setCreationFormData({
+      name: item.name,
+      basePrice: item.basePrice,
+      category: item.category,
+      sourceMode: createMode === 'voice' ? 'voice' : 'scan',
+      sourceLabel: createMode === 'voice' ? '语音录入' : '拍照录入',
+      sourceHint: '系统已根据识别结果预填基础信息，您可以继续补充图片、渠道、规格和展示信息。',
+    });
+    setCreateStep('form');
+  };
+
+  const handleDeleteDraft = (id: string) => {
+    setRecognizedItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleDraftImageReplace = (id: string) => {
+    setRecognizedItems(prev =>
+      prev.map(item => (item.id === id ? { ...item, imageVariant: item.imageVariant + 1 } : item))
+    );
+  };
+
+  const handleStandardFormSave = (data: { name: string; basePrice: string; category: string }) => {
+    if (editingDraftId) {
+      setRecognizedItems(prev =>
+        prev.map(item =>
+          item.id === editingDraftId
+            ? { ...item, name: data.name, basePrice: data.basePrice, category: data.category }
+            : item
+        )
+      );
+    }
+    setEditingDraftId(null);
+    setCreateStep('ai_confirm');
+  };
+
+  const handleSaveDrafts = () => {
+    setSuccessSummary({
+      savedCount: validDrafts.length,
+      pendingCount: invalidDrafts.length,
+    });
+    setCreateStep('success');
   };
 
   const handleBack = () => {
-      if (createStep === 'type_select') {
-          onBack();
-      } else if (createStep === 'form') {
-          setCreateStep('type_select');
-          setCreationFormData({});
-          setAiResult(null);
-          setScanSource(null);
-      } else if (createStep === 'photo_intro' || createStep === 'voice_intro' || createStep === 'ai_result') {
-          setCreateStep('type_select');
-          setAiResult(null);
-          setScanSource(null);
+    if (createStep === 'type_select') {
+      onBack();
+      return;
+    }
+    if (createStep === 'form') {
+      if (formEntrySource === 'ai_confirm') {
+        setCreateStep('ai_confirm');
       } else {
-          setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro');
+        setCreateStep('type_select');
+        setCreationFormData({});
       }
+      return;
+    }
+    if (createStep === 'ai_processing') {
+      handleStopRecognition();
+      return;
+    }
+    if (createStep === 'ai_confirm') {
+      setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro');
+      return;
+    }
+    if (createStep === 'voice_recording') {
+      setCreateStep('voice_intro');
+      return;
+    }
+    if (createStep === 'success') {
+      setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro');
+      return;
+    }
+    resetAiFlow();
+    setCreateStep('type_select');
   };
 
-  const renderTypeSelection = () => {
-      return (
-          <div className="flex-1 flex flex-col bg-white relative h-full animate-in slide-in-from-right duration-300">
-              <div className="px-6 py-4">
-                  {/* Removed instruction text as requested */}
-              </div>
-
-              <div className="flex-1 px-6 space-y-4 overflow-y-auto">
-                  <div 
-                      onClick={() => handleTypeSelect('standard')}
-                      className="bg-[#F5F9F7] border-2 border-transparent active:border-[#00C06B] p-6 rounded-[24px] flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden h-32"
-                  >
-                      <div className="absolute right-0 top-0 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
-                          <CupSoda size={120} />
-                      </div>
-                      <div className="flex items-center relative z-10">
-                          <div className="w-14 h-14 bg-[#E6F8F0] rounded-2xl flex items-center justify-center text-[#00C06B] mr-5 shadow-sm group-active:scale-110 transition-transform">
-                              <CupSoda size={28} strokeWidth={2.5} />
-                          </div>
-                          <div>
-                              <h4 className="text-lg font-black text-[#1F2129] mb-1">标准商品</h4>
-                              <p className="text-xs text-gray-500 font-medium">单品，如咖啡、面包、零售品</p>
-                          </div>
-                      </div>
-                      <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-300 group-active:text-[#00C06B] shadow-sm relative z-10">
-                          <ArrowRight size={18} />
-                      </div>
-                  </div>
-
-                  <div 
-                      onClick={() => handleTypeSelect('combo')}
-                      className="bg-[#FFF8F5] border-2 border-transparent active:border-orange-500 p-6 rounded-[24px] flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden h-32"
-                  >
-                      <div className="absolute right-0 top-0 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
-                          <Utensils size={120} />
-                      </div>
-                      <div className="flex items-center relative z-10">
-                          <div className="w-14 h-14 bg-[#FFF0E6] rounded-2xl flex items-center justify-center text-orange-500 mr-5 shadow-sm group-active:scale-110 transition-transform">
-                              <Utensils size={28} strokeWidth={2.5} />
-                          </div>
-                          <div>
-                              <h4 className="text-lg font-black text-[#1F2129] mb-1">套餐商品</h4>
-                              <p className="text-xs text-gray-500 font-medium">组合，如双人餐、超值午餐</p>
-                          </div>
-                      </div>
-                      <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-300 group-active:text-orange-500 shadow-sm relative z-10">
-                          <ArrowRight size={18} />
-                      </div>
-                  </div>
-              </div>
-
-              {/* AI Entry - Bottom */}
-              <div className="px-6 pb-10 pt-4 bg-white">
-                 <div className="flex items-center justify-center mb-5 opacity-60">
-                    <span className="h-px bg-gray-200 w-12"></span>
-                    <span className="mx-3 text-[10px] font-bold text-gray-400 tracking-wider">AI 智能辅助录入</span>
-                    <span className="h-px bg-gray-200 w-12"></span>
-                 </div>
-                 <div className="flex space-x-4">
-                    <button onClick={() => handleStartCreation('scan')} className="flex-1 bg-white border border-gray-200 text-gray-600 py-4 rounded-2xl font-bold text-sm shadow-sm hover:bg-gray-50 active:scale-95 transition-all flex items-center justify-center group">
-                        <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-2 group-active:bg-blue-100 transition-colors">
-                            <Camera size={16} className="text-blue-500"/>
-                        </div>
-                        拍照识别
-                    </button>
-                    <button onClick={() => handleStartCreation('voice')} className="flex-1 bg-white border border-gray-200 text-gray-600 py-4 rounded-2xl font-bold text-sm shadow-sm hover:bg-gray-50 active:scale-95 transition-all flex items-center justify-center group">
-                        <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center mr-2 group-active:bg-purple-100 transition-colors">
-                            <Mic size={16} className="text-purple-500"/>
-                        </div>
-                        语音录入
-                    </button>
-                 </div>
-              </div>
+  const renderTypeSelection = () => (
+    <div className="flex-1 flex flex-col bg-white relative h-full animate-in slide-in-from-right duration-300">
+      <div className="flex-1 px-6 pt-6 space-y-4 overflow-y-auto">
+        <div
+          onClick={() => handleTypeSelect('standard')}
+          className="bg-[#F5F9F7] border-2 border-transparent active:border-[#00C06B] p-6 rounded-[24px] flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden h-32"
+        >
+          <div className="absolute right-0 top-0 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
+            <CupSoda size={120} />
           </div>
-      );
-  };
+          <div className="flex items-center relative z-10">
+            <div className="w-14 h-14 bg-[#E6F8F0] rounded-2xl flex items-center justify-center text-[#00C06B] mr-5 shadow-sm group-active:scale-110 transition-transform">
+              <CupSoda size={28} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h4 className="text-lg font-black text-[#1F2129] mb-1">标准商品</h4>
+              <p className="text-xs text-gray-500 font-medium">单品，如咖啡、面包、零售品</p>
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-300 group-active:text-[#00C06B] shadow-sm relative z-10">
+            <ArrowRight size={18} />
+          </div>
+        </div>
+
+        <div
+          onClick={() => handleTypeSelect('combo')}
+          className="bg-[#FFF8F5] border-2 border-transparent active:border-orange-500 p-6 rounded-[24px] flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden h-32"
+        >
+          <div className="absolute right-0 top-0 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
+            <Utensils size={120} />
+          </div>
+          <div className="flex items-center relative z-10">
+            <div className="w-14 h-14 bg-[#FFF0E6] rounded-2xl flex items-center justify-center text-orange-500 mr-5 shadow-sm group-active:scale-110 transition-transform">
+              <Utensils size={28} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h4 className="text-lg font-black text-[#1F2129] mb-1">套餐商品</h4>
+              <p className="text-xs text-gray-500 font-medium">组合，如双人餐、超值午餐</p>
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-300 group-active:text-orange-500 shadow-sm relative z-10">
+            <ArrowRight size={18} />
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 pb-10 pt-4 bg-white">
+        <div className="flex items-center justify-center mb-5 opacity-60">
+          <span className="h-px bg-gray-200 w-12"></span>
+          <span className="mx-3 text-[10px] font-bold text-gray-400 tracking-wider">AI 辅助快速录入</span>
+          <span className="h-px bg-gray-200 w-12"></span>
+        </div>
+        <div className="flex space-x-4">
+          <button
+            onClick={() => handleStartCreation('scan')}
+            className="flex-1 bg-white border border-gray-200 text-gray-600 py-4 rounded-2xl font-bold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center"
+          >
+            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-2">
+              <Camera size={16} className="text-blue-500" />
+            </div>
+            拍照录入
+          </button>
+          <button
+            onClick={() => handleStartCreation('voice')}
+            className="flex-1 bg-white border border-gray-200 text-gray-600 py-4 rounded-2xl font-bold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center"
+          >
+            <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center mr-2">
+              <Mic size={16} className="text-purple-500" />
+            </div>
+            语音录入
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderCategoryModal = () => {
-      if (!showCategoryModal) return null;
-      const activeCategoryList = CREATION_CATEGORIES[targetProductType];
-      const isStandard = targetProductType === 'standard';
-
-      return (
-          <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in duration-200">
-              <div className="flex-1" onClick={() => setShowCategoryModal(false)}></div>
-              <div className="bg-white rounded-t-[32px] p-6 animate-in slide-in-from-bottom duration-300 pb-10 shadow-2xl flex flex-col max-h-[80vh]">
-                  <div className="flex justify-between items-center mb-4 shrink-0">
-                      <div>
-                          <h3 className="text-xl font-black text-[#1F2129]">选择所属类目</h3>
-                          <div className="flex items-center mt-1">
-                              <span className="text-xs text-gray-400 mr-1">当前正在创建:</span>
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isStandard ? 'bg-green-50 text-[#00C06B]' : 'bg-orange-50 text-orange-500'}`}>
-                                  {isStandard ? '标准商品' : '套餐商品'}
-                              </span>
-                          </div>
-                      </div>
-                      <button onClick={() => setShowCategoryModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200"><X size={20}/></button>
-                  </div>
-
-                  <div className="mb-4 px-3 py-2.5 bg-gray-50 rounded-xl text-xs text-gray-500 font-medium flex items-start shrink-0">
-                      <Info size={14} className="mr-2 mt-0.5 text-blue-500 shrink-0"/>
-                      请选择您要创建的商品类目，不同类目可管理不同的商品属性
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 overflow-y-auto no-scrollbar pb-6">
-                      {activeCategoryList.map((cat) => (
-                          <div 
-                              key={cat.id} 
-                              onClick={() => handleCategorySelect(cat)} 
-                              className="flex flex-col items-center justify-center py-4 px-2 bg-[#F8FAFB] rounded-2xl border border-transparent active:border-[#00C06B] active:bg-[#00C06B]/5 cursor-pointer min-h-[110px] transition-all hover:bg-gray-50"
-                          >
-                              <div className={`mb-2 p-2.5 rounded-2xl ${isStandard ? 'bg-white text-[#00C06B] shadow-sm' : 'bg-white text-orange-500 shadow-sm'}`}>
-                                  {/* Fix: cast icon to any to avoid prop errors with cloneElement on unknown ReactElement */}
-                                  {React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24, strokeWidth: 2.5 })}
-                              </div>
-                              <span className="font-bold text-sm text-gray-800 text-center mb-0.5">{cat.name}</span>
-                              <span className="text-[10px] text-gray-400 text-center leading-tight px-1">{cat.desc}</span>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
-      );
-  };
-
-  const renderCreationForm = () => {
-    // If it's a combo product, use the optimized MobileComboProductCreator
-    if (targetProductType === 'combo') {
-        return (
-            <MobileComboProductCreator 
-                onBack={handleBack} 
-                categories={categories} 
-                categoryName={creationCategory?.name} 
-            />
-        );
-    }
-    
-    // If it's a standard product, use the newly optimized MobileStandardProductCreator
-    if (targetProductType === 'standard') {
-        return (
-            <MobileStandardProductCreator 
-                onBack={handleBack} 
-                categories={categories} 
-                categoryName={creationCategory?.name} 
-                initialData={creationFormData}
-            />
-        );
-    }
-
-    return null;
-  };
-
-  const renderPhotoIntro = () => (
-    <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full animate-in slide-in-from-right duration-300">
-      <div className="px-5 pt-5 pb-3 bg-white border-b border-gray-100">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-xl font-black text-[#1F2129]">拍照识别快速录入</div>
-            <div className="mt-1 text-xs leading-5 text-gray-500">支持拍照或上传照片，单次识别 1 张菜单图片，先生成商品草稿再继续编辑。</div>
-          </div>
-          <div className="w-11 h-11 shrink-0 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center">
-            <Camera size={22} />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-sm font-black text-[#1F2129] mb-3">选择录入方式</div>
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => startAiProcessing('scan', 'camera')} className="rounded-2xl border border-[#DCEBFF] bg-[#F4F9FF] p-4 text-left active:scale-[0.98] transition-transform">
-              <div className="w-10 h-10 rounded-xl bg-white text-blue-500 flex items-center justify-center mb-3 shadow-sm">
-                <Camera size={18} />
-              </div>
-              <div className="text-sm font-black text-[#1F2129]">拍照识别</div>
-              <div className="mt-1 text-[11px] leading-4 text-gray-500">现场拍一张菜单照片进行识别</div>
-            </button>
-            <button onClick={() => startAiProcessing('scan', 'upload')} className="rounded-2xl border border-[#E4E7EC] bg-[#FAFBFC] p-4 text-left active:scale-[0.98] transition-transform">
-              <div className="w-10 h-10 rounded-xl bg-white text-gray-600 flex items-center justify-center mb-3 shadow-sm">
-                <ImageIcon size={18} />
-              </div>
-              <div className="text-sm font-black text-[#1F2129]">上传照片</div>
-              <div className="mt-1 text-[11px] leading-4 text-gray-500">从相册选择 1 张菜单照片上传</div>
-            </button>
-          </div>
-          <div className="mt-3 rounded-xl bg-[#FFF8E8] px-3 py-2 text-[11px] leading-5 text-[#9A6B00]">
-            单次仅支持 1 张照片，识别后先生成草稿，确认无误再继续编辑商品。
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-sm font-black text-[#1F2129] mb-3">这样拍更容易识别准确</div>
-          <div className="space-y-3">
-            {photoTips.map((tip, index) => (
-              <div key={tip} className="flex items-start text-[12px] leading-5 text-gray-600">
-                <div className="w-5 h-5 rounded-full bg-[#E6F8F0] text-[#00C06B] flex items-center justify-center text-[10px] font-black mr-3 mt-0.5 shrink-0">
-                  {index + 1}
-                </div>
-                <div>{tip}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-sm font-black text-[#1F2129] mb-3">识别说明</div>
-          <div className="space-y-2 text-[12px] leading-5 text-gray-500">
-            <div>系统当前优先识别商品名称和基础售价。</div>
-            <div>规格、做法、加料、套餐等复杂信息需要进入表单后继续补充。</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderVoiceIntro = () => (
-    <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full animate-in slide-in-from-right duration-300">
-      <div className="px-5 pt-5 pb-3 bg-white border-b border-gray-100">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-xl font-black text-[#1F2129]">语音识别录入菜品</div>
-            <div className="mt-1 text-xs leading-5 text-gray-500">适合快速录入简单商品，请尽量按“商品名 + 价格”方式表达，复杂规格建议后续补充。</div>
-          </div>
-          <div className="w-11 h-11 shrink-0 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center">
-            <Mic size={22} />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-sm font-black text-[#1F2129] mb-3">推荐这样说</div>
-          <div className="space-y-3">
-            {voiceExamples.map((item) => (
-              <button
-                key={item}
-                onClick={() => setVoiceExample(item)}
-                className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${voiceExample === item ? 'border-purple-200 bg-purple-50' : 'border-[#EEF0F3] bg-[#FAFBFC]'}`}
-              >
-                <div className="text-[11px] font-bold text-gray-400 mb-1">示例话术</div>
-                <div className="text-sm font-bold text-[#1F2129]">{item}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-sm font-black text-[#1F2129] mb-3">使用提示</div>
-          <div className="space-y-2 text-[12px] leading-5 text-gray-500">
-            <div>请直接说出商品名称和价格，语速尽量平稳。</div>
-            <div>如果包含多个规格，系统只会先预填一个价格，建议稍后补充规格设置。</div>
-            <div>移动端当前不做类目匹配，识别后会先进入商品编辑页继续完善。</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border-t border-gray-100 p-4">
-        <button onClick={() => startAiProcessing('voice')} className="w-full rounded-2xl bg-[#1F2129] py-4 text-sm font-black text-white active:scale-[0.98] transition-transform">
-          开始语音录入
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderAiOverlay = () => ( 
-    <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center animate-in fade-in"> 
-        <div className="relative mb-8"> 
-            {aiProcessingState === 'listening' && ( <div className="w-32 h-32 rounded-full border-4 border-purple-500/50 flex items-center justify-center animate-pulse"> <Mic size={48} className="text-white"/> <div className="absolute inset-0 border-4 border-purple-500 rounded-full animate-ping opacity-50"></div> </div> )} 
-            {aiProcessingState === 'scanning' && ( <div className="w-64 h-40 border-2 border-blue-500/50 rounded-xl relative overflow-hidden bg-gray-800"> <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,1)] animate-[scan_2s_ease-in-out_infinite]"></div> <div className="flex items-center justify-center h-full text-gray-500"><ImageIcon size={32}/></div> </div> )} 
-            {aiProcessingState === 'analyzing' && ( <div className="w-20 h-20"> <Loader2 size={80} className="text-[#00C06B] animate-spin"/> </div> )} 
-        </div> 
-        <h3 className="text-white text-xl font-bold mb-2"> {aiProcessingState === 'listening' ? '正在聆听...' : aiProcessingState === 'scanning' ? (scanSource === 'upload' ? '正在读取照片...' : '正在扫描菜单...') : 'AI 智能解析中...'} </h3> 
-        <p className="text-gray-400 text-sm text-center px-10 leading-6"> {aiProcessingState === 'listening' ? '请按“商品名称 + 价格”方式描述，例如：生椰拿铁，18元' : aiProcessingState === 'scanning' ? (scanSource === 'upload' ? '正在识别您上传的菜单照片，请稍候' : '请保持菜单名称和价格清晰，系统正在提取文字内容') : '正在生成可编辑的商品草稿，识别完成后需要您确认'} </p> 
-        <button onClick={() => setCreateStep('type_select')} className="mt-12 text-gray-500 text-sm">取消</button> 
-        <style>{` @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } } `}</style> 
-    </div> 
-  );
-
-  const resultBadgeClass = useMemo(() => (
-    aiResult?.sourceMode === 'voice'
-      ? 'bg-purple-50 text-purple-600'
-      : 'bg-blue-50 text-blue-600'
-  ), [aiResult]);
-
-  const renderAiResult = () => {
-    if (!aiResult) return null;
+    if (!showCategoryModal) return null;
+    const activeCategoryList = CREATION_CATEGORIES[targetProductType];
+    const isStandard = targetProductType === 'standard';
 
     return (
-      <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full animate-in slide-in-from-right duration-300">
-        <div className="bg-white px-5 py-4 border-b border-gray-100">
-          <div className="flex items-start justify-between gap-3">
+      <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in duration-200">
+        <div className="flex-1" onClick={() => setShowCategoryModal(false)}></div>
+        <div className="bg-white rounded-t-[32px] p-6 animate-in slide-in-from-bottom duration-300 pb-10 shadow-2xl flex flex-col max-h-[80vh]">
+          <div className="flex justify-between items-center mb-4 shrink-0">
             <div>
-              <div className="text-xl font-black text-[#1F2129]">识别结果确认</div>
-              <div className="mt-1 text-xs leading-5 text-gray-500">系统已生成 1 条商品草稿，请先确认商品名称和价格，再进入编辑页继续完善。</div>
-            </div>
-            <div className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold ${resultBadgeClass}`}>
-              {aiResult.sourceLabel}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-black text-[#1F2129]">商品草稿</div>
-              <div className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${aiResult.confidence === 'high' ? 'bg-[#E6F8F0] text-[#00A862]' : 'bg-[#FFF4E5] text-[#C27A00]'}`}>
-                {aiResult.confidence === 'high' ? '识别较稳定' : '建议重点确认'}
+              <h3 className="text-xl font-black text-[#1F2129]">选择所属类目</h3>
+              <div className="flex items-center mt-1">
+                <span className="text-xs text-gray-400 mr-1">当前正在创建:</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isStandard ? 'bg-green-50 text-[#00C06B]' : 'bg-orange-50 text-orange-500'}`}>
+                  {isStandard ? '标准商品' : '套餐商品'}
+                </span>
               </div>
             </div>
-            <div className="space-y-3">
-              <InfoRow label="商品名称" value={aiResult.name} />
-              <InfoRow label="基础售价" value={`${aiResult.basePrice} 元`} />
-              {aiResult.transcript && <InfoRow label="识别原话" value={aiResult.transcript} />}
-            </div>
+            <button onClick={() => setShowCategoryModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-500">
+              <X size={20} />
+            </button>
           </div>
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="text-sm font-black text-[#1F2129] mb-3">识别提醒</div>
-            <div className="space-y-2">
-              {aiResult.warnings.map((warning) => (
-                <div key={warning} className="rounded-xl bg-[#FFF8E8] px-3 py-2 text-[11px] leading-5 text-[#9A6B00]">
-                  {warning}
+          <div className="grid grid-cols-2 gap-3 overflow-y-auto no-scrollbar pb-6">
+            {activeCategoryList.map(cat => (
+              <div
+                key={cat.id}
+                onClick={() => handleCategorySelect(cat)}
+                className="flex flex-col items-center justify-center py-4 px-2 bg-[#F8FAFB] rounded-2xl border border-transparent active:border-[#00C06B] active:bg-[#00C06B]/5 cursor-pointer min-h-[110px] transition-all"
+              >
+                <div className={`mb-2 p-2.5 rounded-2xl ${isStandard ? 'bg-white text-[#00C06B] shadow-sm' : 'bg-white text-orange-500 shadow-sm'}`}>
+                  {React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24, strokeWidth: 2.5 })}
                 </div>
-              ))}
-            </div>
+                <span className="font-bold text-sm text-gray-800 text-center mb-0.5">{cat.name}</span>
+                <span className="text-[10px] text-gray-400 text-center leading-tight px-1">{cat.desc}</span>
+              </div>
+            ))}
           </div>
-
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="text-sm font-black text-[#1F2129] mb-2">进入编辑页后你还可以继续补充</div>
-            <div className="flex flex-wrap gap-2">
-              {['商品主图', '销售渠道', '规格价格', '做法/加料', '展示信息'].map((item) => (
-                <div key={item} className="rounded-full bg-[#F5F6FA] px-3 py-1.5 text-[11px] font-bold text-gray-500">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border-t border-gray-100 p-4 space-y-3">
-          <button onClick={handleAiConfirm} className="w-full rounded-2xl bg-[#00C06B] py-4 text-sm font-black text-white active:scale-[0.98] transition-transform">
-            确认并继续编辑
-          </button>
-          <button onClick={() => setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro')} className="w-full rounded-2xl bg-gray-100 py-4 text-sm font-black text-gray-600 active:scale-[0.98] transition-transform">
-            重新识别
-          </button>
         </div>
       </div>
     );
   };
 
-  const renderSuccess = () => ( 
-    <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 animate-in zoom-in-95"> 
-        <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6"> <CheckCircle size={48} className="text-[#00C06B]"/> </div> 
-        <h2 className="text-2xl font-black text-[#1F2129] mb-2">创建成功</h2> 
-        <p className="text-gray-500 text-center mb-8">商品已添加至门店库，您可以继续完善详细信息。</p> 
-        <div className="flex flex-col w-full space-y-3"> 
-            <button onClick={onBack} className="w-full py-4 bg-[#1F2129] text-white rounded-xl font-bold">查看商品列表</button> 
-            <button onClick={() => { setCreateStep('type_select'); setCreationFormData({}); }} className="w-full py-4 bg-gray-50 text-gray-600 rounded-xl font-bold">继续创建</button> 
-        </div> 
-    </div> 
+  const renderCreationForm = () => {
+    if (targetProductType === 'combo') {
+      return (
+        <MobileComboProductCreator
+          onBack={handleBack}
+          categories={categories}
+          categoryName={creationCategory?.name}
+        />
+      );
+    }
+
+    return (
+      <MobileStandardProductCreator
+        onBack={handleBack}
+        categories={categories}
+        categoryName={creationFormData.category || creationCategory?.name}
+        initialData={creationFormData}
+        saveMode={formEntrySource === 'ai_confirm' ? 'ai_confirm' : 'default'}
+        onSaveDraft={handleStandardFormSave}
+      />
+    );
+  };
+
+  const renderPhotoIntro = () => (
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F5F6FA] animate-in slide-in-from-right duration-300">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-6 py-6 pb-28">
+        <div className="mt-2">
+          <div className="text-[18px] font-black text-[#1F2129]">提供清晰、正面的菜单</div>
+          <div className="mt-2 text-sm text-[#8C8FA1]">符合要求的照片可以使录菜更快、更准确</div>
+        </div>
+
+        <div className="mt-8 rounded-[24px] bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-[120px_1fr] gap-4">
+            <div className="rounded-2xl bg-[#F7F8FB] p-4">
+              {PHOTO_POSITIVE_TIPS.map(item => (
+                <div key={item} className="mb-4 flex items-center text-sm font-medium text-[#4D5566] last:mb-0">
+                  <div className="mr-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#E9F7EF] text-[#00B563]">✓</div>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <div className="rounded-2xl border border-[#E4E8F0] bg-[#FAFBFC] p-4">
+              <div className="flex h-full min-h-[140px] items-center justify-center rounded-xl border border-dashed border-[#D9DEE8] bg-white text-center text-[12px] leading-5 text-[#98A0B3]">
+                菜单示例图占位
+                <br />
+                后续可替换为真实示意图
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8">
+          <div className="text-[18px] font-black text-[#1F2129]">请避免这些情况</div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {PHOTO_NEGATIVE_TIPS.map(item => (
+              <div key={item} className="rounded-2xl bg-white p-3 shadow-sm">
+                <div className="mb-2 flex items-center text-[13px] font-bold text-[#EB5A5A]">
+                  <X size={14} className="mr-1.5" />
+                  {item}
+                </div>
+                <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-[#E3E7EF] bg-[#F8F9FB] text-[12px] text-[#A1A8B8]">
+                  示例图占位
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-[#F0F1F4] bg-white p-6 shadow-[0_-6px_20px_rgba(15,23,42,0.05)]">
+        <div className="mb-3 text-center text-[12px] text-[#8A91A3]">单次支持 1 张菜单照片，可拍照或从相册上传</div>
+        <button
+          onClick={() => setShowPhotoActionSheet(true)}
+          className="w-full rounded-full bg-[#00C06B] py-4 text-base font-bold text-white"
+        >
+          AI识别
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderVoiceEntry = () => {
+    const isRecording = createStep === 'voice_recording';
+
+    return (
+    <div className="relative flex-1 min-h-0 flex flex-col bg-[#F6F7FB] animate-in slide-in-from-right duration-300">
+      <div className={`min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 py-5 ${isRecording ? 'opacity-50' : ''}`}>
+        <div className="rounded-[28px] bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[24px] font-black text-[#1F2129]">语音录入菜品</div>
+              <div className="mt-2 text-sm leading-6 text-[#7D8395]">适合快速录入简单商品，直接说“商品名 + 价格”即可。</div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E9F7EF] text-[#00C06B]">
+              <Mic size={22} />
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl bg-[#F7F8FC] p-4">
+            <div className="text-xs font-bold text-[#969CAF]">可以这样说</div>
+            <div className="mt-3 space-y-3">
+              {VOICE_EXAMPLES.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedVoiceExampleId(item.id)}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left ${selectedVoiceExampleId === item.id ? 'border-[#BDE7CD] bg-[#F2FBF6]' : 'border-[#EEF0F3] bg-white'}`}
+                >
+                  <div className="text-xs font-bold text-[#8F94A8]">{item.label}</div>
+                  <div className="mt-1 text-sm font-bold text-[#1F2129]">{item.transcript}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          {voiceInputError ? (
+            <div className="mt-4 rounded-2xl bg-[#FFF2F2] px-4 py-3">
+              <div className="text-[12px] font-bold text-[#E35D5D]">识别失败，请重新说一遍</div>
+              <div className="mt-1 text-[12px] leading-5 text-[#E35D5D]">
+                {voiceInputError}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-[#F0F1F4] bg-white p-5">
+        <button
+          onMouseDown={() => beginVoiceHold(false)}
+          onTouchStart={() => beginVoiceHold(false)}
+          className="w-full rounded-full bg-[#00C06B] py-4 text-base font-bold text-white"
+        >
+          长按说话
+        </button>
+      </div>
+
+      {isRecording ? (
+        <div className="absolute inset-0 z-20 flex flex-col bg-black/20">
+          <div
+            className="flex-1"
+            onClick={() => {
+              voiceHoldingRef.current = false;
+              voiceAppendRef.current = false;
+              setVoiceRecordingStartedAt(null);
+              setCreateStep('voice_intro');
+            }}
+          ></div>
+          <div className="rounded-t-[28px] bg-white px-5 pb-6 pt-4 shadow-[0_-8px_30px_rgba(15,23,42,0.12)]">
+            <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-[#E6E8EF]"></div>
+            <button
+              onClick={() => {
+                voiceHoldingRef.current = false;
+                voiceAppendRef.current = false;
+                setVoiceRecordingStartedAt(null);
+                setCreateStep('voice_intro');
+              }}
+              className="absolute right-5 top-5 text-[#7D8395]"
+            >
+              <X size={22} />
+            </button>
+            <div className="mt-8 text-center">
+              <div className="text-[28px] font-black leading-9 text-[#1F2129]">
+                正在<span className="text-[#FF7A00]">录入语音</span>
+              </div>
+              <div className="mt-2 text-[13px] leading-6 text-[#8A91A3]">松开完成，上滑取消</div>
+            </div>
+
+            <div className="mt-8 flex flex-col items-center">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#FF7A00] text-white shadow-[0_12px_30px_rgba(255,122,0,0.28)]">
+                <Mic size={34} />
+              </div>
+              <div className="mt-5 text-[13px] font-medium text-[#8A91A3]">
+                已录制 {voiceRecordingStartedAt ? Math.max(1, Math.round((Date.now() - voiceRecordingStartedAt) / 1000)) : 1} 秒
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+    );
+  };
+
+  const renderRecognizing = () => (
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F6F7FB] animate-in slide-in-from-right duration-300">
+      <div className="px-5 pt-6 text-center">
+        <div className="mx-auto flex h-[94px] w-[94px] items-center justify-center rounded-[26px] bg-[#DCE7FF] text-[#3B77F1] shadow-sm">
+          {createMode === 'voice' ? <Mic size={34} /> : <ImageIcon size={34} />}
+        </div>
+        <div className="mt-5 text-[15px] font-bold text-[#4F67F6]">
+          当前已识别出{recognizedItems.length}个菜品
+        </div>
+        <div className="mt-1 text-sm text-[#80869A]">
+          {createMode === 'voice' ? '正在识别语音内容，请耐心等待...' : '正在加速识别中，请耐心等待...'}
+        </div>
+        <button
+          onClick={handleStopRecognition}
+          className="mt-5 inline-flex items-center rounded-full border border-[#D8DDE8] bg-white px-5 py-2.5 text-[15px] font-bold text-[#00A862]"
+        >
+          <Loader2 size={16} className="mr-1.5 animate-spin" />
+          停止识别
+        </button>
+      </div>
+
+      <div className="mx-4 mt-6 min-h-0 flex-1 overflow-y-auto no-scrollbar rounded-[28px] bg-white p-4 shadow-sm">
+        <div className="space-y-0">
+          {recognizedItems.map(item => (
+            <div key={item.id} className="flex items-center justify-between border-b border-[#EEF1F5] py-4 last:border-b-0">
+              <span className="text-[17px] text-[#20232D]">{item.name}</span>
+              <span className="text-[17px] text-[#20232D]">￥{item.basePrice}</span>
+            </div>
+          ))}
+          {!recognizedItems.length && (
+            <div className="py-10 text-center text-sm text-[#A1A7B7]">正在识别第一条商品...</div>
+          )}
+        </div>
+        {!processingDone && (
+          <div className="flex items-center justify-center py-4 text-sm text-[#A1A7B7]">
+            <Loader2 size={16} className="mr-2 animate-spin" />
+            加载中...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAiConfirm = () => (
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F6F7FB] animate-in slide-in-from-right duration-300">
+      <div className="px-4 pt-4 pb-3 bg-white border-b border-[#EEF1F5]">
+        <div className="text-[18px] font-black text-[#1F2129]">确认商品（{recognizedItems.length}个）</div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-3 py-3 space-y-3 pb-8">
+        {recognizedItems.map(item => {
+          const isValid = item.name.trim() && item.basePrice.trim();
+          return (
+            <div key={item.id} className="rounded-[22px] bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start">
+                  <button className="mr-3" onClick={() => handleDraftImageReplace(item.id)}>
+                      <GeneratedProductImage name={item.name} variant={item.imageVariant} />
+                  </button>
+                  <div>
+                    <div className="flex items-center">
+                        <span className="text-sm font-black text-[#1F2129]"><span className="mr-1 text-[#FF6B6B]">*</span>商品图片</span>
+                        <span className="ml-2 rounded-full bg-[#E9F7EF] px-2 py-0.5 text-[10px] font-bold text-[#00A862]">已生成</span>
+                    </div>
+                      <div className="mt-1 text-[11px] text-[#8A91A3]">已根据商品名称生成默认图片，点击图片可直接替换</div>
+                  </div>
+                </div>
+                <button onClick={() => handleDeleteDraft(item.id)} className="text-[#A0A6B7]">
+                  <Trash2 size={18} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <InlineField label="商品名称" required>
+                  <input
+                    value={item.name}
+                    onChange={e => handleDraftChange(item.id, 'name', e.target.value)}
+                    placeholder="请输入商品名称"
+                    className="w-full text-right text-[15px] font-medium text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
+                  />
+                </InlineField>
+                <InlineField label="售价" required>
+                  <input
+                    value={item.basePrice}
+                    onChange={e => handleDraftChange(item.id, 'basePrice', e.target.value.replace(/[^\d.]/g, ''))}
+                    placeholder="请输入售价"
+                    className="w-full text-right text-[15px] font-medium text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
+                  />
+                </InlineField>
+                <InlineField label="商品分类">
+                  <select
+                    value={item.category}
+                    onChange={e => handleDraftChange(item.id, 'category', e.target.value)}
+                    className="w-full bg-transparent text-right text-[15px] font-medium text-[#1F2129] outline-none"
+                  >
+                    {[...new Set((categories.length ? categories.slice(0, 8).map(item => item.name) : ['通用菜品', '现制饮品', '零售商品']))].map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </InlineField>
+              </div>
+
+              {!isValid && (
+                <div className="mt-3 rounded-2xl bg-[#FFF2F2] px-3 py-2 text-[11px] text-[#E35D5D]">
+                  请至少确认商品名称和售价
+                </div>
+              )}
+              {!!item.warnings.length && (
+                <div className="mt-3 space-y-2">
+                  {item.warnings.map(warning => (
+                    <div key={warning} className="rounded-2xl bg-[#FFF8E8] px-3 py-2 text-[11px] text-[#9A6B00]">
+                      {warning}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => handleDraftEditMore(item)}
+                  className="text-[13px] font-bold text-[#00A862]"
+                >
+                  编辑更多
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="shrink-0 border-t border-[#EEF1F5] bg-white px-4 py-3">
+        {invalidDrafts.length > 0 ? (
+          <div className="mb-3 flex items-start rounded-2xl bg-[#FFF8E8] px-3 py-2 text-[11px] text-[#9A6B00]">
+            <AlertCircle size={14} className="mr-2 mt-0.5 shrink-0" />
+            仍有 {invalidDrafts.length} 个商品未补齐基础信息，补齐商品名称和售价后即可保存
+          </div>
+        ) : null}
+        <div className="flex gap-3">
+          {createMode === 'voice' ? (
+            <button
+              onMouseDown={() => beginVoiceHold(true)}
+              onTouchStart={() => beginVoiceHold(true)}
+              className="flex-1 rounded-full border border-[#00C06B] bg-white py-3.5 text-[15px] font-black text-[#00A862]"
+            >
+              长按继续录入
+            </button>
+          ) : null}
+          <button
+            onClick={handleSaveDrafts}
+            disabled={!validDrafts.length}
+            className="flex-1 rounded-full bg-[#00C06B] py-3.5 text-[15px] font-black text-white disabled:opacity-50"
+          >
+            确认保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSuccess = () => (
+    <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 animate-in zoom-in-95">
+      <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6">
+        <CheckCircle size={48} className="text-[#00C06B]" />
+      </div>
+      <h2 className="text-2xl font-black text-[#1F2129] mb-2">保存成功</h2>
+      <p className="text-gray-500 text-center mb-3">
+        已成功保存 {successSummary.savedCount} 个商品
+        {successSummary.pendingCount ? `，仍有 ${successSummary.pendingCount} 个商品待补充` : ''}
+      </p>
+      <div className="flex flex-col w-full space-y-3">
+        <button onClick={onBack} className="w-full py-4 bg-[#1F2129] text-white rounded-xl font-bold">查看商品列表</button>
+        <button
+          onClick={() => {
+            resetAiFlow();
+            setCreateStep(createMode === 'voice' ? 'voice_recording' : 'photo_intro');
+          }}
+          className="w-full py-4 bg-gray-50 text-gray-600 rounded-xl font-bold"
+        >
+          {createMode === 'voice' ? '继续录菜' : '继续录入'}
+        </button>
+      </div>
+    </div>
   );
 
   return (
-    <div className="flex-1 flex flex-col bg-white relative h-full">
-        {/* Fix: removed redundant ternary in title because createStep narrowed by condition */}
-        {createStep !== 'form' && (
-            <div className="h-[50px] flex items-center justify-between px-4 border-b border-gray-100 shrink-0 relative z-20 bg-white">
-                <button onClick={handleBack} className="p-2 -ml-2 text-gray-600 hover:text-black"><ChevronLeft size={24}/></button>
-                <span className="font-bold text-lg text-[#1F2129]">
-                    {'新建商品'}
-                </span>
-                <div className="w-8"></div>
-            </div>
-        )}
+    <div className="flex-1 min-h-0 flex flex-col bg-white relative h-full">
+      {createStep !== 'form' && (
+        <div className="h-[50px] flex items-center justify-between px-4 border-b border-gray-100 shrink-0 relative z-20 bg-white">
+          <button onClick={handleBack} className="p-2 -ml-2 text-gray-600">
+            <ChevronLeft size={24} />
+          </button>
+          <span className="font-bold text-lg text-[#1F2129]">
+            {createStep === 'photo_intro' ? '拍照录入' : createStep === 'voice_intro' || createStep === 'voice_recording' ? '语音录入' : '新建商品'}
+          </span>
+          <div className="w-8"></div>
+        </div>
+      )}
 
-        {createStep === 'type_select' && renderTypeSelection()}
-        {createStep === 'photo_intro' && renderPhotoIntro()}
-        {createStep === 'voice_intro' && renderVoiceIntro()}
-        {createStep === 'ai_result' && renderAiResult()}
-        {createStep === 'form' && renderCreationForm()}
-        
-        {renderCategoryModal()}
-        
-        {createStep === 'ai_processing' && renderAiOverlay()}
-        {createStep === 'success' && renderSuccess()}
+      {createStep === 'type_select' && renderTypeSelection()}
+      {createStep === 'photo_intro' && renderPhotoIntro()}
+      {(createStep === 'voice_intro' || createStep === 'voice_recording') && renderVoiceEntry()}
+      {createStep === 'ai_processing' && renderRecognizing()}
+      {createStep === 'ai_confirm' && renderAiConfirm()}
+      {createStep === 'form' && renderCreationForm()}
+      {createStep === 'success' && renderSuccess()}
+
+      {renderCategoryModal()}
+
+      {showPhotoActionSheet && (
+        <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/45">
+          <div className="flex-1" onClick={() => setShowPhotoActionSheet(false)}></div>
+          <div className="rounded-t-[28px] bg-white px-6 pt-4 pb-8">
+            <div className="text-center text-[13px] text-[#9AA0B0]">支持jpg、jpeg、png格式，不可超过20MB</div>
+            <div className="mt-4 overflow-hidden rounded-[20px] bg-[#F7F8FB]">
+              <button
+                onClick={() => beginRecognition('scan', 'camera')}
+                className="flex h-16 w-full items-center justify-center border-b border-[#E8EBF1] text-[18px] font-medium text-[#1F2129]"
+              >
+                拍照
+              </button>
+              <button
+                onClick={() => beginRecognition('scan', 'upload')}
+                className="flex h-16 w-full items-center justify-center text-[18px] font-medium text-[#1F2129]"
+              >
+                从相册选择
+              </button>
+            </div>
+            <button
+              onClick={() => setShowPhotoActionSheet(false)}
+              className="mt-3 flex h-16 w-full items-center justify-center rounded-[20px] bg-[#F7F8FB] text-[18px] font-medium text-[#1F2129]"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex items-start justify-between gap-4 rounded-xl bg-[#FAFBFC] px-3 py-3">
-    <div className="text-[12px] font-bold text-gray-500">{label}</div>
-    <div className="text-right text-[13px] font-black text-[#1F2129] leading-5">{value}</div>
+const InlineField = ({
+  label,
+  children,
+  required = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) => (
+  <div className="flex items-center border-b border-[#F1F3F7] py-3 last:border-b-0">
+    <div className="mr-4 shrink-0 text-[14px] font-bold text-[#444B5A]">
+      {required ? <span className="mr-1 text-[#FF6B6B]">*</span> : null}
+      {label}
+    </div>
+    <div className="flex-1">{children}</div>
   </div>
 );
+
+const GeneratedProductImage = ({ name, variant = 0 }: { name: string; variant?: number }) => {
+  const displayText = (name || '商品').slice(0, 2);
+  const palettes = [
+    'from-[#EAF8F0] to-[#D9F2E4] text-[#00A862]',
+    'from-[#EEF6FF] to-[#DCEBFF] text-[#3B77F1]',
+    'from-[#FFF5E8] to-[#FFE8C8] text-[#D9822B]',
+  ];
+  const palette = palettes[(name.length + variant) % palettes.length];
+
+  return (
+    <div className={`flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-gradient-to-br ${palette} text-[16px] font-black shadow-sm`}>
+      {displayText}
+    </div>
+  );
+};

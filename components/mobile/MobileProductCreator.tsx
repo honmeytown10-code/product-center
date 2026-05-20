@@ -2,7 +2,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
-  ArrowRight,
   Camera,
   CakeSlice,
   CheckCircle,
@@ -33,6 +32,7 @@ type AiDraftItem = {
   basePrice: string;
   category: string;
   imageVariant: number;
+  specs?: { id: string; name: string; price: string }[];
   confidence: 'high' | 'medium';
   warnings: string[];
 };
@@ -70,23 +70,23 @@ const PHOTO_POSITIVE_TIPS = ['菜单平整', '正对拍摄', '清晰无遮挡'];
 const PHOTO_NEGATIVE_TIPS = ['倾斜或颠倒', '被遮挡', '有反光', '有褶皱'];
 
 const PHOTO_CAMERA_ITEMS: AiDraftItem[] = [
-  { id: 'p1', name: '速溶咖啡', basePrice: '10', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'p2', name: '五粮香', basePrice: '25', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'p3', name: '歪嘴', basePrice: '20', category: '', imageVariant: 0, confidence: 'medium', warnings: ['建议核对名称是否完整'] },
+  { id: 'p1', name: '速溶咖啡', basePrice: '10', category: '现制饮品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p2', name: '五粮香', basePrice: '25', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p3', name: '招牌奶茶', basePrice: '', category: '', imageVariant: 0, specs: [{ id: 'p3-s1', name: '中杯', price: '12' }, { id: 'p3-s2', name: '大杯', price: '15' }], confidence: 'high', warnings: [] },
   { id: 'p4', name: '江小白', basePrice: '20', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'p5', name: '红牛', basePrice: '10', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'p6', name: '雪碧', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'p7', name: '可乐', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p5', name: '红牛', basePrice: '10', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p6', name: '雪碧', basePrice: '5', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p7', name: '可乐', basePrice: '5', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
   { id: 'p8', name: '冰红茶', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'p9', name: '苏打水', basePrice: '6', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'p9', name: '苏打水', basePrice: '6', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
 ];
 
 const PHOTO_UPLOAD_ITEMS: AiDraftItem[] = [
-  { id: 'u1', name: '满杯水果茶', basePrice: '22', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'u2', name: '冰红茶', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'u3', name: '牛肉饭', basePrice: '20', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'u4', name: '可乐', basePrice: '5', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-  { id: 'u5', name: '奶茶', basePrice: '30', category: '', imageVariant: 0, confidence: 'medium', warnings: ['建议补充商品图片'] },
+  { id: 'u1', name: '满杯水果茶', basePrice: '22', category: '现制饮品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u2', name: '冰红茶', basePrice: '5', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u3', name: '牛肉饭', basePrice: '', category: '通用菜品', imageVariant: 0, specs: [{ id: 'u3-s1', name: '小份', price: '20' }, { id: 'u3-s2', name: '大份', price: '26' }], confidence: 'high', warnings: [] },
+  { id: 'u4', name: '可乐', basePrice: '5', category: '零售商品', imageVariant: 0, confidence: 'high', warnings: [] },
+  { id: 'u5', name: '奶茶', basePrice: '30', category: '', imageVariant: 0, confidence: 'medium', warnings: [] },
   { id: 'u6', name: '各种酒水', basePrice: '20', category: '', imageVariant: 0, confidence: 'medium', warnings: ['名称较泛，建议保存后再完善'] },
 ];
 
@@ -95,16 +95,16 @@ const VOICE_EXAMPLES: VoiceExample[] = [
     id: 'v1',
     label: '单个商品',
     transcript: '生椰拿铁，18元',
-    items: [{ id: 'v1-1', name: '生椰拿铁', basePrice: '18', category: '', imageVariant: 0, confidence: 'high', warnings: [] }],
+    items: [{ id: 'v1-1', name: '生椰拿铁', basePrice: '18', category: '现制饮品', imageVariant: 0, confidence: 'high', warnings: [] }],
   },
   {
     id: 'v3',
     label: '小批量录入',
     transcript: '奶茶30元，草莓蛋糕26元，牛肉饭20元',
     items: [
-      { id: 'v3-1', name: '奶茶', basePrice: '30', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+      { id: 'v3-1', name: '奶茶', basePrice: '30', category: '现制饮品', imageVariant: 0, confidence: 'high', warnings: [] },
       { id: 'v3-2', name: '草莓蛋糕', basePrice: '26', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
-      { id: 'v3-3', name: '牛肉饭', basePrice: '20', category: '', imageVariant: 0, confidence: 'high', warnings: [] },
+      { id: 'v3-3', name: '牛肉饭', basePrice: '20', category: '通用菜品', imageVariant: 0, confidence: 'high', warnings: [] },
     ],
   },
 ];
@@ -129,14 +129,46 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   const [successSummary, setSuccessSummary] = useState({ savedCount: 0, pendingCount: 0 });
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [processingBaseItems, setProcessingBaseItems] = useState<AiDraftItem[]>([]);
+  const [confirmFilter, setConfirmFilter] = useState<'all' | 'uncategorized' | string>('all');
   const timerRefs = useRef<number[]>([]);
   const voiceHoldingRef = useRef(false);
   const voiceAppendRef = useRef(false);
   const aiDefaultCategory = categories[0]?.name || '通用菜品';
 
   const selectedVoiceExample = VOICE_EXAMPLES.find(item => item.id === selectedVoiceExampleId) || VOICE_EXAMPLES[0];
-  const validDrafts = recognizedItems.filter(item => item.name.trim() && item.basePrice.trim());
-  const invalidDrafts = recognizedItems.filter(item => !item.name.trim() || !item.basePrice.trim());
+  const categoryOptions = [...new Set([
+    ...categories.slice(0, 12).map(item => item.name),
+    ...recognizedItems.map(item => item.category).filter(Boolean),
+    aiDefaultCategory,
+  ])];
+
+  const isMultiSpecItem = (item: AiDraftItem) => !!item.specs?.length;
+  const areSpecsValid = (item: AiDraftItem) => !!item.specs?.length && item.specs.every(spec => spec.name.trim() && spec.price.trim());
+  const isDraftValid = (item: AiDraftItem) =>
+    !!item.name.trim() &&
+    !!item.category.trim() &&
+    (isMultiSpecItem(item) ? areSpecsValid(item) : !!item.basePrice.trim());
+
+  const validDrafts = recognizedItems.filter(isDraftValid);
+  const invalidDrafts = recognizedItems.filter(item => !isDraftValid(item));
+  const uncategorizedCount = recognizedItems.filter(item => !item.category.trim()).length;
+  const orderedRecognizedItems = [...recognizedItems].sort((a, b) => Number(!!a.category.trim()) - Number(!!b.category.trim()));
+  const filteredRecognizedItems = orderedRecognizedItems.filter(item => {
+    if (confirmFilter === 'all') return true;
+    if (confirmFilter === 'uncategorized') return !item.category.trim();
+    return item.category === confirmFilter;
+  });
+  const confirmFilters: Array<{ id: 'all' | 'uncategorized' | string; label: string; count: number }> = [
+    { id: 'all', label: '全部', count: recognizedItems.length },
+    { id: 'uncategorized', label: '未分类', count: uncategorizedCount },
+    ...categoryOptions
+      .filter(category => category && recognizedItems.some(item => item.category === category))
+      .map(category => ({
+        id: category,
+        label: category,
+        count: recognizedItems.filter(item => item.category === category).length,
+      })),
+  ].filter(filter => filter.id === 'all' || filter.count > 0);
 
   const clearTimers = () => {
     timerRefs.current.forEach(timer => window.clearTimeout(timer));
@@ -186,6 +218,11 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
     };
   }, [createStep, selectedVoiceExample]);
 
+  useEffect(() => {
+    if (createStep !== 'ai_confirm') return;
+    setConfirmFilter(uncategorizedCount > 0 ? 'uncategorized' : 'all');
+  }, [createStep]);
+
   const resetAiFlow = () => {
     clearTimers();
     setRecognitionQueue([]);
@@ -225,7 +262,11 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
     items.map((item, index) => ({
       ...item,
       id: `${item.id}_${Date.now()}_${index}`,
-      category: item.category || aiDefaultCategory,
+      category: item.category || '',
+      specs: item.specs?.map((spec, specIndex) => ({
+        ...spec,
+        id: `${spec.id}_${Date.now()}_${index}_${specIndex}`,
+      })),
     }));
 
   const isVoiceTranscriptValid = (transcript: string) => {
@@ -287,6 +328,34 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   const handleDraftChange = (id: string, field: 'name' | 'basePrice' | 'category', value: string) => {
     setRecognizedItems(prev =>
       prev.map(item => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const handleSpecChange = (draftId: string, specId: string, field: 'name' | 'price', value: string) => {
+    setRecognizedItems(prev =>
+      prev.map(item =>
+        item.id === draftId
+          ? {
+              ...item,
+              specs: item.specs?.map(spec =>
+                spec.id === specId ? { ...spec, [field]: field === 'price' ? value.replace(/[^\d.]/g, '') : value } : spec
+              ),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleRemoveSpec = (draftId: string, specId: string) => {
+    setRecognizedItems(prev =>
+      prev.map(item =>
+        item.id === draftId
+          ? {
+              ...item,
+              specs: item.specs?.filter(spec => spec.id !== specId),
+            }
+          : item
+      )
     );
   };
 
@@ -373,76 +442,87 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   };
 
   const renderTypeSelection = () => (
-    <div className="flex-1 flex flex-col bg-white relative h-full animate-in slide-in-from-right duration-300">
-      <div className="flex-1 px-6 pt-6 space-y-4 overflow-y-auto">
-        <div
-          onClick={() => handleTypeSelect('standard')}
-          className="bg-[#F5F9F7] border-2 border-transparent active:border-[#00C06B] p-6 rounded-[24px] flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden h-32"
-        >
-          <div className="absolute right-0 top-0 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
-            <CupSoda size={120} />
-          </div>
-          <div className="flex items-center relative z-10">
-            <div className="w-14 h-14 bg-[#E6F8F0] rounded-2xl flex items-center justify-center text-[#00C06B] mr-5 shadow-sm group-active:scale-110 transition-transform">
-              <CupSoda size={28} strokeWidth={2.5} />
-            </div>
-            <div>
-              <h4 className="text-lg font-black text-[#1F2129] mb-1">标准商品</h4>
-              <p className="text-xs text-gray-500 font-medium">单品，如咖啡、面包、零售品</p>
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-300 group-active:text-[#00C06B] shadow-sm relative z-10">
-            <ArrowRight size={18} />
-          </div>
-        </div>
-
-        <div
-          onClick={() => handleTypeSelect('combo')}
-          className="bg-[#FFF8F5] border-2 border-transparent active:border-orange-500 p-6 rounded-[24px] flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] group relative overflow-hidden h-32"
-        >
-          <div className="absolute right-0 top-0 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
-            <Utensils size={120} />
-          </div>
-          <div className="flex items-center relative z-10">
-            <div className="w-14 h-14 bg-[#FFF0E6] rounded-2xl flex items-center justify-center text-orange-500 mr-5 shadow-sm group-active:scale-110 transition-transform">
-              <Utensils size={28} strokeWidth={2.5} />
-            </div>
-            <div>
-              <h4 className="text-lg font-black text-[#1F2129] mb-1">套餐商品</h4>
-              <p className="text-xs text-gray-500 font-medium">组合，如双人餐、超值午餐</p>
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-300 group-active:text-orange-500 shadow-sm relative z-10">
-            <ArrowRight size={18} />
-          </div>
-        </div>
-      </div>
-
-      <div className="px-6 pb-10 pt-4 bg-white">
-        <div className="flex items-center justify-center mb-5 opacity-60">
-          <span className="h-px bg-gray-200 w-12"></span>
-          <span className="mx-3 text-[10px] font-bold text-gray-400 tracking-wider">AI 辅助快速录入</span>
-          <span className="h-px bg-gray-200 w-12"></span>
-        </div>
-        <div className="flex space-x-4">
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] relative h-full animate-in slide-in-from-right duration-300">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 pt-4 pb-8">
+        <div className="mb-5 text-[13px] font-bold text-[#9AA2B1]">智能录入 · 推荐</div>
+        <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => handleStartCreation('scan')}
-            className="flex-1 bg-white border border-gray-200 text-gray-600 py-4 rounded-2xl font-bold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center"
+            className="rounded-[24px] bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.98]"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-2">
-              <Camera size={16} className="text-blue-500" />
+            <div className="flex items-start justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2DC55D] text-white shadow-[0_10px_20px_rgba(45,197,93,0.18)]">
+                <Camera size={22} strokeWidth={2.4} />
+              </div>
+              <span className="rounded-full bg-[#EEF8EF] px-2 py-0.5 text-[10px] font-black text-[#67A86D]">AI</span>
             </div>
-            拍照录入
+            <div className="mt-5 text-[15px] font-black text-[#1F2129]">拍菜单</div>
+            <div className="mt-1 text-[12px] leading-5 text-[#99A1B1]">整本菜单一次录入</div>
           </button>
+
           <button
             onClick={() => handleStartCreation('voice')}
-            className="flex-1 bg-white border border-gray-200 text-gray-600 py-4 rounded-2xl font-bold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center"
+            className="rounded-[24px] bg-white p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.98]"
           >
-            <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center mr-2">
-              <Mic size={16} className="text-purple-500" />
+            <div className="flex items-start justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#7A5AF8] text-white shadow-[0_10px_20px_rgba(122,90,248,0.22)]">
+                <Mic size={22} strokeWidth={2.4} />
+              </div>
+              <span className="rounded-full bg-[#F4F0FF] px-2 py-0.5 text-[10px] font-black text-[#8A70F8]">AI</span>
             </div>
-            语音录入
+            <div className="mt-5 text-[15px] font-black text-[#1F2129]">语音录入</div>
+            <div className="mt-1 text-[12px] leading-5 text-[#99A1B1]">对着手机说，AI 整理</div>
           </button>
+        </div>
+
+        <div className="mt-7 text-[13px] font-bold text-[#9AA2B1]">手动添加</div>
+        <div className="mt-3 overflow-hidden rounded-[24px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          <button
+            onClick={() => handleTypeSelect('standard')}
+            className="flex w-full items-center px-4 py-4 text-left transition-colors active:bg-[#F8FAFB]"
+          >
+            <div className="mr-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EAF8EF] text-[#2DC55D]">
+              <CupSoda size={21} strokeWidth={2.3} />
+            </div>
+            <div className="flex-1">
+              <div className="text-[16px] font-black text-[#1F2129]">标准商品</div>
+              <div className="mt-1 text-[12px] text-[#9AA2B1]">单品，如咖啡、面包、零售品</div>
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F6F8] text-[#B3B9C7]">
+              <ChevronRight size={18} />
+            </div>
+          </button>
+
+          <div className="mx-4 h-px bg-[#EEF1F5]"></div>
+
+          <button
+            onClick={() => handleTypeSelect('combo')}
+            className="flex w-full items-center px-4 py-4 text-left transition-colors active:bg-[#F8FAFB]"
+          >
+            <div className="mr-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFF2E9] text-[#FF9448]">
+              <Utensils size={21} strokeWidth={2.3} />
+            </div>
+            <div className="flex-1">
+              <div className="text-[16px] font-black text-[#1F2129]">套餐商品</div>
+              <div className="mt-1 text-[12px] text-[#9AA2B1]">组合，如双人餐、超值午餐</div>
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F6F8] text-[#B3B9C7]">
+              <ChevronRight size={18} />
+            </div>
+          </button>
+
+          <div className="mx-4 h-px bg-[#EEF1F5]"></div>
+
+          <div className="flex items-center px-4 py-4 opacity-70">
+            <div className="mr-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFF6DD] text-[#F3AA22]">
+              <Scale size={21} strokeWidth={2.3} />
+            </div>
+            <div className="flex-1">
+              <div className="text-[16px] font-black text-[#1F2129]">称重商品</div>
+              <div className="mt-1 text-[12px] text-[#9AA2B1]">按重量计算售价，如水果、散称</div>
+            </div>
+            <span className="rounded-full bg-[#F4F6F8] px-2 py-1 text-[10px] font-bold text-[#A1A8B8]">暂未开放</span>
+          </div>
         </div>
       </div>
     </div>
@@ -516,38 +596,47 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   };
 
   const renderPhotoIntro = () => (
-    <div className="flex-1 min-h-0 flex flex-col bg-[#F5F6FA] animate-in slide-in-from-right duration-300">
-      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-6 py-6 pb-28">
-        <div className="mt-2">
-          <div className="text-[18px] font-black text-[#1F2129]">提供清晰、正面的菜单</div>
-          <div className="mt-2 text-sm text-[#8C8FA1]">符合要求的照片可以使录菜更快、更准确</div>
-        </div>
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 py-4 pb-28">
+        <div className="text-[13px] font-bold text-[#9AA2B1]">智能录入 · 拍照</div>
 
-        <div className="mt-8 rounded-[24px] bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-[120px_1fr] gap-4">
-            <div className="rounded-2xl bg-[#F7F8FB] p-4">
-              {PHOTO_POSITIVE_TIPS.map(item => (
-                <div key={item} className="mb-4 flex items-center text-sm font-medium text-[#4D5566] last:mb-0">
-                  <div className="mr-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#E9F7EF] text-[#00B563]">✓</div>
-                  {item}
-                </div>
-              ))}
+        <div className="mt-3 rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[25px] font-black leading-9 text-[#1F2129]">拍照录入菜单</div>
+              <div className="mt-2 text-[14px] leading-6 text-[#8B92A3]">上传清晰的菜单图片，系统会自动识别商品名称、价格和规格信息。</div>
             </div>
-            <div className="rounded-2xl border border-[#E4E8F0] bg-[#FAFBFC] p-4">
-              <div className="flex h-full min-h-[140px] items-center justify-center rounded-xl border border-dashed border-[#D9DEE8] bg-white text-center text-[12px] leading-5 text-[#98A0B3]">
-                菜单示例图占位
-                <br />
-                后续可替换为真实示意图
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF8EF] text-[#2DC55D]">
+              <Camera size={22} />
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-[24px] bg-[#F6F8FB] p-4">
+            <div className="grid grid-cols-[120px_1fr] gap-4">
+              <div className="rounded-2xl bg-white p-4">
+                {PHOTO_POSITIVE_TIPS.map(item => (
+                  <div key={item} className="mb-4 flex items-center text-sm font-medium text-[#4D5566] last:mb-0">
+                    <div className="mr-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#E9F7EF] text-[#00B563]">✓</div>
+                    {item}
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-[#E4E8F0] bg-white p-4">
+                <div className="flex h-full min-h-[140px] items-center justify-center rounded-xl border border-dashed border-[#D9DEE8] bg-[#FAFBFC] text-center text-[12px] leading-5 text-[#98A0B3]">
+                  菜单示例图占位
+                  <br />
+                  后续可替换为真实示意图
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-8">
-          <div className="text-[18px] font-black text-[#1F2129]">请避免这些情况</div>
+        <div className="mt-6">
+          <div className="text-[13px] font-bold text-[#9AA2B1]">拍摄提示</div>
           <div className="mt-4 grid grid-cols-2 gap-4">
             {PHOTO_NEGATIVE_TIPS.map(item => (
-              <div key={item} className="rounded-2xl bg-white p-3 shadow-sm">
+              <div key={item} className="rounded-[22px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
                 <div className="mb-2 flex items-center text-[13px] font-bold text-[#EB5A5A]">
                   <X size={14} className="mr-1.5" />
                   {item}
@@ -561,13 +650,13 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-[#F0F1F4] bg-white p-6 shadow-[0_-6px_20px_rgba(15,23,42,0.05)]">
+      <div className="shrink-0 border-t border-[#F0F1F4] bg-white px-4 pb-6 pt-4 shadow-[0_-6px_20px_rgba(15,23,42,0.05)]">
         <div className="mb-3 text-center text-[12px] text-[#8A91A3]">单次支持 1 张菜单照片，可拍照或从相册上传</div>
         <button
           onClick={() => setShowPhotoActionSheet(true)}
-          className="w-full rounded-full bg-[#00C06B] py-4 text-base font-bold text-white"
+          className="w-full rounded-full bg-[#2DC55D] py-4 text-base font-bold text-white shadow-[0_12px_24px_rgba(45,197,93,0.22)]"
         >
-          AI识别
+          拍照或上传菜单
         </button>
       </div>
     </div>
@@ -577,9 +666,10 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
     const isRecording = createStep === 'voice_recording';
 
     return (
-    <div className="relative flex-1 min-h-0 flex flex-col bg-[#F6F7FB] animate-in slide-in-from-right duration-300">
-      <div className={`min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 py-5 ${isRecording ? 'opacity-50' : ''}`}>
-        <div className="rounded-[28px] bg-white p-5 shadow-sm">
+    <div className="relative flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+      <div className={`min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 py-4 ${isRecording ? 'opacity-50' : ''}`}>
+        <div className="text-[13px] font-bold text-[#9AA2B1]">智能录入 · 语音</div>
+        <div className="mt-3 rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-[24px] font-black text-[#1F2129]">语音录入菜品</div>
@@ -590,14 +680,14 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl bg-[#F7F8FC] p-4">
+          <div className="mt-5 rounded-[24px] bg-[#F7F8FC] p-4">
             <div className="text-xs font-bold text-[#969CAF]">可以这样说</div>
             <div className="mt-3 space-y-3">
               {VOICE_EXAMPLES.map(item => (
                 <button
                   key={item.id}
                   onClick={() => setSelectedVoiceExampleId(item.id)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-left ${selectedVoiceExampleId === item.id ? 'border-[#BDE7CD] bg-[#F2FBF6]' : 'border-[#EEF0F3] bg-white'}`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left ${selectedVoiceExampleId === item.id ? 'border-[#CFC4FF] bg-[#F5F2FF]' : 'border-[#EEF0F3] bg-white'}`}
                 >
                   <div className="text-xs font-bold text-[#8F94A8]">{item.label}</div>
                   <div className="mt-1 text-sm font-bold text-[#1F2129]">{item.transcript}</div>
@@ -616,11 +706,11 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-[#F0F1F4] bg-white p-5">
+      <div className="shrink-0 border-t border-[#F0F1F4] bg-white px-4 pb-6 pt-4">
         <button
           onMouseDown={() => beginVoiceHold(false)}
           onTouchStart={() => beginVoiceHold(false)}
-          className="w-full rounded-full bg-[#00C06B] py-4 text-base font-bold text-white"
+          className="w-full rounded-full bg-[#7A5AF8] py-4 text-base font-bold text-white shadow-[0_12px_24px_rgba(122,90,248,0.22)]"
         >
           长按说话
         </button>
@@ -652,7 +742,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
             </button>
             <div className="mt-8 text-center">
               <div className="text-[28px] font-black leading-9 text-[#1F2129]">
-                正在<span className="text-[#FF7A00]">录入语音</span>
+                请大声说<span className="text-[#FF7A00]">商品名称和价格</span>
               </div>
               <div className="mt-2 text-[13px] leading-6 text-[#8A91A3]">松开完成，上滑取消</div>
             </div>
@@ -673,12 +763,15 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   };
 
   const renderRecognizing = () => (
-    <div className="flex-1 min-h-0 flex flex-col bg-[#F6F7FB] animate-in slide-in-from-right duration-300">
-      <div className="px-5 pt-6 text-center">
-        <div className="mx-auto flex h-[94px] w-[94px] items-center justify-center rounded-[26px] bg-[#DCE7FF] text-[#3B77F1] shadow-sm">
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+      <div className="px-4 pt-4">
+        <div className="text-[13px] font-bold text-[#9AA2B1]">智能识别中</div>
+      </div>
+      <div className="px-5 pt-4 text-center">
+        <div className={`mx-auto flex h-[94px] w-[94px] items-center justify-center rounded-[28px] shadow-sm ${createMode === 'voice' ? 'bg-[#EFE9FF] text-[#7A5AF8]' : 'bg-[#EAF8EF] text-[#2DC55D]'}`}>
           {createMode === 'voice' ? <Mic size={34} /> : <ImageIcon size={34} />}
         </div>
-        <div className="mt-5 text-[15px] font-bold text-[#4F67F6]">
+        <div className={`mt-5 text-[15px] font-bold ${createMode === 'voice' ? 'text-[#7A5AF8]' : 'text-[#2DC55D]'}`}>
           当前已识别出{recognizedItems.length}个菜品
         </div>
         <div className="mt-1 text-sm text-[#80869A]">
@@ -686,19 +779,21 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
         </div>
         <button
           onClick={handleStopRecognition}
-          className="mt-5 inline-flex items-center rounded-full border border-[#D8DDE8] bg-white px-5 py-2.5 text-[15px] font-bold text-[#00A862]"
+          className="mt-5 inline-flex items-center rounded-full border border-[#D8DDE8] bg-white px-5 py-2.5 text-[15px] font-bold text-[#4F5565]"
         >
           <Loader2 size={16} className="mr-1.5 animate-spin" />
           停止识别
         </button>
       </div>
 
-      <div className="mx-4 mt-6 min-h-0 flex-1 overflow-y-auto no-scrollbar rounded-[28px] bg-white p-4 shadow-sm">
+      <div className="mx-4 mt-5 min-h-0 flex-1 overflow-y-auto no-scrollbar rounded-[28px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
         <div className="space-y-0">
           {recognizedItems.map(item => (
             <div key={item.id} className="flex items-center justify-between border-b border-[#EEF1F5] py-4 last:border-b-0">
               <span className="text-[17px] text-[#20232D]">{item.name}</span>
-              <span className="text-[17px] text-[#20232D]">￥{item.basePrice}</span>
+              <span className="text-[15px] text-[#20232D]">
+                {item.specs?.length ? `${item.specs.length}个规格` : `￥${item.basePrice}`}
+              </span>
             </div>
           ))}
           {!recognizedItems.length && (
@@ -716,27 +811,50 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   );
 
   const renderAiConfirm = () => (
-    <div className="flex-1 min-h-0 flex flex-col bg-[#F6F7FB] animate-in slide-in-from-right duration-300">
-      <div className="px-4 pt-4 pb-3 bg-white border-b border-[#EEF1F5]">
-        <div className="text-[18px] font-black text-[#1F2129]">确认商品（{recognizedItems.length}个）</div>
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+      <div className="px-4 pt-4 pb-2">
+        <div className="text-[13px] font-bold text-[#9AA2B1]">{createMode === 'voice' ? '语音录入结果' : '拍照识别结果'}</div>
+        <div className="mt-1 text-[22px] font-black text-[#1F2129]">确认商品（{recognizedItems.length}个）</div>
+      </div>
+
+      <div className="shrink-0 px-4 pb-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {confirmFilters.map(filter => {
+            const active = confirmFilter === filter.id;
+            return (
+              <button
+                key={`${filter.id}`}
+                onClick={() => setConfirmFilter(filter.id)}
+                className={`shrink-0 rounded-full px-4 py-2 text-[12px] font-bold transition-colors ${
+                  active ? 'bg-[#1F2129] text-white' : 'bg-white text-[#707789]'
+                }`}
+              >
+                {filter.label} {filter.count > 0 ? `(${filter.count})` : ''}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-3 py-3 space-y-3 pb-8">
-        {recognizedItems.map(item => {
-          const isValid = item.name.trim() && item.basePrice.trim();
+        {filteredRecognizedItems.map(item => {
+          const isMultiSpec = isMultiSpecItem(item);
           return (
-            <div key={item.id} className="rounded-[22px] bg-white p-4 shadow-sm">
+            <div key={item.id} className="rounded-[24px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
               <div className="flex items-start justify-between">
-                <div className="flex items-start">
-                  <button className="mr-3" onClick={() => handleDraftImageReplace(item.id)}>
+                <div className="flex min-w-0 flex-1 items-start">
+                  <button className="mr-3 shrink-0" onClick={() => handleDraftImageReplace(item.id)}>
                       <GeneratedProductImage name={item.name} variant={item.imageVariant} />
                   </button>
-                  <div>
-                    <div className="flex items-center">
-                        <span className="text-sm font-black text-[#1F2129]"><span className="mr-1 text-[#FF6B6B]">*</span>商品图片</span>
-                        <span className="ml-2 rounded-full bg-[#E9F7EF] px-2 py-0.5 text-[10px] font-bold text-[#00A862]">已生成</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-h-[58px] items-center rounded-[20px] border border-[#E9EDF3] bg-[#F7F9FC] px-4 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+                      <input
+                        value={item.name}
+                        onChange={e => handleDraftChange(item.id, 'name', e.target.value)}
+                        placeholder="请输入商品名称"
+                        className={`min-w-0 flex-1 cursor-text bg-transparent text-[18px] font-black leading-7 outline-none placeholder:font-bold placeholder:text-[#C0C4CF] ${!item.name.trim() ? 'text-[#E35D5D]' : 'text-[#1F2129]'}`}
+                      />
                     </div>
-                      <div className="mt-1 text-[11px] text-[#8A91A3]">已根据商品名称生成默认图片，点击图片可直接替换</div>
                   </div>
                 </div>
                 <button onClick={() => handleDeleteDraft(item.id)} className="text-[#A0A6B7]">
@@ -745,40 +863,57 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
               </div>
 
               <div className="mt-4 space-y-3">
-                <InlineField label="商品名称" required>
-                  <input
-                    value={item.name}
-                    onChange={e => handleDraftChange(item.id, 'name', e.target.value)}
-                    placeholder="请输入商品名称"
-                    className="w-full text-right text-[15px] font-medium text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
-                  />
-                </InlineField>
-                <InlineField label="售价" required>
-                  <input
-                    value={item.basePrice}
-                    onChange={e => handleDraftChange(item.id, 'basePrice', e.target.value.replace(/[^\d.]/g, ''))}
-                    placeholder="请输入售价"
-                    className="w-full text-right text-[15px] font-medium text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
-                  />
-                </InlineField>
-                <InlineField label="商品分类">
+                {!isMultiSpec ? (
+                  <InlineField label="售价" required>
+                    <input
+                      value={item.basePrice}
+                      onChange={e => handleDraftChange(item.id, 'basePrice', e.target.value.replace(/[^\d.]/g, ''))}
+                      placeholder="请输入售价"
+                      className={`w-full text-right text-[15px] font-medium outline-none placeholder:text-[#C0C4CF] ${!item.basePrice.trim() ? 'text-[#E35D5D]' : 'text-[#1F2129]'}`}
+                    />
+                  </InlineField>
+                ) : null}
+                <InlineField label="商品分类" required>
                   <select
                     value={item.category}
                     onChange={e => handleDraftChange(item.id, 'category', e.target.value)}
-                    className="w-full bg-transparent text-right text-[15px] font-medium text-[#1F2129] outline-none"
+                    className={`w-full bg-transparent text-right text-[15px] font-medium outline-none ${!item.category.trim() ? 'text-[#E35D5D]' : 'text-[#1F2129]'}`}
                   >
-                    {[...new Set((categories.length ? categories.slice(0, 8).map(item => item.name) : ['通用菜品', '现制饮品', '零售商品']))].map(category => (
+                    <option value="">请选择分类</option>
+                    {categoryOptions.map(category => (
                       <option key={category} value={category}>{category}</option>
                     ))}
                   </select>
                 </InlineField>
               </div>
 
-              {!isValid && (
-                <div className="mt-3 rounded-2xl bg-[#FFF2F2] px-3 py-2 text-[11px] text-[#E35D5D]">
-                  请至少确认商品名称和售价
+              {isMultiSpec ? (
+                <div className="mt-4 rounded-[20px] bg-[#F7F9FC] p-3">
+                  <div className="mb-3 text-[13px] font-black text-[#1F2129]">规格价格</div>
+                  <div className="space-y-2">
+                    {item.specs?.map(spec => (
+                      <div key={spec.id} className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2">
+                        <input
+                          value={spec.name}
+                          onChange={e => handleSpecChange(item.id, spec.id, 'name', e.target.value)}
+                          placeholder="规格名称"
+                          className="min-w-0 flex-1 text-[14px] font-medium text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
+                        />
+                        <input
+                          value={spec.price}
+                          onChange={e => handleSpecChange(item.id, spec.id, 'price', e.target.value)}
+                          placeholder="价格"
+                          className="w-20 text-right text-[14px] font-medium text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
+                        />
+                        <button onClick={() => handleRemoveSpec(item.id, spec.id)} className="text-[#A0A6B7]">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
+              ) : null}
+
               {!!item.warnings.length && (
                 <div className="mt-3 space-y-2">
                   {item.warnings.map(warning => (
@@ -799,21 +934,20 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
             </div>
           );
         })}
-      </div>
-
-      <div className="shrink-0 border-t border-[#EEF1F5] bg-white px-4 py-3">
-        {invalidDrafts.length > 0 ? (
-          <div className="mb-3 flex items-start rounded-2xl bg-[#FFF8E8] px-3 py-2 text-[11px] text-[#9A6B00]">
-            <AlertCircle size={14} className="mr-2 mt-0.5 shrink-0" />
-            仍有 {invalidDrafts.length} 个商品未补齐基础信息，补齐商品名称和售价后即可保存
+        {!filteredRecognizedItems.length ? (
+          <div className="rounded-[24px] bg-white px-4 py-8 text-center text-[13px] text-[#98A0B3] shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            当前筛选下暂无商品
           </div>
         ) : null}
+      </div>
+
+      <div className="shrink-0 border-t border-[#EEF1F5] bg-white px-4 py-3 shadow-[0_-6px_20px_rgba(15,23,42,0.05)]">
         <div className="flex gap-3">
           {createMode === 'voice' ? (
             <button
               onMouseDown={() => beginVoiceHold(true)}
               onTouchStart={() => beginVoiceHold(true)}
-              className="flex-1 rounded-full border border-[#00C06B] bg-white py-3.5 text-[15px] font-black text-[#00A862]"
+              className="flex-1 rounded-full border border-[#7A5AF8] bg-white py-3.5 text-[15px] font-black text-[#7A5AF8]"
             >
               长按继续录入
             </button>
@@ -821,7 +955,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
           <button
             onClick={handleSaveDrafts}
             disabled={!validDrafts.length}
-            className="flex-1 rounded-full bg-[#00C06B] py-3.5 text-[15px] font-black text-white disabled:opacity-50"
+            className="flex-1 rounded-full bg-[#2DC55D] py-3.5 text-[15px] font-black text-white shadow-[0_10px_24px_rgba(45,197,93,0.22)] disabled:opacity-50"
           >
             确认保存
           </button>
@@ -845,7 +979,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
         <button
           onClick={() => {
             resetAiFlow();
-            setCreateStep(createMode === 'voice' ? 'voice_recording' : 'photo_intro');
+            setCreateStep(createMode === 'voice' ? 'voice_intro' : 'photo_intro');
           }}
           className="w-full py-4 bg-gray-50 text-gray-600 rounded-xl font-bold"
         >
@@ -863,7 +997,11 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
             <ChevronLeft size={24} />
           </button>
           <span className="font-bold text-lg text-[#1F2129]">
-            {createStep === 'photo_intro' ? '拍照录入' : createStep === 'voice_intro' || createStep === 'voice_recording' ? '语音录入' : '新建商品'}
+            {createStep === 'photo_intro'
+              ? '拍照录入'
+              : createStep === 'voice_intro' || createStep === 'voice_recording'
+                ? '语音录入'
+                : '新建商品'}
           </span>
           <div className="w-8"></div>
         </div>
@@ -936,7 +1074,16 @@ const GeneratedProductImage = ({ name, variant = 0 }: { name: string; variant?: 
     'from-[#EEF6FF] to-[#DCEBFF] text-[#3B77F1]',
     'from-[#FFF5E8] to-[#FFE8C8] text-[#D9822B]',
   ];
-  const palette = palettes[(name.length + variant) % palettes.length];
+  const showUploadState = variant % 2 === 1;
+  const palette = palettes[(name.length + Math.floor(variant / 2)) % palettes.length];
+
+  if (showUploadState) {
+    return (
+      <div className="flex h-[58px] w-[58px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#D8DEEA] bg-[#F7F9FC] text-[#9AA3B3] shadow-sm">
+        <ImageIcon size={18} />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-gradient-to-br ${palette} text-[16px] font-black shadow-sm`}>

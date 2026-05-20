@@ -1,9 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { Info, Search, Square, CheckSquare, X } from 'lucide-react';
+import { Info, Search, Square, CheckSquare, X, ChevronRight, ChevronDown, Circle, CheckCircle2 } from 'lucide-react';
 
 type StoreOption = {
   id: string;
   name: string;
+  code: string;
+  merchantId: string;
+  groupId: string;
+  groupName: string;
+  rootGroupId: string;
+  rootGroupName: string;
+  tags: string[];
 };
 
 type MethodRow = {
@@ -20,9 +27,11 @@ type MethodRow = {
 };
 
 const STORE_OPTIONS: StoreOption[] = [
-  { id: 's1', name: '测试-bcz' },
-  { id: 's2', name: '南山万象店' },
-  { id: 's3', name: '福田卓悦店' },
+  { id: 's1', name: '【杭州】技术测试账号', code: '870525145', merchantId: '1151703', groupId: 'g1-1', groupName: '测试品牌直营', rootGroupId: 'g1', rootGroupName: '测试品牌', tags: ['直营', '杭州'] },
+  { id: 's2', name: '【成都】演示账号', code: '39914002', merchantId: '1151699', groupId: 'g1-1', groupName: '测试品牌直营', rootGroupId: 'g1', rootGroupName: '测试品牌', tags: ['直营', '成都'] },
+  { id: 's3', name: '南山万象店', code: '80193701', merchantId: '1151573', groupId: 'g1-2', groupName: '华南区域', rootGroupId: 'g1', rootGroupName: '测试品牌', tags: ['加盟', '深圳'] },
+  { id: 's4', name: '福田卓悦店', code: '39792129', merchantId: '1151570', groupId: 'g1-2', groupName: '华南区域', rootGroupId: 'g1', rootGroupName: '测试品牌', tags: ['直营', '深圳'] },
+  { id: 's5', name: '运维备机示例门店', code: '1151569', merchantId: '1151569', groupId: 'g1-3', groupName: '品牌直营', rootGroupId: 'g1', rootGroupName: '测试品牌', tags: ['备用'] },
 ];
 
 const INITIAL_METHOD_ROWS: MethodRow[] = [
@@ -41,11 +50,37 @@ const INITIAL_METHOD_ROWS: MethodRow[] = [
 
 export const PosMethodView: React.FC = () => {
   const [methodRows, setMethodRows] = useState(INITIAL_METHOD_ROWS);
-  const [activeStoreId, setActiveStoreId] = useState('s1');
-  const [draftStoreId, setDraftStoreId] = useState('s1');
+  const [activeStoreId, setActiveStoreId] = useState('');
+  const [draftStoreId, setDraftStoreId] = useState('');
   const [keyword, setKeyword] = useState('');
   const [draftKeyword, setDraftKeyword] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showStorePicker, setShowStorePicker] = useState(true);
+  const [storePickerKeyword, setStorePickerKeyword] = useState('');
+  const [selectedGroupId, setSelectedGroupId] = useState('g1');
+
+  const storeGroupTree = useMemo(() => {
+    const rootGroups = [...new Map(
+      STORE_OPTIONS.map(store => [
+        store.rootGroupId,
+        {
+          id: store.rootGroupId,
+          name: store.rootGroupName,
+          children: [] as Array<{ id: string; name: string }>,
+        },
+      ])
+    ).values()];
+
+    rootGroups.forEach(root => {
+      root.children = [...new Map(
+        STORE_OPTIONS
+          .filter(store => store.rootGroupId === root.id)
+          .map(store => [store.groupId, { id: store.groupId, name: store.groupName }])
+      ).values()];
+    });
+
+    return rootGroups;
+  }, []);
 
   const filteredRows = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -61,7 +96,15 @@ export const PosMethodView: React.FC = () => {
 
   const allChecked = filteredRows.length > 0 && filteredRows.every(row => selectedIds.has(row.id));
 
-  const currentStore = STORE_OPTIONS.find(item => item.id === draftStoreId);
+  const currentStore = STORE_OPTIONS.find(item => item.id === activeStoreId);
+  const storePickerRows = STORE_OPTIONS.filter(store => {
+    const matchGroup = selectedGroupId ? (store.rootGroupId === selectedGroupId || store.groupId === selectedGroupId) : true;
+    const normalizedKeyword = storePickerKeyword.trim().toLowerCase();
+    const matchKeyword =
+      !normalizedKeyword ||
+      [store.name, store.code, store.merchantId].join(' ').toLowerCase().includes(normalizedKeyword);
+    return matchGroup && matchKeyword;
+  });
 
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
@@ -90,17 +133,28 @@ export const PosMethodView: React.FC = () => {
   };
 
   const handleApplyFilters = () => {
-    setActiveStoreId(draftStoreId);
     setKeyword(draftKeyword);
     setSelectedIds(new Set());
   };
 
   const handleResetFilters = () => {
-    setDraftStoreId('');
-    setActiveStoreId('');
     setDraftKeyword('');
     setKeyword('');
     setSelectedIds(new Set());
+  };
+
+  const handleConfirmStore = () => {
+    if (!draftStoreId) return;
+    setActiveStoreId(draftStoreId);
+    setShowStorePicker(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleOpenStorePicker = () => {
+    setDraftStoreId(activeStoreId || draftStoreId);
+    setStorePickerKeyword('');
+    setSelectedGroupId(STORE_OPTIONS.find(store => store.id === (activeStoreId || draftStoreId))?.rootGroupId || 'g1');
+    setShowStorePicker(true);
   };
 
   const updateEnabled = (ids: string[], enabled: boolean) => {
@@ -115,35 +169,26 @@ export const PosMethodView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-[#F5F6FA] p-6">
-      <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+    <>
+      <div className="flex-1 overflow-auto bg-[#F5F6FA] p-6">
+        <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
         <div className="border-b border-gray-100 bg-[#FAFAFA] px-6 py-5">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <FilterLabel label="机构门店">
-              <div className="flex min-h-[42px] min-w-[320px] items-center rounded-lg border border-gray-200 bg-white px-3">
+              <div className="flex min-h-[42px] min-w-[320px] items-center justify-between rounded-lg border border-gray-200 bg-white px-3">
                 {currentStore ? (
                   <div className="flex items-center rounded-md border border-[#D9F7E7] bg-[#F3FCF7] px-3 py-1 text-sm text-[#1F9D55]">
                     <span>{currentStore.name}</span>
-                    <button
-                      onClick={() => setDraftStoreId('')}
-                      className="ml-2 text-gray-400 hover:text-gray-600"
-                      aria-label="清除机构门店"
-                    >
-                      <X size={14} />
-                    </button>
                   </div>
                 ) : (
-                  <select
-                    value={draftStoreId}
-                    onChange={e => setDraftStoreId(e.target.value)}
-                    className="w-full bg-transparent text-sm text-gray-500 outline-none"
-                  >
-                    <option value="">请选择机构门店</option>
-                    {STORE_OPTIONS.map(store => (
-                      <option key={store.id} value={store.id}>{store.name}</option>
-                    ))}
-                  </select>
+                  <span className="text-sm text-gray-400">请选择机构门店</span>
                 )}
+                <button
+                  onClick={handleOpenStorePicker}
+                  className="ml-3 text-sm font-bold text-[#00C06B] hover:text-[#00A35B]"
+                >
+                  更换门店
+                </button>
               </div>
             </FilterLabel>
 
@@ -258,6 +303,182 @@ export const PosMethodView: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+        </div>
+      </div>
+      {showStorePicker && (
+        <StorePickerModal
+          groups={storeGroupTree}
+          stores={storePickerRows}
+          selectedGroupId={selectedGroupId}
+          onSelectGroup={setSelectedGroupId}
+          selectedStoreId={draftStoreId}
+          onSelectStore={setDraftStoreId}
+          searchValue={storePickerKeyword}
+          onSearchChange={setStorePickerKeyword}
+          onCancel={() => setShowStorePicker(false)}
+          onConfirm={handleConfirmStore}
+          disableCancel={!activeStoreId}
+        />
+      )}
+    </>
+  );
+};
+
+const StorePickerModal = ({
+  groups,
+  stores,
+  selectedGroupId,
+  onSelectGroup,
+  selectedStoreId,
+  onSelectStore,
+  searchValue,
+  onSearchChange,
+  onCancel,
+  onConfirm,
+  disableCancel,
+}: {
+  groups: Array<{ id: string; name: string; children: Array<{ id: string; name: string }> }>;
+  stores: StoreOption[];
+  selectedGroupId: string;
+  onSelectGroup: (groupId: string) => void;
+  selectedStoreId: string;
+  onSelectStore: (storeId: string) => void;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  disableCancel: boolean;
+}) => {
+  const selectedStore = stores.find(store => store.id === selectedStoreId) || null;
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[1120px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
+          <div className="text-[28px] font-black text-[#1F2129]">请选择需要管理的门店</div>
+          {!disableCancel ? (
+            <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]">
+              <X size={22} />
+            </button>
+          ) : (
+            <div className="w-[22px]"></div>
+          )}
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="grid grid-cols-1 gap-4">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A6AEBE]" />
+              <input
+                value={searchValue}
+                onChange={e => onSearchChange(e.target.value)}
+                placeholder="请输入门店名称/编码/ID"
+                className="h-[42px] w-full rounded-[10px] border border-[#E5EAF1] bg-white pl-9 pr-3 text-sm text-[#1F2129] outline-none focus:border-[#00C06B]"
+              />
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-[260px_minmax(0,1fr)] gap-4">
+            <div className="rounded-[12px] border border-[#EEF1F5] bg-white">
+              <div className="border-b border-[#F1F3F7] px-4 py-3 text-sm font-bold text-[#1F2129]">门店组</div>
+              <div className="max-h-[340px] overflow-y-auto no-scrollbar py-2">
+                {groups.map(group => {
+                  const activeRoot = selectedGroupId === group.id;
+                  return (
+                    <div key={group.id}>
+                      <button
+                        onClick={() => onSelectGroup(group.id)}
+                        className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors ${
+                          activeRoot ? 'bg-[#EAF7F0] text-[#16A34A]' : 'text-[#3C4353] hover:bg-[#FAFBFC]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <ChevronDown size={16} className={activeRoot ? 'text-[#16A34A]' : 'text-[#94A3B8]'} />
+                          <span className="font-bold">{group.name}</span>
+                        </div>
+                        <span className={`text-xs font-bold ${activeRoot ? 'text-[#16A34A]' : 'text-[#B6BDCA]'}`}>品牌+</span>
+                      </button>
+                      {group.children.map(child => {
+                        const activeChild = selectedGroupId === child.id;
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => onSelectGroup(child.id)}
+                            className={`flex w-full items-center justify-between pl-10 pr-4 py-3 text-left text-sm transition-colors ${
+                              activeChild ? 'bg-[#F1FCF4] text-[#16A34A]' : 'text-[#3C4353] hover:bg-[#FAFBFC]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronRight size={14} className={activeChild ? 'text-[#16A34A]' : 'text-[#94A3B8]'} />
+                              <span className="font-medium">{child.name}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-[12px] border border-[#EEF1F5] bg-white">
+              <div className="grid grid-cols-[56px_minmax(0,1fr)_220px_180px] border-b border-[#F1F3F7] px-4 py-3 text-sm font-bold text-[#5B6475]">
+                <div></div>
+                <div>门店名称</div>
+                <div>门店 ID</div>
+                <div>门店编码</div>
+              </div>
+              <div className="max-h-[340px] overflow-y-auto no-scrollbar">
+                {stores.map(store => {
+                  const checked = selectedStoreId === store.id;
+                  return (
+                    <button
+                      key={store.id}
+                      onClick={() => onSelectStore(store.id)}
+                      className={`grid w-full grid-cols-[56px_minmax(0,1fr)_220px_180px] items-center border-b border-[#F5F7FA] px-4 py-4 text-left text-sm transition-colors ${
+                        checked ? 'bg-[#F1FCF4]' : 'hover:bg-[#FCFDFE]'
+                      }`}
+                    >
+                      <div className="flex justify-center">
+                        {checked ? <CheckCircle2 size={18} className="text-[#00C06B]" /> : <Circle size={18} className="text-[#C7CEDA]" />}
+                      </div>
+                      <div className="font-medium text-[#1F2129]">{store.name}</div>
+                      <div className="text-[#4B5565]">{store.merchantId}</div>
+                      <div className="text-[#4B5565]">{store.code}</div>
+                    </button>
+                  );
+                })}
+                {!stores.length ? (
+                  <div className="px-4 py-14 text-center text-sm text-[#98A0B3]">暂无符合条件的门店</div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-[#EEF1F5] px-6 py-4">
+          <div className="text-sm text-[#5B6475]">
+            已选择：
+            <span className="ml-1 font-bold text-[#1F2129]">{selectedStore ? selectedStore.name : '未选择门店'}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {!disableCancel ? (
+              <button
+                onClick={onCancel}
+                className="rounded-[10px] border border-[#E5EAF1] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]"
+              >
+                取消
+              </button>
+            ) : null}
+            <button
+              onClick={onConfirm}
+              disabled={!selectedStoreId}
+              className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#9DDDBB]"
+            >
+              确定
+            </button>
+          </div>
         </div>
       </div>
     </div>

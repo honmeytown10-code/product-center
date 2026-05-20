@@ -3,7 +3,7 @@ import {
   Search, Plus, ChevronDown, MoreHorizontal, FileUp,
   Printer, Smartphone, Store, ShoppingBag, Coffee, ChevronLeft,
   ChevronRight, CheckCircle2, X, Link, Layers, Eye, GripVertical,
-  ArrowUpDown, Upload, PackageOpen
+  ArrowUpDown, Upload, PackageOpen, Bike, UtensilsCrossed
 } from 'lucide-react';
 import { useProducts } from '../../context';
 import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
@@ -48,6 +48,20 @@ type StoreProductCoverageSummary = {
   channelIds: string[];
   lastSync: string;
 };
+
+type CoverageStoreDetail = {
+  title: string;
+  type: 'all' | 'on_shelf' | 'off_shelf' | 'sold_out';
+  stores: Array<{
+    storeId: string;
+    storeName: string;
+    channels: string[];
+    status: 'on_shelf' | 'off_shelf';
+    stockStatus: 'normal' | 'low' | 'empty';
+  }>;
+};
+
+type CoverageStatusFilter = 'all' | 'has_on_shelf_store' | 'has_off_shelf_store' | 'has_sold_out_store';
 
 const STORE_OPTIONS = [
   { id: 'all', name: '全部门店' },
@@ -186,14 +200,54 @@ const MOCK_CATEGORIES = [
   { id: '4', name: '轻食系列' },
 ];
 
-const CHANNEL_DEFS: Record<string, { label: string; color: string }> = {
-  pos: { label: 'POS', color: 'bg-blue-100 text-blue-700' },
-  mini_dine: { label: '小程序-堂食', color: 'bg-[#00C06B]/10 text-[#00C06B]' },
-  mini_take: { label: '小程序-外卖', color: 'bg-[#00C06B]/10 text-[#00C06B]' },
-  meituan: { label: '美团-外卖', color: 'bg-yellow-100 text-yellow-700' },
-  meituan_tuangou: { label: '美团-团购', color: 'bg-yellow-100 text-yellow-700' },
-  taobao: { label: '淘宝闪购', color: 'bg-orange-100 text-orange-700' },
-  eleme: { label: '饿了么', color: 'bg-blue-100 text-blue-600' },
+const CHANNEL_DEFS: Record<string, {
+  label: string;
+  shortLabel: string;
+  activeClass: string;
+  icon: React.ReactNode;
+}> = {
+  mini_dine: {
+    label: '小程序-堂食',
+    shortLabel: '堂',
+    activeClass: 'bg-[#FDEBD8] text-[#F59E0B]',
+    icon: <Store size={16} strokeWidth={2.4} />,
+  },
+  mini_take: {
+    label: '小程序-外卖',
+    shortLabel: '外',
+    activeClass: 'bg-[#DDF5D8] text-[#84CC16]',
+    icon: <Bike size={16} strokeWidth={2.4} />,
+  },
+  pos: {
+    label: 'POS',
+    shortLabel: 'POS',
+    activeClass: 'bg-[#DDEEFF] text-[#3B82F6]',
+    icon: <span className="text-[10px] font-black leading-none">POS</span>,
+  },
+  meituan: {
+    label: '美团-外卖',
+    shortLabel: '美',
+    activeClass: 'bg-[#FCE9B9] text-[#EAB308]',
+    icon: <UtensilsCrossed size={16} strokeWidth={2.4} />,
+  },
+  meituan_tuangou: {
+    label: '美团-团购',
+    shortLabel: '团',
+    activeClass: 'bg-[#E0E7FF] text-[#4F46E5]',
+    icon: <span className="text-[10px] font-black leading-none">团</span>,
+  },
+  taobao: {
+    label: '淘宝闪购',
+    shortLabel: '淘',
+    activeClass: 'bg-[#FF7A18] text-white',
+    icon: <ShoppingBag size={16} strokeWidth={2.4} />,
+  },
+  eleme: {
+    label: '饿了么',
+    shortLabel: '饿',
+    activeClass: 'bg-[#E0F2FE] text-[#0284C7]',
+    icon: <span className="text-[10px] font-black leading-none">饿</span>,
+  },
 };
 
 const DEFAULT_CHANNELS = [
@@ -224,14 +278,14 @@ export const WebStoreProductList: React.FC<{
   const [coverageKeyword, setCoverageKeyword] = useState('');
   const [coverageCategoryId, setCoverageCategoryId] = useState('all');
   const [coverageType, setCoverageType] = useState<'all' | 'Standard' | 'Combo'>('all');
-  const [coverageStoreId, setCoverageStoreId] = useState('all');
-  const [coverageChannelId, setCoverageChannelId] = useState('all');
   const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success'; subMessage?: string } | null>(null);
   const [shelfDialog, setShelfDialog] = useState<StoreProductRecord | null>(null);
   const [stockDialog, setStockDialog] = useState<StoreProductRecord | null>(null);
   const [categories, setCategories] = useState(MOCK_CATEGORIES.filter(c => c.id !== 'all'));
   const [isSorting, setIsSorting] = useState(false);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [coverageStoreDetail, setCoverageStoreDetail] = useState<CoverageStoreDetail | null>(null);
+  const [coverageStatusFilter, setCoverageStatusFilter] = useState<CoverageStatusFilter>('all');
 
   useEffect(() => {
     setIsSorting(false);
@@ -277,12 +331,6 @@ export const WebStoreProductList: React.FC<{
   const coverageSourceRows = useMemo(() => {
     const normalizedKeyword = coverageKeyword.trim().toLowerCase();
     return MOCK_STORE_PRODUCTS.filter(product => {
-      if (coverageStoreId !== 'all' && product.storeId !== coverageStoreId) {
-        return false;
-      }
-      if (coverageChannelId !== 'all' && !product.channels.includes(coverageChannelId)) {
-        return false;
-      }
       if (coverageType !== 'all' && product.type !== coverageType) {
         return false;
       }
@@ -300,7 +348,7 @@ export const WebStoreProductList: React.FC<{
       }
       return true;
     });
-  }, [coverageKeyword, coverageCategoryId, coverageType, coverageStoreId, coverageChannelId]);
+  }, [coverageKeyword, coverageCategoryId, coverageType]);
 
   const coverageRows = useMemo<StoreProductCoverageSummary[]>(() => {
     const grouped = coverageSourceRows.reduce<Record<string, StoreProductRecord[]>>((acc, item) => {
@@ -336,17 +384,29 @@ export const WebStoreProductList: React.FC<{
       });
   }, [coverageSourceRows]);
 
+  const filteredCoverageRows = useMemo(() => {
+    return coverageRows.filter(item => {
+      if (coverageStatusFilter === 'has_on_shelf_store') return item.onShelfStoreCount > 0;
+      if (coverageStatusFilter === 'has_off_shelf_store') return item.offShelfStoreCount > 0;
+      if (coverageStatusFilter === 'has_sold_out_store') return item.soldOutStoreCount > 0;
+      return true;
+    });
+  }, [coverageRows, coverageStatusFilter]);
+
   const coverageStats = useMemo(() => {
-    const coveredStores = new Set(coverageSourceRows.map(item => item.storeId));
-    const allChannels = new Set(coverageSourceRows.flatMap(item => item.channels));
     return {
-      totalStores: coveredStores.size,
-      totalChannels: allChannels.size,
       onShelfProducts: coverageRows.filter(item => item.onShelfStoreCount > 0).length,
       offShelfProducts: coverageRows.filter(item => item.offShelfStoreCount > 0).length,
       soldOutProducts: coverageRows.filter(item => item.soldOutStoreCount > 0).length,
     };
   }, [coverageRows, coverageSourceRows]);
+
+  const coverageFilterLabelMap: Record<CoverageStatusFilter, string> = {
+    all: '全部商品',
+    has_on_shelf_store: '门店上架商品',
+    has_off_shelf_store: '门店下架商品',
+    has_sold_out_store: '门店售罄商品',
+  };
 
   const showCategoryPanel = mode === 'manage' && activeStoreId !== 'all';
 
@@ -365,6 +425,47 @@ export const WebStoreProductList: React.FC<{
       setStockDialog(product);
       return;
     }
+  };
+
+  const openCoverageStoreDetail = (
+    item: StoreProductCoverageSummary,
+    type: 'all' | 'on_shelf' | 'off_shelf' | 'sold_out'
+  ) => {
+    const detailRows = coverageSourceRows.filter(row => row.baseProductId === item.baseProductId);
+    const scopedRows = detailRows.filter(row => {
+      if (type === 'on_shelf') return row.status === 'on_shelf';
+      if (type === 'off_shelf') return row.status !== 'on_shelf';
+      if (type === 'sold_out') return row.stockStatus === 'empty';
+      return true;
+    });
+
+    const uniqueStores = Array.from(
+      new Map(
+        scopedRows.map(row => [
+          row.storeId,
+          {
+            storeId: row.storeId,
+            storeName: row.storeName,
+            channels: row.channels,
+            status: row.status,
+            stockStatus: row.stockStatus,
+          },
+        ])
+      ).values()
+    );
+
+    const titleMap = {
+      all: '覆盖门店',
+      on_shelf: '上架门店',
+      off_shelf: '下架门店',
+      sold_out: '售罄门店',
+    } as const;
+
+    setCoverageStoreDetail({
+      title: `${item.name} - ${titleMap[type]}`,
+      type,
+      stores: uniqueStores,
+    });
   };
 
   const handleShelfConfirm = (payload: { action: 'on_shelf' | 'off_shelf'; channels: ShelfChannelId[] }) => {
@@ -647,17 +748,12 @@ export const WebStoreProductList: React.FC<{
                       <td className="py-4 px-4">
                         {activeTabId === 'all' ? (
                           <div className="flex flex-wrap gap-1.5">
-                            {product.channels.map(ch => {
-                              const def = CHANNEL_DEFS[ch];
-                              return def ? (
-                                <div key={ch} className={`px-1.5 py-0.5 rounded-[4px] flex items-center text-[10px] font-bold ${def.color}`}>
-                                  {def.label}
-                                </div>
-                              ) : null;
-                            })}
+                            {product.channels.map(ch => renderCoverageChannelIcon(ch))}
                           </div>
                         ) : (
-                          <div className="text-[#333]">{CHANNEL_DEFS[activeTabId]?.label || activeTabId}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {renderCoverageChannelIcon(activeTabId)}
+                          </div>
                         )}
                       </td>
                       <td className="py-4 px-4">
@@ -761,24 +857,50 @@ export const WebStoreProductList: React.FC<{
               ]}
               widthClass="w-[200px]"
             />
-            <FilterNativeSelect
-              label="售卖渠道"
-              value={coverageChannelId}
-              onChange={setCoverageChannelId}
-              options={[{ value: 'all', label: '全部渠道' }, ...DEFAULT_CHANNELS.map(channel => ({ value: channel.id, label: channel.label }))]}
-              widthClass="w-[220px]"
-            />
-            <FilterStoreSelect label="查看门店" options={STORE_OPTIONS} value={coverageStoreId} onChange={setCoverageStoreId} />
             <button className="h-[34px] px-6 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
             <button className="h-[34px] px-6 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] transition-colors">查询</button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <CoverageStatCard title="涉及门店" value={`${coverageStats.totalStores}`} desc="当前筛选结果覆盖的门店数" accent="blue" />
-            <CoverageStatCard title="已上架商品" value={`${coverageStats.onShelfProducts}`} desc="至少有一个门店在售的商品" accent="green" tooltip="商品在至少一个门店存在可售渠道时，记为已上架商品。" />
-            <CoverageStatCard title="有下架商品" value={`${coverageStats.offShelfProducts}`} desc="仍存在下架门店的商品" accent="orange" tooltip="商品在某门店所有渠道均下架时，该门店记为下架门店；存在这类门店的商品记为有下架商品。" />
-            <CoverageStatCard title="有售罄商品" value={`${coverageStats.soldOutProducts}`} desc="存在售罄门店的商品" accent="red" tooltip="商品在某门店所有渠道均售罄时，该门店记为售罄门店；存在这类门店的商品记为有售罄商品。" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <CoverageStatCard
+              title="门店上架商品"
+              value={`${coverageStats.onShelfProducts}`}
+              desc="商品存在上架门店"
+              accent="green"
+              tooltip="商品至少在一个门店的一个渠道上架售卖，即记为已上架商品。"
+              active={coverageStatusFilter === 'has_on_shelf_store'}
+              onClick={() => setCoverageStatusFilter(prev => prev === 'has_on_shelf_store' ? 'all' : 'has_on_shelf_store')}
+            />
+            <CoverageStatCard
+              title="门店下架商品"
+              value={`${coverageStats.offShelfProducts}`}
+              desc="商品存在下架门店"
+              accent="orange"
+              tooltip="商品在某门店所有渠道均下架时，该门店记为下架门店；存在这类门店的商品记为含下架门店商品。"
+              active={coverageStatusFilter === 'has_off_shelf_store'}
+              onClick={() => setCoverageStatusFilter(prev => prev === 'has_off_shelf_store' ? 'all' : 'has_off_shelf_store')}
+            />
+            <CoverageStatCard
+              title="门店售罄商品"
+              value={`${coverageStats.soldOutProducts}`}
+              desc="商品存在售罄门店"
+              accent="red"
+              tooltip="商品在某门店所有渠道均售罄时，该门店记为售罄门店；存在这类门店的商品记为含售罄门店商品。"
+              active={coverageStatusFilter === 'has_sold_out_store'}
+              onClick={() => setCoverageStatusFilter(prev => prev === 'has_sold_out_store' ? 'all' : 'has_sold_out_store')}
+            />
           </div>
+          {coverageStatusFilter !== 'all' && (
+            <div className="flex items-center">
+              <button
+                onClick={() => setCoverageStatusFilter('all')}
+                className="inline-flex items-center gap-2 rounded-full bg-[#F3FCF7] px-3 py-1.5 text-xs font-bold text-[#00A35B]"
+              >
+                当前筛选：{coverageFilterLabelMap[coverageStatusFilter]}
+                <X size={12} />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-auto no-scrollbar">
@@ -797,7 +919,7 @@ export const WebStoreProductList: React.FC<{
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
-              {coverageRows.map(item => (
+              {filteredCoverageRows.map(item => (
                 <tr key={item.baseProductId} className="border-b border-[#F5F5F5] hover:bg-[#F9FFFC] transition-colors group">
                   <td className="py-4 px-5">
                     <div className="flex items-start gap-3">
@@ -818,43 +940,48 @@ export const WebStoreProductList: React.FC<{
                   <td className="py-4 px-4 text-[#666]">{item.type === 'Standard' ? '标准商品' : '套餐商品'}</td>
                   <td className="py-4 px-4 text-[#666]">{item.category}</td>
                   <td className="py-4 px-4">
-                    <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId })} className="font-bold text-[#00C06B] hover:underline">{item.storeCount} 家门店</button>
+                    <button onClick={() => openCoverageStoreDetail(item, 'all')} className="font-bold text-[#00C06B] hover:underline">{item.storeCount} 家门店</button>
                   </td>
                   <td className="py-4 px-4">
-                    <span className="inline-flex rounded-full px-2 py-1 text-[11px] font-bold bg-[#F0FDF4] text-[#15803D]">
+                    <button
+                      onClick={() => item.onShelfStoreCount > 0 && openCoverageStoreDetail(item, 'on_shelf')}
+                      disabled={item.onShelfStoreCount === 0}
+                      className="inline-flex rounded-full px-2 py-1 text-[11px] font-bold bg-[#F0FDF4] text-[#15803D] disabled:cursor-default disabled:opacity-70"
+                    >
                       {item.onShelfStoreCount} 家
-                    </span>
+                    </button>
                   </td>
                   <td className="py-4 px-4">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${item.offShelfStoreCount === 0 ? 'bg-[#F0FDF4] text-[#15803D]' : 'bg-[#FFF7ED] text-[#C2410C]'}`}>
+                    <button
+                      onClick={() => item.offShelfStoreCount > 0 && openCoverageStoreDetail(item, 'off_shelf')}
+                      disabled={item.offShelfStoreCount === 0}
+                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold disabled:cursor-default disabled:opacity-70 ${item.offShelfStoreCount === 0 ? 'bg-[#F0FDF4] text-[#15803D]' : 'bg-[#FFF7ED] text-[#C2410C]'}`}
+                    >
                       {item.offShelfStoreCount} 家
-                    </span>
+                    </button>
                   </td>
                   <td className="py-4 px-4">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${item.soldOutStoreCount === 0 ? 'bg-[#F0FDF4] text-[#15803D]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
+                    <button
+                      onClick={() => item.soldOutStoreCount > 0 && openCoverageStoreDetail(item, 'sold_out')}
+                      disabled={item.soldOutStoreCount === 0}
+                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold disabled:cursor-default disabled:opacity-70 ${item.soldOutStoreCount === 0 ? 'bg-[#F0FDF4] text-[#15803D]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}
+                    >
                       {item.soldOutStoreCount} 家
-                    </span>
+                    </button>
                   </td>
                   <td className="py-4 px-4">
                     <div className="flex flex-wrap gap-1.5">
-                      {item.channelIds.map(ch => {
-                        const def = CHANNEL_DEFS[ch];
-                        return def ? (
-                          <span key={ch} className={`px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold ${def.color}`}>
-                            {def.label}
-                          </span>
-                        ) : null;
-                      })}
+                      {item.channelIds.map(ch => renderCoverageChannelIcon(ch))}
                     </div>
                   </td>
                   <td className="sticky right-0 py-4 px-4 bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
                     <div className="flex items-center justify-center text-sm">
-                      <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId })} className="text-[#00C06B] font-medium hover:underline">查看明细</button>
+                      <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId })} className="text-[#00C06B] font-medium hover:underline">管理门店商品</button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {coverageRows.length === 0 && (
+              {filteredCoverageRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-10 text-center text-[#999]">暂无售卖门店数据</td>
                 </tr>
@@ -866,7 +993,7 @@ export const WebStoreProductList: React.FC<{
         <div className="h-12 border-t border-[#E8E8E8] flex items-center justify-between px-5 text-xs text-[#666] bg-white shrink-0">
           <div className="flex items-center gap-2 text-[#666]">
             <PackageOpen size={13} />
-            <span>支持按商品名称、前台分类、门店、渠道查看品牌下商品在哪些门店售卖及对应状态。</span>
+            <span>支持按商品名称、前台分类查看品牌下商品在哪些门店售卖及对应状态。</span>
           </div>
           <div className="flex items-center space-x-1">
             <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B] disabled:opacity-50"><ChevronLeft size={12} /></button>
@@ -875,6 +1002,12 @@ export const WebStoreProductList: React.FC<{
           </div>
         </div>
       </div>
+      {coverageStoreDetail && (
+        <CoverageStoreDetailModal
+          detail={coverageStoreDetail}
+          onClose={() => setCoverageStoreDetail(null)}
+        />
+      )}
     </div>
   );
 
@@ -965,12 +1098,16 @@ const CoverageStatCard = ({
   desc,
   accent,
   tooltip,
+  active = false,
+  onClick,
 }: {
   title: string;
   value: string;
   desc: string;
   accent: 'green' | 'blue' | 'orange' | 'red';
   tooltip?: string;
+  active?: boolean;
+  onClick?: () => void;
 }) => {
   const accentClass = {
     green: 'border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]',
@@ -980,12 +1117,104 @@ const CoverageStatCard = ({
   }[accent];
 
   return (
-    <div className={`rounded-2xl border px-4 py-4 ${accentClass}`}>
+    <button
+      onClick={onClick}
+      className={`rounded-2xl border px-4 py-4 text-left transition-all ${accentClass} ${active ? 'ring-2 ring-current/25 shadow-sm' : 'hover:shadow-sm'}`}
+    >
       <div className="text-xs font-bold opacity-80">
         {tooltip ? <LabelWithTip label={title} tip={tooltip} /> : title}
       </div>
       <div className="mt-3 text-2xl font-black">{value}</div>
       <div className="mt-2 text-xs opacity-80">{desc}</div>
+    </button>
+  );
+};
+
+const CoverageStoreDetailModal = ({
+  detail,
+  onClose,
+}: {
+  detail: CoverageStoreDetail;
+  onClose: () => void;
+}) => (
+  <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-6">
+    <div className="w-full max-w-[760px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
+        <div className="text-[22px] font-black text-[#1F2129]">{detail.title}</div>
+        <button onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]">
+          <X size={20} />
+        </button>
+      </div>
+      <div className="max-h-[460px] overflow-y-auto no-scrollbar px-6 py-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_160px] border-b border-[#EEF1F5] pb-3 text-xs font-bold text-[#5B6475]">
+          <div>门店名称</div>
+          <div>门店 ID</div>
+          <div>状态</div>
+          <div>覆盖渠道</div>
+        </div>
+        <div className="divide-y divide-[#F1F3F7]">
+          {detail.stores.map(store => (
+            <div key={store.storeId} className="grid grid-cols-[minmax(0,1fr)_140px_140px_160px] items-start gap-3 py-4 text-sm text-[#1F2129]">
+              <div className="font-medium">{store.storeName}</div>
+              <div className="text-[#5B6475]">{store.storeId.toUpperCase()}</div>
+              <div>
+                {(() => {
+                  const statusMeta =
+                    detail.type === 'off_shelf'
+                      ? { label: '已下架', className: 'bg-[#FFF7ED] text-[#C2410C]' }
+                      : detail.type === 'sold_out'
+                        ? { label: '已售罄', className: 'bg-[#FEF2F2] text-[#DC2626]' }
+                        : detail.type === 'on_shelf'
+                          ? { label: '已上架', className: 'bg-[#F0FDF4] text-[#15803D]' }
+                          : store.stockStatus === 'empty'
+                            ? { label: '已售罄', className: 'bg-[#FEF2F2] text-[#DC2626]' }
+                            : store.status === 'on_shelf'
+                              ? { label: '已上架', className: 'bg-[#F0FDF4] text-[#15803D]' }
+                              : { label: '已下架', className: 'bg-[#FFF7ED] text-[#C2410C]' };
+
+                  return (
+                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${statusMeta.className}`}>
+                      {statusMeta.label}
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {store.channels.map(ch => renderCoverageChannelIcon(ch))}
+              </div>
+            </div>
+          ))}
+          {detail.stores.length === 0 && (
+            <div className="py-12 text-center text-sm text-[#98A0B3]">暂无门店数据</div>
+          )}
+        </div>
+      </div>
+      <div className="flex justify-end border-t border-[#EEF1F5] px-6 py-4">
+        <button
+          onClick={onClose}
+          className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
+        >
+          我知道了
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const renderCoverageChannelIcon = (channelId: string) => {
+  const def = CHANNEL_DEFS[channelId];
+  if (!def) return null;
+  const icon = channelId === 'taobao'
+    ? <span className="text-[10px] font-black leading-none">{def.shortLabel}</span>
+    : def.icon;
+
+  return (
+    <div
+      key={channelId}
+      title={def.label}
+      className={`flex h-7 w-7 items-center justify-center rounded-lg ${def.activeClass}`}
+    >
+      {icon}
     </div>
   );
 };

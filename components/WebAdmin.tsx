@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Box, ChevronDown, ChevronUp, Search, Bell, LayoutGrid, Clock, Settings, Store
 } from 'lucide-react';
@@ -146,6 +146,7 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
 
 export const WebAdmin: React.FC = () => {
   const { products } = useProducts();
+  const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
   const [activeMenu, setActiveMenu] = useState('product_list');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
@@ -163,9 +164,12 @@ export const WebAdmin: React.FC = () => {
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
   const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category, mode?: 'create' | 'edit', product?: any } | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
+  const [storeCategoryReturnMenu, setStoreCategoryReturnMenu] = useState('store_product_list');
   const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(null);
   const [storeRegionEditorContext, setStoreRegionEditorContext] = useState<any>(null);
   const [attributeMutexEditorContext, setAttributeMutexEditorContext] = useState<{ mode: 'create' | 'edit'; rule?: any } | null>(null);
+  const [showProductMenuGuide, setShowProductMenuGuide] = useState(false);
+  const [currentProductMenuGuideStep, setCurrentProductMenuGuideStep] = useState(0);
 
   // Category Manager State
   const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
@@ -173,6 +177,51 @@ export const WebAdmin: React.FC = () => {
 
   const toggleMenu = (key: string) => {
     setExpandedMenus(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hasSeenGuide = window.localStorage.getItem(productMenuGuideStorageKey);
+    if (!hasSeenGuide) {
+      setShowProductMenuGuide(true);
+    }
+  }, []);
+
+  const handleCloseProductMenuGuide = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(productMenuGuideStorageKey, 'seen');
+    }
+    setShowProductMenuGuide(false);
+  };
+
+  const productMenuGuideSteps = [
+    {
+      step: '1/2',
+      title: '新增【商品运营】菜单',
+      desc: '商品同步、模板管理、价格体系等商品运营管理能力搬家至【商品运营】菜单',
+      cardPosition: 'left-[164px] top-[138px]',
+      highlightPosition: 'left-[12px] top-[198px] h-[120px] w-[176px]',
+    },
+    {
+      step: '2/2',
+      title: '【门店做法】菜单搬家',
+      desc: '【门店做法】迁移至【门店商品属性】菜单',
+      cardPosition: 'left-[164px] top-[286px]',
+      highlightPosition: 'left-[12px] top-[332px] h-[78px] w-[176px]',
+    },
+  ];
+  const currentGuideStep = productMenuGuideSteps[currentProductMenuGuideStep];
+
+  const handleNextProductMenuGuide = () => {
+    if (currentProductMenuGuideStep >= productMenuGuideSteps.length - 1) {
+      handleCloseProductMenuGuide();
+      return;
+    }
+    setCurrentProductMenuGuideStep(prev => prev + 1);
+  };
+
+  const handlePrevProductMenuGuide = () => {
+    setCurrentProductMenuGuideStep(prev => Math.max(prev - 1, 0));
   };
 
   // Web Category Handlers
@@ -294,7 +343,7 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'store_category_list') {
-          return <WebStoreCategoryList />;
+          return <WebStoreCategoryList onCancelEntry={() => setActiveMenu(storeCategoryReturnMenu || 'store_product_list')} />;
       }
 
       if (activeMenu === 'categories') {
@@ -554,7 +603,7 @@ export const WebAdmin: React.FC = () => {
                  <div className="mt-1 space-y-0.5">
                     <SidebarItem label="门店商品管理" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setStoreProductManagePreset(null); setCreationContext(null); }} />
                     <SidebarItem label="商品在售门店" active={activeMenu === 'store_product_coverage'} onClick={() => { setActiveMenu('store_product_coverage'); setCreationContext(null); }} />
-                    <SidebarItem label="门店商品分类" active={activeMenu === 'store_category_list'} onClick={() => { setActiveMenu('store_category_list'); setCreationContext(null); }} />
+                    <SidebarItem label="门店商品分类" active={activeMenu === 'store_category_list'} onClick={() => { setStoreCategoryReturnMenu(activeMenu); setActiveMenu('store_category_list'); setCreationContext(null); }} />
                     <SidebarItem label="门店商品属性" active={['store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu)} onClick={() => { setActiveMenu('store_attribute_list'); setCreationContext(null); }} />
                     <SidebarItem label="区域商品" active={activeMenu === 'store_region_list'} onClick={() => { setActiveMenu('store_region_list'); setCreationContext(null); setStoreRegionEditorContext(null); }} />
                  </div>
@@ -605,6 +654,49 @@ export const WebAdmin: React.FC = () => {
 
       {/* Global Modals */}
       {isImportModalOpen && <WebImportModal onClose={() => setIsImportModalOpen(false)} />}
+      {showProductMenuGuide && (
+        <div className="absolute inset-0 z-[80] bg-black/35">
+          <div className={`pointer-events-none absolute rounded-[18px] border-2 border-[#17C964] bg-white/10 shadow-[0_0_0_9999px_rgba(17,24,39,0.20),0_0_0_6px_rgba(23,201,100,0.12)] ${currentGuideStep.highlightPosition}`}></div>
+          <div className={`absolute w-[360px] rounded-[16px] bg-[#17C964] p-5 text-white shadow-[0_18px_48px_rgba(6,78,59,0.28)] ${currentGuideStep.cardPosition}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="rounded-full bg-white/16 px-3 py-1 text-[12px] font-black">
+                {currentGuideStep.step}
+              </div>
+            </div>
+            <div className="mt-2 rounded-[12px] bg-white/12 p-4">
+              <div className="text-[16px] font-black">{currentGuideStep.title}</div>
+              <div className="mt-1 text-[13px] leading-6 text-white/90">
+                {currentGuideStep.desc}
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                onClick={handlePrevProductMenuGuide}
+                disabled={currentProductMenuGuideStep === 0}
+                className="rounded-[10px] border border-white/22 px-4 py-2 text-[13px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                上一步
+              </button>
+              <div className="flex items-center gap-2">
+                {productMenuGuideSteps.map((_, index) => (
+                  <div
+                    key={index}
+                    className={`h-2.5 rounded-full transition-all ${
+                      index === currentProductMenuGuideStep ? 'w-6 bg-white' : 'w-2.5 bg-white/40'
+                    }`}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={handleNextProductMenuGuide}
+                className="rounded-[10px] bg-white px-4 py-2 text-[13px] font-black text-[#12A150] shadow-sm transition-colors hover:bg-[#F3FFF8]"
+              >
+                {currentProductMenuGuideStep === productMenuGuideSteps.length - 1 ? '完成' : '下一步'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
     </div>
   );

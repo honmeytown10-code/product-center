@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Settings, Printer, 
-  CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, AlertTriangle, Clock3,
+  CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3,
   CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical
 } from 'lucide-react';
 import { Category, AVAILABLE_DYNAMIC_FIELDS, DynamicFieldConfig } from '../../types';
@@ -132,7 +132,7 @@ const DISPLAY_TYPE_OPTIONS: DisplayTypeOption[] = [
     { key: 'market_price_product', label: '是否时价商品', desc: '开启后，可在 POS 端按实时价格售卖。' },
     { key: 'children_meal', label: '是否为儿童餐', desc: '开启后，小程序可按儿童餐场景进行展示。' },
 ];
-const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_code', 'p_display_type', 'p_remark', 'p_stat_tags', 'p_tare_weight'] as const;
+const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_display_type', 'p_remark', 'p_stat_tags', 'p_tare_weight'] as const;
 const COLLAPSIBLE_SALES_FIELDS = [
     { id: 's_sale_settings', label: '售卖设置' },
     { id: 's_tax_rate', label: '税率' },
@@ -197,59 +197,6 @@ const PREVIEW_FIELD_TITLES: Record<PreviewField, { title: string; desc: string }
 };
 const DISPLAY_DESC_TAG_OPTIONS = ['店长推荐', '新品首发', '无糖低脂', '人气爆款'];
 const DISPLAY_BADGE_OPTIONS = ['新品', '招牌', '限时', '热卖'];
-
-const CATEGORY_MATCH_RULES: Array<{ categoryNames: string[]; keywords: string[] }> = [
-    { categoryNames: ['现制饮品'], keywords: ['咖啡', '美式', '拿铁', '摩卡', '果茶', '奶茶', '柠檬', '石榴', '椰', '茶'] },
-    { categoryNames: ['蛋糕/烘焙'], keywords: ['蛋糕', '吐司', '面包', '奶油', '可颂', '蛋挞', '烘焙'] },
-    { categoryNames: ['称重商品'], keywords: ['称重', '散装', '熟食', '自选', '斤', '克'] },
-    { categoryNames: ['零售商品'], keywords: ['零售', '瓶装', '罐装', '饼干', '薯片', '矿泉水', '礼盒'] },
-    { categoryNames: ['通用菜品'], keywords: ['饭', '面', '汤', '小炒', '锅', '套餐', '盖饭'] },
-];
-
-const matchCategoryFromName = (name: string, categories: Category[], fallbackCategory: Category) => {
-    const normalizedName = name.trim().toLowerCase();
-    if (!normalizedName) return fallbackCategory;
-
-    for (const rule of CATEGORY_MATCH_RULES) {
-        if (!rule.keywords.some(keyword => normalizedName.includes(keyword.toLowerCase()))) continue;
-        const matchedCategory = categories.find(item => rule.categoryNames.includes(item.name));
-        if (matchedCategory) return matchedCategory;
-    }
-
-    return (
-        categories.find(item => normalizedName.includes(item.name.toLowerCase()))
-        || categories.find(item => item.name.includes('通用'))
-        || categories[0]
-        || fallbackCategory
-    );
-};
-
-const getCategoryImageTheme = (categoryName: string) => {
-    if (categoryName.includes('饮品')) return { bg: '#FFF4E5', accent: '#FA8C16', deco: '#FFD591' };
-    if (categoryName.includes('蛋糕') || categoryName.includes('烘焙')) return { bg: '#FFF1F0', accent: '#EB2F96', deco: '#FFADD2' };
-    if (categoryName.includes('零售')) return { bg: '#F6FFED', accent: '#52C41A', deco: '#B7EB8F' };
-    if (categoryName.includes('称重')) return { bg: '#F9F0FF', accent: '#722ED1', deco: '#D3ADF7' };
-    return { bg: '#E6F7FF', accent: '#1677FF', deco: '#91CAFF' };
-};
-
-const generateProductImageDraft = (productName: string, categoryName: string) => {
-    const safeName = productName.trim().slice(0, 12) || '新商品';
-    const theme = getCategoryImageTheme(categoryName);
-    const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
-            <rect width="320" height="320" rx="32" fill="${theme.bg}" />
-            <circle cx="84" cy="86" r="42" fill="${theme.deco}" opacity="0.9" />
-            <circle cx="248" cy="70" r="26" fill="${theme.accent}" opacity="0.18" />
-            <circle cx="252" cy="244" r="38" fill="${theme.deco}" opacity="0.6" />
-            <rect x="56" y="182" width="208" height="78" rx="22" fill="#FFFFFF" opacity="0.96" />
-            <text x="56" y="140" font-size="26" font-weight="700" fill="${theme.accent}" font-family="Arial, sans-serif">${categoryName}</text>
-            <text x="56" y="228" font-size="28" font-weight="700" fill="#1F2129" font-family="Arial, sans-serif">${safeName}</text>
-            <text x="56" y="268" font-size="16" fill="#667085" font-family="Arial, sans-serif">AI draft image</text>
-        </svg>
-    `;
-
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-};
 
 const createDefaultPrepRule = (overrides: Partial<PrepRule> = {}): PrepRule => ({
     duration: '0',
@@ -347,9 +294,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         p_name: initialProduct.name || '',
         p_front_cat: initialProduct.category || '',
         p_img: initialProduct.image || '',
+        p_img_gallery: Array.isArray(initialProduct.images)
+            ? initialProduct.images
+            : (initialProduct.image ? [initialProduct.image] : []),
         p_weight_flag: false,
         p_unit: '',
     } : {
+        p_img_gallery: [],
         p_weight_flag: false,
         p_unit: '',
     });
@@ -358,10 +309,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [activeFormSection, setActiveFormSection] = useState('basic');
     const [pageView, setPageView] = useState<PageView>('form');
     const [currentCategory, setCurrentCategory] = useState(category);
-    const [isCategoryManuallyAdjusted, setIsCategoryManuallyAdjusted] = useState(mode === 'edit');
-    const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
-    const [showCategoryImpactModal, setShowCategoryImpactModal] = useState(false);
-    const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
     const [prepEnabled, setPrepEnabled] = useState(true);
     const [prepScope, setPrepScope] = useState<PrepScope>('spu');
     const [splitByStockState, setSplitByStockState] = useState(false);
@@ -369,11 +316,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [activePreviewField, setActivePreviewField] = useState<PreviewField>('default');
     const [previewPreference, setPreviewPreference] = useState<PreviewDisplayPreference | null>(() => getStoredPreviewPreference(previewPreferenceKey));
     const [showPreviewPreferenceMenu, setShowPreviewPreferenceMenu] = useState(false);
+    const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
     const [expandedBasicFields, setExpandedBasicFields] = useState<string[]>([]);
+    const [basicExpandedAll, setBasicExpandedAll] = useState(false);
     const [expandedSalesFields, setExpandedSalesFields] = useState<string[]>([]);
+    const [salesExpandedAll, setSalesExpandedAll] = useState(false);
     const [expandedOtherSections, setExpandedOtherSections] = useState<string[]>([]);
+    const [otherExpandedAll, setOtherExpandedAll] = useState(false);
     const [expandedDisplayListFields, setExpandedDisplayListFields] = useState<string[]>([]);
+    const [displayListExpandedAll, setDisplayListExpandedAll] = useState(false);
     const [expandedDisplayDetailFields, setExpandedDisplayDetailFields] = useState<string[]>([]);
+    const [displayDetailExpandedAll, setDisplayDetailExpandedAll] = useState(false);
     const [activeCategorySelector, setActiveCategorySelector] = useState<'p_front_cat' | 'p_back_cat' | null>(null);
     const [frontCategoryOptions, setFrontCategoryOptions] = useState<string[]>(DEFAULT_FRONT_CATEGORY_OPTIONS);
     const [backCategoryOptions, setBackCategoryOptions] = useState<string[]>(DEFAULT_BACK_CATEGORY_OPTIONS);
@@ -405,9 +358,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const [draggingAttrPanelId, setDraggingAttrPanelId] = useState<string | null>(null);
     const [draggingAttrItem, setDraggingAttrItem] = useState<{ groupId: string; item: string } | null>(null);
     const [showAttrSortTip, setShowAttrSortTip] = useState(false);
+    const [draggingProductImageIndex, setDraggingProductImageIndex] = useState<number | null>(null);
     const effectivePreviewPreference = previewPreference ?? defaultPreviewPreference;
     const isCompactPreview = effectivePreviewPreference === 'collapsed';
     const [isPreviewPanelOpen, setIsPreviewPanelOpen] = useState(effectivePreviewPreference === 'expanded');
+    const compactFormMode = isCompactPreview && !isPreviewPanelOpen;
     const [saveAttempted, setSaveAttempted] = useState(false);
     const [draftSaved, setDraftSaved] = useState(false);
     const [hasSavedProduct, setHasSavedProduct] = useState(mode === 'edit');
@@ -452,28 +407,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                 { id: 'addon-2', groupName: '小料', addonName: '小料2', addonCode: '1210585270384668672', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
             ]
     ));
-    const [committedStarterName, setCommittedStarterName] = useState(() => String(initialProduct?.name || '').trim());
-    const starterProductName = String(dynamicFormData.p_name || '').trim();
-    const isProgressiveCreateMode = mode === 'create';
-    const matchedCategory = useMemo(
-        () => matchCategoryFromName(committedStarterName, categories, category),
-        [committedStarterName, categories, category]
-    );
-    const isStarterReady = !isProgressiveCreateMode || committedStarterName.length > 0;
-    const commitStarterName = () => {
-        if (!isProgressiveCreateMode) return;
-        const normalizedName = String(dynamicFormData.p_name || '').trim();
-        if (normalizedName === committedStarterName) return;
-        if (!normalizedName) {
-            setCommittedStarterName('');
-            setIsCategoryManuallyAdjusted(false);
-            setCurrentCategory(category);
-            setDynamicFormData(prev => (prev.p_img ? { ...prev, p_img: '' } : prev));
-            return;
-        }
-        setCommittedStarterName(normalizedName);
-    };
-
     const getStickyOffset = () => {
         const stickyHeight = stickyToolbarRef.current?.offsetHeight ?? 0;
         return stickyHeight + 16;
@@ -533,12 +466,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         };
     };
 
-    const impactedFields = useMemo(() => {
-        if (!pendingCategory) return { resetFields: [] as DynamicFieldConfig[], clearFields: [] as DynamicFieldConfig[] };
-        return getImpactedFieldsForCategory(pendingCategory);
-    }, [pendingCategory, currentCategoryFieldIds, type]);
-
     const getFieldSection = (field: DynamicFieldConfig): SectionId => {
+        if (field.id === 'p_img') return 'display';
         if (field.id === 'p_points_exchange_rule') return 'spec';
         if (field.module === 'base') return 'basic';
         if (field.module === 'display') return 'display';
@@ -558,7 +487,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
     const isDynamicFieldFilled = (field: DynamicFieldConfig) => {
         const value = dynamicFormData[field.id];
-        if (field.id === 'p_cat') return !!currentCategory.id;
         switch (field.type) {
             case 'input':
             case 'selector':
@@ -585,6 +513,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         () => (specDisplayMode === 'single' ? specConfigRows.slice(0, 1) : specConfigRows),
         [specConfigRows, specDisplayMode]
     );
+    const productImages = useMemo<string[]>(() => {
+        const gallery = Array.isArray(dynamicFormData.p_img_gallery)
+            ? dynamicFormData.p_img_gallery.filter((item: unknown): item is string => typeof item === 'string' && item.trim() !== '')
+            : [];
+        if (gallery.length > 0) return gallery;
+        return dynamicFormData.p_img ? [dynamicFormData.p_img] : [];
+    }, [dynamicFormData.p_img, dynamicFormData.p_img_gallery]);
 
     const isSpecPriceFilled = useMemo(
         () => visibleSpecRows.every(row => String(row.s_spec_price ?? '').trim() !== ''),
@@ -606,6 +541,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         currentFieldConfigs.forEach(config => {
             const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === config.id);
             if (!field || !visibleFieldIds.has(field.id)) return;
+            if (field.id === 'p_cat') return;
             if (['s_price', 's_pack_fee', 's_stock', 's_specs'].includes(field.id)) return;
             const required = config.isRequired || !!field.isRequired;
             if (required) {
@@ -707,6 +643,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
             visibleFieldIds.has(field.id)
             && field.module === 'base'
+            && !['p_img'].includes(field.id)
             && !COLLAPSIBLE_BASIC_FIELD_IDS.includes(field.id as typeof COLLAPSIBLE_BASIC_FIELD_IDS[number])
         )),
         [visibleFieldIds]
@@ -715,9 +652,22 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
             visibleFieldIds.has(field.id)
             && field.module === 'base'
+            && !['p_img'].includes(field.id)
             && COLLAPSIBLE_BASIC_FIELD_IDS.includes(field.id as typeof COLLAPSIBLE_BASIC_FIELD_IDS[number])
         )),
         [visibleFieldIds]
+    );
+    const visibleBasicFields = useMemo(
+        () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
+            visibleFieldIds.has(field.id)
+            && field.module === 'base'
+            && field.id !== 'p_img'
+            && (
+                !COLLAPSIBLE_BASIC_FIELD_IDS.includes(field.id as typeof COLLAPSIBLE_BASIC_FIELD_IDS[number])
+                || expandedBasicFields.includes(field.id)
+            )
+        )),
+        [expandedBasicFields, visibleFieldIds]
     );
     const isWeightProduct = !!dynamicFormData.p_weight_flag;
 
@@ -726,25 +676,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
             setSpecDisplayMode('single');
         }
     }, [isWeightProduct, specDisplayMode]);
-
-    useEffect(() => {
-        if (!isProgressiveCreateMode || isCategoryManuallyAdjusted) return;
-        if (!committedStarterName) return;
-        if (matchedCategory.id === currentCategory.id) return;
-        setCurrentCategory(matchedCategory);
-    }, [committedStarterName, currentCategory.id, isCategoryManuallyAdjusted, isProgressiveCreateMode, matchedCategory]);
-
-    useEffect(() => {
-        if (!isProgressiveCreateMode || !committedStarterName) return;
-        setDynamicFormData(prev => {
-            const nextImage = generateProductImageDraft(committedStarterName, currentCategory.name);
-            if (prev.p_img === nextImage) return prev;
-            return {
-                ...prev,
-                p_img: nextImage,
-            };
-        });
-    }, [committedStarterName, currentCategory.name, isProgressiveCreateMode]);
 
     const getFieldDescription = (field: DynamicFieldConfig) => {
         if (field.id === 'p_unit') {
@@ -763,96 +694,113 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         );
     };
 
-    const renderBasicImageField = () => {
-        const imageValue = dynamicFormData.p_img || '';
-        const hasImage = !!imageValue;
-        const hasPreviewImage = typeof imageValue === 'string' && imageValue.startsWith('data:image');
+    const syncProductImages = (nextImages: string[]) => {
+        setDynamicFormData(prev => ({
+            ...prev,
+            p_img: nextImages[0] || '',
+            p_img_gallery: nextImages,
+        }));
+    };
+
+    const buildMockProductImage = (index: number) => `product-image-${index + 1}`;
+
+    const renderDisplayMainImageField = () => {
         const imageField = AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === 'p_img');
         const imageRequired = currentFieldConfigMap.get('p_img')?.isRequired || imageField?.isRequired;
 
+        const addProductImage = () => {
+            if (productImages.length >= 10) return;
+            syncProductImages([...productImages, buildMockProductImage(productImages.length)]);
+            setActivePreviewField('p_img');
+        };
+
+        const removeProductImage = (index: number) => {
+            const nextImages = productImages.filter((_, currentIndex) => currentIndex !== index);
+            syncProductImages(nextImages);
+        };
+
+        const moveProductImage = (fromIndex: number, toIndex: number) => {
+            if (fromIndex === toIndex) return;
+            const nextImages = [...productImages];
+            const [moved] = nextImages.splice(fromIndex, 1);
+            nextImages.splice(toIndex, 0, moved);
+            syncProductImages(nextImages);
+        };
+
         return (
-            <div id="field-p_img" className="rounded-2xl border border-gray-200 bg-[#FCFCFD] p-4 space-y-3">
-                <FormRow
-                    label="商品主图"
-                    required={!!imageRequired}
-                    description="主图为必填信息，系统会根据商品名称自动生成草稿图，也可手动替换。"
-                    descriptionPlacement="bottom"
-                >
-                    <div className="space-y-3">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setActivePreviewField('p_img');
-                                setDynamicFormData(prev => ({
-                                    ...prev,
-                                    p_img: prev.p_img ? '' : 'mock-image',
-                                }));
+            <div id="field-p_img" className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-3">
+                <div className="flex items-center gap-1 text-sm font-bold text-[#1F2129]">
+                    <span className="text-[#FF4D4F]">{imageRequired ? '*' : ''}</span>
+                    <span>商品主图</span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                    {productImages.map((image, index) => (
+                        <div
+                            key={`${image}-${index}`}
+                            draggable
+                            onDragStart={e => {
+                                setDraggingProductImageIndex(index);
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/plain', String(index));
                             }}
-                            className={`group flex h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
-                                hasImage
-                                    ? 'border-[#00C06B] bg-[#F0FDF4]'
-                                    : 'border-gray-200 bg-white text-gray-400 hover:border-[#00C06B] hover:text-[#00A35B]'
-                            }`}
+                            onDragOver={e => {
+                                if (draggingProductImageIndex === null || draggingProductImageIndex === index) return;
+                                e.preventDefault();
+                            }}
+                            onDrop={e => {
+                                if (draggingProductImageIndex === null || draggingProductImageIndex === index) return;
+                                e.preventDefault();
+                                moveProductImage(draggingProductImageIndex, index);
+                                setDraggingProductImageIndex(null);
+                            }}
+                            onDragEnd={() => setDraggingProductImageIndex(null)}
+                            className={`group relative h-[132px] w-[132px] overflow-hidden rounded-xl border bg-white ${draggingProductImageIndex === index ? 'border-[#00C06B] shadow-[0_0_0_3px_rgba(0,192,107,0.12)]' : 'border-[#E5E7EB]'}`}
                         >
-                            {hasPreviewImage ? (
-                                <img src={imageValue} alt="商品主图" className="h-full w-full object-cover" />
-                            ) : (
-                                <div className="flex flex-col items-center justify-center">
-                                    <div className={`mb-2 rounded-full p-3 ${hasImage ? 'bg-white text-[#00A35B]' : 'bg-[#F7F8FA]'}`}>
-                                        {hasImage ? <ImageIcon size={22} /> : <Plus size={22} />}
-                                    </div>
-                                    <span className={`text-sm font-bold ${hasImage ? 'text-[#00A35B]' : 'text-gray-500 group-hover:text-[#00A35B]'}`}>
-                                        {hasImage ? '已生成主图草稿，点击可清空' : '点击添加商品主图'}
-                                    </span>
-                                </div>
-                            )}
-                        </button>
-                        <div className="flex items-center justify-between gap-3 text-xs text-gray-400">
-                            <span>建议尺寸：800x800px，支持 JPG/PNG，大小不超过 2MB。</span>
                             <button
                                 type="button"
                                 onClick={() => {
                                     setActivePreviewField('p_img');
-                                    setDynamicFormData(prev => ({
-                                        ...prev,
-                                        p_img: committedStarterName ? generateProductImageDraft(committedStarterName, currentCategory.name) : '',
-                                    }));
+                                    syncProductImages(productImages.map((item, itemIndex) => itemIndex === index ? buildMockProductImage(index + 10) : item));
                                 }}
-                                className="shrink-0 font-bold text-[#00A35B] hover:text-[#008A4D]"
+                                className="h-full w-full bg-gradient-to-br from-[#F3F4F6] via-[#E5E7EB] to-[#D1D5DB]"
                             >
-                                重新生成草稿
+                                <div className="flex h-full w-full items-center justify-center text-sm font-black text-[#6B7280]">
+                                    商品主图
+                                </div>
                             </button>
+                            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/45 px-2 py-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setActivePreviewField('p_img')}
+                                    className="text-white/90 hover:text-white"
+                                >
+                                    <ImageIcon size={16} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => removeProductImage(index)}
+                                    className="text-white/90 hover:text-white"
+                                >
+                                    <CircleAlert size={16} />
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </FormRow>
+                    ))}
+                    {productImages.length < 10 && (
+                        <button
+                            type="button"
+                            onClick={addProductImage}
+                            className="flex h-[132px] w-[132px] items-center justify-center rounded-xl border border-dashed border-[#D9DDE7] bg-white text-[#666] transition-colors hover:border-[#00C06B] hover:text-[#00A35B]"
+                        >
+                            <Plus size={28} />
+                        </button>
+                    )}
+                </div>
+                <div className="text-xs leading-5 text-gray-400">
+                    建议尺寸：1:1，单张大小不超过 300K，最多可上传 10 张；支持拖拽调整图片顺序。
+                </div>
             </div>
         );
-    };
-
-    const handleCategoryChangeRequest = (targetCategory: Category) => {
-        if (!targetCategory || targetCategory.id === currentCategory.id) return;
-        setIsCategoryManuallyAdjusted(true);
-        const nextImpactedFields = getImpactedFieldsForCategory(targetCategory);
-        if (nextImpactedFields.resetFields.length === 0 && nextImpactedFields.clearFields.length === 0) {
-            setCurrentCategory(targetCategory);
-            setPendingCategory(null);
-            setShowCategoryImpactModal(false);
-            return;
-        }
-        setPendingCategory(targetCategory);
-        setShowCategoryImpactModal(true);
-    };
-
-    const confirmCategoryChange = () => {
-        if (!pendingCategory) return;
-        setCurrentCategory(pendingCategory);
-        setPendingCategory(null);
-        setShowCategoryImpactModal(false);
-    };
-
-    const cancelCategoryChange = () => {
-        setPendingCategory(null);
-        setShowCategoryImpactModal(false);
     };
 
     const handleSave = () => {
@@ -890,7 +838,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
         setActivePreviewField('default');
         setActiveFormSection('basic');
         setCurrentCategory(category);
-        setIsCategoryManuallyAdjusted(false);
         setPageView('form');
         formContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     };
@@ -907,6 +854,87 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
     const togglePreviewPanel = () => {
         setShowPreviewPreferenceMenu(false);
         setIsPreviewPanelOpen(prev => !prev);
+    };
+
+    const handleSingleExpand = (
+        setter: React.Dispatch<React.SetStateAction<string[]>>,
+        fieldId: string,
+        setExpandedAll?: React.Dispatch<React.SetStateAction<boolean>>
+    ) => {
+        setter(prev => (prev.includes(fieldId) ? prev : [...prev, fieldId]));
+        setExpandedAll?.(false);
+    };
+
+    const handleExpandAll = (
+        setter: React.Dispatch<React.SetStateAction<string[]>>,
+        fieldIds: string[],
+        setExpandedAll?: React.Dispatch<React.SetStateAction<boolean>>
+    ) => {
+        setter(fieldIds);
+        setExpandedAll?.(true);
+    };
+
+    const handleCategorySelect = (nextCategory: Category) => {
+        setCurrentCategory(nextCategory);
+        setShowCategoryPickerModal(false);
+        setActiveFormSection('basic');
+    };
+
+    const renderCollapsedFieldControls = (
+        items: Array<{ id: string; label: string }>,
+        expandedIds: string[],
+        onExpandAll: () => void,
+        onExpandOne: (id: string) => void,
+        onCollapseAll: () => void,
+        options?: {
+            gapClass?: string;
+            buttonClassName?: string;
+            chipClassName?: string;
+            showCollapse?: boolean;
+        }
+    ) => {
+        const collapsedItems = items.filter(item => !expandedIds.includes(item.id));
+        const hasCollapsedItems = collapsedItems.length > 0;
+        const allExpanded = items.length > 0 && expandedIds.length >= items.length;
+        const gapClass = options?.gapClass ?? 'gap-3';
+        const buttonClassName = options?.buttonClassName ?? 'px-4 py-2';
+        const chipClassName = options?.chipClassName ?? 'px-4 py-2';
+        const showCollapse = options?.showCollapse ?? allExpanded;
+
+        return (
+            <div className={`flex flex-wrap items-center ${gapClass}`}>
+                {hasCollapsedItems && (
+                    <button
+                        type="button"
+                        onClick={onExpandAll}
+                        className={`inline-flex items-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors ${buttonClassName}`}
+                    >
+                        展开
+                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
+                    </button>
+                )}
+                {collapsedItems.map(item => (
+                    <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onExpandOne(item.id)}
+                        className={`inline-flex items-center rounded-xl bg-[#F5F7FA] text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors ${chipClassName}`}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+                {(showCollapse || allExpanded) && (
+                    <button
+                        type="button"
+                        onClick={onCollapseAll}
+                        className={`inline-flex items-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors ${buttonClassName}`}
+                    >
+                        收起
+                        <ChevronUp size={16} className="ml-1.5 text-gray-400" />
+                    </button>
+                )}
+            </div>
+        );
     };
 
     const handleInlineCategoryCreate = (fieldId: 'p_front_cat' | 'p_back_cat') => {
@@ -1253,12 +1281,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                  <div className="relative">
                      <button
                         type="button"
-                        onClick={() => setShowCategoryPickerModal(true)}
+                        onClick={() => {
+                            setPreview();
+                            setShowCategoryPickerModal(true);
+                        }}
                         className="q-form-select text-left text-[#1F2129] hover:border-[#00C06B]"
                      >
                         {currentCategory.name}
                      </button>
-                     <p className="text-[11px] text-gray-400 mt-2">切换类目后，不适用字段会在保存时被清空或恢复默认值。</p>
                  </div>
              );
         }
@@ -1426,14 +1456,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                        placeholder={field.placeholder || `请输入${field.label}`}
                        value={value}
                        onChange={e => setValue(e.target.value)}
-                       onBlur={field.id === 'p_name' ? commitStarterName : undefined}
-                       onKeyDown={field.id === 'p_name' ? (e => {
-                           if (e.key === 'Enter') {
-                               e.preventDefault();
-                               commitStarterName();
-                               (e.currentTarget as HTMLInputElement).blur();
-                           }
-                       }) : undefined}
                    />
                    {['p_name', 'p_code'].includes(field.id) && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">{String(value).length}/70</span>}
                </div>
@@ -1726,30 +1748,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
                         {renderSelectField('描述标签', 'p_desc_tags', DISPLAY_DESC_TAG_OPTIONS, '请选择')}
 
-                        <div className="pt-1">
-                            {expandedDisplayListFields.length === 0 ? (
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setExpandedDisplayListFields(listOptionalFields.map(field => field.id))}
-                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                    >
-                                        展开
-                                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
-                                    </button>
-                                    {listOptionalFields.map(field => (
-                                        <button
-                                            key={field.id}
-                                            type="button"
-                                            onClick={() => setExpandedDisplayListFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
-                                            className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
-                                        >
-                                            {field.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="space-y-2.5">
+                        <div className="pt-1 space-y-2.5">
+                            {expandedDisplayListFields.length > 0 && (
+                                <>
                                     {expandedDisplayListFields.includes('p_badge') && (
                                         <>
                                             {renderSelectField('商品角标', 'p_badge', DISPLAY_BADGE_OPTIONS, '请选择角标')}
@@ -1775,17 +1776,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             </div>
                                         </div>
                                     )}
-                                    <div className="pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setExpandedDisplayListFields([])}
-                                            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                        >
-                                            收起
-                                            <ChevronUp size={16} className="ml-1.5 text-gray-400" />
-                                        </button>
-                                    </div>
-                                </div>
+                                </>
+                            )}
+                            {renderCollapsedFieldControls(
+                                listOptionalFields,
+                                expandedDisplayListFields,
+                                () => handleExpandAll(setExpandedDisplayListFields, listOptionalFields.map(field => field.id), setDisplayListExpandedAll),
+                                fieldId => handleSingleExpand(setExpandedDisplayListFields, fieldId, setDisplayListExpandedAll),
+                                () => {
+                                    setExpandedDisplayListFields([]);
+                                    setDisplayListExpandedAll(false);
+                                },
+                                { showCollapse: displayListExpandedAll }
                             )}
                         </div>
                     </div>
@@ -1829,30 +1831,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             </div>
                         </div>
 
-                        <div className="pt-1">
-                            {expandedDisplayDetailFields.length === 0 ? (
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setExpandedDisplayDetailFields(detailOptionalFields.map(field => field.id))}
-                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                    >
-                                        展开
-                                        <ChevronDown size={16} className="ml-1.5 text-gray-400" />
-                                    </button>
-                                    {detailOptionalFields.map(field => (
-                                        <button
-                                            key={field.id}
-                                            type="button"
-                                            onClick={() => setExpandedDisplayDetailFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
-                                            className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
-                                        >
-                                            {field.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="space-y-2.5">
+                        <div className="pt-1 space-y-2.5">
+                            {expandedDisplayDetailFields.length > 0 && (
+                                <>
                                     {expandedDisplayDetailFields.includes('p_detail_bottom_img') && (
                                         <>
                                             {renderDisplayUploadField({
@@ -1883,17 +1864,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             </div>
                                         </div>
                                     )}
-                                    <div className="pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setExpandedDisplayDetailFields([])}
-                                            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                        >
-                                            收起
-                                            <ChevronUp size={16} className="ml-1.5 text-gray-400" />
-                                        </button>
-                                    </div>
-                                </div>
+                                </>
+                            )}
+                            {renderCollapsedFieldControls(
+                                detailOptionalFields,
+                                expandedDisplayDetailFields,
+                                () => handleExpandAll(setExpandedDisplayDetailFields, detailOptionalFields.map(field => field.id), setDisplayDetailExpandedAll),
+                                fieldId => handleSingleExpand(setExpandedDisplayDetailFields, fieldId, setDisplayDetailExpandedAll),
+                                () => {
+                                    setExpandedDisplayDetailFields([]);
+                                    setDisplayDetailExpandedAll(false);
+                                },
+                                { showCollapse: displayDetailExpandedAll }
                             )}
                         </div>
                     </div>
@@ -2041,31 +2023,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                     </div>
                 )}
 
-                <div className="pt-1">
-                    {expandedSalesFields.length === 0 ? (
-                        <div className="flex flex-wrap items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSalesFields(optionalSalesFields.map(field => field.id))}
-                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                            >
-                                展开
-                                <ChevronDown size={16} className="ml-1.5 text-gray-400" />
-                            </button>
-                            {optionalSalesFields.map(field => (
-                                <button
-                                    key={field.id}
-                                    type="button"
-                                    onClick={() => setExpandedSalesFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
-                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
-                                >
-                                    {field.label}
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
+                <div className="pt-1 space-y-2">
+                    {expandedSalesFields.length > 0 && (
+                        <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
                                 {expandedSalesFields.includes('s_sale_settings') && isFieldEnabled('s_sale_settings') && (
                                     <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">售卖设置</div>
@@ -2231,19 +2191,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                         </div>
                                     </div>
                                 )}
-                            </div>
-
-                            <div className="pt-1">
-                                <button
-                                    type="button"
-                                    onClick={() => setExpandedSalesFields([])}
-                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                >
-                                    收起
-                                    <ChevronUp size={16} className="ml-1.5 text-gray-400" />
-                                </button>
-                            </div>
                         </div>
+                    )}
+                    {renderCollapsedFieldControls(
+                        optionalSalesFields,
+                        expandedSalesFields,
+                        () => handleExpandAll(setExpandedSalesFields, optionalSalesFields.map(field => field.id), setSalesExpandedAll),
+                        fieldId => handleSingleExpand(setExpandedSalesFields, fieldId, setSalesExpandedAll),
+                        () => {
+                            setExpandedSalesFields([]);
+                            setSalesExpandedAll(false);
+                        },
+                        { showCollapse: salesExpandedAll }
                     )}
                 </div>
             </div>
@@ -2287,31 +2246,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
 
         return (
             <div className="space-y-2.5">
-                <div className="pt-1">
-                    {expandedOtherSections.length === 0 ? (
-                        <div className="flex flex-wrap items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedOtherSections(optionalSections.map(section => section.id))}
-                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                            >
-                                展开
-                                <ChevronDown size={16} className="ml-1.5 text-gray-400" />
-                            </button>
-                            {optionalSections.map(section => (
-                                <button
-                                    key={section.id}
-                                    type="button"
-                                    onClick={() => setExpandedOtherSections(prev => prev.includes(section.id) ? prev : [...prev, section.id])}
-                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-4 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
-                                >
-                                    {section.label}
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
+                <div className="pt-1 space-y-2">
+                    {expandedOtherSections.length > 0 && (
+                        <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
                                 {expandedOtherSections.includes('o_more_settings') && (
                                     <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">更多设置</div>
@@ -2420,19 +2357,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                         </div>
                                     </div>
                                 )}
-                            </div>
-
-                            <div className="pt-1">
-                                <button
-                                    type="button"
-                                    onClick={() => setExpandedOtherSections([])}
-                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                >
-                                    收起
-                                    <ChevronUp size={16} className="ml-1.5 text-gray-400" />
-                                </button>
-                            </div>
                         </div>
+                    )}
+                    {renderCollapsedFieldControls(
+                        optionalSections,
+                        expandedOtherSections,
+                        () => handleExpandAll(setExpandedOtherSections, optionalSections.map(section => section.id), setOtherExpandedAll),
+                        sectionId => handleSingleExpand(setExpandedOtherSections, sectionId, setOtherExpandedAll),
+                        () => {
+                            setExpandedOtherSections([]);
+                            setOtherExpandedAll(false);
+                        },
+                        { showCollapse: otherExpandedAll }
                     )}
                 </div>
             </div>
@@ -3654,9 +3590,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </h3>
                         <p className="truncate text-xs text-gray-400 mt-0.5">
                             {pageView === 'form'
-                                ? (isProgressiveCreateMode && !starterProductName
-                                    ? '请先填写商品名称，系统将自动匹配商品类目并展开后续字段'
-                                    : '完善商品信息并保存后，可继续进行后续处理')
+                                ? '完善商品信息并保存后，可继续进行后续处理'
                                 : `已从${successMode === 'edit' ? '编辑商品页' : '创建商品页'}进入后续处理流程`}
                         </p>
                     </div>
@@ -3689,13 +3623,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
             </div>
 
             <div className="relative flex-1 flex overflow-hidden min-w-0">
-                {pageView === 'form' && isStarterReady && !isCompactPreview && (
+                {pageView === 'form' && !isCompactPreview && (
                     <div className="w-[300px] bg-white border-r border-[#E8E8E8] shrink-0 flex flex-col">
                         {renderPreviewPanel()}
                     </div>
                 )}
 
-                {pageView === 'form' && isStarterReady && isCompactPreview && isPreviewPanelOpen && (
+                {pageView === 'form' && isCompactPreview && isPreviewPanelOpen && (
                     <div className="pointer-events-none fixed right-6 top-[92px] bottom-6 z-30 flex items-start">
                         <div className="pointer-events-auto">
                             {renderPreviewPanel(true)}
@@ -3704,8 +3638,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                 )}
 
                 {/* Form Content */}
-                <div ref={formContentRef} className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-8 scroll-smooth no-scrollbar lg:px-6 xl:px-8">
-                    <div className="w-full min-w-0 max-w-[1240px] mx-auto pt-3 pb-12 space-y-2">
+                <div ref={formContentRef} className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-8 scroll-smooth no-scrollbar lg:px-5 xl:px-6">
+                    <div className={`w-full min-w-0 mx-auto pt-3 pb-12 ${compactFormMode ? 'max-w-[1480px] space-y-1.5' : 'max-w-[1240px] space-y-2'}`}>
                         {pageView === 'success' ? (
                             <div className="space-y-5">
                                 <div className="rounded-[28px] border border-[#D7F0E1] bg-white p-8 shadow-sm">
@@ -3777,7 +3711,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                             renderTaskPage(pageView)
                         ) : (
                         <>
-                        {isStarterReady && (
                         <div ref={stickyToolbarRef} className="sticky top-0 z-10 -mx-1 px-1 pb-2 bg-[#FAFAFA]">
                             <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden">
                                 <div className="px-4 pt-2.5 pb-1.5 border-b border-gray-100">
@@ -3807,7 +3740,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                             </div>
                                             {requiredMissingItems.length > 0 ? (
                                                 <>
-                                                    {requiredMissingItems.slice(0, 3).map(item => (
+                                                    {requiredMissingItems.map(item => (
                                                         <button
                                                             key={item.key}
                                                             type="button"
@@ -3818,11 +3751,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                                             {item.label}
                                                         </button>
                                                     ))}
-                                                    {requiredMissingItems.length > 3 && (
-                                                        <span className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-gray-400">
-                                                            另有 {requiredMissingItems.length - 3} 项
-                                                        </span>
-                                                    )}
                                                 </>
                                             ) : (
                                                 <div className="inline-flex items-center rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-2 py-1 text-[11px] font-bold text-[#166534]">
@@ -3830,7 +3758,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                                     可保存
                                                 </div>
                                             )}
-                                            {requiredMissingItems.length === 0 && recommendedMissingItems.slice(0, 2).map(item => (
+                                            {requiredMissingItems.length === 0 && recommendedMissingItems.map(item => (
                                                 <button
                                                     key={item.key}
                                                     type="button"
@@ -3861,98 +3789,55 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                                 </div>
                             </div>
                         </div>
-                        )}
-
                         {/* Basic Section */}
-                        <div id="basic" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2">
+                        <div id="basic" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-1.5' : 'p-4 xl:p-5 space-y-2'}`}>
                             <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
-                            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5">
-                                    {primaryBasicFields.map(field => {
-                                        if (field.id === 'p_img') return null;
-                                        if (isProgressiveCreateMode && !isStarterReady && field.id !== 'p_name') return null;
-                                        const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
-                                        const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                        return (
-                                            <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
-                                                <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
-                                                    <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
-                                                        {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                                    </FormRow>
-                                                </div>
+                            <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
+                                {visibleBasicFields.map(field => {
+                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                    const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
+                                    const compactWideField = compactFormMode && ['p_name', 'p_alias', 'p_front_cat', 'p_back_cat', 'p_cat'].includes(field.id);
+                                    return (
+                                        <div
+                                            id={`field-${field.id}`}
+                                            key={field.id}
+                                            className={
+                                                isFullWidth
+                                                    ? 'col-span-full'
+                                                    : compactWideField
+                                                        ? 'col-span-1 xl:col-span-2 2xl:col-span-2'
+                                                        : 'col-span-1'
+                                            }
+                                        >
+                                            <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
+                                                    {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                                </FormRow>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                                {isStarterReady && (
-                                    <div className="xl:pl-1">
-                                        {renderBasicImageField()}
-                                    </div>
-                                )}
+                                        </div>
+                                    );
+                                })}
                             </div>
-                            {isProgressiveCreateMode && !isStarterReady && (
-                                <div className="rounded-2xl border border-dashed border-[#D9D9D9] bg-[#FCFCFD] px-4 py-3 text-sm text-gray-500">
-                                    先填写并确认`商品名称`，系统会自动匹配商品类目并根据类目展示完整创建表单。
-                                </div>
-                            )}
-                            {optionalBasicFields.length > 0 && isStarterReady && (
-                                <div className="pt-1">
-                                    {expandedBasicFields.length === 0 ? (
-                                        <div className="flex flex-wrap items-center gap-2.5">
-                                            <button
-                                                type="button"
-                                                onClick={() => setExpandedBasicFields(optionalBasicFields.map(field => field.id))}
-                                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                            >
-                                                展开
-                                                <ChevronDown size={16} className="ml-1.5 text-gray-400" />
-                                            </button>
-                                            {optionalBasicFields.map(field => (
-                                                <button
-                                                    key={field.id}
-                                                    type="button"
-                                                    onClick={() => setExpandedBasicFields(prev => prev.includes(field.id) ? prev : [...prev, field.id])}
-                                                    className="inline-flex items-center rounded-xl bg-[#F5F7FA] px-3.5 py-2 text-sm font-bold text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
-                                                >
-                                                    {field.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-1.5">
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5">
-                                                {optionalBasicFields.filter(field => expandedBasicFields.includes(field.id)).map(field => {
-                                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                                    const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || ['rich_text', 'checkbox_group'].includes(field.type);
-                                                    return (
-                                                        <div id={`field-${field.id}`} key={field.id} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
-                                                            <FormRow label={field.label} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
-                                                                {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                                            </FormRow>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                            <div className="pt-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setExpandedBasicFields([])}
-                                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                                >
-                                                    收起
-                                                    <ChevronUp size={16} className="ml-1.5 text-gray-400" />
-                                                </button>
-                                            </div>
-                                        </div>
+                            {optionalBasicFields.length > 0 && (
+                                <div className="pt-1 space-y-1.5">
+                                    {renderCollapsedFieldControls(
+                                        optionalBasicFields,
+                                        expandedBasicFields,
+                                        () => handleExpandAll(setExpandedBasicFields, optionalBasicFields.map(field => field.id), setBasicExpandedAll),
+                                        fieldId => handleSingleExpand(setExpandedBasicFields, fieldId, setBasicExpandedAll),
+                                        () => {
+                                            setExpandedBasicFields([]);
+                                            setBasicExpandedAll(false);
+                                        },
+                                        { gapClass: 'gap-2.5', buttonClassName: 'px-3.5 py-2', chipClassName: 'px-3.5 py-2', showCollapse: basicExpandedAll }
                                     )}
                                 </div>
                             )}
                         </div>
 
-                        {isStarterReady && (
                         <>
                         {/* Product Attr Section */}
-                        <div id="method" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5">
+                        <div id="method" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
                             <SectionHeader title="商品属性" icon={<ChefHat size={20}/>} meta={renderSectionMeta('method')} />
                             <div id="field-s_specs">
                                 {renderSpecConfigTable()}
@@ -3961,16 +3846,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Display Section */}
-                        <div id="display" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5">
+                        <div id="display" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
                             <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
+                            {renderDisplayMainImageField()}
                             {renderDisplaySettingsSection()}
                         </div>
 
                         {/* Sales Section */}
-                        <div id="spec" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5">
+                        <div id="spec" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
                             <SectionHeader title="销售属性" icon={<Scale size={20}/>} meta={renderSectionMeta('spec')} />
                             {renderSalesAttributePanel()}
-                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5">
+                            <div className={`grid ${compactFormMode ? 'grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-2' : 'grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5'}`}>
                                 {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
                                     f.module === 'sales'
                                     && visibleFieldIds.has(f.id)
@@ -4007,84 +3893,23 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({ type, category, 
                         </div>
 
                         {/* Others Section */}
-                        <div id="settings" className="scroll-mt-[190px] bg-white rounded-2xl p-4 xl:p-5 border border-gray-200 shadow-sm space-y-2.5 min-w-0 overflow-hidden">
+                        <div id="settings" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm min-w-0 overflow-hidden ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
                             <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
                             {renderOthersAttributePanel()}
                         </div>
                         </>
-                        )}
                         </>
                         )}
 
                     </div>
                 </div>
             </div>
-            {showCategoryImpactModal && pendingCategory && (
-                <div className="fixed inset-0 z-50 bg-[#1F2129]/40 flex items-center justify-center p-6">
-                    <div className="w-full max-w-[640px] bg-white rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="px-6 py-5 border-b border-gray-100 flex items-start">
-                            <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mr-3 shrink-0">
-                                <AlertTriangle size={18} />
-                            </div>
-                            <div>
-                                <h4 className="text-lg font-black text-[#1F2129]">确认切换商品类目</h4>
-                                <p className="text-sm text-gray-500 mt-1">当前类目将从“{currentCategory.name}”切换为“{pendingCategory.name}”。保存后，部分字段会被清空或恢复默认值。</p>
-                            </div>
-                        </div>
-                        <div className="px-6 py-5 space-y-5">
-                            {impactedFields.resetFields.length > 0 && (
-                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                    <div className="text-sm font-bold text-amber-800 mb-2">将恢复默认值的字段</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {impactedFields.resetFields.map(field => (
-                                            <span key={field.id} className="px-3 py-1 rounded-full text-xs font-bold bg-white text-amber-700 border border-amber-200">
-                                                {field.label}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {impactedFields.clearFields.length > 0 && (
-                                <div className="rounded-xl border border-red-100 bg-red-50 p-4">
-                                    <div className="text-sm font-bold text-red-700 mb-2">将清空配置的字段</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {impactedFields.clearFields.map(field => (
-                                            <span key={field.id} className="px-3 py-1 rounded-full text-xs font-bold bg-white text-red-600 border border-red-100">
-                                                {field.label}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {impactedFields.resetFields.length === 0 && impactedFields.clearFields.length === 0 && (
-                                <div className="rounded-xl border border-[#DCFCE7] bg-[#F0FDF4] p-4 text-sm text-[#166534]">
-                                    新类目与当前类目字段差异较小，切换后不会产生额外字段清理。
-                                </div>
-                            )}
-                            <div className="text-xs text-gray-400 leading-6">
-                                保存后系统会按新类目保留字段；不再适用的可选配置会被清空，系统基础字段会恢复默认值，不会继续以隐藏状态生效。
-                            </div>
-                        </div>
-                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-                            <button onClick={cancelCategoryChange} className="px-5 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-white border border-transparent hover:border-gray-200 transition-colors">
-                                取消
-                            </button>
-                            <button onClick={confirmCategoryChange} className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-[#1F2129] hover:bg-black transition-colors">
-                                确认切换
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {showCategoryPickerModal && (
                 <WebCategorySelectModal
                     type={type}
                     onClose={() => setShowCategoryPickerModal(false)}
                     categories={categories}
-                    onSelect={(nextCategory) => {
-                        setShowCategoryPickerModal(false);
-                        handleCategoryChangeRequest(nextCategory);
-                    }}
+                    onSelect={handleCategorySelect}
                 />
             )}
             {renderSpecPickerModal()}

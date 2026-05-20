@@ -18,7 +18,7 @@ import { WebRequiredProductPolicyEditor } from './web/WebRequiredProductPolicyEd
 import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
 import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
-import { WebImportModal } from './web/WebModals';
+import { WebCategorySelectModal, WebImportModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
 import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
 import { WebProductDetail } from './web/WebProductDetail';
@@ -161,6 +161,7 @@ export const WebAdmin: React.FC = () => {
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [categorySelectType, setCategorySelectType] = useState<'standard' | 'combo' | null>(null);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
   const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category, mode?: 'create' | 'edit', product?: any } | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
@@ -420,10 +421,7 @@ export const WebAdmin: React.FC = () => {
       return (
          <WebProductList 
             onCreateClick={(type) => {
-              const targetCategory = webCategories.find(cat => cat.classification === type)
-                || INITIAL_WEB_CATEGORIES.find(cat => cat.classification === type);
-              if (!targetCategory) return;
-              setCreationContext({ type, category: targetCategory });
+              setCategorySelectType(type);
             }}
             onImportClick={() => setIsImportModalOpen(true)} 
             onViewDetail={(p: any) => setDetailContext(p)}
@@ -654,6 +652,17 @@ export const WebAdmin: React.FC = () => {
 
       {/* Global Modals */}
       {isImportModalOpen && <WebImportModal onClose={() => setIsImportModalOpen(false)} />}
+      {categorySelectType && (
+        <WebCategorySelectModal
+          type={categorySelectType}
+          categories={webCategories}
+          onClose={() => setCategorySelectType(null)}
+          onSelect={(selectedCategory) => {
+            setCreationContext({ type: categorySelectType, category: selectedCategory });
+            setCategorySelectType(null);
+          }}
+        />
+      )}
       {showProductMenuGuide && (
         <div className="absolute inset-0 z-[80] bg-black/35">
           <div className={`pointer-events-none absolute rounded-[18px] border-2 border-[#17C964] bg-white/10 shadow-[0_0_0_9999px_rgba(17,24,39,0.20),0_0_0_6px_rgba(23,201,100,0.12)] ${currentGuideStep.highlightPosition}`}></div>

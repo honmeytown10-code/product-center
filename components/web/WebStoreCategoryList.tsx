@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronDown, ArrowUpDown, ChevronLeft,
-  ChevronRight, GripVertical, CheckCircle2, X, Circle
+  ChevronRight, GripVertical, CheckCircle2, X, Circle, Plus, Minus
 } from 'lucide-react';
 
 type StoreCategoryRecord = {
@@ -9,6 +9,9 @@ type StoreCategoryRecord = {
   storeId: string;
   storeName: string;
   channelId: string;
+  level: 1 | 2;
+  parentCode?: string;
+  parentName?: string;
   sortIndex: number;
   iconText: string;
   name: string;
@@ -39,6 +42,22 @@ type StoreCategoryEditorDraft = Omit<StoreCategoryListRow, 'channelId'> & {
   notOrderAlone: boolean;
   queueSetting: 'join' | 'skip';
   orderLimit: 'participate' | 'not_participate';
+};
+
+type SecondaryCategoryEditorDraft = {
+  id: string;
+  sourceIds: string[];
+  parentCode: string;
+  parentName: string;
+  name: string;
+  sortIndex: number;
+};
+
+type CategorySortDraftRow = {
+  id: string;
+  code: string;
+  name: string;
+  sortIndex: number;
 };
 
 type StoreOption = {
@@ -85,13 +104,18 @@ const DEFAULT_CHANNELS = [
 ];
 
 const MOCK_STORE_CATEGORIES: StoreCategoryRecord[] = [
-  { id: 'c-001', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', sortIndex: 1, iconText: '奶', name: '奶茶系列', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-002', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', sortIndex: 1, iconText: '奶', name: '奶茶系列', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-003', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', sortIndex: 2, iconText: '果', name: '果茶系列', code: 'fruit-tea', tag: '推荐', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: true },
-  { id: 'c-004', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', sortIndex: 3, iconText: '咖', name: '咖啡系列', code: 'coffee', tag: '新品', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-005', storeId: 's2', storeName: '福田卓悦店', channelId: 'pos', sortIndex: 1, iconText: '甜', name: '甜品系列', code: 'dessert', tag: '甜品', requiredGroup: false, displayChannels: ['qimai_app'], limitTop: false },
-  { id: 'c-006', storeId: 's3', storeName: '宝安壹方城店', channelId: 'meituan', sortIndex: 1, iconText: '早', name: '早餐系列', code: 'breakfast', tag: '早餐', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini'], limitTop: false },
-  { id: 'c-007', storeId: 's4', storeName: '龙华红山店', channelId: 'taobao', sortIndex: 1, iconText: '夜', name: '夜宵系列', code: 'supper', tag: '夜宵', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_h5'], limitTop: false },
+  { id: 'c-001', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-002', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001-2', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001-3', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
+  { id: 'c-001-4', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
+  { id: 'c-003', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 2, iconText: '果', name: '果茶系列', code: 'fruit-tea', tag: '推荐', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: true },
+  { id: 'c-003-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'fruit-tea', parentName: '果茶系列', sortIndex: 1, iconText: '子', name: '鲜柠果茶', code: 'fruit-tea-lemon', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
+  { id: 'c-004', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 3, iconText: '咖', name: '咖啡系列', code: 'coffee', tag: '新品', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-005', storeId: 's2', storeName: '福田卓悦店', channelId: 'pos', level: 1, sortIndex: 1, iconText: '甜', name: '甜品系列', code: 'dessert', tag: '甜品', requiredGroup: false, displayChannels: ['qimai_app'], limitTop: false },
+  { id: 'c-006', storeId: 's3', storeName: '宝安壹方城店', channelId: 'meituan', level: 1, sortIndex: 1, iconText: '早', name: '早餐系列', code: 'breakfast', tag: '早餐', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini'], limitTop: false },
+  { id: 'c-007', storeId: 's4', storeName: '龙华红山店', channelId: 'taobao', level: 1, sortIndex: 1, iconText: '夜', name: '夜宵系列', code: 'supper', tag: '夜宵', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_h5'], limitTop: false },
 ];
 
 const FilterInput = ({
@@ -123,9 +147,11 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
   const [categoryName, setCategoryName] = useState('');
   const [categoryCode, setCategoryCode] = useState('');
   const [categories, setCategories] = useState(MOCK_STORE_CATEGORIES);
-  const [isSorting, setIsSorting] = useState(false);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<StoreCategoryEditorDraft | null>(null);
+  const [editingSecondCategory, setEditingSecondCategory] = useState<SecondaryCategoryEditorDraft | null>(null);
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [sortDraftRows, setSortDraftRows] = useState<CategorySortDraftRow[]>([]);
+  const [expandedParentCodes, setExpandedParentCodes] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showStorePicker, setShowStorePicker] = useState(true);
   const [storePickerKeyword, setStorePickerKeyword] = useState('');
@@ -161,28 +187,17 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     });
   }, [selectedGroupId, storePickerKeyword]);
 
-  const filteredCategories = useMemo<StoreCategoryListRow[]>(() => {
-    let next = categories;
-    next = next.filter(item => item.storeId === activeStoreId);
+  const scopedCategories = useMemo<StoreCategoryListRow[]>(() => {
+    let next = categories.filter(item => item.storeId === activeStoreId);
 
     if (activeTabId !== 'all') {
       next = next.filter(item => item.channelId === activeTabId);
     }
 
-    const trimName = categoryName.trim().toLowerCase();
-    if (trimName) {
-      next = next.filter(item => item.name.toLowerCase().includes(trimName));
-    }
-
-    const trimCode = categoryCode.trim().toLowerCase();
-    if (trimCode) {
-      next = next.filter(item => item.code.toLowerCase().includes(trimCode));
-    }
-
     if (activeTabId === 'all') {
       const grouped = new Map<string, StoreCategoryListRow>();
       next.forEach(item => {
-        const key = `${item.storeId}:${item.code}`;
+        const key = `${item.storeId}:${item.parentCode || 'root'}:${item.code}`;
         const existing = grouped.get(key);
         if (existing) {
           existing.sourceIds.push(item.id);
@@ -198,21 +213,85 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
           channelIds: [item.channelId],
         });
       });
-      return [...grouped.values()].sort((a, b) => a.sortIndex - b.sortIndex);
+      return [...grouped.values()];
     }
 
-    return [...next]
-      .sort((a, b) => a.sortIndex - b.sortIndex)
-      .map(item => ({
-        ...item,
-        sourceIds: [item.id],
-        channelIds: [item.channelId],
-      }));
-  }, [activeStoreId, activeTabId, categories, categoryCode, categoryName]);
+    return next.map(item => ({
+      ...item,
+      sourceIds: [item.id],
+      channelIds: [item.channelId],
+    }));
+  }, [activeStoreId, activeTabId, categories]);
 
-  useEffect(() => {
-    setIsSorting(false);
-  }, [activeStoreId, activeTabId]);
+  const filteredCategories = useMemo<StoreCategoryListRow[]>(() => {
+    const trimName = categoryName.trim().toLowerCase();
+    const trimCode = categoryCode.trim().toLowerCase();
+    const matchesKeyword = (item: StoreCategoryListRow) => {
+      const matchName = !trimName || item.name.toLowerCase().includes(trimName) || item.parentName?.toLowerCase().includes(trimName);
+      const matchCode = !trimCode || item.code.toLowerCase().includes(trimCode) || item.parentCode?.toLowerCase().includes(trimCode);
+      return matchName && matchCode;
+    };
+
+    const matched = scopedCategories.filter(matchesKeyword);
+    const visibleKeys = new Set(matched.map(item => `${item.parentCode || 'root'}:${item.code}`));
+    const childParentCodes = new Set(matched.filter(item => item.level === 2).map(item => item.parentCode).filter(Boolean));
+
+    const matchedWithParents = [...scopedCategories.filter(item => (
+      visibleKeys.has(`${item.parentCode || 'root'}:${item.code}`)
+      || (item.level === 1 && childParentCodes.has(item.code))
+    ))];
+
+    const parentRows = matchedWithParents
+      .filter(item => item.level === 1)
+      .sort((a, b) => a.sortIndex - b.sortIndex);
+
+    const childrenByParent = matchedWithParents
+      .filter(item => item.level === 2)
+      .reduce((acc, item) => {
+        const key = item.parentCode || 'root';
+        if (!acc.has(key)) acc.set(key, []);
+        acc.get(key)?.push(item);
+        return acc;
+      }, new Map<string, StoreCategoryListRow[]>());
+
+    parentRows.forEach(item => {
+      const children = childrenByParent.get(item.code);
+      if (children) {
+        children.sort((a, b) => a.sortIndex - b.sortIndex);
+      }
+    });
+
+    return parentRows.flatMap(item => [item, ...(childrenByParent.get(item.code) || [])]);
+  }, [categoryCode, categoryName, scopedCategories]);
+
+  const sortablePrimaryCategories = useMemo<CategorySortDraftRow[]>(() => (
+    scopedCategories
+      .filter(item => item.level === 1)
+      .sort((a, b) => a.sortIndex - b.sortIndex)
+      .map(item => ({ id: item.id, code: item.code, name: item.name, sortIndex: item.sortIndex }))
+  ), [scopedCategories]);
+  const childCountByParent = useMemo(() => (
+    scopedCategories.reduce((acc, item) => {
+      if (item.level !== 2 || !item.parentCode) return acc;
+      acc.set(item.parentCode, (acc.get(item.parentCode) || 0) + 1);
+      return acc;
+    }, new Map<string, number>())
+  ), [scopedCategories]);
+  const hasKeywordSearch = !!categoryName.trim() || !!categoryCode.trim();
+  const autoExpandedParentCodes = useMemo(() => (
+    new Set(
+      filteredCategories
+        .filter(item => item.level === 2 && item.parentCode)
+        .map(item => item.parentCode as string)
+    )
+  ), [filteredCategories]);
+  const visibleCategories = useMemo(() => (
+    filteredCategories.filter(item => (
+      item.level === 1
+      || expandedParentCodes.includes(item.parentCode || '')
+      || (hasKeywordSearch && autoExpandedParentCodes.has(item.parentCode || ''))
+    ))
+  ), [autoExpandedParentCodes, expandedParentCodes, filteredCategories, hasKeywordSearch]);
 
   useEffect(() => {
     if (!notification) return undefined;
@@ -220,7 +299,23 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     return () => clearTimeout(timer);
   }, [notification]);
 
+  useEffect(() => {
+    setExpandedParentCodes([]);
+  }, [activeStoreId, activeTabId]);
+
   const openEditor = (item: StoreCategoryListRow) => {
+    if (item.level === 2) {
+      setEditingSecondCategory({
+        id: item.id,
+        sourceIds: item.sourceIds,
+        parentCode: item.parentCode || '',
+        parentName: item.parentName || '-',
+        name: item.name,
+        sortIndex: item.sortIndex,
+      });
+      return;
+    }
+
     setEditingCategory({
       ...item,
       channelId: activeTabId === 'all' ? 'all' : item.channelId,
@@ -240,28 +335,50 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     });
   };
 
-  const moveCategory = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
+  const openSortModal = () => {
+    setSortDraftRows(sortablePrimaryCategories.map((item, index) => ({
+      ...item,
+      sortIndex: index + 1,
+    })));
+    setShowSortModal(true);
+  };
 
-    const currentOrder = filteredCategories.map(item => item.id);
-    const fromIndex = currentOrder.indexOf(fromId);
-    const toIndex = currentOrder.indexOf(toId);
-    if (fromIndex === -1 || toIndex === -1) return;
+  const updateSortDraftRow = (rowId: string, nextPosition: number) => {
+    setSortDraftRows(prev => {
+      const currentIndex = prev.findIndex(item => item.id === rowId);
+      if (currentIndex === -1) return prev;
+      const nextIndex = Math.max(0, Math.min(prev.length - 1, nextPosition - 1));
+      const nextRows = [...prev];
+      const [moved] = nextRows.splice(currentIndex, 1);
+      nextRows.splice(nextIndex, 0, moved);
+      return nextRows.map((item, index) => ({ ...item, sortIndex: index + 1 }));
+    });
+  };
 
-    const nextOrder = [...currentOrder];
-    const [moved] = nextOrder.splice(fromIndex, 1);
-    nextOrder.splice(toIndex, 0, moved);
-
-    const sortMap = new Map(nextOrder.map((id, index) => [id, index + 1]));
-    setCategories(prev => prev.map(item => (
-      sortMap.has(activeTabId === 'all' ? `${item.storeId}:${item.code}` : item.id)
-        ? { ...item, sortIndex: sortMap.get(activeTabId === 'all' ? `${item.storeId}:${item.code}` : item.id) as number }
-        : item
-    )));
+  const moveSortDraftRow = (dragId: string, targetId: string) => {
+    if (dragId === targetId) return;
+    setSortDraftRows(prev => {
+      const currentIndex = prev.findIndex(item => item.id === dragId);
+      const targetIndex = prev.findIndex(item => item.id === targetId);
+      if (currentIndex === -1 || targetIndex === -1) return prev;
+      const nextRows = [...prev];
+      const [moved] = nextRows.splice(currentIndex, 1);
+      nextRows.splice(targetIndex, 0, moved);
+      return nextRows.map((item, index) => ({ ...item, sortIndex: index + 1 }));
+    });
   };
 
   const saveSort = () => {
-    setIsSorting(false);
+    const sortMap = new Map(sortDraftRows.map(item => [item.code, item.sortIndex]));
+    setCategories(prev => prev.map(item => (
+      item.storeId === activeStoreId
+      && item.level === 1
+      && sortMap.has(item.code)
+      && (activeTabId === 'all' || item.channelId === activeTabId)
+        ? { ...item, sortIndex: sortMap.get(item.code) as number }
+        : item
+    )));
+    setShowSortModal(false);
     setNotification({
       type: 'success',
       message: activeTabId === 'all'
@@ -291,11 +408,30 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     setNotification({ type: 'success', message: '分类编辑已保存' });
   };
 
+  const saveSecondCategory = () => {
+    if (!editingSecondCategory) return;
+    const targetIds = new Set(editingSecondCategory.sourceIds);
+    setCategories(prev => prev.map(item => targetIds.has(item.id) ? {
+      ...item,
+      name: editingSecondCategory.name,
+      sortIndex: editingSecondCategory.sortIndex,
+    } : item));
+    setEditingSecondCategory(null);
+    setNotification({ type: 'success', message: '二级分类编辑已保存' });
+  };
+
+  const toggleParentExpand = (parentCode: string) => {
+    setExpandedParentCodes(prev => (
+      prev.includes(parentCode)
+        ? prev.filter(item => item !== parentCode)
+        : [...prev, parentCode]
+    ));
+  };
+
   const handleConfirmStore = () => {
     if (!draftStoreId) return;
     setActiveStoreId(draftStoreId);
     setShowStorePicker(false);
-    setIsSorting(false);
   };
 
   const handleOpenStorePicker = () => {
@@ -647,39 +783,16 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
-            {isSorting ? (
-              <>
-                <button
-                  onClick={() => setIsSorting(false)}
-                  className="px-4 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium"
-                >
-                  取消排序
-                </button>
-                <button
-                  onClick={saveSort}
-                  className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] transition-colors"
-                >
-                  保存排序
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setIsSorting(true)}
-                className="flex items-center px-3 py-1.5 border rounded text-xs font-medium transition-colors border-[#E8E8E8] text-[#333] hover:bg-gray-50"
-              >
-                <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
-              </button>
-            )}
+            <button
+              onClick={openSortModal}
+              className="flex items-center px-3 py-1.5 border rounded text-xs font-medium transition-colors border-[#E8E8E8] text-[#333] hover:bg-gray-50"
+            >
+              <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
+            </button>
           </div>
         </div>
 
-        {isSorting && activeTabId === 'all' && (
-          <div className="mx-5 mt-4 rounded-lg border border-[#DDEFE4] bg-[#F3FCF7] px-4 py-3 text-sm text-[#1B9B5F]">
-            全局排序：保存后分类排序将同步至所有渠道
-          </div>
-        )}
-
-        <div className={`flex-1 overflow-auto no-scrollbar ${isSorting && activeTabId === 'all' ? 'pt-4' : 'pt-3.5'}`}>
+        <div className="flex-1 overflow-auto no-scrollbar pt-3.5">
           <table className="w-full text-left border-collapse min-w-[1160px]">
             <thead className="sticky top-0 bg-[#F7F8FA] z-10 text-xs font-bold text-[#333]">
               <tr>
@@ -694,68 +807,76 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
-              {filteredCategories.map(item => (
+              {visibleCategories.map(item => (
                 <tr
                   key={item.id}
-                  draggable={isSorting}
-                  onDragStart={e => {
-                    if (!isSorting) return;
-                    setDraggedId(item.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', item.id);
-                  }}
-                  onDragOver={e => {
-                    if (!isSorting || !draggedId || draggedId === item.id) return;
-                    e.preventDefault();
-                  }}
-                  onDrop={e => {
-                    if (!isSorting || !draggedId || draggedId === item.id) return;
-                    e.preventDefault();
-                    moveCategory(draggedId, item.id);
-                    setDraggedId(item.id);
-                  }}
-                  onDragEnd={() => setDraggedId(null)}
-                  className={`border-b border-[#F5F5F5] hover:bg-[#F9FFFC] transition-colors group ${draggedId === item.id ? 'bg-[#F0FDF4]' : ''}`}
+                  className={`border-b border-[#F5F5F5] transition-colors group ${item.level === 2 ? 'bg-[#FCFCFD] hover:bg-[#F7FFF9]' : 'hover:bg-[#F9FFFC]'}`}
                 >
                   <td className="py-4 pl-5">
-                    <div className={`flex items-center text-[#666] ${isSorting ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-                      {isSorting && <GripVertical size={15} className="mr-1 text-[#999]" />}
+                    <div className={`flex items-center text-[#666] ${item.level === 2 ? 'pl-7' : ''}`}>
+                      {item.level === 1 && (childCountByParent.get(item.code) || 0) > 0 && (
+                        <button
+                          onClick={() => toggleParentExpand(item.code)}
+                          className="mr-2 flex h-5 w-5 items-center justify-center rounded border border-[#D9DDE7] text-[#667085] hover:border-[#00C06B] hover:text-[#00C06B]"
+                          aria-label={expandedParentCodes.includes(item.code) || (hasKeywordSearch && autoExpandedParentCodes.has(item.code)) ? '收起二级分类' : '展开二级分类'}
+                        >
+                          {expandedParentCodes.includes(item.code) || (hasKeywordSearch && autoExpandedParentCodes.has(item.code)) ? <Minus size={12} /> : <Plus size={12} />}
+                        </button>
+                      )}
                       <span className="font-medium">{item.sortIndex}</span>
                     </div>
                   </td>
                   <td className="py-4 px-4">
-                    <div className="h-10 w-10 rounded-xl bg-[#F0FDF4] text-[#00C06B] flex items-center justify-center font-bold">
-                      {item.iconText}
-                    </div>
+                    {item.level === 1 ? (
+                      <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-[#F0FDF4] font-bold text-[#00C06B]">
+                        {item.iconText}
+                      </div>
+                    ) : (
+                      <span className="text-[#999]">-</span>
+                    )}
                   </td>
                   <td className="py-4 px-4">
-                    <div className="font-bold text-[#333]">{item.name}</div>
+                    {item.level === 2 ? (
+                      <div className="pl-5">
+                        <div className="font-bold text-[#333]">{item.name}</div>
+                      </div>
+                    ) : (
+                      <div className="font-bold text-[#333]">{item.name}</div>
+                    )}
                   </td>
-                  <td className="py-4 px-4 text-[#666] font-mono">{item.code}</td>
+                  <td className="py-4 px-4 text-[#666] font-mono">{item.level === 2 ? '-' : item.code}</td>
                   <td className="py-4 px-4">
-                    <span className="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-[#F5F3FF] text-[#7C3AED]">
-                      {item.tag}
-                    </span>
+                    {item.level === 1 && item.tag ? (
+                      <span className="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-[#F5F3FF] text-[#7C3AED]">
+                        {item.tag}
+                      </span>
+                    ) : (
+                      <span className="text-[#999]">-</span>
+                    )}
                   </td>
-                  <td className="py-4 px-4 text-[#666]">{item.requiredGroup ? '是' : '否'}</td>
+                  <td className="py-4 px-4 text-[#666]">{item.level === 2 ? '-' : (item.requiredGroup ? '是' : '否')}</td>
                   <td className="py-4 px-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {item.displayChannels.map(channelId => renderDisplayChannelIcon(channelId))}
-                    </div>
+                    {item.level === 1 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.displayChannels.map(channelId => renderDisplayChannelIcon(channelId))}
+                      </div>
+                    ) : (
+                      <span className="text-[#999]">-</span>
+                    )}
                   </td>
-                  <td className="sticky right-0 py-4 px-4 text-center bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
+                  <td className={`sticky right-0 py-4 px-4 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)] ${item.level === 2 ? 'bg-[#FCFCFD] group-hover:bg-[#F7FFF9]' : 'bg-white group-hover:bg-[#F9FFFC]'}`}>
                     <div className="flex items-center justify-center text-sm">
                       <button
                         onClick={() => openEditor(item)}
                         className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline"
                       >
-                        编辑分类
+                        {item.level === 2 ? '编辑二级分类' : '编辑分类'}
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {filteredCategories.length === 0 && (
+              {visibleCategories.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-[#999]">暂无门店商品分类数据</td>
                 </tr>
@@ -765,7 +886,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
         </div>
 
         <div className="h-12 border-t border-[#E8E8E8] flex items-center justify-end px-5 text-xs text-[#666] bg-white shrink-0">
-          <span className="mr-4">共 {filteredCategories.length} 条</span>
+          <span className="mr-4">共 {visibleCategories.length} 条</span>
           <div className="flex items-center mr-4">
             <span className="mr-2">20条/页</span>
             <ChevronDown size={14} />
@@ -799,6 +920,201 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
           disableCancel={false}
         />
       )}
+      {editingSecondCategory && (
+        <SecondaryCategoryEditorModal
+          draft={editingSecondCategory}
+          onChange={setEditingSecondCategory}
+          onCancel={() => setEditingSecondCategory(null)}
+          onConfirm={saveSecondCategory}
+        />
+      )}
+      {showSortModal && (
+        <CategorySortModal
+          rows={sortDraftRows}
+          activeTabId={activeTabId}
+          onChangeSort={updateSortDraftRow}
+          onMoveRow={moveSortDraftRow}
+          onCancel={() => setShowSortModal(false)}
+          onConfirm={saveSort}
+        />
+      )}
+    </div>
+  );
+};
+
+const SecondaryCategoryEditorModal = ({
+  draft,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: SecondaryCategoryEditorDraft;
+  onChange: (draft: SecondaryCategoryEditorDraft) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[900px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
+          <div className="text-[20px] font-black text-[#1F2129]">编辑二级分类</div>
+          <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]">
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="space-y-7 px-8 py-8">
+          <div className="grid grid-cols-[160px_minmax(0,1fr)] items-center gap-4">
+            <div className="text-[16px] text-[#5B6475]">所属一级分类：</div>
+            <div className="flex items-center gap-2 text-[18px] text-[#1F2129]">
+              <span>{draft.parentName}</span>
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#D9DDE7] text-xs text-[#98A2B3]">?</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[160px_minmax(0,1fr)] items-center gap-4">
+            <div className="text-[16px] text-[#5B6475]"><span className="mr-1 text-[#FF4D4F]">*</span>二级分类名称：</div>
+            <div className="relative">
+              <input
+                value={draft.name}
+                maxLength={10}
+                onChange={e => onChange({ ...draft, name: e.target.value.slice(0, 10) })}
+                className="h-[48px] w-full rounded-[10px] border border-[#D9DDE7] px-4 pr-16 text-[16px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#98A2B3]">{draft.name.length}/10</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[160px_minmax(0,1fr)] items-center gap-4">
+            <div className="text-[16px] text-[#5B6475]"><span className="mr-1 text-[#FF4D4F]">*</span>排序：</div>
+            <div>
+              <div className="inline-flex overflow-hidden rounded-[10px] border border-[#D9DDE7]">
+                <button
+                  onClick={() => onChange({ ...draft, sortIndex: Math.max(1, draft.sortIndex - 1) })}
+                  className="flex h-[46px] w-[48px] items-center justify-center bg-[#F8FAFB] text-[24px] text-[#98A2B3] hover:text-[#1F2129]"
+                >
+                  -
+                </button>
+                <div className="flex h-[46px] w-[96px] items-center justify-center border-x border-[#D9DDE7] text-[20px] text-[#1F2129]">
+                  {draft.sortIndex}
+                </div>
+                <button
+                  onClick={() => onChange({ ...draft, sortIndex: draft.sortIndex + 1 })}
+                  className="flex h-[46px] w-[48px] items-center justify-center bg-[#F8FAFB] text-[24px] text-[#5B6475] hover:text-[#1F2129]"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-4 border-t border-[#EEF1F5] px-8 py-6">
+          <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-8 py-3 text-[16px] font-bold text-[#5B6475]">
+            取消
+          </button>
+          <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-8 py-3 text-[16px] font-bold text-white">
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CategorySortModal = ({
+  rows,
+  activeTabId,
+  onChangeSort,
+  onMoveRow,
+  onCancel,
+  onConfirm,
+}: {
+  rows: CategorySortDraftRow[];
+  activeTabId: string;
+  onChangeSort: (rowId: string, nextPosition: number) => void;
+  onMoveRow: (dragId: string, targetId: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[980px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-5">
+          <div>
+            <div className="text-[20px] font-black text-[#1F2129]">分类排序</div>
+            {activeTabId === 'all' && (
+              <div className="mt-3 rounded-lg border border-[#DDEFE4] bg-[#F3FCF7] px-4 py-3 text-sm text-[#1B9B5F]">
+                全局排序：保存后分类排序将同步至所有渠道
+              </div>
+            )}
+          </div>
+          <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="px-8 py-5">
+          <div className="overflow-hidden rounded-[12px] border border-[#EEF1F5]">
+            <div className="grid grid-cols-[minmax(0,1fr)_160px] bg-[#F8FAFB] px-4 py-3 text-sm font-bold text-[#5B6475]">
+              <div>分类名称</div>
+              <div>排序</div>
+            </div>
+            <div className="max-h-[520px] overflow-y-auto no-scrollbar">
+              {rows.map(item => (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={e => {
+                    setDraggingRowId(item.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', item.id);
+                  }}
+                  onDragOver={e => {
+                    if (!draggingRowId || draggingRowId === item.id) return;
+                    e.preventDefault();
+                  }}
+                  onDrop={e => {
+                    if (!draggingRowId || draggingRowId === item.id) return;
+                    e.preventDefault();
+                    onMoveRow(draggingRowId, item.id);
+                    setDraggingRowId(null);
+                  }}
+                  onDragEnd={() => setDraggingRowId(null)}
+                  className={`grid grid-cols-[minmax(0,1fr)_160px] items-center border-t border-[#F2F4F7] px-4 py-3 text-sm ${draggingRowId === item.id ? 'bg-[#F3FCF7]' : 'bg-white'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <GripVertical size={16} className="cursor-grab text-[#98A2B3] active:cursor-grabbing" />
+                    <div className="font-medium text-[#333]">{item.name}</div>
+                  </div>
+                  <div>
+                    <select
+                      value={item.sortIndex}
+                      onChange={e => onChangeSort(item.id, Number(e.target.value))}
+                      className="h-9 w-full rounded-lg border border-[#D9DDE7] bg-white px-3 text-sm text-[#333] outline-none focus:border-[#00C06B]"
+                    >
+                      {rows.map((_, index) => (
+                        <option key={index + 1} value={index + 1}>{index + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-8 py-5">
+          <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]">
+            取消
+          </button>
+          <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white">
+            确定
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

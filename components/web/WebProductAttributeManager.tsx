@@ -474,6 +474,41 @@ export const WebProductAttributeManager: React.FC = () => {
   );
 };
 
+const ActionButtons = ({ actions }: { actions: string[] }) => (
+  <div className="flex flex-wrap justify-end gap-x-4 gap-y-2 whitespace-nowrap">
+    {actions.map(action => (
+      <button
+        key={action}
+        type="button"
+        className="inline-flex items-center text-sm text-[#00C06B] hover:text-[#00A35B]"
+      >
+        {action}
+      </button>
+    ))}
+  </div>
+);
+
+const TreeGroupName = ({
+  name,
+  expanded,
+  hasChildren,
+  onClick,
+}: {
+  name: string;
+  expanded: boolean;
+  hasChildren: boolean;
+  onClick: () => void;
+}) => (
+  <div className="flex items-center gap-3">
+    <ExpandButton expanded={expanded} hasChildren={hasChildren} onClick={onClick} />
+    <div>{name}</div>
+  </div>
+);
+
+const TreeChildName = ({ name }: { name?: string }) => (
+  <div className="pl-8 text-[#666]">{name || '-'}</div>
+);
+
 const SpecTable = ({
   groups,
   expandedGroupIds,
@@ -490,7 +525,7 @@ const SpecTable = ({
           <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4">规格名称</th>
           <th className="border-b border-[#E8E8E8] px-4 py-4">规格值</th>
           <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">规格值编码</th>
-          <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
+          <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
         </tr>
       </thead>
       <tbody className="text-sm text-[#333]">
@@ -498,42 +533,26 @@ const SpecTable = ({
           <React.Fragment key={group.id}>
             <tr className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
               <td className="px-4 py-4 font-medium">
-                <div className="flex items-center gap-3">
-                  <ExpandButton
-                    expanded={expandedGroupIds.has(group.id)}
-                    hasChildren={group.values.length > 0}
-                    onClick={() => onToggleGroup(group.id)}
-                  />
-                  <div>
-                    <div>{group.name}</div>
-                    {group.values.length > 0 && (
-                      <div className="mt-1 text-xs font-normal text-[#999]">
-                        {expandedGroupIds.has(group.id) ? `已展开 ${group.values.length} 个规格值` : `已收起 ${group.values.length} 个规格值`}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <TreeGroupName
+                  name={group.name}
+                  expanded={expandedGroupIds.has(group.id)}
+                  hasChildren={group.values.length > 0}
+                  onClick={() => onToggleGroup(group.id)}
+                />
               </td>
               <td className="px-4 py-4 text-[#999]">{group.values.length ? '' : '-'}</td>
               <td className="px-4 py-4 text-[#999]">{group.values.length ? '' : '-'}</td>
               <td className="px-4 py-4 text-right">
-                <span className="mr-4 text-[#00C06B]">新增规格值</span>
-                <span className="mr-4 text-[#00C06B]">编辑</span>
-                <span className="text-[#00C06B]">删除</span>
+                <ActionButtons actions={['新增规格值', '编辑', '删除']} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.values.map(value => (
               <tr key={value.id} className="border-b border-[#F7F7F7] bg-[#FCFCFC]">
-                <td className="pl-14 pr-4 py-4 text-[#666]">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#F0F2F5] text-[10px] text-[#999]">值</span>
-                  </div>
-                </td>
+                <td className="px-4 py-4 text-[#666]"><TreeChildName /></td>
                 <td className="px-4 py-4 text-[#666]">{value.name}</td>
                 <td className="px-4 py-4 text-[#666]">{value.code}</td>
                 <td className="px-4 py-4 text-right">
-                  <span className="mr-4 text-[#00C06B]">编辑</span>
-                  <span className="text-[#00C06B]">删除</span>
+                  <ActionButtons actions={['编辑', '删除']} />
                 </td>
               </tr>
             ))}
@@ -565,7 +584,7 @@ const MethodTable = ({
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">关联商品数</th>
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">做法值多选</th>
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">做法选项</th>
-          <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
+          <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
         </tr>
       </thead>
       <tbody className="text-sm text-[#333]">
@@ -573,21 +592,12 @@ const MethodTable = ({
           <React.Fragment key={group.id}>
             <tr className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
               <td className="px-4 py-4 font-medium">
-                <div className="flex items-center gap-3">
-                  <ExpandButton
-                    expanded={expandedGroupIds.has(group.id)}
-                    hasChildren={group.values.length > 0}
-                    onClick={() => onToggleGroup(group.id)}
-                  />
-                  <div>
-                    <div>{group.name}</div>
-                    {group.values.length > 0 && (
-                      <div className="mt-1 text-xs font-normal text-[#999]">
-                        {expandedGroupIds.has(group.id) ? `已展开 ${group.values.length} 个做法值` : `已收起 ${group.values.length} 个做法值`}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <TreeGroupName
+                  name={group.name}
+                  expanded={expandedGroupIds.has(group.id)}
+                  hasChildren={group.values.length > 0}
+                  onClick={() => onToggleGroup(group.id)}
+                />
               </td>
               <td className="px-4 py-4 text-[#999]"></td>
               <td className="px-4 py-4 text-[#999]"></td>
@@ -601,18 +611,12 @@ const MethodTable = ({
               </td>
               <td className="px-4 py-4 text-[#666]">{group.optionType}</td>
               <td className="px-4 py-4 text-right">
-                <span className="mr-4 text-[#00C06B]">新增做法值</span>
-                <span className="mr-4 text-[#00C06B]">编辑</span>
-                <span className="text-[#00C06B]">删除</span>
+                <ActionButtons actions={['新增做法值', '编辑', '删除']} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.values.map(value => (
               <tr key={value.id} className="border-b border-[#F7F7F7] bg-[#FCFCFC]">
-                <td className="pl-14 pr-4 py-4 text-[#666]">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#F0F2F5] text-[10px] text-[#999]">值</span>
-                  </div>
-                </td>
+                <td className="px-4 py-4 text-[#666]"><TreeChildName /></td>
                 <td className="px-4 py-4 text-[#666]">{value.name}</td>
                 <td className="px-4 py-4 text-[#666]">{value.code}</td>
                 <td className="px-4 py-4 text-[#666]"></td>
@@ -621,9 +625,7 @@ const MethodTable = ({
                 <td className="px-4 py-4"></td>
                 <td className="px-4 py-4"></td>
                 <td className="px-4 py-4 text-right">
-                  <span className="mr-4 text-[#00C06B]">编辑</span>
-                  <span className="mr-4 text-[#00C06B]">关联商品</span>
-                  <span className="text-[#00C06B]">解除关联</span>
+                  <ActionButtons actions={['编辑', '关联商品', '解除关联']} />
                 </td>
               </tr>
             ))}
@@ -653,7 +655,7 @@ const LabelTable = ({
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">字体颜色</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">效果</th>
           <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-4">创建时间</th>
-          <th className="w-[190px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
+          <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
         </tr>
       </thead>
       <tbody className="text-sm text-[#333]">
@@ -661,21 +663,12 @@ const LabelTable = ({
           <React.Fragment key={group.id}>
             <tr className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
               <td className="px-4 py-4 font-medium">
-                <div className="flex items-center gap-3">
-                  <ExpandButton
-                    expanded={expandedGroupIds.has(group.id)}
-                    hasChildren={group.labels.length > 0}
-                    onClick={() => onToggleGroup(group.id)}
-                  />
-                  <div>
-                    <div>{group.groupName}</div>
-                    {group.labels.length > 0 && (
-                      <div className="mt-1 text-xs font-normal text-[#999]">
-                        {expandedGroupIds.has(group.id) ? `已展开 ${group.labels.length} 个标签` : `已收起 ${group.labels.length} 个标签`}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <TreeGroupName
+                  name={group.groupName}
+                  expanded={expandedGroupIds.has(group.id)}
+                  hasChildren={group.labels.length > 0}
+                  onClick={() => onToggleGroup(group.id)}
+                />
               </td>
               <td className="px-4 py-4 text-[#999]"></td>
               <td className="px-4 py-4 text-[#999]"></td>
@@ -683,26 +676,19 @@ const LabelTable = ({
               <td className="px-4 py-4 text-[#999]"></td>
               <td className="px-4 py-4 text-[#666]">{group.labels[0]?.createdAt || '2025-09-10 15:36:29'}</td>
               <td className="px-4 py-4 text-right">
-                <span className="mr-4 text-[#00C06B]">新增标签</span>
-                <span className="mr-4 text-[#00C06B]">编辑</span>
-                <span className="text-[#00C06B]">删除</span>
+                <ActionButtons actions={['新增标签', '编辑', '删除']} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.labels.map(label => (
               <tr key={label.id} className="border-b border-[#F7F7F7] bg-[#FCFCFC]">
-                <td className="pl-14 pr-4 py-4 text-[#666]">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#F0F2F5] text-[10px] text-[#999]">签</span>
-                </td>
+                <td className="px-4 py-4 text-[#666]"><TreeChildName /></td>
                 <td className="px-4 py-4 text-[#666]">{label.name}</td>
                 <td className="px-4 py-4"><div className="h-5 w-10 rounded-sm" style={{ backgroundColor: label.bgColor }} /></td>
                 <td className="px-4 py-4" style={{ color: label.textColor }}>{label.name === '0910文字' ? '标签' : '标签'}</td>
                 <td className="px-4 py-4"><span className="inline-flex rounded-sm px-3 py-1 text-xs font-bold" style={{ backgroundColor: label.bgColor, color: label.textColor }}>标签</span></td>
                 <td className="px-4 py-4 text-[#666]">{label.createdAt}</td>
                 <td className="px-4 py-4 text-right">
-                  <span className="mr-4 text-[#00C06B]">关联商品</span>
-                  <span className="mr-4 text-[#00C06B]">解除关联</span>
-                  <span className="mr-4 text-[#00C06B]">编辑</span>
-                  <span className="text-[#00C06B]">删除</span>
+                  <ActionButtons actions={['关联商品', '解除关联', '编辑', '删除']} />
                 </td>
               </tr>
             ))}
@@ -841,7 +827,7 @@ const AddonTable = ({
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">初始价格</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">关联商品数量</th>
           <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-4">创建时间</th>
-          <th className="w-[160px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
+          <th className="w-[240px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
         </tr>
       </thead>
       <tbody className="text-sm text-[#333]">
@@ -849,21 +835,12 @@ const AddonTable = ({
           <React.Fragment key={group.id}>
             <tr className="border-b border-[#F3F4F6] bg-[#FCFCFC]">
               <td className="px-4 py-4 font-medium">
-                <div className="flex items-center gap-2">
-                  <ExpandButton
-                    expanded={expandedGroupIds.has(group.id)}
-                    hasChildren={(group.children?.length || 0) > 0}
-                    onClick={() => onToggleGroup(group.id)}
-                  />
-                  <div>
-                    <div>{group.typeName}</div>
-                    {(group.children?.length || 0) > 0 && (
-                      <div className="mt-1 text-xs font-normal text-[#999]">
-                        {expandedGroupIds.has(group.id) ? `已展开 ${group.children?.length || 0} 个加料项` : `已收起 ${group.children?.length || 0} 个加料项`}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <TreeGroupName
+                  name={group.typeName}
+                  expanded={expandedGroupIds.has(group.id)}
+                  hasChildren={(group.children?.length || 0) > 0}
+                  onClick={() => onToggleGroup(group.id)}
+                />
               </td>
               <td className="px-4 py-4 text-[#666]">{group.sort}</td>
               <td className="px-4 py-4 text-[#999]">{group.productName || ''}</td>
@@ -872,16 +849,13 @@ const AddonTable = ({
               </td>
               <td className="px-4 py-4 text-[#666]">{group.relatedCount || ''}</td>
               <td className="px-4 py-4 text-[#666]">{group.createdAt || ''}</td>
-              <td className="px-4 py-4 text-right"></td>
+              <td className="px-4 py-4 text-right">
+                <ActionButtons actions={['编辑类型', '新增加料项', '删除']} />
+              </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.children?.map(item => (
               <tr key={item.id} className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
-                <td className="pl-10 pr-4 py-4 text-[#666]">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#F0F2F5] text-[10px] text-[#999]">项</span>
-                    <span>{item.typeName}</span>
-                  </div>
-                </td>
+                <td className="px-4 py-4 text-[#666]"><TreeChildName name={item.typeName} /></td>
                 <td className="px-4 py-4">{item.sort}</td>
                 <td className="px-4 py-4 text-[#666]">{item.productName || '-'}</td>
                 <td className="px-4 py-4">
@@ -890,8 +864,7 @@ const AddonTable = ({
                 <td className="px-4 py-4 text-[#666]">{item.relatedCount}</td>
                 <td className="px-4 py-4 text-[#666]">{item.createdAt}</td>
                 <td className="px-4 py-4 text-right">
-                  <span className="mr-4 text-[#00C06B]">编辑</span>
-                  <span className="text-[#00C06B]">删除</span>
+                  <ActionButtons actions={['编辑', '删除']} />
                 </td>
               </tr>
             ))}

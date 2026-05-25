@@ -1,0 +1,190 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多屏应用原型</title>
+<style>
+  :root {
+    --bg: oklch(98% 0.004 240);
+    --surface: oklch(100% 0 0);
+    --fg: oklch(20% 0.02 240);
+    --muted: oklch(50% 0.018 240);
+    --border: oklch(90% 0.006 240);
+    --accent: oklch(56% 0.12 170);
+    --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --radius: 12px;
+    --shadow: 0 2px 8px oklch(0% 0 0 / 0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+  .app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  header {
+    padding: 16px; border-bottom: 1px solid var(--border); background: var(--surface);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 20px; font-weight: 600; }
+  main { flex: 1; padding: 16px; }
+  .screen { display: none; animation: fadeIn 0.2s ease; }
+  .screen.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface);
+    border-top: 1px solid var(--border); display: flex; justify-content: space-around;
+    padding: 8px 0; z-index: 20;
+  }
+  nav button {
+    background: none; border: none; padding: 8px 12px; color: var(--muted);
+    font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; transition: color 0.2s;
+  }
+  nav button.active { color: var(--accent); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .btn {
+    background: var(--accent); color: white; border: none; padding: 10px 16px;
+    border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 8px;
+  }
+  .btn:hover { opacity: 0.9; }
+  input, select {
+    width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+    margin-top: 6px; font-size: 14px; background: var(--surface);
+  }
+  .tag { display: inline-block; background: oklch(90% 0.006 240); padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header><h1 id="pageTitle">首页</h1></header>
+  <main>
+    <section id="screen-home" class="screen active">
+      <div class="card">
+        <h3 style="margin-bottom:8px">📊 数据概览</h3>
+        <p>今日活跃用户 <strong>2,841</strong> · 转化率 <strong>4.2%</strong></p>
+        <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+          <span class="tag">增长</span><span class="tag">留存</span><span class="tag">活跃</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px">📈 趋势图表</h3>
+        <div style="height:120px; background:var(--bg); border-radius:8px; display:flex; align-items:flex-end; padding:8px; gap:6px;">
+          <div style="flex:1; background:var(--accent); height:40%; border-radius:4px"></div>
+          <div style="flex:1; background:var(--accent); height:65%; border-radius:4px"></div>
+          <div style="flex:1; background:var(--accent); height:50%; border-radius:4px"></div>
+          <div style="flex:1; background:var(--accent); height:80%; border-radius:4px"></div>
+          <div style="flex:1; background:var(--accent); height:70%; border-radius:4px"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-detail" class="screen">
+      <div class="card">
+        <h3 style="margin-bottom:8px">📦 项目详情</h3>
+        <p>名称：<strong>Nexus 原型系统</strong></p>
+        <p>状态：<span style="color:oklch(58% 0.16 145)">● 运行中</span></p>
+        <p>更新时间：<span id="updateTime">刚刚</span></p>
+        <button class="btn" onclick="simulateAction(this)">同步数据</button>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px">📝 配置项</h3>
+        <label>主题模式</label>
+        <select id="themeSelect">
+          <option>跟随系统</option><option>浅色</option><option>深色</option>
+        </select>
+        <label>通知开关</label>
+        <input type="checkbox" checked style="width:auto; margin-left:8px;"> 启用推送
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen">
+      <div class="card">
+        <h3 style="margin-bottom:8px">⚙️ 系统设置</h3>
+        <label>缓存管理</label>
+        <button class="btn" style="background:var(--muted)" onclick="clearCache(this)">清理缓存 (24MB)</button>
+        <label style="margin-top:12px">数据导出</label>
+        <select>
+          <option>CSV</option><option>JSON</option><option>PDF</option>
+        </select>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:8px">🔐 账户安全</h3>
+        <p>上次登录：2024-05-20 14:32</p>
+        <p>设备数：<strong>3</strong></p>
+      </div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="nav-btn active" data-target="screen-home" data-title="首页">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      首页
+    </button>
+    <button class="nav-btn" data-target="screen-detail" data-title="详情">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      详情
+    </button>
+    <button class="nav-btn" data-target="screen-settings" data-title="设置">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      设置
+    </button>
+  </nav>
+</div>
+
+<script>
+  const navBtns = document.querySelectorAll('.nav-btn');
+  const screens = document.querySelectorAll('.screen');
+  const pageTitle = document.getElementById('pageTitle');
+
+  navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navBtns.forEach(b => b.classList.remove('active'));
+      screens.forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.target;
+      document.getElementById(target).classList.add('active');
+      pageTitle.textContent = btn.dataset.title;
+      localStorage.setItem('activeScreen', target);
+    });
+  });
+
+  // 恢复上次屏幕
+  const saved = localStorage.getItem('activeScreen');
+  if (saved) {
+    const btn = document.querySelector(`.nav-btn[data-target="${saved}"]`);
+    if (btn) btn.click();
+  }
+
+  function simulateAction(btn) {
+    btn.textContent = '同步中...';
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = '同步完成 ✓';
+      btn.style.background = 'oklch(58% 0.16 145)';
+      setTimeout(() => {
+        btn.textContent = '同步数据';
+        btn.disabled = false;
+        btn.style.background = '';
+        document.getElementById('updateTime').textContent = new Date().toLocaleTimeString();
+      }, 1200);
+    }, 1500);
+  }
+
+  function clearCache(btn) {
+    btn.textContent = '清理中...';
+    setTimeout(() => {
+      btn.textContent = '已清理 (0MB)';
+      btn.style.background = 'oklch(90% 0.006 240)';
+    }, 800);
+  }
+</script>
+</body>
+</html>

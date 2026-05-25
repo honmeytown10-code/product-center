@@ -20,7 +20,6 @@ import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebCategorySelectModal, WebImportModal } from './web/WebModals';
 import { WebProductForm } from './web/WebProductForm';
-import { WebComboProductFormV2 } from './web/WebComboProductFormV2';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
@@ -182,10 +181,8 @@ export const WebAdmin: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const hasSeenGuide = window.localStorage.getItem(productMenuGuideStorageKey);
-    if (!hasSeenGuide) {
-      setShowProductMenuGuide(true);
-    }
+    window.localStorage.setItem(productMenuGuideStorageKey, 'seen');
+    setShowProductMenuGuide(false);
   }, []);
 
   const handleCloseProductMenuGuide = () => {
@@ -233,14 +230,6 @@ export const WebAdmin: React.FC = () => {
   // Determine current content
   const renderContent = () => {
       if (creationContext) {
-          if (creationContext.type === 'combo') {
-              return (
-                  <WebComboProductFormV2 
-                      category={creationContext.category} 
-                      onClose={() => setCreationContext(null)} 
-                  />
-              );
-          }
           return (
               <WebProductForm 
                   type={creationContext.type} 

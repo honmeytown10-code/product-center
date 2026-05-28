@@ -1,4 +1,4 @@
-﻿﻿﻿import React, { useMemo, useState } from 'react';
+﻿﻿﻿﻿﻿﻿import React, { useMemo, useState } from 'react';
 import { AlertCircle, ArrowLeft, ChevronDown, ChevronRight, Eye, GripVertical, Info, ListFilter, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 
 type DisplayCategory = {
@@ -17,6 +17,8 @@ type DisplayCategory = {
   linkedProducts: LinkedProduct[];
   parentId?: string;
   children?: DisplayCategory[];
+  sourceType: 'brand' | 'store';
+  sourceName: string;
 };
 
 type LinkedProduct = {
@@ -80,7 +82,7 @@ type BackendCategory = {
 };
 
 type SortSyncMode = 'immediate' | 'manual' | 'scheduled';
-type CategoryColumnKey = 'sort' | 'icon' | 'name' | 'code' | 'tag' | 'requiredGroup' | 'displaySettings' | 'linkedProducts' | 'remark';
+type CategoryColumnKey = 'sort' | 'icon' | 'name' | 'code' | 'tag' | 'requiredGroup' | 'displaySettings' | 'linkedProducts' | 'remark' | 'source';
 
 const MOCK_DATA: DisplayCategory[] = [
   {
@@ -115,6 +117,8 @@ const MOCK_DATA: DisplayCategory[] = [
           { id: 'p-102', name: '子测试加料', type: '加料商品', categoryCount: 1 },
         ],
         parentId: '1',
+        sourceType: 'brand',
+        sourceName: '品牌',
       },
     ],
     linkedProducts: [
@@ -122,6 +126,8 @@ const MOCK_DATA: DisplayCategory[] = [
       { id: 'p-002', name: '测试标准商品', type: '标准商品', categoryCount: 1 },
       { id: 'p-003', name: '测试商城商品', type: '商城商品', categoryCount: 3 },
     ],
+    sourceType: 'brand',
+    sourceName: '品牌',
   },
   {
     id: '2',
@@ -140,6 +146,8 @@ const MOCK_DATA: DisplayCategory[] = [
       { id: 'p-011', name: '双人精品套餐', type: '套餐商品', categoryCount: 1 },
       { id: 'p-012', name: '商城精品套餐', type: '商城商品', categoryCount: 2 },
     ],
+    sourceType: 'brand',
+    sourceName: '品牌',
   },
   {
     id: '3',
@@ -158,6 +166,8 @@ const MOCK_DATA: DisplayCategory[] = [
       { id: 'p-021', name: '芒果蛋糕', type: '标准商品', categoryCount: 1 },
       { id: 'p-022', name: '草莓蛋糕', type: '商城商品', categoryCount: 2 },
     ],
+    sourceType: 'brand',
+    sourceName: '品牌',
   },
   {
     id: '4',
@@ -177,6 +187,8 @@ const MOCK_DATA: DisplayCategory[] = [
       { id: 'p-032', name: '活动加料', type: '加料商品' },
       { id: 'p-033', name: '活动单品', type: '标准商品' },
     ],
+    sourceType: 'store',
+    sourceName: '南山万象店',
   },
   {
     id: '5',
@@ -195,6 +207,8 @@ const MOCK_DATA: DisplayCategory[] = [
       { id: 'p-041', name: '冰美式', type: '标准商品' },
       { id: 'p-042', name: '门店酒水组合', type: '商城商品' },
     ],
+    sourceType: 'store',
+    sourceName: '福田卓悦店',
   },
 ];
 
@@ -277,6 +291,7 @@ const COLUMN_DEFS: Array<{ key: CategoryColumnKey; label: string; width: string 
   { key: 'linkedProducts', label: '关联商品', width: '120px' },
   { key: 'requiredGroup', label: '是否必选分组', width: '120px' },
   { key: 'remark', label: '备注', width: '170px' },
+  { key: 'source', label: '数据来源', width: '160px' },
 ];
 
 const ACTION_COLUMN_WIDTH = '280px';
@@ -291,6 +306,7 @@ const DEFAULT_VISIBLE_COLUMNS: Record<CategoryColumnKey, boolean> = {
   displaySettings: true,
   linkedProducts: true,
   remark: true,
+  source: true,
 };
 
 const createRootDraft = (sort: number): CategoryFormState => ({
@@ -676,6 +692,8 @@ export const WebCategoryListManager: React.FC = () => {
         productCount: 0,
         linkedProducts: [],
         children: [],
+        sourceType: 'brand',
+        sourceName: '品牌',
       };
       setCategories(prev => normalizeLinkedProductCounts(sortCategories([...prev, nextRoot])));
     } else {
@@ -698,6 +716,7 @@ export const WebCategoryListManager: React.FC = () => {
   const handleSaveSecondCategory = () => {
     if (!editingSecondCategory) return;
     const existingChild = editingSecondCategory.id ? findChildCategory(categories, editingSecondCategory.id) : null;
+    const parentCategory = categories.find(item => item.id === editingSecondCategory.parentId);
     const childPayload: DisplayCategory = {
       id: editingSecondCategory.id || `child-${Date.now()}`,
       parentId: editingSecondCategory.parentId,
@@ -712,7 +731,9 @@ export const WebCategoryListManager: React.FC = () => {
       saleTypes: [],
       remark: '',
       productCount: existingChild?.productCount || 0,
-        linkedProducts: existingChild?.linkedProducts || [],
+      linkedProducts: existingChild?.linkedProducts || [],
+      sourceType: existingChild?.sourceType || parentCategory?.sourceType || 'brand',
+      sourceName: existingChild?.sourceName || parentCategory?.sourceName || '品牌',
     };
 
     setCategories(prev => {
@@ -1177,6 +1198,11 @@ export const WebCategoryListManager: React.FC = () => {
             <div className="pr-3">
               <div className="flex min-w-0 items-center">
                 <span className="min-w-0 truncate text-sm font-bold text-gray-800">{cat.name}</span>
+                {cat.sourceType === 'store' && (
+                  <span className="ml-2 shrink-0 rounded-full border border-[#DDEEE4] bg-[#F7FFF9] px-2 py-0.5 text-[10px] font-bold leading-4 text-[#16A34A]">
+                    门店自建
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -1200,6 +1226,7 @@ export const WebCategoryListManager: React.FC = () => {
           )}
           {visibleColumns.requiredGroup && <div className="pr-3 text-sm text-gray-600">{isChild ? '-' : (cat.requiredGroup ? '是' : '否')}</div>}
           {visibleColumns.remark && <div className="pr-4 text-sm text-gray-600 break-all">{isChild ? '-' : (cat.remark || '-')}</div>}
+          {visibleColumns.source && <div className="pr-4 text-sm text-gray-600 truncate">{cat.sourceName}</div>}
           <div className="sticky right-0 z-20 flex h-full w-[280px] items-center justify-start gap-3 border-l border-gray-100 bg-white px-4 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)] transition-colors group-hover:z-40 group-hover:bg-gray-50">
             {!isChild && (
               <button onClick={() => handleCreateSub(cat)} className="shrink-0 whitespace-nowrap text-sm font-bold text-[#00C06B] hover:text-[#00A35B]">新建二级分类</button>
@@ -1773,6 +1800,7 @@ export const WebCategoryListManager: React.FC = () => {
                 {visibleColumns.linkedProducts && <div className="pr-3">关联商品</div>}
                 {visibleColumns.requiredGroup && <div className="pr-3">是否必选分组</div>}
                 {visibleColumns.remark && <div className="pr-4">备注</div>}
+                {visibleColumns.source && <div className="pr-4">数据来源</div>}
                 <div className="sticky right-0 z-30 flex h-full w-[280px] items-center border-l border-gray-200 bg-gray-50 px-4 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.2)]">操作</div>
               </div>
               <div className="pb-20">{filteredCategories.map(cat => renderRow(cat))}</div>

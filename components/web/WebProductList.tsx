@@ -11,8 +11,8 @@ type QuickCategoryView = 'backend' | 'frontend';
 const DEFAULT_FILTERS = {
   productId: '',
   skuId: '',
-  backendCategory: 'all',
   frontendCategory: 'all',
+  backendCategory: 'all',
   productType: 'all',
 };
 
@@ -64,9 +64,9 @@ export const WebProductList: React.FC<{
   const [showImportDropdown, setShowImportDropdown] = useState(false);
   const [showToolbarMoreDropdown, setShowToolbarMoreDropdown] = useState(false);
   const [isCategoryPanelCollapsed, setIsCategoryPanelCollapsed] = useState(false);
-  const [quickCategoryView, setQuickCategoryView] = useState<QuickCategoryView>('backend');
+  const [quickCategoryView, setQuickCategoryView] = useState<QuickCategoryView>('frontend');
   const [selectedQuickCategory, setSelectedQuickCategory] = useState<{ view: QuickCategoryView; name: string | null }>({
-    view: 'backend',
+    view: 'frontend',
     name: null,
   });
   const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS);
@@ -264,30 +264,6 @@ export const WebProductList: React.FC<{
             />
           </div>
           <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
-            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">后台分类:</span>
-            <select
-              className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none"
-              value={draftFilters.backendCategory}
-              onChange={e => setDraftFilters(prev => ({ ...prev, backendCategory: e.target.value }))}
-            >
-              <option value="all">全部</option>
-              {backendQuickCategories.map(item => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            {draftFilters.backendCategory !== 'all' ? (
-              <X
-                size={14}
-                className="ml-1 cursor-pointer text-gray-400 hover:text-red-500"
-                onClick={() => setDraftFilters(prev => ({ ...prev, backendCategory: 'all' }))}
-              />
-            ) : (
-              <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />
-            )}
-          </div>
-          <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
             <span className="mr-2 whitespace-nowrap text-xs text-gray-500">前台分类:</span>
             <select
               className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none"
@@ -306,6 +282,30 @@ export const WebProductList: React.FC<{
                 size={14}
                 className="ml-1 cursor-pointer text-gray-400 hover:text-red-500"
                 onClick={() => setDraftFilters(prev => ({ ...prev, frontendCategory: 'all' }))}
+              />
+            ) : (
+              <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />
+            )}
+          </div>
+          <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
+            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">后台分类:</span>
+            <select
+              className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none"
+              value={draftFilters.backendCategory}
+              onChange={e => setDraftFilters(prev => ({ ...prev, backendCategory: e.target.value }))}
+            >
+              <option value="all">全部</option>
+              {backendQuickCategories.map(item => (
+                <option key={item.name} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {draftFilters.backendCategory !== 'all' ? (
+              <X
+                size={14}
+                className="ml-1 cursor-pointer text-gray-400 hover:text-red-500"
+                onClick={() => setDraftFilters(prev => ({ ...prev, backendCategory: 'all' }))}
               />
             ) : (
               <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />
@@ -357,21 +357,21 @@ export const WebProductList: React.FC<{
                 <div className="flex items-center space-x-4 text-[13px] font-bold">
                   <button
                     onClick={() => {
-                      setQuickCategoryView('backend');
-                      setSelectedQuickCategory(prev => ({ view: 'backend', name: prev.view === 'backend' ? prev.name : null }));
-                    }}
-                    className={quickCategoryView === 'backend' ? 'text-[#00C06B]' : 'text-[#666] hover:text-[#00C06B]'}
-                  >
-                    后台分类({backendQuickCategories.length})
-                  </button>
-                  <button
-                    onClick={() => {
                       setQuickCategoryView('frontend');
                       setSelectedQuickCategory(prev => ({ view: 'frontend', name: prev.view === 'frontend' ? prev.name : null }));
                     }}
                     className={quickCategoryView === 'frontend' ? 'text-[#00C06B]' : 'text-[#666] hover:text-[#00C06B]'}
                   >
                     前台分类({frontendQuickCategories.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setQuickCategoryView('backend');
+                      setSelectedQuickCategory(prev => ({ view: 'backend', name: prev.view === 'backend' ? prev.name : null }));
+                    }}
+                    className={quickCategoryView === 'backend' ? 'text-[#00C06B]' : 'text-[#666] hover:text-[#00C06B]'}
+                  >
+                    后台分类({backendQuickCategories.length})
                   </button>
                 </div>
               </div>
@@ -528,11 +528,11 @@ export const WebProductList: React.FC<{
                     {selectedQuickCategory.view === 'backend' ? '后台分类' : '前台分类'}：{selectedQuickCategory.name}
                   </span>
                 )}
-                {appliedFilters.backendCategory !== 'all' && (
-                  <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">后台分类筛选：{appliedFilters.backendCategory}</span>
-                )}
                 {appliedFilters.frontendCategory !== 'all' && (
                   <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">前台分类筛选：{appliedFilters.frontendCategory}</span>
+                )}
+                {appliedFilters.backendCategory !== 'all' && (
+                  <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">后台分类筛选：{appliedFilters.backendCategory}</span>
                 )}
               </div>
             </div>
@@ -552,8 +552,8 @@ export const WebProductList: React.FC<{
                     <th className="w-[110px] whitespace-nowrap px-4">
                       商品类型 <Filter size={12} className="ml-1 inline text-[#00C06B]" />
                     </th>
-                    <th className="w-[120px] whitespace-nowrap px-4">后台分类</th>
                     <th className="w-[120px] whitespace-nowrap px-4">前台分类</th>
+                    <th className="w-[120px] whitespace-nowrap px-4">后台分类</th>
                     <th className="w-[100px] whitespace-nowrap px-4">基础价格</th>
                     <th className="w-[100px] whitespace-nowrap px-4">售卖状态</th>
                     <th className="w-[100px] whitespace-nowrap px-4">数据来源</th>
@@ -590,8 +590,8 @@ export const WebProductList: React.FC<{
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#666]">{getProductTypeLabel(product)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#666]">{product.category || '未分类'}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#666]">{getFrontendCategoryName(product)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[#666]">{product.category || '未分类'}</td>
                         <td className="whitespace-nowrap px-4 py-3 font-mono font-medium">
                           {product.price} <span className="text-[10px] text-gray-400">元</span>
                         </td>

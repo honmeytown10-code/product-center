@@ -4,7 +4,7 @@ import {
   Box, ChevronDown, ChevronUp, Search, Bell, LayoutGrid, Clock, Settings, Store
 } from 'lucide-react';
 import { useProducts } from '../context';
-import { Category, CategoryFieldConfig } from '../types';
+import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY } from '../types';
 import { SidebarItem } from './web/WebCommon';
 import { WebProductList } from './web/WebProductList';
 import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new component
@@ -29,6 +29,7 @@ import { WebProductSync } from './web/WebProductSync'; // Import new component
 import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
+import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
@@ -40,6 +41,51 @@ export interface WebCategory extends Category {
 type StoreProductManagePreset = {
   keyword?: string;
 };
+
+type CommonFieldConfigs = Record<string, CategoryFieldConfig[]>;
+
+const COMMON_FIELD_PRIORITY: Record<'standard' | 'combo', string[]> = {
+  standard: ['p_name', 'p_alias', 'p_front_cat', 'p_img', 'p_list_desc', 's_price', 's_stock', 'm_methods', 'a_addons'],
+  combo: ['p_name', 'p_front_cat', 'p_img', 'p_list_desc', 's_price', 's_stock', 'c_groups', 'm_methods'],
+};
+
+const getCommonFieldConfigKey = (type: 'standard' | 'combo', categoryId: string) => `${type}:${categoryId}`;
+
+const buildChildConfigs = (fieldId: string, current?: Record<string, boolean>) => {
+  const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[fieldId] || [];
+  if (childTemplates.length === 0) return undefined;
+  return childTemplates.reduce<Record<string, boolean>>((acc, child) => {
+    acc[child.id] = current?.[child.id] ?? !!(child.isDefaultSelected || child.isSystem);
+    return acc;
+  }, {});
+};
+
+const buildCommonFieldConfigEntry = (fieldConfig: CategoryFieldConfig): CategoryFieldConfig => ({
+  id: fieldConfig.id,
+  isRequired: fieldConfig.isRequired,
+  childConfigs: buildChildConfigs(fieldConfig.id, fieldConfig.childConfigs),
+  childRequiredConfigs: fieldConfig.childRequiredConfigs,
+});
+
+const buildDefaultCommonFieldIds = (category: WebCategory) => {
+  const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
+  const availableIds = fieldConfigs.map(field => field.id);
+  const requiredIds = fieldConfigs.filter(field => field.isRequired).map(field => field.id);
+  const preferredIds = COMMON_FIELD_PRIORITY[category.classification].filter(id => availableIds.includes(id));
+  const fallbackIds = availableIds.slice(0, Math.min(8, availableIds.length));
+  return Array.from(new Set([...requiredIds, ...preferredIds, ...fallbackIds]));
+};
+
+const buildInitialCommonFieldConfigs = (categories: WebCategory[]): CommonFieldConfigs => (
+  categories.reduce<CommonFieldConfigs>((acc, category) => {
+    const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
+    const defaultIds = new Set(buildDefaultCommonFieldIds(category));
+    acc[getCommonFieldConfigKey(category.classification, category.id)] = fieldConfigs
+      .filter(field => defaultIds.has(field.id))
+      .map(buildCommonFieldConfigEntry);
+    return acc;
+  }, {})
+);
 
 const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_name', isRequired: true },
@@ -170,10 +216,48 @@ export const WebAdmin: React.FC = () => {
   const [attributeMutexEditorContext, setAttributeMutexEditorContext] = useState<{ mode: 'create' | 'edit'; rule?: any } | null>(null);
   const [showProductMenuGuide, setShowProductMenuGuide] = useState(false);
   const [currentProductMenuGuideStep, setCurrentProductMenuGuideStep] = useState(0);
+  const [commonFieldConfigs, setCommonFieldConfigs] = useState<CommonFieldConfigs>(() => buildInitialCommonFieldConfigs(INITIAL_WEB_CATEGORIES));
+  const [commonFieldSettingsContext, setCommonFieldSettingsContext] = useState<{ type: 'standard' | 'combo'; categoryId: string | null } | null>(null);
 
   // Category Manager State
   const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
   const [selectedManageCat, setSelectedManageCat] = useState<Category | null>(null);
+
+  useEffect(() => {
+    setCommonFieldConfigs(prev => {
+      const next: CommonFieldConfigs = {};
+
+      webCategories.forEach(category => {
+        const key = getCommonFieldConfigKey(category.classification, category.id);
+        const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
+        const fieldMap = new Map(fieldConfigs.map(field => [field.id, field]));
+        const defaultEntries = buildInitialCommonFieldConfigs([category])[key] || [];
+        const prevEntries = prev[key] || defaultEntries;
+        const selectedIds = new Set([
+          ...prevEntries.map(field => field.id),
+          ...fieldConfigs.filter(field => field.isRequired).map(field => field.id),
+        ]);
+
+        next[key] = Array.from(selectedIds)
+          .map(fieldId => {
+            const sourceField = fieldMap.get(fieldId);
+            if (!sourceField) return null;
+            const prevField = prevEntries.find(item => item.id === fieldId);
+            return buildCommonFieldConfigEntry({
+              ...sourceField,
+              childConfigs: buildChildConfigs(fieldId, prevField?.childConfigs || sourceField.childConfigs),
+            });
+          })
+          .filter((item): item is CategoryFieldConfig => !!item);
+      });
+
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      const serialize = (value: CategoryFieldConfig[] = []) => JSON.stringify(value);
+      const changed = prevKeys.length !== nextKeys.length || nextKeys.some(key => serialize(prev[key]) !== serialize(next[key]));
+      return changed ? next : prev;
+    });
+  }, [webCategories]);
 
   const toggleMenu = (key: string) => {
     setExpandedMenus(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -229,6 +313,34 @@ export const WebAdmin: React.FC = () => {
 
   // Determine current content
   const renderContent = () => {
+      if (activeMenu === 'common_field_settings') {
+          return (
+              <WebCommonFieldSettings
+                  categories={webCategories}
+                  configs={commonFieldConfigs}
+                  initialType={commonFieldSettingsContext?.type}
+                  initialCategoryId={commonFieldSettingsContext?.categoryId || null}
+                  onBack={() => setActiveMenu('product_list')}
+                  onSave={(type, categoryId, fieldConfigs) => {
+                      setCommonFieldConfigs(prev => ({
+                          ...prev,
+                          [getCommonFieldConfigKey(type, categoryId)]: fieldConfigs,
+                      }));
+                  }}
+                  onReset={(type, categoryId) => {
+                      const targetCategory = webCategories.find(item => item.classification === type && item.id === categoryId);
+                      if (!targetCategory) return;
+                      const defaultConfigKey = getCommonFieldConfigKey(type, categoryId);
+                      const defaultConfigs = buildInitialCommonFieldConfigs([targetCategory])[defaultConfigKey] || [];
+                      setCommonFieldConfigs(prev => ({
+                          ...prev,
+                          [defaultConfigKey]: defaultConfigs,
+                      }));
+                  }}
+              />
+          );
+      }
+
       if (creationContext) {
           return (
               <WebProductForm 
@@ -239,6 +351,11 @@ export const WebAdmin: React.FC = () => {
                   initialProduct={creationContext.product || null}
                   existingProductCount={products.length}
                   previewPreferenceKey="web-admin-qimai-jingjing"
+                  commonFieldConfigs={commonFieldConfigs}
+                  onOpenCommonFieldSettings={(type, categoryId) => {
+                      setCommonFieldSettingsContext({ type, categoryId });
+                      setActiveMenu('common_field_settings');
+                  }}
                   onClose={() => setCreationContext(null)} 
               />
           );
@@ -627,7 +744,14 @@ export const WebAdmin: React.FC = () => {
               {expandedMenus.includes('product_settings') && (
                  <div className="mt-1 space-y-0.5">
                     <SidebarItem label="通用设置" active={activeMenu === 'general_settings'} onClick={() => { setActiveMenu('general_settings'); setCreationContext(null); }} />
-                    <SidebarItem label="自定义字段" />
+                    <SidebarItem
+                      label="常用字段"
+                      active={activeMenu === 'common_field_settings'}
+                      onClick={() => {
+                        setCommonFieldSettingsContext(null);
+                        setActiveMenu('common_field_settings');
+                      }}
+                    />
                  </div>
               )}
            </div>

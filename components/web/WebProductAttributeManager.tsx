@@ -1,13 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart, Blend, ChevronRight, ChevronDown } from 'lucide-react';
+import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart, Blend, ChevronRight, ChevronDown, Plus, X, Eye, EyeOff, Lock } from 'lucide-react';
+
+type SpecValue = {
+  id: string;
+  name: string;
+  code: string;
+  relatedProducts: LinkedSpecProduct[];
+};
 
 type AttributeTab = 'spec' | 'method' | 'label' | 'badge' | 'series' | 'custom_combo' | 'addon';
 type LabelTab = 'desc' | 'order' | 'stats';
+type SpecColumnKey = 'name' | 'value' | 'code' | 'relatedProducts';
+
+type LinkedSpecProduct = {
+  id: string;
+  name: string;
+  type: '标准商品' | '套餐商品' | '商城商品' | '加料商品';
+  imageText?: string;
+};
 
 type SpecGroup = {
   id: string;
   name: string;
-  values: Array<{ id: string; name: string; code: string }>;
+  description: string;
+  relatedProducts: LinkedSpecProduct[];
+  values: SpecValue[];
 };
 
 type MethodGroup = {
@@ -73,31 +90,105 @@ type AddonGroup = {
   children?: AddonGroup[];
 };
 
+type SpecEditorState = {
+  mode: 'create' | 'edit';
+  groupId?: string;
+  name: string;
+  description: string;
+  values: SpecValue[];
+};
+
+type SpecValueEditorState = {
+  groupId: string;
+  groupName: string;
+  values: SpecValue[];
+};
+
+type SpecDeleteDialogState =
+  | {
+      mode: 'confirm';
+      targetType: 'group' | 'value';
+      groupId: string;
+      groupName: string;
+      valueId?: string;
+      valueName?: string;
+    }
+  | {
+      mode: 'blocked';
+      targetType: 'group' | 'value';
+      groupId: string;
+      groupName: string;
+      relationCount: number;
+      valueId?: string;
+      valueName?: string;
+    };
+
+type SpecLinkedProductsViewer = {
+  title: string;
+  products: LinkedSpecProduct[];
+};
+
 const SPEC_GROUPS: SpecGroup[] = [
   {
     id: 'spec-1',
     name: '0325规格1',
-    values: [{ id: 'sv-1', name: '050811', code: '050811' }],
+    description: '用于门店测试的默认规格',
+    relatedProducts: [
+      { id: 'sp-101', name: '经典奶茶', type: '标准商品', imageText: '奶' },
+      { id: 'sp-102', name: '双杯套餐', type: '套餐商品', imageText: '套' },
+    ],
+    values: [{ id: 'sv-1', name: '050811', code: '050811', relatedProducts: [{ id: 'sp-101', name: '经典奶茶', type: '标准商品', imageText: '奶' }] }],
   },
   {
     id: 'spec-2',
     name: '验收-自建规格',
+    description: '验收环境下临时使用',
+    relatedProducts: [],
     values: [],
   },
   {
     id: 'spec-3',
     name: '人数222',
+    description: '按人数区分的规格组',
+    relatedProducts: [
+      { id: 'sp-103', name: '围炉双人餐', type: '套餐商品', imageText: '围' },
+      { id: 'sp-104', name: '围炉四人餐', type: '套餐商品', imageText: '围' },
+      { id: 'sp-105', name: '生日聚会套餐', type: '商城商品', imageText: '生' },
+    ],
     values: [
-      { id: 'sv-2', name: '2人', code: '2' },
-      { id: 'sv-3', name: '4人', code: '4' },
+      { id: 'sv-2', name: '2人', code: '2', relatedProducts: [{ id: 'sp-103', name: '围炉双人餐', type: '套餐商品', imageText: '围' }] },
+      { id: 'sv-3', name: '4人', code: '4', relatedProducts: [{ id: 'sp-104', name: '围炉四人餐', type: '套餐商品', imageText: '围' }, { id: 'sp-105', name: '生日聚会套餐', type: '商城商品', imageText: '生' }] },
     ],
   },
   {
     id: 'spec-4',
     name: 'KOI规格',
+    description: '品牌规格示例',
+    relatedProducts: [],
     values: [],
   },
 ];
+
+const SPEC_COLUMN_DEFS: Array<{ key: SpecColumnKey; label: string }> = [
+  { key: 'name', label: '规格名称' },
+  { key: 'value', label: '规格值' },
+  { key: 'code', label: '规格值编码' },
+  { key: 'relatedProducts', label: '关联商品数量' },
+];
+
+const DEFAULT_VISIBLE_SPEC_COLUMNS: Record<SpecColumnKey, boolean> = {
+  name: true,
+  value: true,
+  code: true,
+  relatedProducts: true,
+};
+
+const createEmptySpecValue = (): SpecValue => ({
+  id: `spec-value-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: '',
+  code: '',
+  relatedProducts: [],
+});
 
 const METHOD_GROUPS: MethodGroup[] = [
   {
@@ -231,6 +322,16 @@ export const WebProductAttributeManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AttributeTab>('spec');
   const [activeLabelTab, setActiveLabelTab] = useState<LabelTab>('desc');
   const [keyword, setKeyword] = useState('');
+  const [specGroups, setSpecGroups] = useState<SpecGroup[]>(SPEC_GROUPS);
+  const [specNameInput, setSpecNameInput] = useState('');
+  const [specNameFilter, setSpecNameFilter] = useState('');
+  const [showSpecColumnPanel, setShowSpecColumnPanel] = useState(false);
+  const [specColumnKeyword, setSpecColumnKeyword] = useState('');
+  const [visibleSpecColumns, setVisibleSpecColumns] = useState<Record<SpecColumnKey, boolean>>(DEFAULT_VISIBLE_SPEC_COLUMNS);
+  const [specEditor, setSpecEditor] = useState<SpecEditorState | null>(null);
+  const [specValueEditor, setSpecValueEditor] = useState<SpecValueEditorState | null>(null);
+  const [specDeleteDialog, setSpecDeleteDialog] = useState<SpecDeleteDialogState | null>(null);
+  const [specProductsViewer, setSpecProductsViewer] = useState<SpecLinkedProductsViewer | null>(null);
   const [expandedSpecGroups, setExpandedSpecGroups] = useState<Set<string>>(
     () => new Set(SPEC_GROUPS.filter(group => group.values.length > 0).map(group => group.id))
   );
@@ -245,11 +346,12 @@ export const WebProductAttributeManager: React.FC = () => {
   );
 
   const normalizedKeyword = keyword.trim().toLowerCase();
+  const normalizedSpecName = specNameFilter.trim().toLowerCase();
 
   const filteredSpecGroups = useMemo(() => {
-    if (!normalizedKeyword) return SPEC_GROUPS;
-    return SPEC_GROUPS.filter(group => [group.name, ...group.values.map(value => `${value.name} ${value.code}`)].join(' ').toLowerCase().includes(normalizedKeyword));
-  }, [normalizedKeyword]);
+    if (!normalizedSpecName) return specGroups;
+    return specGroups.filter(group => group.name.toLowerCase().includes(normalizedSpecName));
+  }, [normalizedSpecName, specGroups]);
 
   const filteredMethodGroups = useMemo(() => {
     if (!normalizedKeyword) return METHOD_GROUPS;
@@ -323,6 +425,208 @@ export const WebProductAttributeManager: React.FC = () => {
       else next.add(id);
       return next;
     });
+  };
+
+  const handleSearchSpecs = () => {
+    setSpecNameFilter(specNameInput.trim());
+  };
+
+  const handleResetSpecs = () => {
+    setSpecNameInput('');
+    setSpecNameFilter('');
+  };
+
+  const handleOpenCreateSpec = () => {
+    setSpecEditor({
+      mode: 'create',
+      name: '',
+      description: '',
+      values: [createEmptySpecValue()],
+    });
+  };
+
+  const handleOpenEditSpec = (group: SpecGroup) => {
+    setSpecEditor({
+      mode: 'edit',
+      groupId: group.id,
+      name: group.name,
+      description: group.description,
+      values: group.values.length ? group.values.map(value => ({ ...value })) : [createEmptySpecValue()],
+    });
+  };
+
+  const handleOpenSpecValueEditor = (group: SpecGroup) => {
+    setSpecValueEditor({
+      groupId: group.id,
+      groupName: group.name,
+      values: group.values.length ? group.values.map(value => ({ ...value })) : [createEmptySpecValue()],
+    });
+  };
+
+  const handleSaveSpecEditor = () => {
+    if (!specEditor) return;
+
+    const nextName = specEditor.name.trim() || '未命名规格';
+    const nextDescription = specEditor.description.trim();
+    const nextValues = specEditor.values
+      .map(value => ({
+        ...value,
+        name: value.name.trim(),
+        code: value.code.trim(),
+      }))
+      .filter(value => value.name || value.code);
+
+    if (specEditor.mode === 'create') {
+      const nextGroupId = `spec-${Date.now()}`;
+      setSpecGroups(prev => [
+        {
+          id: nextGroupId,
+          name: nextName,
+          description: nextDescription,
+          relatedProducts: [],
+          values: nextValues,
+        },
+        ...prev,
+      ]);
+      if (nextValues.length) {
+        setExpandedSpecGroups(prev => new Set([nextGroupId, ...prev]));
+      }
+    } else if (specEditor.groupId) {
+      setSpecGroups(prev =>
+        prev.map(group =>
+          group.id === specEditor.groupId
+            ? {
+                ...group,
+                name: nextName,
+                description: nextDescription,
+                values: nextValues,
+              }
+            : group
+        )
+      );
+      setExpandedSpecGroups(prev => {
+        const next = new Set(prev);
+        if (nextValues.length) next.add(specEditor.groupId!);
+        else next.delete(specEditor.groupId!);
+        return next;
+      });
+    }
+
+    setSpecEditor(null);
+  };
+
+  const handleSaveSpecValueEditor = () => {
+    if (!specValueEditor) return;
+
+    const nextValues = specValueEditor.values
+      .map(value => ({
+        ...value,
+        name: value.name.trim(),
+        code: value.code.trim(),
+      }))
+      .filter(value => value.name || value.code);
+
+    setSpecGroups(prev =>
+      prev.map(group =>
+        group.id === specValueEditor.groupId
+          ? {
+              ...group,
+              values: nextValues,
+            }
+          : group
+      )
+    );
+    setExpandedSpecGroups(prev => {
+      const next = new Set(prev);
+      if (nextValues.length) next.add(specValueEditor.groupId);
+      else next.delete(specValueEditor.groupId);
+      return next;
+    });
+    setSpecValueEditor(null);
+  };
+
+  const handleRequestDeleteSpec = (group: SpecGroup) => {
+    if (group.relatedProducts.length > 0) {
+      setSpecDeleteDialog({
+        mode: 'blocked',
+        targetType: 'group',
+        groupId: group.id,
+        groupName: group.name,
+        relationCount: group.relatedProducts.length,
+      });
+      return;
+    }
+
+    setSpecDeleteDialog({
+      mode: 'confirm',
+      targetType: 'group',
+      groupId: group.id,
+      groupName: group.name,
+    });
+  };
+
+  const handleRequestDeleteSpecValue = (group: SpecGroup, value: SpecValue) => {
+    if (value.relatedProducts.length > 0) {
+      setSpecDeleteDialog({
+        mode: 'blocked',
+        targetType: 'value',
+        groupId: group.id,
+        groupName: group.name,
+        valueId: value.id,
+        valueName: value.name,
+        relationCount: value.relatedProducts.length,
+      });
+      return;
+    }
+
+    setSpecDeleteDialog({
+      mode: 'confirm',
+      targetType: 'value',
+      groupId: group.id,
+      groupName: group.name,
+      valueId: value.id,
+      valueName: value.name,
+    });
+  };
+
+  const handleConfirmDeleteSpec = () => {
+    if (!specDeleteDialog || specDeleteDialog.mode !== 'confirm') return;
+
+    if (specDeleteDialog.targetType === 'group') {
+      setSpecGroups(prev => prev.filter(group => group.id !== specDeleteDialog.groupId));
+      setExpandedSpecGroups(prev => {
+        const next = new Set(prev);
+        next.delete(specDeleteDialog.groupId);
+        return next;
+      });
+      setSpecDeleteDialog(null);
+      return;
+    }
+
+    let shouldCollapse = false;
+    setSpecGroups(prev =>
+      prev.map(group => {
+        if (group.id !== specDeleteDialog.groupId) return group;
+        const nextValues = group.values.filter(value => value.id !== specDeleteDialog.valueId);
+        shouldCollapse = nextValues.length === 0;
+        return {
+          ...group,
+          values: nextValues,
+        };
+      })
+    );
+    if (shouldCollapse) {
+      setExpandedSpecGroups(prev => {
+        const next = new Set(prev);
+        next.delete(specDeleteDialog.groupId);
+        return next;
+      });
+    }
+    setSpecDeleteDialog(null);
+  };
+
+  const handleOpenSpecProducts = (title: string, products: LinkedSpecProduct[]) => {
+    setSpecProductsViewer({ title, products });
   };
 
   return (
@@ -408,6 +712,41 @@ export const WebProductAttributeManager: React.FC = () => {
                 </div>
               </div>
             </div>
+          ) : activeTab === 'spec' ? (
+            <div className="flex items-center justify-between gap-4 border-b border-[#E8E8E8] px-6 py-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#666]">规格名称</span>
+                  <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+                  <input
+                    value={specNameInput}
+                    onChange={e => setSpecNameInput(e.target.value)}
+                    placeholder="请输入"
+                    className="h-[38px] w-[220px] rounded-lg border border-[#E8E8E8] bg-white pl-[72px] pr-10 text-sm text-[#333] outline-none focus:border-[#00C06B]"
+                  />
+                </div>
+                <button onClick={handleSearchSpecs} className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">搜索</button>
+                <button onClick={handleResetSpecs} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2.5 text-sm font-bold text-[#5B6475] hover:bg-[#FAFAFA]">重置</button>
+              </div>
+
+              <div className="relative flex items-center gap-3">
+                <button
+                  onClick={() => setShowSpecColumnPanel(prev => !prev)}
+                  className="inline-flex items-center rounded-lg border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm font-medium text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]"
+                >
+                  <ListFilter size={14} />
+                </button>
+                {showSpecColumnPanel && (
+                  <SpecColumnPanel
+                    keyword={specColumnKeyword}
+                    visibleColumns={visibleSpecColumns}
+                    onChangeKeyword={setSpecColumnKeyword}
+                    onToggleColumn={key => setVisibleSpecColumns(prev => ({ ...prev, [key]: !prev[key] }))}
+                  />
+                )}
+                <button onClick={handleOpenCreateSpec} className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">新增规格</button>
+              </div>
+            </div>
           ) : (
           <div className="flex items-center justify-between gap-4 border-b border-[#E8E8E8] px-6 py-4">
             <div className="flex items-center gap-3">
@@ -440,8 +779,15 @@ export const WebProductAttributeManager: React.FC = () => {
           {activeTab === 'spec' && (
             <SpecTable
               groups={filteredSpecGroups}
+              visibleColumns={visibleSpecColumns}
               expandedGroupIds={expandedSpecGroups}
               onToggleGroup={(id) => toggleExpanded(setExpandedSpecGroups, id)}
+              onCreateValue={handleOpenSpecValueEditor}
+              onEditGroup={handleOpenEditSpec}
+              onDeleteGroup={handleRequestDeleteSpec}
+              onEditValue={handleOpenSpecValueEditor}
+              onDeleteValue={handleRequestDeleteSpecValue}
+              onViewProducts={handleOpenSpecProducts}
             />
           )}
           {activeTab === 'method' && (
@@ -468,22 +814,57 @@ export const WebProductAttributeManager: React.FC = () => {
               onToggleGroup={(id) => toggleExpanded(setExpandedAddonGroups, id)}
             />
           )}
+          {specEditor && (
+            <SpecEditorModal
+              draft={specEditor}
+              onChange={setSpecEditor}
+              onCancel={() => setSpecEditor(null)}
+              onConfirm={handleSaveSpecEditor}
+            />
+          )}
+          {specValueEditor && (
+            <SpecValueEditorModal
+              draft={specValueEditor}
+              onChange={setSpecValueEditor}
+              onCancel={() => setSpecValueEditor(null)}
+              onConfirm={handleSaveSpecValueEditor}
+            />
+          )}
+          {specDeleteDialog && (
+            <SpecDeleteModal
+              dialog={specDeleteDialog}
+              onCancel={() => setSpecDeleteDialog(null)}
+              onConfirm={handleConfirmDeleteSpec}
+            />
+          )}
+          {specProductsViewer && (
+            <SpecLinkedProductsModal
+              viewer={specProductsViewer}
+              onClose={() => setSpecProductsViewer(null)}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const ActionButtons = ({ actions }: { actions: string[] }) => (
+const ActionButtons = ({ actions }: { actions: Array<string | { label: string; onClick?: () => void; danger?: boolean }> }) => (
   <div className="flex flex-wrap justify-end gap-x-4 gap-y-2 whitespace-nowrap">
     {actions.map(action => (
+      (() => {
+        const item = typeof action === 'string' ? { label: action } : action;
+        return (
       <button
-        key={action}
+        key={item.label}
         type="button"
-        className="inline-flex items-center text-sm text-[#00C06B] hover:text-[#00A35B]"
+        onClick={item.onClick}
+        className={`inline-flex items-center text-sm ${item.danger ? 'text-[#FF4D4F] hover:text-[#D9363E]' : 'text-[#00C06B] hover:text-[#00A35B]'}`}
       >
-        {action}
+        {item.label}
       </button>
+        );
+      })()
     ))}
   </div>
 );
@@ -511,20 +892,35 @@ const TreeChildName = ({ name }: { name?: string }) => (
 
 const SpecTable = ({
   groups,
+  visibleColumns,
   expandedGroupIds,
   onToggleGroup,
+  onCreateValue,
+  onEditGroup,
+  onDeleteGroup,
+  onEditValue,
+  onDeleteValue,
+  onViewProducts,
 }: {
   groups: SpecGroup[];
+  visibleColumns: Record<SpecColumnKey, boolean>;
   expandedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  onCreateValue: (group: SpecGroup) => void;
+  onEditGroup: (group: SpecGroup) => void;
+  onDeleteGroup: (group: SpecGroup) => void;
+  onEditValue: (group: SpecGroup) => void;
+  onDeleteValue: (group: SpecGroup, value: SpecValue) => void;
+  onViewProducts: (title: string, products: LinkedSpecProduct[]) => void;
 }) => (
   <div className="overflow-auto">
-    <table className="w-full min-w-[900px] border-collapse text-left">
+    <table className="w-full min-w-[960px] border-collapse text-left">
       <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
         <tr>
-          <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4">规格名称</th>
-          <th className="border-b border-[#E8E8E8] px-4 py-4">规格值</th>
-          <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">规格值编码</th>
+          {visibleColumns.name && <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4">规格名称</th>}
+          {visibleColumns.value && <th className="border-b border-[#E8E8E8] px-4 py-4">规格值</th>}
+          {visibleColumns.code && <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">规格值编码</th>}
+          {visibleColumns.relatedProducts && <th className="w-[160px] border-b border-[#E8E8E8] px-4 py-4">关联商品数量</th>}
           <th className="w-[260px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
         </tr>
       </thead>
@@ -532,27 +928,70 @@ const SpecTable = ({
         {groups.map(group => (
           <React.Fragment key={group.id}>
             <tr className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
-              <td className="px-4 py-4 font-medium">
-                <TreeGroupName
-                  name={group.name}
-                  expanded={expandedGroupIds.has(group.id)}
-                  hasChildren={group.values.length > 0}
-                  onClick={() => onToggleGroup(group.id)}
-                />
-              </td>
-              <td className="px-4 py-4 text-[#999]">{group.values.length ? '' : '-'}</td>
-              <td className="px-4 py-4 text-[#999]">{group.values.length ? '' : '-'}</td>
+              {visibleColumns.name && (
+                <td className="px-4 py-4 font-medium">
+                  <TreeGroupName
+                    name={group.name}
+                    expanded={expandedGroupIds.has(group.id)}
+                    hasChildren={group.values.length > 0}
+                    onClick={() => onToggleGroup(group.id)}
+                  />
+                </td>
+              )}
+              {visibleColumns.value && <td className="px-4 py-4 text-[#999]">{group.values.length ? '' : '-'}</td>}
+              {visibleColumns.code && <td className="px-4 py-4 text-[#999]">{group.values.length ? '' : '-'}</td>}
+              {visibleColumns.relatedProducts && (
+                <td className="px-4 py-4">
+                  {group.relatedProducts.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewProducts(`${group.name} 已关联商品`, group.relatedProducts)}
+                      className="text-sm font-medium text-[#00C06B] hover:text-[#00A35B] hover:underline"
+                    >
+                      {group.relatedProducts.length} 个
+                    </button>
+                  ) : (
+                    <span className="text-[#999]">0</span>
+                  )}
+                </td>
+              )}
               <td className="px-4 py-4 text-right">
-                <ActionButtons actions={['新增规格值', '编辑', '删除']} />
+                <ActionButtons
+                  actions={[
+                    { label: '新增规格值', onClick: () => onCreateValue(group) },
+                    { label: '编辑', onClick: () => onEditGroup(group) },
+                    { label: '删除', onClick: () => onDeleteGroup(group), danger: true },
+                  ]}
+                />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.values.map(value => (
               <tr key={value.id} className="border-b border-[#F7F7F7] bg-[#FCFCFC]">
-                <td className="px-4 py-4 text-[#666]"><TreeChildName /></td>
-                <td className="px-4 py-4 text-[#666]">{value.name}</td>
-                <td className="px-4 py-4 text-[#666]">{value.code}</td>
+                {visibleColumns.name && <td className="px-4 py-4 text-[#666]"><TreeChildName /></td>}
+                {visibleColumns.value && <td className="px-4 py-4 text-[#666]">{value.name}</td>}
+                {visibleColumns.code && <td className="px-4 py-4 text-[#666]">{value.code}</td>}
+                {visibleColumns.relatedProducts && (
+                  <td className="px-4 py-4">
+                    {value.relatedProducts.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => onViewProducts(`${group.name} / ${value.name} 已关联商品`, value.relatedProducts)}
+                        className="text-sm font-medium text-[#00C06B] hover:text-[#00A35B] hover:underline"
+                      >
+                        {value.relatedProducts.length} 个
+                      </button>
+                    ) : (
+                      <span className="text-[#999]">0</span>
+                    )}
+                  </td>
+                )}
                 <td className="px-4 py-4 text-right">
-                  <ActionButtons actions={['编辑', '删除']} />
+                  <ActionButtons
+                    actions={[
+                      { label: '编辑', onClick: () => onEditValue(group) },
+                      { label: '删除', onClick: () => onDeleteValue(group, value), danger: true },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -562,6 +1001,340 @@ const SpecTable = ({
     </table>
   </div>
 );
+
+const SpecColumnPanel = ({
+  keyword,
+  visibleColumns,
+  onChangeKeyword,
+  onToggleColumn,
+}: {
+  keyword: string;
+  visibleColumns: Record<SpecColumnKey, boolean>;
+  onChangeKeyword: (keyword: string) => void;
+  onToggleColumn: (key: SpecColumnKey) => void;
+}) => {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const matchedColumns = SPEC_COLUMN_DEFS.filter(def => !normalizedKeyword || def.label.toLowerCase().includes(normalizedKeyword));
+  const visibleItems = matchedColumns.filter(def => visibleColumns[def.key]);
+  const hiddenItems = matchedColumns.filter(def => !visibleColumns[def.key]);
+
+  const renderItem = (def: { key: SpecColumnKey; label: string }, visible: boolean) => (
+    <button
+      key={def.key}
+      type="button"
+      onClick={() => onToggleColumn(def.key)}
+      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-[#333] transition-colors hover:bg-[#F7F8FA]"
+    >
+      <span>{def.label}</span>
+      {visible ? <Eye size={16} className="text-[#98A2B3]" /> : <EyeOff size={16} className="text-[#D1D5DB]" />}
+    </button>
+  );
+
+  return (
+    <div className="absolute right-0 top-12 z-40 w-[420px] rounded-2xl border border-[#E8E8E8] bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+        <input
+          value={keyword}
+          onChange={e => onChangeKeyword(e.target.value)}
+          placeholder="搜索"
+          className="h-10 w-full rounded-lg border border-[#E8E8E8] pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]"
+        />
+      </div>
+      <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-[#EEF1F5]">
+        <div className="min-h-[220px] border-r border-[#EEF1F5] px-3 py-3">
+          <div className="mb-3 flex items-center justify-between text-sm text-[#666]">
+            <span>在列表中展示</span>
+            <span className="inline-flex items-center gap-1 text-xs text-[#98A2B3]"><Lock size={12} />冻结</span>
+          </div>
+          <div className="space-y-1">
+            {visibleItems.map(def => renderItem(def, true))}
+            <div className="flex items-center justify-between rounded-lg bg-[#F7F8FA] px-3 py-2 text-sm text-[#333]">
+              <span>操作</span>
+              <Lock size={16} className="text-[#98A2B3]" />
+            </div>
+            {!visibleItems.length && <div className="px-3 py-8 text-center text-sm text-[#98A2B3]">暂无匹配字段</div>}
+          </div>
+        </div>
+        <div className="min-h-[220px] px-3 py-3">
+          <div className="mb-3 text-sm text-[#666]">在列表中隐藏</div>
+          <div className="space-y-1">
+            {hiddenItems.map(def => renderItem(def, false))}
+            {!hiddenItems.length && <div className="px-3 py-8 text-center text-sm text-[#98A2B3]">暂无隐藏字段</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SpecValueRowsEditor = ({
+  values,
+  onChange,
+}: {
+  values: SpecValue[];
+  onChange: (values: SpecValue[]) => void;
+}) => {
+  const updateRow = (valueId: string, patch: Partial<SpecValue>) => {
+    onChange(values.map(value => (value.id === valueId ? { ...value, ...patch } : value)));
+  };
+
+  const appendRow = () => {
+    onChange([...values, createEmptySpecValue()]);
+  };
+
+  const removeRow = (valueId: string) => {
+    const nextValues = values.filter(value => value.id !== valueId);
+    onChange(nextValues.length ? nextValues : [createEmptySpecValue()]);
+  };
+
+  return (
+    <div className="rounded-xl border border-[#EEF1F5]">
+      <div className="grid grid-cols-[minmax(0,1fr)_340px_96px] bg-[#F7F8FA] px-4 py-3 text-sm font-bold text-[#333]">
+        <div><span className="mr-1 text-[#FF4D4F]">*</span>规格值</div>
+        <div>规格值编码</div>
+        <div className="text-right">操作</div>
+      </div>
+      <div className="px-4">
+        {values.map(value => (
+          <div key={value.id} className="grid grid-cols-[minmax(0,1fr)_340px_96px] items-start gap-4 border-t border-[#EEF1F5] py-3 first:border-t-0">
+            <div className="relative">
+              <input
+                value={value.name}
+                maxLength={70}
+                onChange={e => updateRow(value.id, { name: e.target.value.slice(0, 70) })}
+                placeholder="请输入规格名称"
+                className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 pr-14 text-sm text-[#333] outline-none focus:border-[#00C06B]"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{value.name.length}/70</span>
+            </div>
+            <div className="relative">
+              <input
+                value={value.code}
+                maxLength={50}
+                onChange={e => updateRow(value.id, { code: e.target.value.slice(0, 50) })}
+                placeholder="请输入规格值编码"
+                className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 pr-14 text-sm text-[#333] outline-none focus:border-[#00C06B]"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{value.code.length}/50</span>
+            </div>
+            <div className="flex h-10 items-center justify-end">
+              <button type="button" onClick={() => removeRow(value.id)} className="text-sm text-[#00C06B] hover:text-[#00A35B]">删除</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-[#EEF1F5] px-4 py-3">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={appendRow}
+            className="inline-flex items-center gap-1 rounded-lg border border-[#D9DDE7] bg-white px-4 py-2 text-sm text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]"
+          >
+            <Plus size={14} />
+            添加规格值
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SpecEditorModal = ({
+  draft,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: SpecEditorState;
+  onChange: (draft: SpecEditorState) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => (
+  <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/35 px-6">
+    <div className="w-full max-w-[1024px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <div className="flex items-center justify-between px-6 py-5">
+        <div className="text-[20px] font-bold text-[#1F2129]">{draft.mode === 'create' ? '新增规格' : '编辑规格'}</div>
+        <button onClick={onCancel} className="text-[#98A2B3] hover:text-[#5B6475]"><X size={20} /></button>
+      </div>
+      <div className="space-y-6 px-6 pb-6">
+        <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+          <div className="text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>规格名称:</div>
+          <div className="relative max-w-[420px]">
+            <input
+              value={draft.name}
+              maxLength={20}
+              onChange={e => onChange({ ...draft, name: e.target.value.slice(0, 20) })}
+              placeholder="请输入规格名称"
+              className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 pr-14 text-sm text-[#333] outline-none focus:border-[#00C06B]"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{draft.name.length}/20</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+          <div className="text-sm text-[#333]">规格描述:</div>
+          <div className="flex items-center gap-3">
+            <div className="relative w-full max-w-[420px]">
+              <input
+                value={draft.description}
+                maxLength={50}
+                onChange={e => onChange({ ...draft, description: e.target.value.slice(0, 50) })}
+                placeholder="请输入规格描述"
+                className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 pr-14 text-sm text-[#333] outline-none focus:border-[#00C06B]"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{draft.description.length}/50</span>
+            </div>
+            <button type="button" className="text-sm font-medium text-[#00C06B] hover:text-[#00A35B]">查看示例</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
+          <div className="pt-3 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>规格值:</div>
+          <SpecValueRowsEditor
+            values={draft.values}
+            onChange={values => onChange({ ...draft, values })}
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-6 py-5">
+        <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">确定</button>
+        <button onClick={onCancel} className="rounded-[10px] bg-white px-2 py-2.5 text-sm font-medium text-[#00C06B] hover:text-[#00A35B]">取消</button>
+      </div>
+    </div>
+  </div>
+);
+
+const SpecValueEditorModal = ({
+  draft,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: SpecValueEditorState;
+  onChange: (draft: SpecValueEditorState) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => (
+  <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/35 px-6">
+    <div className="w-full max-w-[1024px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <div className="flex items-center justify-between px-6 py-5">
+        <div className="text-[20px] font-bold text-[#1F2129]">新增规格值</div>
+        <button onClick={onCancel} className="text-[#98A2B3] hover:text-[#5B6475]"><X size={20} /></button>
+      </div>
+      <div className="space-y-5 px-6 pb-6">
+        <div className="rounded-xl bg-[#F7F8FA] px-4 py-3 text-sm text-[#5B6475]">规格名称：{draft.groupName}</div>
+        <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
+          <div className="pt-3 text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>规格值:</div>
+          <SpecValueRowsEditor
+            values={draft.values}
+            onChange={values => onChange({ ...draft, values })}
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-6 py-5">
+        <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">确定</button>
+        <button onClick={onCancel} className="rounded-[10px] bg-white px-2 py-2.5 text-sm font-medium text-[#00C06B] hover:text-[#00A35B]">取消</button>
+      </div>
+    </div>
+  </div>
+);
+
+const SpecDeleteModal = ({
+  dialog,
+  onCancel,
+  onConfirm,
+}: {
+  dialog: SpecDeleteDialogState;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const targetLabel = dialog.targetType === 'group' ? `规格“${dialog.groupName}”` : `规格值“${dialog.valueName || '-'}”`;
+  const isBlocked = dialog.mode === 'blocked';
+
+  return (
+    <div className="fixed inset-0 z-[97] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[520px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-5">
+          <div className="text-[20px] font-bold text-[#1F2129]">{isBlocked ? '无法删除' : '删除确认'}</div>
+          <button onClick={onCancel} className="text-[#98A2B3] hover:text-[#5B6475]"><X size={20} /></button>
+        </div>
+        <div className="px-6 py-6">
+          <div className={`rounded-xl px-4 py-4 text-sm leading-6 ${isBlocked ? 'bg-[#FFF7E8] text-[#D97706]' : 'bg-[#F8FAFB] text-[#5B6475]'}`}>
+            {isBlocked
+              ? `${targetLabel} 已关联 ${dialog.relationCount} 个商品，请先解除关联后再删除。`
+              : `确认删除${targetLabel}吗？删除后不可恢复。`}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-6 py-5">
+          <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]">
+            {isBlocked ? '我知道了' : '取消'}
+          </button>
+          {!isBlocked && (
+            <button onClick={onConfirm} className="rounded-[10px] bg-[#FF4D4F] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#D9363E]">删除</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SpecLinkedProductsModal = ({
+  viewer,
+  onClose,
+}: {
+  viewer: SpecLinkedProductsViewer;
+  onClose: () => void;
+}) => {
+  const typeClassMap: Record<LinkedSpecProduct['type'], string> = {
+    标准商品: 'bg-[#F0FDF4] text-[#00A35B]',
+    套餐商品: 'bg-[#FFF7ED] text-[#EA580C]',
+    商城商品: 'bg-[#EEF4FF] text-[#2563EB]',
+    加料商品: 'bg-[#F5F3FF] text-[#7C3AED]',
+  };
+
+  return (
+    <div className="fixed inset-0 z-[97] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[920px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
+          <div>
+            <div className="text-[20px] font-bold text-[#1F2129]">已关联商品</div>
+            <div className="mt-1 text-sm text-[#98A2B3]">{viewer.title}</div>
+          </div>
+          <button onClick={onClose} className="text-[#98A2B3] hover:text-[#5B6475]"><X size={22} /></button>
+        </div>
+        <div className="px-8 py-6">
+          <div className="mb-5 rounded-xl bg-[#F8FAFB] px-4 py-3 text-sm text-[#5B6475]">当前已关联 {viewer.products.length} 个商品</div>
+          <div className="overflow-hidden rounded-xl border border-[#EEF1F5]">
+            <div className="grid grid-cols-[minmax(0,1fr)_140px_120px] bg-[#F8FAFB] px-4 py-3 text-sm font-bold text-[#5B6475]">
+              <div>商品名称</div>
+              <div>商品类型</div>
+              <div>商品ID</div>
+            </div>
+            <div className="max-h-[420px] overflow-y-auto">
+              {viewer.products.map(product => (
+                <div key={product.id} className="grid grid-cols-[minmax(0,1fr)_140px_120px] items-center border-t border-[#EEF1F5] px-4 py-4 first:border-t-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[linear-gradient(135deg,#DDF5E6,#CFF3DB)] text-sm font-bold text-[#00A35B]">
+                      {product.imageText || product.name.slice(0, 2)}
+                    </div>
+                    <div className="truncate text-sm text-[#1F2129]">{product.name}</div>
+                  </div>
+                  <div>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${typeClassMap[product.type]}`}>{product.type}</span>
+                  </div>
+                  <div className="text-sm text-[#5B6475]">{product.id}</div>
+                </div>
+              ))}
+              {!viewer.products.length && <div className="px-4 py-12 text-center text-sm text-[#98A2B3]">暂无关联商品</div>}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end border-t border-[#EEF1F5] px-8 py-5">
+          <button onClick={onClose} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const MethodTable = ({
   groups,

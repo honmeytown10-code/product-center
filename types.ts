@@ -111,6 +111,68 @@ export interface DynamicFieldConfig {
   placeholder?: string; 
 }
 
+export interface FieldChildOption {
+  id: string;
+  label: string;
+  isSystem?: boolean;
+  isDefaultSelected?: boolean;
+  description?: string;
+}
+
+export const COMMON_FIELD_CHILD_CONFIG_LIBRARY: Record<string, FieldChildOption[]> = {
+  p_display_type: [
+    { id: 'blind_box', label: '盲盒商品', isDefaultSelected: true, description: '适用于套餐盲盒等特殊售卖场景。' },
+    { id: 'display_product', label: '展示商品', isDefaultSelected: true, description: '前端仅展示，不支持直接下单结算。' },
+    { id: 'group_meal', label: '团餐商品', isDefaultSelected: true, description: '用于团餐或统一套餐业务场景。' },
+    { id: 'group_meal_only', label: '仅团餐业务售卖', isDefaultSelected: true, description: '开启后仅在团餐业务中展示和售卖。' },
+    { id: 'pos_edit_price', label: 'POS 临时改价', isDefaultSelected: true, description: '门店 POS 端支持临时改价。' },
+    { id: 'temp_product', label: '临时商品', isDefaultSelected: true, description: '用于临时菜品或按次上新的商品。' },
+    { id: 'market_price_product', label: '时价商品', isDefaultSelected: true, description: '支持 POS 端按实时价格售卖。' },
+    { id: 'children_meal', label: '儿童餐', isDefaultSelected: true, description: '小程序可按儿童餐场景进行展示。' },
+  ],
+  s_specs: [
+    { id: 's_spec_name', label: '规格名称', isSystem: true, isDefaultSelected: true, description: '规格首列名称，默认保留。' },
+    { id: 's_spec_price', label: '销售价', isSystem: true, isDefaultSelected: true, description: '规格价格设置中的核心字段。' },
+    { id: 's_spec_market', label: '市场价', isDefaultSelected: true, description: '规格市场划线价。' },
+    { id: 's_spec_cost', label: '预估成本价', isDefaultSelected: true, description: '规格成本或预估成本。' },
+    { id: 's_spec_barcode', label: '商品条码', isDefaultSelected: true, description: '规格对应的商品条码。' },
+    { id: 's_spec_mark', label: '商品标识', isDefaultSelected: true, description: '规格标识或内部识别码。' },
+    { id: 's_spec_sku_code', label: '商品规格码', isDefaultSelected: true, description: '规格 SKU 编码字段。' },
+    { id: 's_spec_code', label: '商品编码', isDefaultSelected: true, description: '规格商品编码。' },
+    { id: 's_spec_stock', label: '库存设置', isSystem: true, isDefaultSelected: true, description: '库存模式与初始库存。' },
+    { id: 's_spec_plan_stock', label: '计划库存', isDefaultSelected: true, description: '计划库存开关与每日计划库存。' },
+    { id: 's_spec_img', label: '规格图片', isDefaultSelected: true, description: '规格独立图片上传。' },
+    { id: 's_spec_large_img', label: '规格大图', isDefaultSelected: true, description: '规格大图，优先用于规格区域展示，建议尺寸 800*450。' },
+    { id: 's_spec_alias', label: '规格别名', isDefaultSelected: true, description: '规格别名文案。' },
+    { id: 's_spec_amount', label: '商品分量', isDefaultSelected: true, description: '规格分量与单位。' },
+    { id: 's_spec_store_pack_fee', label: '到店外带包装费', isDefaultSelected: true, description: '到店外带场景包装费。' },
+    { id: 's_spec_store_pack_mark', label: '到店外带包装标识', isDefaultSelected: true, description: '到店外带包装标识。' },
+    { id: 's_spec_take_pack_fee', label: '外卖配送包装费', isDefaultSelected: true, description: '外卖配送包装费。' },
+    { id: 's_spec_take_pack_mark', label: '外卖配送包装标识', isDefaultSelected: true, description: '外卖配送包装标识。' },
+  ],
+  m_methods: [
+    { id: 'm_method_name', label: '做法值', isSystem: true, isDefaultSelected: true, description: '做法值名称，默认保留。' },
+    { id: 'm_method_sync', label: '同步', isDefaultSelected: true, description: '是否同步到相关规格或门店。' },
+    { id: 'm_method_markup', label: '做法加价', isDefaultSelected: true, description: '做法附加价格。' },
+    { id: 'm_method_code', label: '标识码', isDefaultSelected: true, description: '做法编码或标识码。' },
+    { id: 'm_method_remark', label: '备注', isDefaultSelected: true, description: '做法备注信息。' },
+    { id: 'm_method_tip', label: '温馨提示', isDefaultSelected: true, description: '前台温馨提示文案。' },
+  ],
+  a_addons: [
+    { id: 'a_rule_scope', label: '加料配置', isDefaultSelected: true, description: '限制所有加料购买总量或限制单个加料购买量。' },
+    { id: 'a_rule_unlimited', label: '点餐时数量不限', isDefaultSelected: true, description: '加料数量不限的规则项。' },
+    { id: 'a_rule_limit', label: '点餐时起购限购数', isDefaultSelected: true, description: '控制起购与限购规则。' },
+    { id: 'a_rule_required', label: '点餐时必选', isDefaultSelected: true, description: '配置加料必选规则。' },
+    { id: 'a_addon_name', label: '加料商品名称', isSystem: true, isDefaultSelected: true, description: '加料表格中的商品名称列。' },
+    { id: 'a_addon_code', label: '加料商品编码', isDefaultSelected: true, description: '加料商品编码列。' },
+    { id: 'a_addon_limit', label: '限购', isDefaultSelected: true, description: '加料单项限购值。' },
+    { id: 'a_addon_price', label: '初始价格', isDefaultSelected: true, description: '加料基础价格。' },
+    { id: 'a_addon_spec_price', label: '规格加价', isDefaultSelected: true, description: '不同规格下的加价设置入口。' },
+    { id: 'a_addon_status', label: '商品状态', isDefaultSelected: true, description: '加料商品当前启停状态。' },
+    { id: 'a_empty_tip', label: '加料未点提示', isDefaultSelected: true, description: '未选择加料时的提示文案与说明。' },
+  ],
+};
+
 export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   // 1. 基础属性 (base)
   { id: 'p_name', label: '商品名称', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 10, isRequired: true, placeholder: '请输入商品名称' },
@@ -136,7 +198,8 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
         { id: 's_spec_market', label: '市场价格', module: 'product_attr', type: 'number', sortOrder: 4 },
         { id: 's_spec_stock', label: '库存设置', module: 'product_attr', type: 'number', isSystem: true, isDefaultSelected: true, sortOrder: 5 },
         { id: 's_spec_img', label: '规格独立图片', module: 'product_attr', type: 'image', sortOrder: 6 },
-        { id: 's_spec_code', label: '规格编码', module: 'product_attr', type: 'input', sortOrder: 7 },
+        { id: 's_spec_large_img', label: '规格大图', module: 'product_attr', type: 'image', sortOrder: 7 },
+        { id: 's_spec_code', label: '规格编码', module: 'product_attr', type: 'input', sortOrder: 8 },
     ]
   },
   { 

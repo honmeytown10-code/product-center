@@ -12,6 +12,7 @@ import { StockoutSpec, WebStockoutModal } from './WebStockoutModal';
 type StoreProductPageMode = 'manage' | 'coverage';
 type StoreProductManagePreset = {
   keyword?: string;
+  channelId?: string;
 };
 
 type StoreProductRecord = {
@@ -45,17 +46,23 @@ type StoreProductCoverageSummary = {
   onShelfStoreCount: number;
   offShelfStoreCount: number;
   soldOutStoreCount: number;
-  channelIds: string[];
+  storeDetails: Array<{
+    storeId: string;
+    storeName: string;
+    status: 'on_shelf' | 'off_shelf';
+    stockStatus: 'normal' | 'low' | 'empty';
+  }>;
   lastSync: string;
 };
 
 type CoverageStoreDetail = {
+  baseProductId: string;
+  channelId: string;
   title: string;
   type: 'all' | 'on_shelf' | 'off_shelf' | 'sold_out';
   stores: Array<{
     storeId: string;
     storeName: string;
-    channels: string[];
     status: 'on_shelf' | 'off_shelf';
     stockStatus: 'normal' | 'low' | 'empty';
   }>;
@@ -114,6 +121,42 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     sortIndex: 1,
   },
   {
+    id: '974340414367182854-s3',
+    baseProductId: '974340414367182854',
+    name: '招牌珍珠奶茶',
+    type: 'Standard',
+    category: '奶茶系列',
+    storeName: '宝安壹方城店',
+    storeId: 's3',
+    channels: ['mini_dine', 'meituan'],
+    image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=100',
+    tags: ['新品'],
+    status: 'off_shelf',
+    stockStatus: 'empty',
+    stockCount: 0,
+    isMultiSpec: false,
+    lastSync: '12分钟前',
+    sortIndex: 2,
+  },
+  {
+    id: '974340414367182854-s4',
+    baseProductId: '974340414367182854',
+    name: '招牌珍珠奶茶',
+    type: 'Standard',
+    category: '奶茶系列',
+    storeName: '龙华红山店',
+    storeId: 's4',
+    channels: ['mini_dine', 'mini_take'],
+    image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=100',
+    tags: ['新品'],
+    status: 'on_shelf',
+    stockStatus: 'empty',
+    stockCount: 0,
+    isMultiSpec: false,
+    lastSync: '8分钟前',
+    sortIndex: 3,
+  },
+  {
     id: '924336445413220352-s2',
     baseProductId: '924336445413220352',
     name: '海盐芝士拿铁',
@@ -132,6 +175,42 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     sortIndex: 1,
   },
   {
+    id: '924336445413220352-s1',
+    baseProductId: '924336445413220352',
+    name: '海盐芝士拿铁',
+    type: 'Standard',
+    category: '咖啡系列',
+    storeName: '南山万象店',
+    storeId: 's1',
+    channels: ['mini_dine', 'pos'],
+    image: 'https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&q=80&w=100',
+    tags: ['热销'],
+    status: 'off_shelf',
+    stockStatus: 'normal',
+    stockCount: 56,
+    isMultiSpec: false,
+    lastSync: '16分钟前',
+    sortIndex: 2,
+  },
+  {
+    id: '924336445413220352-s3',
+    baseProductId: '924336445413220352',
+    name: '海盐芝士拿铁',
+    type: 'Standard',
+    category: '咖啡系列',
+    storeName: '宝安壹方城店',
+    storeId: 's3',
+    channels: ['mini_dine', 'taobao'],
+    image: 'https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&q=80&w=100',
+    tags: ['热销'],
+    status: 'on_shelf',
+    stockStatus: 'empty',
+    stockCount: 0,
+    isMultiSpec: false,
+    lastSync: '6分钟前',
+    sortIndex: 3,
+  },
+  {
     id: '934501236899667968-s3',
     baseProductId: '934501236899667968',
     name: '多肉葡萄',
@@ -148,6 +227,42 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     isMultiSpec: false,
     lastSync: '2小时前',
     sortIndex: 1,
+  },
+  {
+    id: '934501236899667968-s1',
+    baseProductId: '934501236899667968',
+    name: '多肉葡萄',
+    type: 'Standard',
+    category: '果茶系列',
+    storeName: '南山万象店',
+    storeId: 's1',
+    channels: ['mini_dine', 'eleme'],
+    image: 'https://images.unsplash.com/photo-1606756790138-261d2b21cd71?auto=format&fit=crop&q=80&w=100',
+    tags: [],
+    status: 'on_shelf',
+    stockStatus: 'normal',
+    stockCount: 38,
+    isMultiSpec: false,
+    lastSync: '22分钟前',
+    sortIndex: 2,
+  },
+  {
+    id: '934501236899667968-s2',
+    baseProductId: '934501236899667968',
+    name: '多肉葡萄',
+    type: 'Standard',
+    category: '果茶系列',
+    storeName: '福田卓悦店',
+    storeId: 's2',
+    channels: ['mini_dine', 'mini_take'],
+    image: 'https://images.unsplash.com/photo-1606756790138-261d2b21cd71?auto=format&fit=crop&q=80&w=100',
+    tags: [],
+    status: 'off_shelf',
+    stockStatus: 'empty',
+    stockCount: 0,
+    isMultiSpec: false,
+    lastSync: '18分钟前',
+    sortIndex: 3,
   },
   {
     id: '956890134637523945-s4',
@@ -259,6 +374,15 @@ const DEFAULT_CHANNELS = [
   { id: 'pos', label: 'POS' },
 ];
 
+const COVERAGE_CHANNEL_OPTIONS = Array.from(
+  new Set([...DEFAULT_CHANNELS.map(channel => channel.id), ...Object.keys(CHANNEL_DEFS)])
+).map(channelId => ({
+  id: channelId,
+  label: CHANNEL_DEFS[channelId]?.label || channelId,
+}));
+
+const DEFAULT_COVERAGE_CHANNEL_ID = COVERAGE_CHANNEL_OPTIONS[0]?.id || 'mini_dine';
+
 export const WebStoreProductList: React.FC<{
   mode?: StoreProductPageMode;
   managePreset?: StoreProductManagePreset | null;
@@ -270,6 +394,7 @@ export const WebStoreProductList: React.FC<{
   const groups = config?.channelGroups || [];
   const isShelvesUnited = config?.features.shelves_unite ?? false;
   const isStockShared = config?.features.stock_shared ?? false;
+  const [storeProducts, setStoreProducts] = useState<StoreProductRecord[]>(MOCK_STORE_PRODUCTS);
 
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeCategoryId, setActiveCategoryId] = useState('all');
@@ -278,6 +403,7 @@ export const WebStoreProductList: React.FC<{
   const [coverageKeyword, setCoverageKeyword] = useState('');
   const [coverageCategoryId, setCoverageCategoryId] = useState('all');
   const [coverageType, setCoverageType] = useState<'all' | 'Standard' | 'Combo'>('all');
+  const [coverageChannelId, setCoverageChannelId] = useState(DEFAULT_COVERAGE_CHANNEL_ID);
   const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success'; subMessage?: string } | null>(null);
   const [shelfDialog, setShelfDialog] = useState<StoreProductRecord | null>(null);
   const [stockDialog, setStockDialog] = useState<StoreProductRecord | null>(null);
@@ -303,14 +429,14 @@ export const WebStoreProductList: React.FC<{
       setManageKeyword(managePreset?.keyword || '');
       setActiveStoreId('all');
       setActiveCategoryId('all');
-      setActiveTabId('all');
+      setActiveTabId(managePreset?.channelId || 'all');
     }
   }, [managePreset, mode]);
 
   const tabs = useMemo(() => [{ id: 'all', label: '全部渠道' }, ...DEFAULT_CHANNELS], []);
 
   const filteredProducts = useMemo(() => {
-    let filtered = MOCK_STORE_PRODUCTS;
+    let filtered = storeProducts;
     if (activeStoreId !== 'all') {
       filtered = filtered.filter(p => p.storeId === activeStoreId);
     }
@@ -326,11 +452,11 @@ export const WebStoreProductList: React.FC<{
       filtered = filtered.filter(p => `${p.name} ${p.baseProductId} ${p.category}`.toLowerCase().includes(normalizedKeyword));
     }
     return filtered;
-  }, [activeStoreId, activeTabId, activeCategoryId, manageKeyword]);
+  }, [storeProducts, activeStoreId, activeTabId, activeCategoryId, manageKeyword]);
 
   const coverageSourceRows = useMemo(() => {
     const normalizedKeyword = coverageKeyword.trim().toLowerCase();
-    return MOCK_STORE_PRODUCTS.filter(product => {
+    return storeProducts.filter(product => {
       if (coverageType !== 'all' && product.type !== coverageType) {
         return false;
       }
@@ -340,6 +466,9 @@ export const WebStoreProductList: React.FC<{
           return false;
         }
       }
+      if (!product.channels.includes(coverageChannelId)) {
+        return false;
+      }
       if (normalizedKeyword) {
         const matchedText = `${product.name} ${product.baseProductId} ${product.category}`.toLowerCase();
         if (!matchedText.includes(normalizedKeyword)) {
@@ -348,7 +477,7 @@ export const WebStoreProductList: React.FC<{
       }
       return true;
     });
-  }, [coverageKeyword, coverageCategoryId, coverageType]);
+  }, [storeProducts, coverageKeyword, coverageCategoryId, coverageType, coverageChannelId]);
 
   const coverageRows = useMemo<StoreProductCoverageSummary[]>(() => {
     const grouped = coverageSourceRows.reduce<Record<string, StoreProductRecord[]>>((acc, item) => {
@@ -362,7 +491,6 @@ export const WebStoreProductList: React.FC<{
     return Object.values(grouped)
       .map(items => {
         const first = items[0];
-        const channelIds = Array.from(new Set(items.flatMap(item => item.channels)));
         return {
           baseProductId: first.baseProductId,
           name: first.name,
@@ -374,7 +502,12 @@ export const WebStoreProductList: React.FC<{
           onShelfStoreCount: items.filter(item => item.status === 'on_shelf').length,
           offShelfStoreCount: items.filter(item => item.status !== 'on_shelf').length,
           soldOutStoreCount: items.filter(item => item.stockStatus === 'empty').length,
-          channelIds,
+          storeDetails: items.map(item => ({
+            storeId: item.storeId,
+            storeName: item.storeName,
+            status: item.status,
+            stockStatus: item.stockStatus,
+          })),
           lastSync: items[0].lastSync,
         };
       })
@@ -399,13 +532,13 @@ export const WebStoreProductList: React.FC<{
       offShelfProducts: coverageRows.filter(item => item.offShelfStoreCount > 0).length,
       soldOutProducts: coverageRows.filter(item => item.soldOutStoreCount > 0).length,
     };
-  }, [coverageRows, coverageSourceRows]);
+  }, [coverageRows]);
 
   const coverageFilterLabelMap: Record<CoverageStatusFilter, string> = {
     all: '全部商品',
-    has_on_shelf_store: '门店上架商品',
-    has_off_shelf_store: '门店下架商品',
-    has_sold_out_store: '门店售罄商品',
+    has_on_shelf_store: '上架商品',
+    has_off_shelf_store: '下架商品',
+    has_sold_out_store: '售罄商品',
   };
 
   const showCategoryPanel = mode === 'manage' && activeStoreId !== 'all';
@@ -431,28 +564,12 @@ export const WebStoreProductList: React.FC<{
     item: StoreProductCoverageSummary,
     type: 'all' | 'on_shelf' | 'off_shelf' | 'sold_out'
   ) => {
-    const detailRows = coverageSourceRows.filter(row => row.baseProductId === item.baseProductId);
-    const scopedRows = detailRows.filter(row => {
-      if (type === 'on_shelf') return row.status === 'on_shelf';
-      if (type === 'off_shelf') return row.status !== 'on_shelf';
-      if (type === 'sold_out') return row.stockStatus === 'empty';
+    const scopedStores = item.storeDetails.filter(store => {
+      if (type === 'on_shelf') return store.status === 'on_shelf';
+      if (type === 'off_shelf') return store.status !== 'on_shelf';
+      if (type === 'sold_out') return store.stockStatus === 'empty';
       return true;
     });
-
-    const uniqueStores = Array.from(
-      new Map(
-        scopedRows.map(row => [
-          row.storeId,
-          {
-            storeId: row.storeId,
-            storeName: row.storeName,
-            channels: row.channels,
-            status: row.status,
-            stockStatus: row.stockStatus,
-          },
-        ])
-      ).values()
-    );
 
     const titleMap = {
       all: '覆盖门店',
@@ -461,11 +578,85 @@ export const WebStoreProductList: React.FC<{
       sold_out: '售罄门店',
     } as const;
 
+    const currentChannelLabel = CHANNEL_DEFS[coverageChannelId]?.label || coverageChannelId;
+
     setCoverageStoreDetail({
-      title: `${item.name} - ${titleMap[type]}`,
+      baseProductId: item.baseProductId,
+      channelId: coverageChannelId,
+      title: `${item.name} - ${currentChannelLabel} - ${titleMap[type]}`,
       type,
-      stores: uniqueStores,
+      stores: scopedStores,
     });
+  };
+
+  const handleCoverageStoreQuickAction = (
+    detail: CoverageStoreDetail,
+    targetStore: CoverageStoreDetail['stores'][number]
+  ) => {
+    const action =
+      detail.type === 'sold_out'
+        ? 'restore_stock'
+        : detail.type === 'off_shelf'
+          ? 'on_shelf'
+          : detail.type === 'on_shelf'
+            ? 'off_shelf'
+            : targetStore.stockStatus === 'empty'
+              ? 'restore_stock'
+              : targetStore.status === 'off_shelf'
+                ? 'on_shelf'
+                : 'off_shelf';
+
+    setStoreProducts(prev => prev.map(product => {
+      if (
+        product.baseProductId !== detail.baseProductId ||
+        product.storeId !== targetStore.storeId ||
+        !product.channels.includes(detail.channelId)
+      ) {
+        return product;
+      }
+
+      if (action === 'restore_stock') {
+        return {
+          ...product,
+          status: 'on_shelf',
+          stockStatus: 'normal',
+          stockCount: product.stockCount > 0 ? product.stockCount : 99,
+          lastSync: '刚刚',
+        };
+      }
+
+      if (action === 'on_shelf') {
+        return {
+          ...product,
+          status: 'on_shelf',
+          stockStatus: product.stockStatus === 'empty' ? 'normal' : product.stockStatus,
+          stockCount: product.stockCount > 0 ? product.stockCount : 99,
+          lastSync: '刚刚',
+        };
+      }
+
+      return {
+        ...product,
+        status: 'off_shelf',
+        lastSync: '刚刚',
+      };
+    }));
+
+    const channelLabel = CHANNEL_DEFS[detail.channelId]?.label || detail.channelId;
+    const message =
+      action === 'restore_stock'
+        ? `${targetStore.storeName} 已恢复库存`
+        : action === 'on_shelf'
+          ? `${targetStore.storeName} 已上架`
+          : `${targetStore.storeName} 已下架`;
+
+    setNotification({
+      type: 'success',
+      message,
+      subMessage: `已更新 ${channelLabel} 渠道下的门店商品状态`,
+    });
+
+    setCoverageStoreDetail(null);
   };
 
   const handleShelfConfirm = (payload: { action: 'on_shelf' | 'off_shelf'; channels: ShelfChannelId[] }) => {
@@ -857,35 +1048,56 @@ export const WebStoreProductList: React.FC<{
               ]}
               widthClass="w-[200px]"
             />
-            <button className="h-[34px] px-6 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
+            <FilterNativeSelect
+              label="渠道"
+              value={coverageChannelId}
+              onChange={setCoverageChannelId}
+              options={COVERAGE_CHANNEL_OPTIONS.map(channel => ({
+                value: channel.id,
+                label: channel.label,
+              }))}
+              widthClass="w-[220px]"
+            />
+            <button
+              onClick={() => {
+                setCoverageKeyword('');
+                setCoverageCategoryId('all');
+                setCoverageType('all');
+                setCoverageChannelId(DEFAULT_COVERAGE_CHANNEL_ID);
+                setCoverageStatusFilter('all');
+              }}
+              className="h-[34px] px-6 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors"
+            >
+              重置
+            </button>
             <button className="h-[34px] px-6 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] transition-colors">查询</button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <CoverageStatCard
-              title="门店上架商品"
+              title="上架商品"
               value={`${coverageStats.onShelfProducts}`}
-              desc="商品存在上架门店"
+              desc="商品在当前渠道存在上架门店"
               accent="green"
-              tooltip="商品至少在一个门店的一个渠道上架售卖，即记为已上架商品。"
+              tooltip="商品在当前所选渠道至少存在一个上架门店时，记为上架商品。"
               active={coverageStatusFilter === 'has_on_shelf_store'}
               onClick={() => setCoverageStatusFilter(prev => prev === 'has_on_shelf_store' ? 'all' : 'has_on_shelf_store')}
             />
             <CoverageStatCard
-              title="门店下架商品"
+              title="下架商品"
               value={`${coverageStats.offShelfProducts}`}
-              desc="商品存在下架门店"
+              desc="商品在当前渠道存在下架门店"
               accent="orange"
-              tooltip="商品在某门店所有渠道均下架时，该门店记为下架门店；存在这类门店的商品记为含下架门店商品。"
+              tooltip="商品在当前所选渠道至少存在一个下架门店时，记为下架商品。"
               active={coverageStatusFilter === 'has_off_shelf_store'}
               onClick={() => setCoverageStatusFilter(prev => prev === 'has_off_shelf_store' ? 'all' : 'has_off_shelf_store')}
             />
             <CoverageStatCard
-              title="门店售罄商品"
+              title="售罄商品"
               value={`${coverageStats.soldOutProducts}`}
-              desc="商品存在售罄门店"
+              desc="商品在当前渠道存在售罄门店"
               accent="red"
-              tooltip="商品在某门店所有渠道均售罄时，该门店记为售罄门店；存在这类门店的商品记为含售罄门店商品。"
+              tooltip="商品在当前所选渠道至少存在一个售罄门店时，记为售罄商品。"
               active={coverageStatusFilter === 'has_sold_out_store'}
               onClick={() => setCoverageStatusFilter(prev => prev === 'has_sold_out_store' ? 'all' : 'has_sold_out_store')}
             />
@@ -904,17 +1116,16 @@ export const WebStoreProductList: React.FC<{
         </div>
 
         <div className="flex-1 overflow-auto no-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[1140px]">
+          <table className="w-full text-left border-collapse min-w-[1080px]">
             <thead className="sticky top-0 bg-[#F7F8FA] z-10 text-xs font-bold text-[#333]">
               <tr>
                 <th className="py-3 px-5 border-b border-[#E8E8E8]">商品名称</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-24">商品类型</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8]">前台分类</th>
-                <th className="py-3 px-4 border-b border-[#E8E8E8]">覆盖门店</th>
-                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="上架门店" tip="商品在门店至少有一个渠道上架时，记为上架门店。" /></th>
-                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="下架门店" tip="商品在门店所有渠道均下架时，记为下架门店。" /></th>
-                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="售罄门店" tip="商品在门店所有渠道均售罄时，记为售罄门店。" /></th>
-                <th className="py-3 px-4 border-b border-[#E8E8E8] w-[240px]">覆盖渠道</th>
+                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="覆盖门店" tip="商品在当前所选渠道覆盖的门店数。" /></th>
+                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="上架门店" tip="商品在当前所选渠道状态为上架的门店数。" /></th>
+                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="下架门店" tip="商品在当前所选渠道状态为下架的门店数。" /></th>
+                <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="售罄门店" tip="商品在当前所选渠道状态为售罄的门店数。" /></th>
                 <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-32 text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
               </tr>
             </thead>
@@ -927,13 +1138,6 @@ export const WebStoreProductList: React.FC<{
                       <div className="min-w-0">
                         <div className="font-bold text-[#333] truncate">{item.name}</div>
                         <div className="text-[11px] text-[#999] font-mono mt-1">{item.baseProductId}</div>
-                        {item.tags.length > 0 && (
-                          <div className="flex gap-1 mt-1 flex-wrap">
-                            {item.tags.map(tag => (
-                              <span key={tag} className="text-[10px] px-1 rounded border border-[#E8E8E8] text-[#999]">{tag}</span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </td>
@@ -969,21 +1173,16 @@ export const WebStoreProductList: React.FC<{
                       {item.soldOutStoreCount} 家
                     </button>
                   </td>
-                  <td className="py-4 px-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {item.channelIds.map(ch => renderCoverageChannelIcon(ch))}
-                    </div>
-                  </td>
                   <td className="sticky right-0 py-4 px-4 bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
                     <div className="flex items-center justify-center text-sm">
-                      <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId })} className="text-[#00C06B] font-medium hover:underline">管理门店商品</button>
+                      <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId, channelId: coverageChannelId })} className="text-[#00C06B] font-medium hover:underline">管理商品</button>
                     </div>
                   </td>
                 </tr>
               ))}
               {filteredCoverageRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-[#999]">暂无售卖门店数据</td>
+                  <td colSpan={8} className="py-10 text-center text-[#999]">暂无当前渠道商品数据</td>
                 </tr>
               )}
             </tbody>
@@ -993,7 +1192,7 @@ export const WebStoreProductList: React.FC<{
         <div className="h-12 border-t border-[#E8E8E8] flex items-center justify-between px-5 text-xs text-[#666] bg-white shrink-0">
           <div className="flex items-center gap-2 text-[#666]">
             <PackageOpen size={13} />
-            <span>支持按商品名称、前台分类查看品牌下商品在哪些门店售卖及对应状态。</span>
+            <span>支持按商品名称、前台分类查看当前渠道下商品覆盖门店及其上下架、售罄状态。</span>
           </div>
           <div className="flex items-center space-x-1">
             <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B] disabled:opacity-50"><ChevronLeft size={12} /></button>
@@ -1005,6 +1204,7 @@ export const WebStoreProductList: React.FC<{
       {coverageStoreDetail && (
         <CoverageStoreDetailModal
           detail={coverageStoreDetail}
+          onQuickAction={handleCoverageStoreQuickAction}
           onClose={() => setCoverageStoreDetail(null)}
         />
       )}
@@ -1132,74 +1332,122 @@ const CoverageStatCard = ({
 
 const CoverageStoreDetailModal = ({
   detail,
+  onQuickAction,
   onClose,
 }: {
   detail: CoverageStoreDetail;
+  onQuickAction: (detail: CoverageStoreDetail, store: CoverageStoreDetail['stores'][number]) => void;
   onClose: () => void;
-}) => (
-  <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-6">
-    <div className="w-full max-w-[760px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
-      <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
-        <div className="text-[22px] font-black text-[#1F2129]">{detail.title}</div>
-        <button onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]">
-          <X size={20} />
-        </button>
-      </div>
-      <div className="max-h-[460px] overflow-y-auto no-scrollbar px-6 py-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_160px] border-b border-[#EEF1F5] pb-3 text-xs font-bold text-[#5B6475]">
-          <div>门店名称</div>
-          <div>门店 ID</div>
-          <div>状态</div>
-          <div>覆盖渠道</div>
-        </div>
-        <div className="divide-y divide-[#F1F3F7]">
-          {detail.stores.map(store => (
-            <div key={store.storeId} className="grid grid-cols-[minmax(0,1fr)_140px_140px_160px] items-start gap-3 py-4 text-sm text-[#1F2129]">
-              <div className="font-medium">{store.storeName}</div>
-              <div className="text-[#5B6475]">{store.storeId.toUpperCase()}</div>
-              <div>
-                {(() => {
-                  const statusMeta =
-                    detail.type === 'off_shelf'
-                      ? { label: '已下架', className: 'bg-[#FFF7ED] text-[#C2410C]' }
-                      : detail.type === 'sold_out'
-                        ? { label: '已售罄', className: 'bg-[#FEF2F2] text-[#DC2626]' }
-                        : detail.type === 'on_shelf'
-                          ? { label: '已上架', className: 'bg-[#F0FDF4] text-[#15803D]' }
-                          : store.stockStatus === 'empty'
-                            ? { label: '已售罄', className: 'bg-[#FEF2F2] text-[#DC2626]' }
-                            : store.status === 'on_shelf'
-                              ? { label: '已上架', className: 'bg-[#F0FDF4] text-[#15803D]' }
-                              : { label: '已下架', className: 'bg-[#FFF7ED] text-[#C2410C]' };
+}) => {
+  const [selectedStoreId, setSelectedStoreId] = useState('all');
 
-                  return (
-                    <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${statusMeta.className}`}>
-                      {statusMeta.label}
-                    </span>
-                  );
-                })()}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {store.channels.map(ch => renderCoverageChannelIcon(ch))}
-              </div>
-            </div>
-          ))}
-          {detail.stores.length === 0 && (
-            <div className="py-12 text-center text-sm text-[#98A0B3]">暂无门店数据</div>
-          )}
+  useEffect(() => {
+    setSelectedStoreId('all');
+  }, [detail]);
+
+  const filteredStores = useMemo(() => {
+    if (selectedStoreId === 'all') return detail.stores;
+    return detail.stores.filter(store => store.storeId === selectedStoreId);
+  }, [detail.stores, selectedStoreId]);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[760px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
+          <div className="text-[22px] font-black text-[#1F2129]">{detail.title}</div>
+          <button onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]">
+            <X size={20} />
+          </button>
         </div>
-      </div>
-      <div className="flex justify-end border-t border-[#EEF1F5] px-6 py-4">
-        <button
-          onClick={onClose}
-          className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
-        >
-          我知道了
-        </button>
+        <div className="border-b border-[#EEF1F5] px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center border border-[#E8E8E8] rounded h-[34px] px-3 bg-white transition-colors w-[220px]">
+              <span className="text-xs text-[#666] mr-2 whitespace-nowrap">门店:</span>
+              <select
+                value={selectedStoreId}
+                onChange={e => setSelectedStoreId(e.target.value)}
+                className="flex-1 text-xs bg-transparent outline-none text-[#333]"
+              >
+                <option value="all">全部门店</option>
+                {detail.stores.map(store => (
+                  <option key={store.storeId} value={store.storeId}>{store.storeName}</option>
+                ))}
+              </select>
+            </div>
+            <div className="text-xs text-[#98A0B3]">
+              共 {filteredStores.length} 家门店
+            </div>
+          </div>
+        </div>
+        <div className="max-h-[460px] overflow-y-auto no-scrollbar px-6 py-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_120px] border-b border-[#EEF1F5] pb-3 text-xs font-bold text-[#5B6475]">
+            <div>门店名称</div>
+            <div>状态</div>
+            <div>门店 ID</div>
+            <div className="text-right">操作</div>
+          </div>
+          <div className="divide-y divide-[#F1F3F7]">
+            {filteredStores.map(store => (
+              <div key={store.storeId} className="grid grid-cols-[minmax(0,1fr)_140px_140px_120px] items-center gap-3 py-4 text-sm text-[#1F2129]">
+                <div className="font-medium truncate">{store.storeName}</div>
+                <div>
+                  {(() => {
+                    const statusMeta =
+                      detail.type === 'sold_out'
+                        ? { label: '已售罄', className: 'bg-[#FEF2F2] text-[#DC2626]' }
+                        : store.status === 'off_shelf'
+                        ? { label: '已下架', className: 'bg-[#FFF7ED] text-[#C2410C]' }
+                        : store.stockStatus === 'empty'
+                          ? { label: '已售罄', className: 'bg-[#FEF2F2] text-[#DC2626]' }
+                          : store.status === 'on_shelf'
+                            ? { label: '已上架', className: 'bg-[#F0FDF4] text-[#15803D]' }
+                            : { label: '已下架', className: 'bg-[#FFF7ED] text-[#C2410C]' };
+
+                    return (
+                      <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${statusMeta.className}`}>
+                        {statusMeta.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="text-[#5B6475]">{store.storeId.toUpperCase()}</div>
+                <div className="text-right">
+                  <button
+                    onClick={() => onQuickAction(detail, store)}
+                    className="inline-flex min-w-[72px] items-center justify-center rounded-lg border border-[#00C06B]/25 bg-[#F3FCF7] px-3 py-1.5 text-xs font-bold text-[#00A35B] hover:bg-[#E8F9F0]"
+                  >
+                    {detail.type === 'sold_out'
+                      ? '恢复库存'
+                      : detail.type === 'off_shelf'
+                        ? '上架'
+                        : detail.type === 'on_shelf'
+                          ? '下架'
+                          : store.stockStatus === 'empty'
+                            ? '恢复库存'
+                            : store.status === 'off_shelf'
+                              ? '上架'
+                              : '下架'}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {filteredStores.length === 0 && (
+              <div className="py-12 text-center text-sm text-[#98A0B3]">暂无门店数据</div>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end border-t border-[#EEF1F5] px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
+          >
+            我知道了
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const renderCoverageChannelIcon = (channelId: string) => {
   const def = CHANNEL_DEFS[channelId];

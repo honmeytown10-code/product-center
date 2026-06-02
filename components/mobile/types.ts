@@ -56,5 +56,8 @@ export interface LocalComboGroup {
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
+  requiredOptionCount?: number;
+  minTotalQuantity?: number;
+  maxTotalQuantity?: number;
   items: LocalComboItem[];
 }

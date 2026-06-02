@@ -13,6 +13,9 @@ const INITIAL_COMBO_GROUPS: LocalComboGroup[] = [
     isRequired: true,
     minSelect: 1,
     maxSelect: 1,
+    requiredOptionCount: 1,
+    minTotalQuantity: 1,
+    maxTotalQuantity: 1,
     items: [
       { id: 'ci_1', productId: 'prod_1', productName: '槐店生椰拿铁', quantity: 1, isDefault: true, markupPrice: '0', hasPackFee: false },
       { id: 'ci_2', productId: 'prod_6', productName: '手打柠檬茶', quantity: 1, isDefault: false, markupPrice: '0', hasPackFee: false }
@@ -28,11 +31,27 @@ const INITIAL_COMBO_GROUPS: LocalComboGroup[] = [
     isRequired: false,
     minSelect: 0,
     maxSelect: 2,
+    requiredOptionCount: 1,
+    minTotalQuantity: 1,
+    maxTotalQuantity: 2,
     items: [
       { id: 'ci_3', productId: 'prod_5', productName: '时令水果拼盘', quantity: 1, isDefault: false, markupPrice: '5', hasPackFee: true }
     ]
   }
 ];
+
+const getRequiredOptionCount = (group: Partial<LocalComboGroup>) => (
+  group.requiredOptionCount ?? Math.max(1, group.minSelect ?? 1)
+);
+
+const getMinTotalQuantity = (group: Partial<LocalComboGroup>) => {
+  if (typeof group.minTotalQuantity === 'number') return group.minTotalQuantity;
+  return group.isRequired === false ? 0 : 1;
+};
+
+const getMaxTotalQuantity = (group: Partial<LocalComboGroup>) => (
+  group.maxTotalQuantity ?? Math.max(1, group.maxSelect ?? 1)
+);
 
 interface Props {
   onBack: () => void;
@@ -99,10 +118,12 @@ export const MobileComboGroupManager: React.FC<Props> = ({ onBack }) => {
             
             <div className="flex items-center space-x-2 text-xs font-medium text-gray-500 bg-gray-50 p-2 rounded-lg">
                 <span className={`${group.isRequired ? 'text-red-500 bg-red-50' : 'text-blue-500 bg-blue-50'} px-1.5 py-0.5 rounded text-[10px] font-bold`}>
-                    {group.isRequired ? '必选' : '可选'}
+                    {group.isRequired ? '必选' : '非必选'}
                 </span>
                 <span className="text-gray-400 mx-1">|</span>
-                <span>{group.minSelect} 选 {group.maxSelect}</span>
+                <span>{group.items.length} 选 {getRequiredOptionCount(group)}</span>
+                <span className="text-gray-400 mx-1">|</span>
+                <span>{getMinTotalQuantity(group)} ~ {getMaxTotalQuantity(group)}</span>
                 <span className="text-gray-400 mx-1">|</span>
                 <span>共 {group.items.length} 个子商品</span>
             </div>
@@ -148,8 +169,9 @@ const ComboGroupFormModal = ({ onClose, onSave, onDelete, onAddProduct, item, ty
     const [remark, setRemark] = useState(item?.remark || '');
     
     const [isRequired, setIsRequired] = useState(item?.isRequired ?? true);
-    const [minSelect, setMinSelect] = useState(item?.minSelect || 1);
-    const [maxSelect, setMaxSelect] = useState(item?.maxSelect || 1);
+    const [requiredOptionCount, setRequiredOptionCount] = useState(getRequiredOptionCount(item || {}));
+    const [minTotalQuantity, setMinTotalQuantity] = useState(getMinTotalQuantity(item || {}));
+    const [maxTotalQuantity, setMaxTotalQuantity] = useState(getMaxTotalQuantity(item || {}));
     
     const [items, setItems] = useState<LocalComboItem[]>(item?.items || []);
 
@@ -186,6 +208,9 @@ const ComboGroupFormModal = ({ onClose, onSave, onDelete, onAddProduct, item, ty
 
     const handleSave = () => {
         if (!name) return;
+        const normalizedRequiredOptionCount = Math.max(1, requiredOptionCount || 1);
+        const normalizedMinTotalQuantity = Math.max(0, minTotalQuantity || 0);
+        const normalizedMaxTotalQuantity = Math.max(normalizedMinTotalQuantity, maxTotalQuantity || 1);
         const groupData: LocalComboGroup = {
             id: item?.id || `cg_store_${Date.now()}`,
             name,
@@ -194,8 +219,11 @@ const ComboGroupFormModal = ({ onClose, onSave, onDelete, onAddProduct, item, ty
             code,
             remark,
             isRequired,
-            minSelect,
-            maxSelect,
+            minSelect: normalizedRequiredOptionCount,
+            maxSelect: normalizedMaxTotalQuantity,
+            requiredOptionCount: normalizedRequiredOptionCount,
+            minTotalQuantity: normalizedMinTotalQuantity,
+            maxTotalQuantity: normalizedMaxTotalQuantity,
             items
         };
         onSave(groupData);
@@ -254,23 +282,58 @@ const ComboGroupFormModal = ({ onClose, onSave, onDelete, onAddProduct, item, ty
                         <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">分组设置</h4>
                         <div className="bg-white p-4 rounded-2xl shadow-sm space-y-6">
                             <div>
-                                <label className="text-xs font-bold text-gray-500 mb-2 block">选择类型</label>
-                                <div className="flex bg-gray-100 p-1 rounded-xl">
-                                    <button onClick={() => !isView && setIsRequired(true)} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${isRequired ? 'bg-white text-[#00C06B] shadow-sm' : 'text-gray-500'}`}>必选</button>
-                                    <button onClick={() => !isView && setIsRequired(false)} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${!isRequired ? 'bg-white text-blue-500 shadow-sm' : 'text-gray-500'}`}>可选</button>
+                                <label className="text-xs font-bold text-gray-500 mb-2 block">分组内需选商品种类数</label>
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-[11px] leading-5 text-gray-400">配置用户在该分组下必须选择几种商品，对应前台“几选几”规则。</p>
+                                    <div className="flex items-center border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 min-w-[120px]">
+                                        <button
+                                            type="button"
+                                            onClick={() => !isView && setRequiredOptionCount(prev => Math.max(1, prev - 1))}
+                                            className="text-sm text-gray-400 disabled:opacity-40"
+                                            disabled={isView}
+                                        >
+                                            -
+                                        </button>
+                                        <input
+                                            type="number"
+                                            value={requiredOptionCount}
+                                            onChange={e => setRequiredOptionCount(Math.max(1, Number(e.target.value) || 1))}
+                                            disabled={isView}
+                                            className="flex-1 bg-transparent text-sm font-bold text-center outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => !isView && setRequiredOptionCount(prev => prev + 1)}
+                                            className="text-sm text-gray-400 disabled:opacity-40"
+                                            disabled={isView}
+                                        >
+                                            +
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 mb-2 block">数量限制 (最少 / 最多)</label>
-                                <div className="flex items-center space-x-3">
-                                    <div className="flex-1 flex items-center border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
-                                        <span className="text-xs text-gray-400 mr-2">Min</span>
-                                        <input type="number" value={minSelect} onChange={e => setMinSelect(Number(e.target.value))} disabled={isView} className="flex-1 bg-transparent text-sm font-bold text-center outline-none"/>
-                                    </div>
-                                    <span className="text-gray-300">-</span>
-                                    <div className="flex-1 flex items-center border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
-                                        <span className="text-xs text-gray-400 mr-2">Max</span>
-                                        <input type="number" value={maxSelect} onChange={e => setMaxSelect(Number(e.target.value))} disabled={isView} className="flex-1 bg-transparent text-sm font-bold text-center outline-none"/>
+                                <label className="text-xs font-bold text-gray-500 mb-2 block">是否必选</label>
+                                <div className="flex bg-gray-100 p-1 rounded-xl">
+                                    <button onClick={() => !isView && setIsRequired(true)} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${isRequired ? 'bg-white text-[#00C06B] shadow-sm' : 'text-gray-500'}`}>必选</button>
+                                    <button onClick={() => !isView && setIsRequired(false)} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${!isRequired ? 'bg-white text-blue-500 shadow-sm' : 'text-gray-500'}`}>非必选</button>
+                                </div>
+                                <p className="mt-2 text-[11px] leading-5 text-gray-400">是否必选由独立配置控制，不再根据最少购买总数自动判断。</p>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 mb-2 block">商品购买数量限制</label>
+                                <div className="space-y-3">
+                                    <p className="text-[11px] leading-5 text-gray-400">单个商品可多选，限制分组内商品购买总数。</p>
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1 flex items-center border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
+                                            <span className="text-xs text-gray-400 mr-2">Min</span>
+                                            <input type="number" value={minTotalQuantity} onChange={e => setMinTotalQuantity(Math.max(0, Number(e.target.value) || 0))} disabled={isView} className="flex-1 bg-transparent text-sm font-bold text-center outline-none"/>
+                                        </div>
+                                        <span className="text-gray-300">-</span>
+                                        <div className="flex-1 flex items-center border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
+                                            <span className="text-xs text-gray-400 mr-2">Max</span>
+                                            <input type="number" value={maxTotalQuantity} onChange={e => setMaxTotalQuantity(Math.max(1, Number(e.target.value) || 1))} disabled={isView} className="flex-1 bg-transparent text-sm font-bold text-center outline-none"/>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

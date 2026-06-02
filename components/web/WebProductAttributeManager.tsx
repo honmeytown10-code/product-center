@@ -68,6 +68,8 @@ type SeriesRecord = {
   enabled: boolean;
 };
 
+type CustomComboConfigMode = 'pick' | 'flexible';
+
 type CustomComboRecord = {
   id: string;
   groupName: string;
@@ -75,6 +77,13 @@ type CustomComboRecord = {
   remark: string;
   productCode: string;
   barcode: string;
+  configMode: CustomComboConfigMode;
+  isRelativePrice: boolean;
+  isRequired: boolean;
+  requiredOptionCount: number;
+  minTotalQuantity: number;
+  maxTotalQuantity: number;
+  items: CustomComboItem[];
   relatedCount: number;
 };
 
@@ -126,6 +135,33 @@ type SpecDeleteDialogState =
 type SpecLinkedProductsViewer = {
   title: string;
   products: LinkedSpecProduct[];
+};
+
+type CustomComboItem = {
+  id: string;
+  name: string;
+  spec: string;
+  productCode: string;
+  barcode: string;
+  quantity: number;
+};
+
+type CustomComboEditorState = {
+  mode: 'create' | 'edit';
+  id?: string;
+  groupName: string;
+  groupCode: string;
+  remark: string;
+  productCode: string;
+  barcode: string;
+  configMode: CustomComboConfigMode;
+  isRelativePrice: boolean;
+  isRequired: boolean;
+  requiredOptionCount: number;
+  minTotalQuantity: number;
+  maxTotalQuantity: number;
+  items: CustomComboItem[];
+  relatedCount: number;
 };
 
 const SPEC_GROUPS: SpecGroup[] = [
@@ -189,6 +225,46 @@ const createEmptySpecValue = (): SpecValue => ({
   code: '',
   relatedProducts: [],
 });
+
+const createMockCustomComboItem = (index: number = 1): CustomComboItem => ({
+  id: `custom-combo-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: `随心配商品${index}`,
+  spec: '默认',
+  productCode: `P${String(index).padStart(3, '0')}`,
+  barcode: `BC${String(index).padStart(4, '0')}`,
+  quantity: 1,
+});
+
+const createEmptyCustomComboEditor = (): CustomComboEditorState => ({
+  mode: 'create',
+  groupName: '',
+  groupCode: '',
+  remark: '',
+  productCode: '',
+  barcode: '',
+  configMode: 'pick',
+  isRelativePrice: false,
+  isRequired: false,
+  requiredOptionCount: 1,
+  minTotalQuantity: 0,
+  maxTotalQuantity: 100,
+  items: [createMockCustomComboItem()],
+  relatedCount: 0,
+});
+
+const getCustomComboModeLabel = (mode: CustomComboConfigMode) => (
+  mode === 'pick' ? '按种类选择' : '按数量选择'
+);
+
+const getCustomComboOptionRule = (record: Pick<CustomComboRecord, 'configMode' | 'items' | 'requiredOptionCount'>) =>
+  record.configMode === 'pick' ? `${record.items.length}选${record.requiredOptionCount}` : '--';
+
+const getCustomComboRequiredLabel = (record: Pick<CustomComboRecord, 'configMode' | 'isRequired'>) => (
+  record.configMode === 'flexible' ? (record.isRequired ? '必选' : '非必选') : '--'
+);
+
+const getCustomComboQuantityLimit = (record: Pick<CustomComboRecord, 'configMode' | 'minTotalQuantity' | 'maxTotalQuantity'>) =>
+  record.configMode === 'flexible' ? `${record.minTotalQuantity} ~ ${record.maxTotalQuantity}` : '--';
 
 const METHOD_GROUPS: MethodGroup[] = [
   {
@@ -269,13 +345,118 @@ const SERIES_RECORDS: SeriesRecord[] = [
 ];
 
 const CUSTOM_COMBO_RECORDS: CustomComboRecord[] = [
-  { id: 'cc-1', groupName: '0509随心配-3', groupCode: '1', remark: '0509随心配-3', productCode: '', barcode: '', relatedCount: 0 },
-  { id: 'cc-2', groupName: '0509随心配-2', groupCode: '1', remark: '0509随心配-2', productCode: '', barcode: '', relatedCount: 0 },
-  { id: 'cc-3', groupName: '0509随心配-1', groupCode: '1', remark: '0509随心配-1', productCode: '', barcode: '', relatedCount: 0 },
-  { id: 'cc-4', groupName: '4月27-3选1', groupCode: '1', remark: '', productCode: '', barcode: '', relatedCount: 1 },
-  { id: 'cc-5', groupName: '0427可选分组-1', groupCode: '1', remark: '', productCode: '04270402', barcode: '04270401', relatedCount: 1 },
-  { id: 'cc-6', groupName: '果茶随心配', groupCode: '1', remark: '', productCode: 'zfb123', barcode: '', relatedCount: 2 },
-  { id: 'cc-7', groupName: '0330可选分组-3', groupCode: '1', remark: '', productCode: '', barcode: '', relatedCount: 2 },
+  {
+    id: 'cc-1',
+    groupName: '0509随心配-3',
+    groupCode: '1',
+    remark: '0509随心配-3',
+    productCode: '',
+    barcode: '',
+    configMode: 'pick',
+    isRelativePrice: false,
+    isRequired: true,
+    requiredOptionCount: 1,
+    minTotalQuantity: 1,
+    maxTotalQuantity: 1,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2)],
+    relatedCount: 0
+  },
+  {
+    id: 'cc-2',
+    groupName: '0509随心配-2',
+    groupCode: '1',
+    remark: '0509随心配-2',
+    productCode: '',
+    barcode: '',
+    configMode: 'flexible',
+    isRelativePrice: true,
+    isRequired: false,
+    requiredOptionCount: 1,
+    minTotalQuantity: 0,
+    maxTotalQuantity: 2,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2), createMockCustomComboItem(3)],
+    relatedCount: 0
+  },
+  {
+    id: 'cc-3',
+    groupName: '0509随心配-1',
+    groupCode: '1',
+    remark: '0509随心配-1',
+    productCode: '',
+    barcode: '',
+    configMode: 'pick',
+    isRelativePrice: false,
+    isRequired: true,
+    requiredOptionCount: 2,
+    minTotalQuantity: 2,
+    maxTotalQuantity: 4,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2), createMockCustomComboItem(3), createMockCustomComboItem(4)],
+    relatedCount: 0
+  },
+  {
+    id: 'cc-4',
+    groupName: '4月27-3选1',
+    groupCode: '1',
+    remark: '',
+    productCode: '',
+    barcode: '',
+    configMode: 'pick',
+    isRelativePrice: false,
+    isRequired: true,
+    requiredOptionCount: 1,
+    minTotalQuantity: 1,
+    maxTotalQuantity: 1,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2), createMockCustomComboItem(3)],
+    relatedCount: 1
+  },
+  {
+    id: 'cc-5',
+    groupName: '0427可选分组-1',
+    groupCode: '1',
+    remark: '',
+    productCode: '04270402',
+    barcode: '04270401',
+    configMode: 'flexible',
+    isRelativePrice: true,
+    isRequired: false,
+    requiredOptionCount: 2,
+    minTotalQuantity: 1,
+    maxTotalQuantity: 3,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2), createMockCustomComboItem(3), createMockCustomComboItem(4), createMockCustomComboItem(5)],
+    relatedCount: 1
+  },
+  {
+    id: 'cc-6',
+    groupName: '果茶随心配',
+    groupCode: '1',
+    remark: '',
+    productCode: 'zfb123',
+    barcode: '',
+    configMode: 'flexible',
+    isRelativePrice: false,
+    isRequired: true,
+    requiredOptionCount: 1,
+    minTotalQuantity: 1,
+    maxTotalQuantity: 2,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2), createMockCustomComboItem(3)],
+    relatedCount: 2
+  },
+  {
+    id: 'cc-7',
+    groupName: '0330可选分组-3',
+    groupCode: '1',
+    remark: '',
+    productCode: '',
+    barcode: '',
+    configMode: 'flexible',
+    isRelativePrice: false,
+    isRequired: false,
+    requiredOptionCount: 1,
+    minTotalQuantity: 0,
+    maxTotalQuantity: 2,
+    items: [createMockCustomComboItem(1), createMockCustomComboItem(2)],
+    relatedCount: 2
+  },
 ];
 
 const ADDON_GROUPS: AddonGroup[] = [
@@ -332,6 +513,8 @@ export const WebProductAttributeManager: React.FC = () => {
   const [specValueEditor, setSpecValueEditor] = useState<SpecValueEditorState | null>(null);
   const [specDeleteDialog, setSpecDeleteDialog] = useState<SpecDeleteDialogState | null>(null);
   const [specProductsViewer, setSpecProductsViewer] = useState<SpecLinkedProductsViewer | null>(null);
+  const [customComboRecords, setCustomComboRecords] = useState<CustomComboRecord[]>(CUSTOM_COMBO_RECORDS);
+  const [customComboEditor, setCustomComboEditor] = useState<CustomComboEditorState | null>(null);
   const [expandedSpecGroups, setExpandedSpecGroups] = useState<Set<string>>(
     () => new Set(SPEC_GROUPS.filter(group => group.values.length > 0).map(group => group.id))
   );
@@ -375,11 +558,21 @@ export const WebProductAttributeManager: React.FC = () => {
   }, [normalizedKeyword]);
 
   const filteredCustomCombos = useMemo(() => {
-    if (!normalizedKeyword) return CUSTOM_COMBO_RECORDS;
-    return CUSTOM_COMBO_RECORDS.filter(item =>
-      [item.groupName, item.groupCode, item.remark, item.productCode, item.barcode].join(' ').toLowerCase().includes(normalizedKeyword)
+    if (!normalizedKeyword) return customComboRecords;
+    return customComboRecords.filter(item =>
+      [
+        item.groupName,
+        item.groupCode,
+        item.remark,
+        item.productCode,
+        item.barcode,
+        getCustomComboModeLabel(item.configMode),
+        getCustomComboOptionRule(item),
+        getCustomComboRequiredLabel(item),
+        getCustomComboQuantityLimit(item)
+      ].join(' ').toLowerCase().includes(normalizedKeyword)
     );
-  }, [normalizedKeyword]);
+  }, [customComboRecords, normalizedKeyword]);
 
   const filteredAddonGroups = useMemo(() => {
     if (!normalizedKeyword) return ADDON_GROUPS;
@@ -629,6 +822,89 @@ export const WebProductAttributeManager: React.FC = () => {
     setSpecProductsViewer({ title, products });
   };
 
+  const handleOpenCreateCustomCombo = () => {
+    setCustomComboEditor(createEmptyCustomComboEditor());
+  };
+
+  const handleOpenEditCustomCombo = (record: CustomComboRecord) => {
+    setCustomComboEditor({
+      mode: 'edit',
+      id: record.id,
+      groupName: record.groupName,
+      groupCode: record.groupCode,
+      remark: record.remark,
+      productCode: record.productCode,
+      barcode: record.barcode,
+      configMode: record.configMode,
+      isRelativePrice: record.isRelativePrice,
+      isRequired: record.isRequired,
+      requiredOptionCount: record.requiredOptionCount,
+      minTotalQuantity: record.minTotalQuantity,
+      maxTotalQuantity: record.maxTotalQuantity,
+      items: record.items.map(item => ({ ...item })),
+      relatedCount: record.relatedCount,
+    });
+  };
+
+  const handleCopyCustomCombo = (record: CustomComboRecord) => {
+    setCustomComboEditor({
+      ...createEmptyCustomComboEditor(),
+      mode: 'create',
+      groupName: `${record.groupName}-复制`,
+      groupCode: record.groupCode,
+      remark: record.remark,
+      productCode: record.productCode,
+      barcode: record.barcode,
+      configMode: record.configMode,
+      isRelativePrice: record.isRelativePrice,
+      isRequired: record.isRequired,
+      requiredOptionCount: record.requiredOptionCount,
+      minTotalQuantity: record.minTotalQuantity,
+      maxTotalQuantity: record.maxTotalQuantity,
+      items: record.items.map(item => ({ ...item, id: `custom-combo-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` })),
+      relatedCount: 0,
+    });
+  };
+
+  const handleDeleteCustomCombo = (record: CustomComboRecord) => {
+    const confirmed = window.confirm(`确认删除随心配分组“${record.groupName}”吗？删除后不可恢复。`);
+    if (!confirmed) return;
+    setCustomComboRecords(prev => prev.filter(item => item.id !== record.id));
+  };
+
+  const handleSaveCustomCombo = () => {
+    if (!customComboEditor) return;
+    const groupName = customComboEditor.groupName.trim() || '未命名分组';
+    const items = customComboEditor.items.filter(item => item.name.trim());
+    const normalizedRequiredOptionCount = Math.min(Math.max(1, customComboEditor.requiredOptionCount || 1), Math.max(items.length, 1));
+    const minFloor = customComboEditor.configMode === 'flexible' && customComboEditor.isRequired ? 1 : 0;
+    const normalizedMinTotalQuantity = Math.max(minFloor, customComboEditor.minTotalQuantity || 0);
+    const normalizedMaxTotalQuantity = Math.min(100, Math.max(normalizedMinTotalQuantity, customComboEditor.maxTotalQuantity || 100));
+    const nextRecord: CustomComboRecord = {
+      id: customComboEditor.id || `cc-${Date.now()}`,
+      groupName,
+      groupCode: customComboEditor.groupCode.trim(),
+      remark: customComboEditor.remark.trim(),
+      productCode: customComboEditor.productCode.trim(),
+      barcode: customComboEditor.barcode.trim(),
+      configMode: customComboEditor.configMode,
+      isRelativePrice: customComboEditor.isRelativePrice,
+      isRequired: customComboEditor.isRequired,
+      requiredOptionCount: normalizedRequiredOptionCount,
+      minTotalQuantity: customComboEditor.configMode === 'flexible' ? normalizedMinTotalQuantity : 0,
+      maxTotalQuantity: customComboEditor.configMode === 'flexible' ? normalizedMaxTotalQuantity : 100,
+      items: items.length ? items : [createMockCustomComboItem()],
+      relatedCount: customComboEditor.relatedCount,
+    };
+
+    if (customComboEditor.mode === 'edit' && customComboEditor.id) {
+      setCustomComboRecords(prev => prev.map(item => item.id === customComboEditor.id ? nextRecord : item));
+    } else {
+      setCustomComboRecords(prev => [nextRecord, ...prev]);
+    }
+    setCustomComboEditor(null);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
       <div className="shrink-0 bg-white px-6 pt-5">
@@ -664,7 +940,7 @@ export const WebProductAttributeManager: React.FC = () => {
             {activeTab === 'label' && <>描述标签展示在小程序端的商品名称下方、分类名称上方，用于口味做饮、食材等商品信息或分类式说明 <span className="text-[#00C06B]">查看示例</span></>}
             {activeTab === 'badge' && <>商品角标展示在小程序点单页商品列表的商品图片中，用于新品、套餐等特殊标记展示 <span className="text-[#00C06B]">查看示例</span> <span className="ml-3 text-[#00C06B]">查看帮助文档</span></>}
             {activeTab === 'series' && <>如果商品存在商品系列，小程序点单页购买商品时，可快速切换相同系列的商品 <span className="text-[#00C06B]">查看示例</span></>}
-            {activeTab === 'custom_combo' && <>管理商品随心配分组，支持配置分组编码、商品标识、商品条码和关联商品 <span className="text-[#00C06B]">查看示例</span></>}
+            {activeTab === 'custom_combo' && <>管理商品随心配分组，支持配置分组编码、商品标识、商品条码、按种类选择、是否必选和购买数量限制 <span className="text-[#00C06B]">查看示例</span></>}
             {activeTab === 'addon' && <>管理商品加料类型与加料商品，可配置初始价格、启停状态及关联商品范围 <span className="text-[#00C06B]">查看示例</span></>}
           </div>
 
@@ -771,7 +1047,12 @@ export const WebProductAttributeManager: React.FC = () => {
               </button>
               {activeTab === 'label' && <button className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">排序管理</button>}
               {activeTab === 'custom_combo' && <button className="rounded-lg border border-[#00C06B] bg-[#F3FCF7] px-4 py-2.5 text-sm font-bold text-[#00C06B] hover:bg-[#EAF9F1]">筛选(2)</button>}
-              <button className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">{buttonLabelMap[activeTab]}</button>
+              <button
+                onClick={activeTab === 'custom_combo' ? handleOpenCreateCustomCombo : undefined}
+                className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
+              >
+                {buttonLabelMap[activeTab]}
+              </button>
             </div>
           </div>
           )}
@@ -806,7 +1087,15 @@ export const WebProductAttributeManager: React.FC = () => {
           )}
           {activeTab === 'badge' && <BadgeTable records={filteredBadges} />}
           {activeTab === 'series' && <SeriesTable records={filteredSeries} />}
-          {activeTab === 'custom_combo' && <CustomComboTable records={filteredCustomCombos} />}
+          {activeTab === 'custom_combo' && (
+            <CustomComboTable
+              records={filteredCustomCombos}
+              onCreate={handleOpenCreateCustomCombo}
+              onEdit={handleOpenEditCustomCombo}
+              onCopy={handleCopyCustomCombo}
+              onDelete={handleDeleteCustomCombo}
+            />
+          )}
           {activeTab === 'addon' && (
             <AddonTable
               groups={filteredAddonGroups}
@@ -841,6 +1130,14 @@ export const WebProductAttributeManager: React.FC = () => {
             <SpecLinkedProductsModal
               viewer={specProductsViewer}
               onClose={() => setSpecProductsViewer(null)}
+            />
+          )}
+          {customComboEditor && (
+            <CustomComboEditorModal
+              draft={customComboEditor}
+              onChange={setCustomComboEditor}
+              onCancel={() => setCustomComboEditor(null)}
+              onConfirm={handleSaveCustomCombo}
             />
           )}
         </div>
@@ -1544,9 +1841,21 @@ const SeriesTable = ({ records }: { records: SeriesRecord[] }) => (
   </div>
 );
 
-const CustomComboTable = ({ records }: { records: CustomComboRecord[] }) => (
+const CustomComboTable = ({
+  records,
+  onCreate,
+  onEdit,
+  onCopy,
+  onDelete,
+}: {
+  records: CustomComboRecord[];
+  onCreate: () => void;
+  onEdit: (record: CustomComboRecord) => void;
+  onCopy: (record: CustomComboRecord) => void;
+  onDelete: (record: CustomComboRecord) => void;
+}) => (
   <div className="overflow-auto">
-    <table className="w-full min-w-[1180px] border-collapse text-left">
+    <table className="w-full min-w-[1540px] border-collapse text-left">
       <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
         <tr>
           <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">分组ID</th>
@@ -1555,6 +1864,10 @@ const CustomComboTable = ({ records }: { records: CustomComboRecord[] }) => (
           <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-4">备注</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">商品标识</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">商品条码</th>
+          <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">配置方式</th>
+          <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">按种类选择</th>
+          <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-4">是否必选</th>
+          <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">购买数量限制</th>
           <th className="w-[100px] border-b border-[#E8E8E8] px-4 py-4">关联商品</th>
           <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
         </tr>
@@ -1568,18 +1881,306 @@ const CustomComboTable = ({ records }: { records: CustomComboRecord[] }) => (
             <td className="px-4 py-4 text-[#666]">{record.remark || '-'}</td>
             <td className="px-4 py-4 text-[#666]">{record.productCode || '-'}</td>
             <td className="px-4 py-4 text-[#666]">{record.barcode || '-'}</td>
+            <td className="px-4 py-4 text-[#666]">{getCustomComboModeLabel(record.configMode)}</td>
+            <td className="px-4 py-4 text-[#666]">{getCustomComboOptionRule(record)}</td>
+            <td className="px-4 py-4">
+              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${record.configMode === 'flexible' ? (record.isRequired ? 'bg-[#FFF1F0] text-[#FF4D4F]' : 'bg-[#F0F5FF] text-[#2F54EB]') : 'bg-[#F5F5F5] text-[#98A2B3]'}`}>
+                {getCustomComboRequiredLabel(record)}
+              </span>
+            </td>
+            <td className="px-4 py-4 text-[#666]">{getCustomComboQuantityLimit(record)}</td>
             <td className="px-4 py-4 text-[#00C06B]">{record.relatedCount}</td>
             <td className="px-4 py-4 text-right">
-              <span className="mr-4 text-[#00C06B]">编辑</span>
-              <span className="mr-4 text-[#00C06B]">复制</span>
-              <span className="text-[#00C06B]">删除</span>
+              <ActionButtons
+                actions={[
+                  { label: '编辑', onClick: () => onEdit(record) },
+                  { label: '复制', onClick: () => onCopy(record) },
+                  { label: '删除', onClick: () => onDelete(record), danger: true },
+                ]}
+              />
             </td>
           </tr>
         ))}
+        {!records.length && (
+          <tr>
+            <td colSpan={11} className="px-4 py-12 text-center text-sm text-[#98A2B3]">
+              暂无随心配分组，点击右上角“创建分组”开始配置
+            </td>
+          </tr>
+        )}
       </tbody>
     </table>
   </div>
 );
+
+const CustomComboEditorModal = ({
+  draft,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: CustomComboEditorState;
+  onChange: (draft: CustomComboEditorState) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const updateField = <K extends keyof CustomComboEditorState>(key: K, value: CustomComboEditorState[K]) => {
+    onChange({ ...draft, [key]: value });
+  };
+
+  const updateItem = (itemId: string, patch: Partial<CustomComboItem>) => {
+    onChange({
+      ...draft,
+      items: draft.items.map(item => (item.id === itemId ? { ...item, ...patch } : item)),
+    });
+  };
+
+  const appendItem = () => {
+    onChange({
+      ...draft,
+      items: [...draft.items, createMockCustomComboItem(draft.items.length + 1)],
+    });
+  };
+
+  const removeItem = (itemId: string) => {
+    const nextItems = draft.items.filter(item => item.id !== itemId);
+    onChange({
+      ...draft,
+      items: nextItems.length ? nextItems : [createMockCustomComboItem()],
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[98] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[1180px] overflow-hidden rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-5">
+          <div>
+            <div className="text-[20px] font-bold text-[#1F2129]">{draft.mode === 'create' ? '新建随心配分组' : '编辑随心配分组'}</div>
+            <div className="mt-1 text-sm text-[#98A2B3]">在 Web 后台直接配置分组规则、是否必选和购买数量限制。</div>
+          </div>
+          <button onClick={onCancel} className="text-[#98A2B3] hover:text-[#5B6475]"><X size={20} /></button>
+        </div>
+        <div className="max-h-[76vh] overflow-y-auto bg-[#F8FAFB] px-6 py-6">
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-[#EEF1F5] bg-white p-5">
+              <div className="mb-5 text-sm font-bold text-[#1F2129]">分组信息</div>
+              <div className="max-w-[620px] space-y-4">
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
+                  <div className="text-sm text-[#333]">分组ID：</div>
+                  <input
+                    value={draft.id || '保存后自动生成'}
+                    disabled
+                    className="h-10 w-full rounded-lg border border-[#E8E8E8] bg-[#F5F7FA] px-3 text-sm text-[#98A2B3] outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
+                  <div className="text-sm text-[#333]"><span className="mr-1 text-[#FF4D4F]">*</span>分组名称：</div>
+                  <input
+                    value={draft.groupName}
+                    onChange={e => updateField('groupName', e.target.value)}
+                    placeholder="请输入分组名称"
+                    className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]"
+                  />
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
+                  <div className="text-sm text-[#333]">分组编码：</div>
+                  <input
+                    value={draft.groupCode}
+                    onChange={e => updateField('groupCode', e.target.value)}
+                    placeholder="请输入分组编码"
+                    className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]"
+                  />
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-3">
+                  <div className="pt-2 text-sm text-[#333]">备注</div>
+                  <textarea
+                    value={draft.remark}
+                    onChange={e => updateField('remark', e.target.value)}
+                    placeholder="请输入备注"
+                    className="min-h-[84px] w-full resize-none rounded-lg border border-[#E8E8E8] px-3 py-2 text-sm outline-none focus:border-[#00C06B]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#EEF1F5] bg-white p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-sm font-bold text-[#1F2129]">商品信息</div>
+                <button type="button" onClick={appendItem} className="inline-flex items-center rounded-lg bg-[#00C06B] px-3 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">
+                  <Plus size={14} className="mr-1" />
+                  添加商品
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-[#EEF1F5]">
+                <div className="grid grid-cols-[minmax(0,1.6fr)_140px_140px_160px_100px_96px] gap-4 bg-[#F7F8FA] px-4 py-3 text-sm font-bold text-[#333]">
+                  <div>商品名称</div>
+                  <div>规格</div>
+                  <div>商品标识</div>
+                  <div>商品条码</div>
+                  <div>数量</div>
+                  <div className="text-right">操作</div>
+                </div>
+                <div className="max-h-[260px] overflow-y-auto">
+                  {draft.items.map(item => (
+                    <div key={item.id} className="grid grid-cols-[minmax(0,1.6fr)_140px_140px_160px_100px_96px] gap-4 border-t border-[#EEF1F5] px-4 py-3 first:border-t-0">
+                      <input value={item.name} onChange={e => updateItem(item.id, { name: e.target.value })} className="h-10 rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]" />
+                      <input value={item.spec} onChange={e => updateItem(item.id, { spec: e.target.value })} className="h-10 rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]" />
+                      <input value={item.productCode} onChange={e => updateItem(item.id, { productCode: e.target.value })} className="h-10 rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]" />
+                      <input value={item.barcode} onChange={e => updateItem(item.id, { barcode: e.target.value })} className="h-10 rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]" />
+                      <input type="number" value={item.quantity} onChange={e => updateItem(item.id, { quantity: Math.max(1, parseInt(e.target.value) || 1) })} className="h-10 rounded-lg border border-[#E8E8E8] px-3 text-center text-sm outline-none focus:border-[#00C06B]" />
+                      <div className="flex items-center justify-end">
+                        <button type="button" onClick={() => removeItem(item.id)} className="text-sm text-[#FF4D4F] hover:text-[#D9363E]">删除</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#EEF1F5] bg-white p-5">
+              <div className="mb-4 text-sm font-bold text-[#1F2129]">分组设置</div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-6 rounded-xl bg-[#F8FAFB] px-4 py-3">
+                  <div>
+                    <div className="text-sm font-medium text-[#333]">配置方式</div>
+                    <div className="mt-1 text-xs text-[#98A2B3]">请选择分组的选购方式。“按种类选择”用于限制用户需要选择几种不同商品；“按数量选择”用于设置该分组是否必选，以及用户在本组内可买多少件商品。</div>
+                  </div>
+                  <div className="flex rounded-lg border border-[#D9DDE7] bg-white p-1">
+                    <button
+                      type="button"
+                      onClick={() => updateField('configMode', 'pick')}
+                      className={`min-w-[112px] whitespace-nowrap rounded-md px-5 py-1.5 text-sm font-medium ${draft.configMode === 'pick' ? 'bg-[#00C06B] text-white' : 'text-[#666] hover:bg-[#F7F8FA]'}`}
+                    >
+                      按种类选择
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onChange({
+                        ...draft,
+                        configMode: 'flexible',
+                        isRequired: draft.configMode === 'flexible' ? draft.isRequired : false,
+                        minTotalQuantity: draft.configMode === 'flexible'
+                          ? draft.minTotalQuantity
+                          : 0,
+                        maxTotalQuantity: draft.configMode === 'flexible'
+                          ? draft.maxTotalQuantity
+                          : 100,
+                      })}
+                      className={`min-w-[112px] whitespace-nowrap rounded-md px-5 py-1.5 text-sm font-medium ${draft.configMode === 'flexible' ? 'bg-[#00C06B] text-white' : 'text-[#666] hover:bg-[#F7F8FA]'}`}
+                    >
+                      按数量选择
+                    </button>
+                  </div>
+                </div>
+
+                {draft.configMode === 'pick' && (
+                  <div className="flex items-center justify-between gap-6 rounded-xl bg-[#F8FAFB] px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-[#333]">分组内必选商品种类数</div>
+                      <div className="mt-1 text-xs text-[#98A2B3]">设置用户在该分组中必须选择几种不同商品，例如当前 `3选1` 表示 3 种商品中必须选择 1 种。<span className="ml-2 cursor-pointer text-[#00C06B] hover:underline">查看示例</span></div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-[#5B6475]">当前 {draft.items.length}选{Math.min(draft.requiredOptionCount, Math.max(draft.items.length, 1))}</span>
+                      <div className="flex items-center overflow-hidden rounded-lg border border-[#D9DDE7] bg-white">
+                        <button type="button" onClick={() => updateField('requiredOptionCount', Math.max(1, draft.requiredOptionCount - 1))} className="px-3 py-2 text-[#666] hover:bg-[#F7F8FA]">-</button>
+                        <input
+                          type="number"
+                          value={draft.requiredOptionCount}
+                          onChange={e => updateField('requiredOptionCount', Math.max(1, parseInt(e.target.value) || 1))}
+                          className="h-10 w-16 border-x border-[#D9DDE7] text-center text-sm outline-none"
+                        />
+                        <button type="button" onClick={() => updateField('requiredOptionCount', draft.requiredOptionCount + 1)} className="px-3 py-2 text-[#666] hover:bg-[#F7F8FA]">+</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {draft.configMode === 'flexible' && (
+                  <>
+                    <div className="flex items-center justify-between gap-6 rounded-xl bg-[#F8FAFB] px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium text-[#333]">是否必选</div>
+                        <div className="mt-1 text-xs text-[#98A2B3]">开启后，用户下单时必须从该分组中选择商品；关闭后，用户可以跳过这个分组不选。</div>
+                      </div>
+                      <div className="flex rounded-lg border border-[#D9DDE7] bg-white p-1">
+                        <button
+                          type="button"
+                          onClick={() => onChange({
+                            ...draft,
+                            isRequired: true,
+                            minTotalQuantity: Math.max(1, draft.minTotalQuantity || 0),
+                          })}
+                          className={`rounded-md px-4 py-1.5 text-sm font-medium ${draft.isRequired ? 'bg-[#00C06B] text-white' : 'text-[#666] hover:bg-[#F7F8FA]'}`}
+                        >
+                          必选
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateField('isRequired', false)}
+                          className={`rounded-md px-4 py-1.5 text-sm font-medium ${!draft.isRequired ? 'bg-[#00C06B] text-white' : 'text-[#666] hover:bg-[#F7F8FA]'}`}
+                        >
+                          非必选
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-[#F8FAFB] px-4 py-3">
+                      <div className="text-sm font-medium text-[#333]">商品购买数量限制</div>
+                      <div className="mt-1 text-xs text-[#98A2B3]">设置用户在该分组内最少买几件、最多买几件，单个商品可重复选择。默认起购数量为 0，限购数量为 100，且限购数量最多不超过 100。<span className="ml-2 cursor-pointer text-[#00C06B] hover:underline">查看示例</span></div>
+                      <div className="mt-3 flex items-center gap-3">
+                        <span className="text-sm text-[#5B6475]">起购数量</span>
+                        <input
+                          type="number"
+                          value={draft.minTotalQuantity}
+                          min={draft.isRequired ? 1 : 0}
+                          max={100}
+                          onChange={e => {
+                            const nextMinTotalQuantity = Math.min(100, Math.max(draft.isRequired ? 1 : 0, parseInt(e.target.value) || 0));
+                            onChange({
+                              ...draft,
+                              minTotalQuantity: nextMinTotalQuantity,
+                              maxTotalQuantity: Math.max(nextMinTotalQuantity, draft.maxTotalQuantity),
+                            });
+                          }}
+                          className="h-10 w-20 rounded-lg border border-[#E8E8E8] px-3 text-center text-sm outline-none focus:border-[#00C06B]"
+                        />
+                        <span className="text-[#98A2B3]">~</span>
+                        <span className="text-sm text-[#5B6475]">限购数量</span>
+                        <input
+                          type="number"
+                          value={draft.maxTotalQuantity}
+                          min={draft.minTotalQuantity}
+                          max={100}
+                          onChange={e => updateField('maxTotalQuantity', Math.min(100, Math.max(draft.minTotalQuantity, parseInt(e.target.value) || 100)))}
+                          className="h-10 w-20 rounded-lg border border-[#E8E8E8] px-3 text-center text-sm outline-none focus:border-[#00C06B]"
+                        />
+                      </div>
+                      {draft.isRequired && (
+                        <div className="mt-2 text-xs text-[#98A2B3]">该分组设为必选时，起购数量必须大于 0。</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-t border-[#EEF1F5] bg-white px-6 py-5">
+          <div className="text-sm text-[#98A2B3]">
+            规则预览：{draft.configMode === 'pick'
+              ? `按种类选择 / ${draft.items.length}选${Math.min(draft.requiredOptionCount, Math.max(draft.items.length, 1))}`
+              : `按数量选择 / ${draft.isRequired ? '必选' : '非必选'} / ${draft.minTotalQuantity} ~ ${draft.maxTotalQuantity}`}
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]">取消</button>
+            <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AddonTable = ({
   groups,

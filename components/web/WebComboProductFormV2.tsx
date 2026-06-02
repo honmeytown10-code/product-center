@@ -60,8 +60,11 @@ interface ComboGroup {
     relativePrice?: boolean; // 可选分组特有：相对价
     isRequired?: boolean; // 可选分组特有：是否必选
     remark?: string;
-    minSelect?: number; // 可选分组规则
-    maxSelect?: number; // 可选分组规则
+    minSelect?: number; // 随心配模板规则：最少选择数
+    maxSelect?: number; // 随心配模板规则：最多选择数
+    requiredOptionCount?: number; // 可选分组：需选择的商品种类数
+    minTotalQuantity?: number; // 可选分组：最少购买总数
+    maxTotalQuantity?: number; // 可选分组：最多购买总数
     templateId?: string; // 随心配特有
     saveAsFreeMatch?: boolean; // 可选分组特有：保存为随心配
     items: ComboItem[];
@@ -140,6 +143,19 @@ interface Props {
     category: Category;
     onClose: () => void;
 }
+
+const getOptionalRequiredOptionCount = (group: Partial<ComboGroup>) => (
+    group.requiredOptionCount ?? Math.max(1, group.minSelect ?? 1)
+);
+
+const getOptionalMinTotalQuantity = (group: Partial<ComboGroup>) => {
+    if (typeof group.minTotalQuantity === 'number') return group.minTotalQuantity;
+    return group.isRequired === false ? 0 : 1;
+};
+
+const getOptionalMaxTotalQuantity = (group: Partial<ComboGroup>) => (
+    group.maxTotalQuantity ?? group.maxSelect ?? 100
+);
 
 export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) => {
     const [activeSection, setActiveSection] = useState<SectionId>('basic');
@@ -238,7 +254,16 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
             setOptionalModalConfig({
                 isOpen: true,
                 mode: 'create',
-                data: { name: '', isRequired: true, minSelect: 1, maxSelect: 100, relativePrice: false, remark: '', saveAsFreeMatch: false }
+                data: {
+                    name: '',
+                    isRequired: true,
+                    requiredOptionCount: 1,
+                    minTotalQuantity: 1,
+                    maxTotalQuantity: 100,
+                    relativePrice: false,
+                    remark: '',
+                    saveAsFreeMatch: false
+                }
             });
             return;
         }
@@ -259,8 +284,9 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                 type: 'optional',
                 name: optionalModalConfig.data.name || '未命名分组',
                 isRequired: optionalModalConfig.data.isRequired,
-                minSelect: optionalModalConfig.data.minSelect,
-                maxSelect: optionalModalConfig.data.maxSelect,
+                requiredOptionCount: getOptionalRequiredOptionCount(optionalModalConfig.data),
+                minTotalQuantity: getOptionalMinTotalQuantity(optionalModalConfig.data),
+                maxTotalQuantity: getOptionalMaxTotalQuantity(optionalModalConfig.data),
                 relativePrice: optionalModalConfig.data.relativePrice,
                 remark: optionalModalConfig.data.remark,
                 saveAsFreeMatch: optionalModalConfig.data.saveAsFreeMatch,
@@ -607,15 +633,15 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                                     <div className="flex items-center space-x-8 text-sm text-gray-600 pl-7">
                                                         {group.type === 'free' && <span>分组编码：{group.templateId || '1'}</span>}
                                                         <span>备注：{group.remark || '--'}</span>
-                                                        <span>
-                                                            分组设置：
-                                                            {group.type === 'free' ? '随心配' : '商品'}
-                                                            {group.type === 'free' ? `${group.maxSelect || 3}选${group.minSelect || 1}` : 
-                                                             group.isRequired === false ? 
-                                                                (group.maxSelect ? `${group.maxSelect}选${group.minSelect || 0}` : `选${group.minSelect || 0}`) : 
-                                                                (group.maxSelect ? `${group.maxSelect}选${group.minSelect || 1}` : `选${group.minSelect || 1}`)
-                                                            }
-                                                        </span>
+                                                        {group.type === 'free' ? (
+                                                            <span>分组设置：随心配{group.maxSelect || 3}选{group.minSelect || 1}</span>
+                                                        ) : (
+                                                            <>
+                                                                <span>分组设置：{group.items.length}选{getOptionalRequiredOptionCount(group)}</span>
+                                                                <span>是否必选：{group.isRequired === false ? '非必选' : '必选'}</span>
+                                                                <span>购买数量限制：{getOptionalMinTotalQuantity(group)} ~ {getOptionalMaxTotalQuantity(group)}</span>
+                                                            </>
+                                                        )}
                                                         <span>是否为锅底：否</span>
                                                         {group.type === 'optional' && group.relativePrice && <span>相对价：是</span>}
                                                     </div>
@@ -1093,91 +1119,172 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
 
                             <FormRow label="分组设置" required>
                                 <div className="flex flex-col space-y-4">
-                                    <label className="flex items-center space-x-3 cursor-pointer group">
-                                        <div className="relative flex items-center justify-center">
-                                            <input 
-                                                type="radio" 
-                                                name="isRequired" 
-                                                className="peer sr-only" 
-                                                checked={optionalModalConfig.data.isRequired !== false} 
-                                                onChange={() => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, isRequired: true, minSelect: Math.max(1, optionalModalConfig.data.minSelect || 1) } })}
-                                            />
-                                            <div className="w-4 h-4 rounded-full border-2 border-gray-300 peer-checked:border-[#00C06B] group-hover:border-[#00C06B]/50 transition-colors"></div>
-                                            <div className="absolute w-2 h-2 rounded-full bg-[#00C06B] opacity-0 peer-checked:opacity-100 transition-opacity"></div>
+                                    <div className="rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4 space-y-4">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <div className="text-sm font-medium text-[#333]">分组内需选商品种类数</div>
+                                                <div className="mt-1 text-xs text-[#98A2B3]">
+                                                    用于配置用户在该分组下必须选择几种商品，体现为前台“几选几”规则
+                                                    <span className="ml-2 cursor-pointer text-[#00C06B] hover:underline">查看示例</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center border border-gray-200 rounded overflow-hidden h-8 bg-white">
+                                                <button
+                                                    className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-r border-gray-200"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setOptionalModalConfig({
+                                                            ...optionalModalConfig,
+                                                            data: {
+                                                                ...optionalModalConfig.data,
+                                                                requiredOptionCount: Math.max(1, getOptionalRequiredOptionCount(optionalModalConfig.data) - 1)
+                                                            }
+                                                        });
+                                                    }}
+                                                >−</button>
+                                                <input
+                                                    type="number"
+                                                    value={getOptionalRequiredOptionCount(optionalModalConfig.data)}
+                                                    onChange={(e) => setOptionalModalConfig({
+                                                        ...optionalModalConfig,
+                                                        data: {
+                                                            ...optionalModalConfig.data,
+                                                            requiredOptionCount: Math.max(1, parseInt(e.target.value) || 1)
+                                                        }
+                                                    })}
+                                                    className="w-14 text-center text-sm outline-none focus:bg-gray-50"
+                                                />
+                                                <button
+                                                    className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-l border-gray-200"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setOptionalModalConfig({
+                                                            ...optionalModalConfig,
+                                                            data: {
+                                                                ...optionalModalConfig.data,
+                                                                requiredOptionCount: getOptionalRequiredOptionCount(optionalModalConfig.data) + 1
+                                                            }
+                                                        });
+                                                    }}
+                                                >+</button>
+                                            </div>
                                         </div>
-                                        <span className={`text-sm ${optionalModalConfig.data.isRequired !== false ? 'text-[#00C06B]' : 'text-gray-700'}`}>分组为必选，分组内商品必须选择</span>
-                                        <div className="flex items-center border border-gray-200 rounded overflow-hidden h-8">
-                                            <button 
-                                                className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-r border-gray-200 disabled:opacity-50"
-                                                onClick={(e) => { e.preventDefault(); setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, minSelect: Math.max(1, (optionalModalConfig.data.minSelect || 1) - 1) } }); }}
-                                                disabled={optionalModalConfig.data.isRequired === false}
-                                            >−</button>
-                                            <input 
-                                                type="number" 
-                                                value={optionalModalConfig.data.isRequired !== false ? (optionalModalConfig.data.minSelect || 1) : ''} 
-                                                onChange={(e) => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, minSelect: parseInt(e.target.value) || 1 } })}
-                                                disabled={optionalModalConfig.data.isRequired === false}
-                                                className="w-12 text-center text-sm outline-none focus:bg-gray-50 disabled:bg-gray-100"
-                                            />
-                                            <button 
-                                                className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-l border-gray-200 disabled:opacity-50"
-                                                onClick={(e) => { e.preventDefault(); setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, minSelect: (optionalModalConfig.data.minSelect || 1) + 1 } }); }}
-                                                disabled={optionalModalConfig.data.isRequired === false}
-                                            >+</button>
-                                        </div>
-                                    </label>
 
-                                    <label className="flex items-center space-x-3 cursor-pointer group">
-                                        <div className="relative flex items-center justify-center">
-                                            <input 
-                                                type="radio" 
-                                                name="isRequired" 
-                                                className="peer sr-only" 
-                                                checked={optionalModalConfig.data.isRequired === false} 
-                                                onChange={() => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, isRequired: false, minSelect: 0 } })}
-                                            />
-                                            <div className="w-4 h-4 rounded-full border-2 border-gray-300 peer-checked:border-[#00C06B] group-hover:border-[#00C06B]/50 transition-colors"></div>
-                                            <div className="absolute w-2 h-2 rounded-full bg-[#00C06B] opacity-0 peer-checked:opacity-100 transition-opacity"></div>
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <div className="text-sm font-medium text-[#333]">是否必选</div>
+                                                <div className="mt-1 text-xs text-[#98A2B3]">是否必选由独立配置控制，不再根据最少购买总数自动判断</div>
+                                            </div>
+                                            <div className="flex items-center rounded-lg border border-[#E8E8E8] bg-white p-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, isRequired: true } })}
+                                                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${optionalModalConfig.data.isRequired !== false ? 'bg-[#00C06B] text-white' : 'text-[#666] hover:bg-[#F5F7FA]'}`}
+                                                >
+                                                    必选
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, isRequired: false } })}
+                                                    className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${optionalModalConfig.data.isRequired === false ? 'bg-[#00C06B] text-white' : 'text-[#666] hover:bg-[#F5F7FA]'}`}
+                                                >
+                                                    非必选
+                                                </button>
+                                            </div>
                                         </div>
-                                        <span className={`text-sm ${optionalModalConfig.data.isRequired === false ? 'text-[#00C06B]' : 'text-gray-700'}`}>分组为可选，单个商品可多选，限制分组内商品</span>
-                                        <div className="flex items-center border border-gray-200 rounded overflow-hidden h-8">
-                                            <button 
-                                                className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-r border-gray-200 disabled:opacity-50"
-                                                onClick={(e) => { e.preventDefault(); setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, minSelect: Math.max(0, (optionalModalConfig.data.minSelect || 0) - 1) } }); }}
-                                                disabled={optionalModalConfig.data.isRequired !== false}
-                                            >−</button>
-                                            <input 
-                                                type="number" 
-                                                value={optionalModalConfig.data.isRequired === false ? (optionalModalConfig.data.minSelect || 0) : ''} 
-                                                onChange={(e) => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, minSelect: parseInt(e.target.value) || 0 } })}
-                                                disabled={optionalModalConfig.data.isRequired !== false}
-                                                className="w-12 text-center text-sm outline-none focus:bg-gray-50 disabled:bg-gray-100"
-                                            />
-                                            <button 
-                                                className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-l border-gray-200 disabled:opacity-50"
-                                                onClick={(e) => { e.preventDefault(); setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, minSelect: (optionalModalConfig.data.minSelect || 0) + 1 } }); }}
-                                                disabled={optionalModalConfig.data.isRequired !== false}
-                                            >+</button>
-                                        </div>
-                                    </label>
 
-                                    <div className="flex items-center space-x-3 pl-7">
-                                        <span className="text-sm text-gray-700">最多购买总数</span>
-                                        <div className="flex items-center border border-gray-200 rounded overflow-hidden h-8">
-                                            <button 
-                                                className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-r border-gray-200"
-                                                onClick={(e) => { e.preventDefault(); setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, maxSelect: Math.max(1, (optionalModalConfig.data.maxSelect || 100) - 1) } }); }}
-                                            >−</button>
-                                            <input 
-                                                type="number" 
-                                                value={optionalModalConfig.data.maxSelect || 100} 
-                                                onChange={(e) => setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, maxSelect: parseInt(e.target.value) || 100 } })}
-                                                className="w-16 text-center text-sm outline-none focus:bg-gray-50"
-                                            />
-                                            <button 
-                                                className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-l border-gray-200"
-                                                onClick={(e) => { e.preventDefault(); setOptionalModalConfig({ ...optionalModalConfig, data: { ...optionalModalConfig.data, maxSelect: (optionalModalConfig.data.maxSelect || 100) + 1 } }); }}
-                                            >+</button>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <div className="text-sm font-medium text-[#333]">商品购买数量限制</div>
+                                                <div className="mt-1 text-xs text-[#98A2B3]">
+                                                    单个商品可多选，限制分组内商品购买总数，原有示例保留
+                                                    <span className="ml-2 cursor-pointer text-[#00C06B] hover:underline">查看示例</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm text-gray-700">最少购买总数</span>
+                                                <div className="flex items-center border border-gray-200 rounded overflow-hidden h-8 bg-white">
+                                                    <button
+                                                        className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-r border-gray-200"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setOptionalModalConfig({
+                                                                ...optionalModalConfig,
+                                                                data: {
+                                                                    ...optionalModalConfig.data,
+                                                                    minTotalQuantity: Math.max(0, getOptionalMinTotalQuantity(optionalModalConfig.data) - 1)
+                                                                }
+                                                            });
+                                                        }}
+                                                    >−</button>
+                                                    <input
+                                                        type="number"
+                                                        value={getOptionalMinTotalQuantity(optionalModalConfig.data)}
+                                                        onChange={(e) => setOptionalModalConfig({
+                                                            ...optionalModalConfig,
+                                                            data: {
+                                                                ...optionalModalConfig.data,
+                                                                minTotalQuantity: Math.max(0, parseInt(e.target.value) || 0)
+                                                            }
+                                                        })}
+                                                        className="w-16 text-center text-sm outline-none focus:bg-gray-50"
+                                                    />
+                                                    <button
+                                                        className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-l border-gray-200"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setOptionalModalConfig({
+                                                                ...optionalModalConfig,
+                                                                data: {
+                                                                    ...optionalModalConfig.data,
+                                                                    minTotalQuantity: getOptionalMinTotalQuantity(optionalModalConfig.data) + 1
+                                                                }
+                                                            });
+                                                        }}
+                                                    >+</button>
+                                                </div>
+                                                <span className="text-sm text-gray-700">最多购买总数</span>
+                                                <div className="flex items-center border border-gray-200 rounded overflow-hidden h-8 bg-white">
+                                                    <button
+                                                        className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-r border-gray-200"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setOptionalModalConfig({
+                                                                ...optionalModalConfig,
+                                                                data: {
+                                                                    ...optionalModalConfig.data,
+                                                                    maxTotalQuantity: Math.max(1, getOptionalMaxTotalQuantity(optionalModalConfig.data) - 1)
+                                                                }
+                                                            });
+                                                        }}
+                                                    >−</button>
+                                                    <input
+                                                        type="number"
+                                                        value={getOptionalMaxTotalQuantity(optionalModalConfig.data)}
+                                                        onChange={(e) => setOptionalModalConfig({
+                                                            ...optionalModalConfig,
+                                                            data: {
+                                                                ...optionalModalConfig.data,
+                                                                maxTotalQuantity: Math.max(1, parseInt(e.target.value) || 1)
+                                                            }
+                                                        })}
+                                                        className="w-16 text-center text-sm outline-none focus:bg-gray-50"
+                                                    />
+                                                    <button
+                                                        className="px-2 bg-gray-50 text-gray-500 hover:bg-gray-100 border-l border-gray-200"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            setOptionalModalConfig({
+                                                                ...optionalModalConfig,
+                                                                data: {
+                                                                    ...optionalModalConfig.data,
+                                                                    maxTotalQuantity: getOptionalMaxTotalQuantity(optionalModalConfig.data) + 1
+                                                                }
+                                                            });
+                                                        }}
+                                                    >+</button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

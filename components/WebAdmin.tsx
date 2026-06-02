@@ -29,6 +29,7 @@ import { WebProductSync } from './web/WebProductSync'; // Import new component
 import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
+import { WebProductLogPage } from './web/WebProductLogPage';
 import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
@@ -41,6 +42,8 @@ export interface WebCategory extends Category {
 type StoreProductManagePreset = {
   keyword?: string;
 };
+
+type TopNavView = 'brand' | 'store';
 
 type CommonFieldConfigs = Record<string, CategoryFieldConfig[]>;
 
@@ -193,15 +196,14 @@ export const WebAdmin: React.FC = () => {
   const { products } = useProducts();
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
-  const [activeMenu, setActiveMenu] = useState('product_list');
+  const [activeTopNav, setActiveTopNav] = useState<TopNavView>('brand');
+  const [activeMenu, setActiveMenu] = useState('product_logs');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([
-    'product_archives',
-    'product_archives_recipe',
-    'store_products',
-    'chain_management',
-    'platform_products',
+    'security_compliance',
+    'log_audit',
+    'coupon_logs',
   ]);
 
   // Creation/Import State
@@ -261,6 +263,30 @@ export const WebAdmin: React.FC = () => {
 
   const toggleMenu = (key: string) => {
     setExpandedMenus(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  const resetTransientViews = () => {
+    setCreationContext(null);
+    setDetailContext(null);
+    setRequiredPolicyEditorContext(null);
+    setStoreRegionEditorContext(null);
+    setAttributeMutexEditorContext(null);
+    setCategorySelectType(null);
+  };
+
+  const switchTopNav = (target: TopNavView) => {
+    if (target === activeTopNav) return;
+    resetTransientViews();
+    setActiveTopNav(target);
+
+    if (target === 'brand') {
+      setExpandedMenus(['security_compliance', 'log_audit', 'coupon_logs']);
+      setActiveMenu('product_logs');
+      return;
+    }
+
+    setExpandedMenus(['product_archives', 'product_archives_recipe', 'store_products', 'chain_management', 'platform_products']);
+    setActiveMenu('product_list');
   };
 
   useEffect(() => {
@@ -523,6 +549,10 @@ export const WebAdmin: React.FC = () => {
           return <WebProductTemplateManager />;
       }
 
+      if (activeMenu === 'product_logs') {
+          return <WebProductLogPage />;
+      }
+
       // Default: Product List
       return (
          <WebProductList 
@@ -558,13 +588,27 @@ export const WebAdmin: React.FC = () => {
           </div>
           <div className="h-5 w-px bg-gray-200"></div>
           <nav className="flex space-x-2 text-[#666] font-medium text-[13px]">
-            <button className="flex items-center hover:bg-gray-100 px-3 py-1.5 rounded-md transition-all">
+            <button
+              onClick={() => switchTopNav('brand')}
+              className={`px-3 py-1.5 rounded-md flex items-center transition-all ${
+                activeTopNav === 'brand'
+                  ? 'bg-[#E6F8F0] text-[#00C06B] font-bold border border-[#00C06B]/20'
+                  : 'hover:bg-gray-100'
+              }`}
+            >
                <LayoutGrid size={16} className="mr-2"/> 品牌管理
             </button>
             <button className="flex items-center hover:bg-gray-100 px-3 py-1.5 rounded-md transition-all">
                <Clock size={16} className="mr-2"/> 经营洞察
             </button>
-            <button className="bg-[#E6F8F0] px-3 py-1.5 rounded-md flex items-center text-[#00C06B] font-bold border border-[#00C06B]/20">
+            <button
+              onClick={() => switchTopNav('store')}
+              className={`px-3 py-1.5 rounded-md flex items-center transition-all ${
+                activeTopNav === 'store'
+                  ? 'bg-[#E6F8F0] text-[#00C06B] font-bold border border-[#00C06B]/20'
+                  : 'hover:bg-gray-100'
+              }`}
+            >
                <Store size={16} className="mr-2"/> 门店业务 <ChevronDown size={14} className="ml-1"/>
             </button>
           </nav>
@@ -594,14 +638,111 @@ export const WebAdmin: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         
         {/* Sidebar */}
+        {activeTopNav === 'brand' ? (
+        <aside className="w-[200px] bg-[#F7F8FA] border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30">
+           <div className="px-3 py-2">
+              <div className="flex items-center rounded-xl bg-white px-3 py-3 shadow-sm border border-[#EEF0F3]">
+                 <Box size={18} className="mr-2 text-[#00C06B]"/>
+                 <span className="font-bold text-[#333]">品牌管理</span>
+              </div>
+           </div>
+
+           <div className="px-3 py-1 space-y-1 text-[13px] text-[#4B5563]">
+              <div className="flex items-center rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <span className="mr-2 text-[#98A2B3]">▣</span>品牌概览
+              </div>
+              <div className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <div><span className="mr-2 text-[#98A2B3]">▤</span>门店管理</div>
+                 <ChevronDown size={14} className="text-[#98A2B3]" />
+              </div>
+              <div className="flex items-center rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <span className="mr-2 text-[#98A2B3]">◫</span>素材管理
+              </div>
+              <div className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <div><span className="mr-2 text-[#98A2B3]">◌</span>费用中心</div>
+                 <ChevronDown size={14} className="text-[#98A2B3]" />
+              </div>
+              <div className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <div><span className="mr-2 text-[#98A2B3]">◌</span>支付管理</div>
+                 <ChevronDown size={14} className="text-[#98A2B3]" />
+              </div>
+
+              <div className="rounded-xl bg-white border border-[#E8E8E8] overflow-hidden">
+                 <div
+                    className="flex items-center justify-between px-3 py-2.5 cursor-pointer text-[#1F2937]"
+                    onClick={() => toggleMenu('security_compliance')}
+                 >
+                    <div><span className="mr-2 text-[#00C06B]">▣</span><span className="font-semibold">安全合规</span></div>
+                    {expandedMenus.includes('security_compliance') ? <ChevronUp size={14} className="text-[#98A2B3]" /> : <ChevronDown size={14} className="text-[#98A2B3]" />}
+                 </div>
+
+                 {expandedMenus.includes('security_compliance') && (
+                   <div className="border-t border-[#F0F1F3] bg-white py-1">
+                     <div
+                       className="flex items-center justify-between px-3 py-2 cursor-pointer text-[#4B5563] hover:bg-[#F7F8FA]"
+                       onClick={() => toggleMenu('log_audit')}
+                     >
+                       <span className="pl-5">日志审计</span>
+                       {expandedMenus.includes('log_audit') ? <ChevronUp size={14} className="text-[#98A2B3]" /> : <ChevronDown size={14} className="text-[#98A2B3]" />}
+                     </div>
+
+                     {expandedMenus.includes('log_audit') && (
+                       <div className="space-y-1 px-2 py-1">
+                         <div className="rounded-lg px-3 py-2 text-[#4B5563] hover:bg-[#F7F8FA] cursor-pointer pl-9">
+                           操作日志
+                         </div>
+                         <div
+                           onClick={() => { setActiveMenu('product_logs'); setCreationContext(null); }}
+                           className={`rounded-lg px-3 py-2 cursor-pointer pl-9 ${
+                             activeMenu === 'product_logs' ? 'bg-[#00C06B] text-white font-semibold shadow-sm' : 'text-[#4B5563] hover:bg-[#F7F8FA]'
+                           }`}
+                         >
+                           商品日志
+                         </div>
+                       </div>
+                     )}
+
+                     <div
+                       className="flex items-center justify-between px-3 py-2 cursor-pointer text-[#4B5563] hover:bg-[#F7F8FA]"
+                       onClick={() => toggleMenu('coupon_logs')}
+                     >
+                       <span className="pl-5">卡券日志</span>
+                       {expandedMenus.includes('coupon_logs') ? <ChevronUp size={14} className="text-[#98A2B3]" /> : <ChevronDown size={14} className="text-[#98A2B3]" />}
+                     </div>
+
+                     <div className="rounded-lg px-3 py-2 text-[#4B5563] hover:bg-[#F7F8FA] cursor-pointer pl-8">门店日志</div>
+                     <div className="rounded-lg px-3 py-2 text-[#4B5563] hover:bg-[#F7F8FA] cursor-pointer pl-8">系统日志</div>
+                     <div className="rounded-lg px-3 py-2 text-[#4B5563] hover:bg-[#F7F8FA] cursor-pointer pl-8">用户权益日志</div>
+                   </div>
+                 )}
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <div><span className="mr-2 text-[#98A2B3]">▣</span>品牌管理</div>
+                 <ChevronDown size={14} className="text-[#98A2B3]" />
+              </div>
+              <div className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-white cursor-pointer">
+                 <div><span className="mr-2 text-[#98A2B3]">▣</span>应用市场</div>
+                 <ChevronDown size={14} className="text-[#98A2B3]" />
+              </div>
+           </div>
+
+           <div className="mt-auto px-3 pb-4 pt-6">
+             <div className="grid grid-cols-3 gap-2 text-center text-[12px] text-[#98A2B3]">
+               <div className="rounded-lg bg-white px-2 py-2 border border-[#EEF0F3]">账户</div>
+               <div className="rounded-lg bg-white px-2 py-2 border border-[#EEF0F3]">更新</div>
+               <div className="rounded-lg bg-white px-2 py-2 border border-[#EEF0F3]">记录</div>
+             </div>
+           </div>
+        </aside>
+        ) : (
         <aside className="w-[200px] bg-white border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30">
            <div className="px-4 py-3 mb-2">
               <div className="flex items-center font-bold text-[#333] mb-1">
                  <Box size={18} className="mr-2 text-[#00C06B]"/> 商品管理
               </div>
            </div>
-           
-           {/* Product Archives Group */}
+
            <div className="mb-1">
               <div 
                  className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
@@ -694,7 +835,6 @@ export const WebAdmin: React.FC = () => {
               )}
            </div>
 
-           {/* Store Products Group (New) */}
            <div className="mb-1">
               <div 
                  className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
@@ -758,6 +898,7 @@ export const WebAdmin: React.FC = () => {
 
            <div className="mt-auto h-4"></div>
         </aside>
+        )}
 
         {/* Main Content */}
         {renderContent()}

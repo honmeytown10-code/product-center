@@ -20,6 +20,10 @@ interface WebProductFormProps {
     previewPreferenceKey?: string;
     commonFieldConfigs?: Record<string, CategoryFieldConfig[]>;
     onOpenCommonFieldSettings?: (type: 'standard' | 'combo', categoryId: string) => void;
+    groupedTagOptions?: Record<GroupedTagFieldId, GroupedTagGroup[]>;
+    badgeOptions?: BadgeOptionConfig[];
+    onGroupedTagOptionsChange?: (value: Record<GroupedTagFieldId, GroupedTagGroup[]>) => void;
+    onBadgeOptionsChange?: (value: BadgeOptionConfig[]) => void;
 }
 
 const DEFAULT_RESET_FIELD_IDS = new Set(['p_weight_flag', 'st_member']);
@@ -75,27 +79,30 @@ type CategoryTreeNode = {
         name: string;
     }>;
 };
-type TagStyleType = 'text' | 'image';
-type GroupedTagFieldId = 'p_desc_tags' | 'p_order_tags' | 'p_stat_tags';
-type GroupedTagOption = {
+export type TagStyleType = 'text' | 'image';
+export type GroupedTagFieldId = 'p_desc_tags' | 'p_order_tags' | 'p_stat_tags';
+export type GroupedTagOption = {
     id: string;
     name: string;
     styleType?: TagStyleType;
     backgroundColor?: string;
     textColor?: string;
+    source?: 'brand' | 'store';
 };
-type GroupedTagGroup = {
+export type GroupedTagGroup = {
     id: string;
     name: string;
     options: GroupedTagOption[];
+    source?: 'brand' | 'store';
 };
-type BadgeOptionConfig = {
+export type BadgeOptionConfig = {
     id: string;
     name: string;
     badgeType: TagStyleType;
     backgroundColor: string;
     startDate: string;
     endDate: string;
+    source?: 'brand' | 'store';
 };
 type ColorPickerTarget = 'background' | 'text';
 type CreatableSelectFieldId =
@@ -474,22 +481,24 @@ const DEFAULT_BACK_CATEGORY_TREE: CategoryTreeNode[] = [
 ];
 const TAG_BACKGROUND_COLOR_OPTIONS = ['#EEF2FF', '#ECFDF3', '#FEF3C7', '#FCE7F3', '#E0F2FE'];
 const TAG_TEXT_COLOR_OPTIONS = ['#4338CA', '#047857', '#B45309', '#BE185D', '#0369A1'];
-const DEFAULT_GROUPED_TAG_OPTIONS: Record<GroupedTagFieldId, GroupedTagGroup[]> = {
+export const DEFAULT_GROUPED_TAG_OPTIONS: Record<GroupedTagFieldId, GroupedTagGroup[]> = {
     p_desc_tags: [
         {
             id: 'desc-group-1',
             name: '0910',
+            source: 'brand',
             options: [
-                { id: 'desc-1', name: '0910图片1', styleType: 'image', backgroundColor: '#EEF2FF', textColor: '#4338CA' },
-                { id: 'desc-2', name: '0910文字', styleType: 'text', backgroundColor: '#ECFDF3', textColor: '#047857' },
+                { id: 'desc-1', name: '0910图片1', styleType: 'image', backgroundColor: '#EEF2FF', textColor: '#4338CA', source: 'brand' },
+                { id: 'desc-2', name: '0910文字', styleType: 'text', backgroundColor: '#ECFDF3', textColor: '#047857', source: 'brand' },
             ],
         },
         {
             id: 'desc-group-2',
             name: '口味描述',
+            source: 'store',
             options: [
-                { id: 'desc-3', name: '店长推荐', styleType: 'text', backgroundColor: '#FEF3C7', textColor: '#B45309' },
-                { id: 'desc-4', name: '无糖低脂', styleType: 'text', backgroundColor: '#E0F2FE', textColor: '#0369A1' },
+                { id: 'desc-3', name: '店长推荐', styleType: 'text', backgroundColor: '#FEF3C7', textColor: '#B45309', source: 'store' },
+                { id: 'desc-4', name: '无糖低脂', styleType: 'text', backgroundColor: '#E0F2FE', textColor: '#0369A1', source: 'store' },
             ],
         },
     ],
@@ -497,16 +506,18 @@ const DEFAULT_GROUPED_TAG_OPTIONS: Record<GroupedTagFieldId, GroupedTagGroup[]> 
         {
             id: 'order-group-1',
             name: '热销推荐',
+            source: 'brand',
             options: [
-                { id: 'order-1', name: '门店推荐', styleType: 'text', backgroundColor: '#ECFDF3', textColor: '#047857' },
-                { id: 'order-2', name: '新品尝鲜', styleType: 'image', backgroundColor: '#EEF2FF', textColor: '#4338CA' },
+                { id: 'order-1', name: '门店推荐', styleType: 'text', backgroundColor: '#ECFDF3', textColor: '#047857', source: 'brand' },
+                { id: 'order-2', name: '新品尝鲜', styleType: 'image', backgroundColor: '#EEF2FF', textColor: '#4338CA', source: 'brand' },
             ],
         },
         {
             id: 'order-group-2',
             name: '营销活动',
+            source: 'store',
             options: [
-                { id: 'order-3', name: '本周爆款', styleType: 'text', backgroundColor: '#FCE7F3', textColor: '#BE185D' },
+                { id: 'order-3', name: '本周爆款', styleType: 'text', backgroundColor: '#FCE7F3', textColor: '#BE185D', source: 'store' },
             ],
         },
     ],
@@ -514,25 +525,27 @@ const DEFAULT_GROUPED_TAG_OPTIONS: Record<GroupedTagFieldId, GroupedTagGroup[]> 
         {
             id: 'stat-group-1',
             name: '销量统计',
+            source: 'brand',
             options: [
-                { id: 'stat-1', name: '销量统计' },
-                { id: 'stat-2', name: '活动统计' },
+                { id: 'stat-1', name: '销量统计', source: 'brand' },
+                { id: 'stat-2', name: '活动统计', source: 'brand' },
             ],
         },
         {
             id: 'stat-group-2',
             name: '经营分析',
+            source: 'store',
             options: [
-                { id: 'stat-3', name: '成本统计' },
-                { id: 'stat-4', name: '渠道统计' },
+                { id: 'stat-3', name: '成本统计', source: 'store' },
+                { id: 'stat-4', name: '渠道统计', source: 'store' },
             ],
         },
     ],
 };
-const DEFAULT_BADGE_OPTIONS: BadgeOptionConfig[] = [
-    { id: 'badge-1', name: '新品', badgeType: 'text', backgroundColor: '#ECFDF3', startDate: '2026-05-01', endDate: '2026-06-30' },
-    { id: 'badge-2', name: '招牌', badgeType: 'text', backgroundColor: '#FEF3C7', startDate: '2026-05-01', endDate: '2026-12-31' },
-    { id: 'badge-3', name: '限时', badgeType: 'image', backgroundColor: '#FCE7F3', startDate: '2026-05-20', endDate: '2026-06-20' },
+export const DEFAULT_BADGE_OPTIONS: BadgeOptionConfig[] = [
+    { id: 'badge-1', name: '新品', badgeType: 'text', backgroundColor: '#ECFDF3', startDate: '2026-05-01', endDate: '2026-06-30', source: 'brand' },
+    { id: 'badge-2', name: '招牌', badgeType: 'text', backgroundColor: '#FEF3C7', startDate: '2026-05-01', endDate: '2026-12-31', source: 'brand' },
+    { id: 'badge-3', name: '限时', badgeType: 'image', backgroundColor: '#FCE7F3', startDate: '2026-05-20', endDate: '2026-06-20', source: 'store' },
 ];
 const SPEC_LIBRARY = [
     { id: 'spec-group-1', name: '杯型规格', values: ['中杯 480ml', '大杯 600ml', '超大杯 700ml'] },
@@ -724,6 +737,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     previewPreferenceKey = 'default-account',
     commonFieldConfigs = {},
     onOpenCommonFieldSettings,
+    groupedTagOptions: groupedTagOptionsProp,
+    badgeOptions: badgeOptionsProp,
+    onGroupedTagOptionsChange,
+    onBadgeOptionsChange,
 }) => {
     const defaultPreviewPreference: PreviewDisplayPreference = existingProductCount > 10 ? 'collapsed' : 'expanded';
     const isComboProduct = type === 'combo';
@@ -780,13 +797,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         p_front_cat: DEFAULT_FRONT_CATEGORY_TREE[0]?.id || null,
         p_back_cat: DEFAULT_BACK_CATEGORY_TREE[0]?.id || null,
     });
-    const [groupedTagOptions, setGroupedTagOptions] = useState<Record<GroupedTagFieldId, GroupedTagGroup[]>>(DEFAULT_GROUPED_TAG_OPTIONS);
+    const [groupedTagOptions, setGroupedTagOptions] = useState<Record<GroupedTagFieldId, GroupedTagGroup[]>>(
+        groupedTagOptionsProp || DEFAULT_GROUPED_TAG_OPTIONS
+    );
     const [activeGroupedTagIds, setActiveGroupedTagIds] = useState<Record<GroupedTagFieldId, string | null>>({
         p_desc_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_desc_tags[0]?.id || null,
         p_order_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_order_tags[0]?.id || null,
         p_stat_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_stat_tags[0]?.id || null,
     });
-    const [badgeOptions, setBadgeOptions] = useState<BadgeOptionConfig[]>(DEFAULT_BADGE_OPTIONS);
+    const [badgeOptions, setBadgeOptions] = useState<BadgeOptionConfig[]>(badgeOptionsProp || DEFAULT_BADGE_OPTIONS);
     const [quickCreateOptionModal, setQuickCreateOptionModal] = useState<QuickCreateOptionModalState | null>(null);
     const [quickCreateOptionDraft, setQuickCreateOptionDraft] = useState('');
     const [quickCreateStyleType, setQuickCreateStyleType] = useState<TagStyleType>('text');
@@ -1447,6 +1466,26 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             setActiveFormSection(firstVisibleSection);
         }
     }, [activeFormSection, firstVisibleSection, visibleSectionOrder]);
+
+    useEffect(() => {
+        if (groupedTagOptionsProp) {
+            setGroupedTagOptions(groupedTagOptionsProp);
+        }
+    }, [groupedTagOptionsProp]);
+
+    useEffect(() => {
+        if (badgeOptionsProp) {
+            setBadgeOptions(badgeOptionsProp);
+        }
+    }, [badgeOptionsProp]);
+
+    useEffect(() => {
+        onGroupedTagOptionsChange?.(groupedTagOptions);
+    }, [groupedTagOptions, onGroupedTagOptionsChange]);
+
+    useEffect(() => {
+        onBadgeOptionsChange?.(badgeOptions);
+    }, [badgeOptions, onBadgeOptionsChange]);
 
     useEffect(() => {
         if (isWeightProduct && specDisplayMode !== 'single') {
@@ -2136,7 +2175,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             updateGroupedTagOptionsByField(fieldId, prev => (
                 prev.some(group => group.name === nextName)
                     ? prev
-                    : [...prev, { id: nextGroupId, name: nextName, options: [] }]
+                    : [...prev, { id: nextGroupId, name: nextName, options: [], source: 'store' }]
             ));
             setActiveGroupedTagIds(prev => ({ ...prev, [fieldId]: nextGroupId }));
         } else if ((fieldId === 'p_desc_tags' || fieldId === 'p_order_tags' || fieldId === 'p_stat_tags') && mode === 'tag_item' && quickCreateOptionModal.parentId) {
@@ -2156,6 +2195,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         backgroundColor: quickCreateBackgroundColor,
                                         textColor: quickCreateTextColor,
                                     }),
+                                    source: 'store',
                                 },
                             ],
                     }
@@ -2174,6 +2214,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 backgroundColor: quickCreateBackgroundColor,
                 startDate: quickCreateStartDate,
                 endDate: quickCreateEndDate,
+                source: 'store',
             };
             setBadgeOptions(prev => [...prev, nextBadge]);
             setDynamicFormData(prev => ({
@@ -3891,8 +3932,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const showListDesc = isFieldRendered('p_list_desc');
         const showDescTags = isFieldRendered('p_desc_tags');
         const showOrderTags = isFieldRendered('p_order_tags');
-        const showBadge = isMoreFieldEnabled('p_badge');
-        const showBadgeDate = isMoreFieldEnabled('p_badge_date');
+        const showBadge = isFieldRendered('p_badge');
+        const showBadgeDate = isFieldRendered('p_badge_date');
         const showRichDesc = isFieldRendered('p_rich_desc');
         const showDisplayListGroup = showMainImage || showListDesc || showDescTags || showOrderTags || showBadge || showBadgeDate;
         const showDisplayDetailGroup = showRichDesc || expandedDisplayDetailFields.length > 0;

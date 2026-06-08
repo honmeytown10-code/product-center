@@ -387,7 +387,9 @@ export const WebStoreProductList: React.FC<{
   mode?: StoreProductPageMode;
   managePreset?: StoreProductManagePreset | null;
   onOpenManageProduct?: (preset: StoreProductManagePreset) => void;
-}> = ({ mode = 'manage', managePreset = null, onOpenManageProduct }) => {
+  onCreateClick?: (type: 'standard' | 'combo') => void;
+  onEditProduct?: (product: StoreProductRecord) => void;
+}> = ({ mode = 'manage', managePreset = null, onOpenManageProduct, onCreateClick, onEditProduct }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const config = brandConfigs[activeBrandId];
   const enableGrouping = config?.enableChannelGrouping ?? false;
@@ -545,6 +547,8 @@ export const WebStoreProductList: React.FC<{
 
   const handleAction = (product: StoreProductRecord, action: 'shelf' | 'stock' | 'edit') => {
     if (action === 'edit') {
+      onEditProduct?.(product);
+      if (onEditProduct) return;
       setNotification({ type: 'info', message: `打开 ${product.storeName} 的商品编辑页` });
       return;
     }
@@ -824,6 +828,18 @@ export const WebStoreProductList: React.FC<{
             </button>
             <button className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
               <Upload size={14} className="mr-1.5 text-[#666]" /> 导入
+            </button>
+            <button
+              onClick={() => onCreateClick?.('standard')}
+              className="flex items-center px-4 py-1.5 border border-[#00C06B] bg-[#F3FCF7] text-[#00A35B] rounded text-xs font-bold hover:bg-[#EAF9F1] transition-colors"
+            >
+              <Coffee size={14} className="mr-1.5" /> 新建商品
+            </button>
+            <button
+              onClick={() => onCreateClick?.('combo')}
+              className="flex items-center px-4 py-1.5 border border-[#00C06B] bg-white text-[#00A35B] rounded text-xs font-bold hover:bg-[#F3FCF7] transition-colors"
+            >
+              <ShoppingBag size={14} className="mr-1.5" /> 新建套餐商品
             </button>
             <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">
               日志导出

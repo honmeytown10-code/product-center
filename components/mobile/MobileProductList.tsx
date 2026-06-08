@@ -20,7 +20,7 @@ interface Props {
   // Context Actions
   toggleShelfStatus: (id: string) => void;
   onUpdateProduct?: (id: string, updates: Partial<Product>) => void; // Added updater prop
-  onEditProduct?: (product: Product) => void; // Added edit prop
+  onEditProduct?: (product: Product, activeChannel: ChannelType) => void; // Added edit prop
   isStockShared: boolean;
   isShelvesUnited: boolean;
 }
@@ -226,7 +226,7 @@ export const MobileProductList: React.FC<Props> = ({
                                 if (isBatchMode) {
                                     onToggleSelection(product.id);
                                 } else if (onEditProduct) {
-                                    onEditProduct(product);
+                                    onEditProduct(product, activeChannel);
                                 }
                             }} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'} ${isOffShelf ? 'opacity-75 grayscale-[0.5]' : ''} ${!isBatchMode ? 'cursor-pointer active:scale-[0.98]' : ''}`}>
                                 <div className="flex">

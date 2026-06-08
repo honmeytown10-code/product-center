@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Box, ChevronDown, ChevronUp, Search, Bell, LayoutGrid, Clock, Settings, Store
 } from 'lucide-react';
@@ -19,7 +19,7 @@ import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
 import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebCategorySelectModal, WebImportModal } from './web/WebModals';
-import { WebProductForm } from './web/WebProductForm';
+import { BadgeOptionConfig, DEFAULT_BADGE_OPTIONS, DEFAULT_GROUPED_TAG_OPTIONS, GroupedTagFieldId, GroupedTagGroup, WebProductForm } from './web/WebProductForm';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
@@ -41,6 +41,14 @@ export interface WebCategory extends Category {
 
 type StoreProductManagePreset = {
   keyword?: string;
+};
+
+type CreationContext = {
+  type: 'standard' | 'combo';
+  category: Category;
+  mode?: 'create' | 'edit';
+  product?: any;
+  scope?: TopNavView;
 };
 
 type TopNavView = 'brand' | 'store';
@@ -151,6 +159,7 @@ const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_order_tags', isRequired: false },
   { id: 'p_list_desc', isRequired: false },
   { id: 'p_badge', isRequired: false },
+  { id: 'p_badge_date', isRequired: false },
   { id: 'p_video', isRequired: false },
   { id: 'p_rich_desc', isRequired: false },
   { id: 'st_member', isRequired: false },
@@ -193,6 +202,7 @@ const DEFAULT_COMBO_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_desc_tags', isRequired: false },
   { id: 'p_list_desc', isRequired: false },
   { id: 'p_badge', isRequired: false },
+  { id: 'p_badge_date', isRequired: false },
   { id: 'p_video', isRequired: false },
   { id: 'p_rich_desc', isRequired: false },
   { id: 'st_member', isRequired: false },
@@ -232,9 +242,9 @@ export const WebAdmin: React.FC = () => {
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [categorySelectType, setCategorySelectType] = useState<'standard' | 'combo' | null>(null);
+  const [categorySelectContext, setCategorySelectContext] = useState<{ type: 'standard' | 'combo'; scope: TopNavView } | null>(null);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
-  const [creationContext, setCreationContext] = useState<{ type: 'standard' | 'combo', category: Category, mode?: 'create' | 'edit', product?: any } | null>(null); // Triggers Form Page
+  const [creationContext, setCreationContext] = useState<CreationContext | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
   const [storeCategoryReturnMenu, setStoreCategoryReturnMenu] = useState('store_product_list');
   const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(null);
@@ -244,10 +254,52 @@ export const WebAdmin: React.FC = () => {
   const [currentProductMenuGuideStep, setCurrentProductMenuGuideStep] = useState(0);
   const [commonFieldConfigs, setCommonFieldConfigs] = useState<CommonFieldConfigs>(() => buildInitialCommonFieldConfigs(INITIAL_WEB_CATEGORIES));
   const [commonFieldSettingsContext, setCommonFieldSettingsContext] = useState<{ type: 'standard' | 'combo'; categoryId: string | null } | null>(null);
+  const [storeGroupedTagOptions, setStoreGroupedTagOptions] = useState<Record<GroupedTagFieldId, GroupedTagGroup[]>>(() => ({
+    ...DEFAULT_GROUPED_TAG_OPTIONS,
+    p_desc_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_desc_tags.map(group => ({
+      ...group,
+      options: group.options.map(option => ({ ...option })),
+    })),
+    p_order_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_order_tags.map(group => ({
+      ...group,
+      options: group.options.map(option => ({ ...option })),
+    })),
+    p_stat_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_stat_tags.map(group => ({
+      ...group,
+      options: group.options.map(option => ({ ...option })),
+    })),
+  }));
+  const [storeBadgeOptions, setStoreBadgeOptions] = useState<BadgeOptionConfig[]>(() => DEFAULT_BADGE_OPTIONS.map(option => ({ ...option })));
 
   // Category Manager State
   const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
   const [selectedManageCat, setSelectedManageCat] = useState<Category | null>(null);
+  const storeRequiredVisibleFieldIds = ['p_desc_tags', 'p_badge', 'p_badge_date', 'p_rich_desc'];
+
+  const storeCommonFieldConfigs = useMemo<CommonFieldConfigs>(() => (
+    webCategories.reduce<CommonFieldConfigs>((acc, category) => {
+      const key = getCommonFieldConfigKey(category.classification, category.id);
+      const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
+      const fieldMap = new Map(fieldConfigs.map(field => [field.id, field]));
+      const nextConfigList = (commonFieldConfigs[key] || []).map(item => ({ ...item }));
+
+      storeRequiredVisibleFieldIds.forEach(fieldId => {
+        const sourceField = fieldMap.get(fieldId);
+        if (!sourceField) return;
+        const targetIndex = nextConfigList.findIndex(item => item.id === fieldId);
+        const nextFieldConfig = {
+          ...sourceField,
+          ...(targetIndex >= 0 ? nextConfigList[targetIndex] : {}),
+          displayMode: 'visible' as const,
+        };
+        if (targetIndex >= 0) nextConfigList[targetIndex] = nextFieldConfig;
+        else nextConfigList.push(nextFieldConfig);
+      });
+
+      acc[key] = nextConfigList;
+      return acc;
+    }, {})
+  ), [commonFieldConfigs, webCategories]);
 
   useEffect(() => {
     setCommonFieldConfigs(prev => {
@@ -301,7 +353,7 @@ export const WebAdmin: React.FC = () => {
     setRequiredPolicyEditorContext(null);
     setStoreRegionEditorContext(null);
     setAttributeMutexEditorContext(null);
-    setCategorySelectType(null);
+    setCategorySelectContext(null);
   };
 
   const switchTopNav = (target: TopNavView) => {
@@ -406,8 +458,12 @@ export const WebAdmin: React.FC = () => {
                   mode={creationContext.mode || 'create'}
                   initialProduct={creationContext.product || null}
                   existingProductCount={products.length}
-                  previewPreferenceKey="web-admin-qimai-jingjing"
-                  commonFieldConfigs={commonFieldConfigs}
+                  previewPreferenceKey={creationContext.scope === 'store' ? 'web-admin-store-product-form' : 'web-admin-qimai-jingjing'}
+                  commonFieldConfigs={creationContext.scope === 'store' ? storeCommonFieldConfigs : commonFieldConfigs}
+                  groupedTagOptions={creationContext.scope === 'store' ? storeGroupedTagOptions : undefined}
+                  badgeOptions={creationContext.scope === 'store' ? storeBadgeOptions : undefined}
+                  onGroupedTagOptionsChange={creationContext.scope === 'store' ? setStoreGroupedTagOptions : undefined}
+                  onBadgeOptionsChange={creationContext.scope === 'store' ? setStoreBadgeOptions : undefined}
                   onOpenCommonFieldSettings={(type, categoryId) => {
                       setCommonFieldSettingsContext({ type, categoryId });
                       setActiveMenu('common_field_settings');
@@ -456,7 +512,28 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'store_product_list') {
-          return <WebStoreProductList mode="manage" managePreset={storeProductManagePreset} />;
+          return (
+            <WebStoreProductList
+              mode="manage"
+              managePreset={storeProductManagePreset}
+              onCreateClick={(type) => setCategorySelectContext({ type, scope: 'store' })}
+              onEditProduct={(product) => {
+                const targetType = product.type === 'Combo' ? 'combo' : 'standard';
+                const targetCategory = webCategories.find(cat => cat.classification === targetType) || webCategories[0];
+                if (!targetCategory) return;
+                setCreationContext({
+                  type: targetType,
+                  category: targetCategory,
+                  mode: 'edit',
+                  product: {
+                    ...product,
+                    category: product.category,
+                  },
+                  scope: 'store',
+                });
+              }}
+            />
+          );
       }
 
       if (activeMenu === 'store_product_coverage') {
@@ -472,15 +549,39 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'store_addon_list') {
-          return <WebStoreAttributeManager initialTab="addon" />;
+          return (
+            <WebStoreAttributeManager
+              initialTab="addon"
+              groupedTagOptions={storeGroupedTagOptions}
+              badgeOptions={storeBadgeOptions}
+              onGroupedTagOptionsChange={setStoreGroupedTagOptions}
+              onBadgeOptionsChange={setStoreBadgeOptions}
+            />
+          );
       }
 
       if (activeMenu === 'store_method_list') {
-          return <WebStoreAttributeManager initialTab="method" />;
+          return (
+            <WebStoreAttributeManager
+              initialTab="method"
+              groupedTagOptions={storeGroupedTagOptions}
+              badgeOptions={storeBadgeOptions}
+              onGroupedTagOptionsChange={setStoreGroupedTagOptions}
+              onBadgeOptionsChange={setStoreBadgeOptions}
+            />
+          );
       }
 
       if (activeMenu === 'store_attribute_list') {
-          return <WebStoreAttributeManager initialTab="addon" />;
+          return (
+            <WebStoreAttributeManager
+              initialTab="addon"
+              groupedTagOptions={storeGroupedTagOptions}
+              badgeOptions={storeBadgeOptions}
+              onGroupedTagOptionsChange={setStoreGroupedTagOptions}
+              onBadgeOptionsChange={setStoreBadgeOptions}
+            />
+          );
       }
 
       if (activeMenu === 'store_region_list') {
@@ -587,7 +688,7 @@ export const WebAdmin: React.FC = () => {
       return (
          <WebProductList 
             onCreateClick={(type) => {
-              setCategorySelectType(type);
+              setCategorySelectContext({ type, scope: 'brand' });
             }}
             onImportClick={() => setIsImportModalOpen(true)} 
             onViewDetail={(p: any) => setDetailContext(p)}
@@ -601,6 +702,7 @@ export const WebAdmin: React.FC = () => {
                 category: targetCategory,
                 mode: 'edit',
                 product: p,
+                scope: 'brand',
               });
             }}
          />
@@ -936,14 +1038,18 @@ export const WebAdmin: React.FC = () => {
 
       {/* Global Modals */}
       {isImportModalOpen && <WebImportModal onClose={() => setIsImportModalOpen(false)} />}
-      {categorySelectType && (
+      {categorySelectContext && (
         <WebCategorySelectModal
-          type={categorySelectType}
+          type={categorySelectContext.type}
           categories={webCategories}
-          onClose={() => setCategorySelectType(null)}
+          onClose={() => setCategorySelectContext(null)}
           onSelect={(selectedCategory) => {
-            setCreationContext({ type: categorySelectType, category: selectedCategory });
-            setCategorySelectType(null);
+            setCreationContext({
+              type: categorySelectContext.type,
+              category: selectedCategory,
+              scope: categorySelectContext.scope,
+            });
+            setCategorySelectContext(null);
           }}
         />
       )}

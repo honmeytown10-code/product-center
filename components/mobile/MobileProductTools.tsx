@@ -94,6 +94,20 @@ export const MobileProductTools: React.FC<Props> = ({ onBack, onNavigate }) => {
                     bg="bg-[#E6F8F0]"
                     onClick={() => onNavigate('addon_list')} 
                 />
+                <ListItem
+                    icon={<Tag size={18}/>}
+                    label="描述标签"
+                    color="text-pink-600"
+                    bg="bg-pink-50"
+                    onClick={() => onNavigate('label_list')}
+                />
+                <ListItem
+                    icon={<Coffee size={18}/>}
+                    label="角标管理"
+                    color="text-amber-600"
+                    bg="bg-amber-50"
+                    onClick={() => onNavigate('badge_list')}
+                />
             </div>
         </div>
 

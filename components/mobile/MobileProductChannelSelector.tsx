@@ -5,6 +5,7 @@ interface Props {
   selectedChannels: string[];
   onBack: () => void;
   onSave: (next: string[]) => void;
+  helperText?: string;
 }
 
 const CHANNEL_OPTIONS = [
@@ -14,7 +15,7 @@ const CHANNEL_OPTIONS = [
   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={18}/>, color: 'text-orange-600', bg: 'bg-orange-50' },
 ];
 
-export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels, onBack, onSave }) => {
+export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels, onBack, onSave, helperText }) => {
   const [localChannels, setLocalChannels] = useState<string[]>(selectedChannels);
 
   const toggleChannel = (id: string) => {
@@ -54,6 +55,11 @@ export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3">
+        {helperText ? (
+          <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+            <p className="text-[12px] leading-5 font-medium text-orange-700">{helperText}</p>
+          </div>
+        ) : null}
         {CHANNEL_OPTIONS.map(opt => {
           const isEnabled = localChannels.includes(opt.id);
           const isMini = opt.id === 'mini';

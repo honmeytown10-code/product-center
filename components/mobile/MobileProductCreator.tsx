@@ -22,6 +22,7 @@ import { Category } from '../../types';
 import { MobileComboProductCreator } from './MobileComboProductCreator';
 import { MobileStandardProductCreator } from './MobileStandardProductCreator';
 import { MobileQuickCreate, QuickCreateSavedDraft, QuickEntryScreen } from './MobileQuickCreate';
+import { MobileBadgeItem, MobileLabelGroup, STORE_CREATION_CATEGORIES } from './productMeta';
 
 type CreateStep = 'type_select' | 'quick' | 'photo_intro' | 'voice_intro' | 'voice_recording' | 'ai_processing' | 'ai_confirm' | 'form' | 'success';
 type CreateMode = 'manual' | 'scan' | 'voice';
@@ -48,24 +49,11 @@ type VoiceExample = {
 interface Props {
   onBack: () => void;
   categories: Category[];
+  labelGroups: MobileLabelGroup[];
+  badges: MobileBadgeItem[];
+  onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
+  onBadgesChange: (badges: MobileBadgeItem[]) => void;
 }
-
-const CREATION_CATEGORIES = {
-  standard: [
-    { id: 'sc_1', name: '通用菜品', icon: <Utensils />, desc: '热菜、凉菜、小吃' },
-    { id: 'sc_2', name: '现制饮品', icon: <CupSoda />, desc: '奶茶、咖啡、果汁' },
-    { id: 'sc_3', name: '称重商品', icon: <Scale />, desc: '海鲜、麻辣烫' },
-    { id: 'sc_4', name: '蛋糕/烘焙', icon: <CakeSlice />, desc: '面包、甜点、整糕' },
-    { id: 'sc_5', name: '零售商品', icon: <ShoppingBag />, desc: '预包装零食、饮料' },
-  ],
-  combo: [
-    { id: 'cc_1', name: '通用套餐', icon: <Utensils />, desc: '超值午餐、多人餐' },
-    { id: 'cc_2', name: '饮品套餐', icon: <CupSoda />, desc: '双杯优惠、下午茶' },
-    { id: 'cc_3', name: '烘焙套餐', icon: <CakeSlice />, desc: '甜点搭配' },
-    { id: 'cc_4', name: '零售套餐', icon: <ShoppingBag />, desc: '礼盒、组合装' },
-    { id: 'cc_5', name: '火锅锅底', icon: <Flame />, desc: '鸳鸯锅、九宫格' },
-  ],
-};
 
 const PHOTO_POSITIVE_TIPS = ['菜单平整', '正对拍摄', '清晰无遮挡'];
 const PHOTO_NEGATIVE_TIPS = ['倾斜或颠倒', '被遮挡', '有反光', '有褶皱'];
@@ -110,7 +98,7 @@ const VOICE_EXAMPLES: VoiceExample[] = [
   },
 ];
 
-export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) => {
+export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange }) => {
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
   const [quickMode, setQuickMode] = useState<'photo' | 'voice'>('photo');
@@ -557,7 +545,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
 
   const renderCategoryModal = () => {
     if (!showCategoryModal) return null;
-    const activeCategoryList = CREATION_CATEGORIES[targetProductType];
+    const activeCategoryList = STORE_CREATION_CATEGORIES[targetProductType];
     const isStandard = targetProductType === 'standard';
 
     return (
@@ -587,7 +575,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
                 className="flex flex-col items-center justify-center py-4 px-2 bg-[#F8FAFB] rounded-2xl border border-transparent active:border-[#00C06B] active:bg-[#00C06B]/5 cursor-pointer min-h-[110px] transition-all"
               >
                 <div className={`mb-2 p-2.5 rounded-2xl ${isStandard ? 'bg-white text-[#00C06B] shadow-sm' : 'bg-white text-orange-500 shadow-sm'}`}>
-                  {React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24, strokeWidth: 2.5 })}
+                  {cat.icon ? React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24, strokeWidth: 2.5 }) : <Utensils size={24} strokeWidth={2.5} />}
                 </div>
                 <span className="font-bold text-sm text-gray-800 text-center mb-0.5">{cat.name}</span>
                 <span className="text-[10px] text-gray-400 text-center leading-tight px-1">{cat.desc}</span>
@@ -614,10 +602,15 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
       <MobileStandardProductCreator
         onBack={handleBack}
         categories={categories}
+        productType={targetProductType}
         categoryName={creationFormData.category || creationCategory?.name}
         initialData={creationFormData}
         saveMode={formEntrySource === 'ai_confirm' ? 'ai_confirm' : 'default'}
         onSaveDraft={handleStandardFormSave}
+        labelGroups={labelGroups}
+        badges={badges}
+        onLabelGroupsChange={onLabelGroupsChange}
+        onBadgesChange={onBadgesChange}
       />
     );
   };

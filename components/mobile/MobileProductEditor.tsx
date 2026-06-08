@@ -1,191 +1,222 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  ChevronLeft, Plus, ChevronRight, Check, 
-  ImageIcon, Smartphone, Printer, Store, ShoppingBag,
-  Info, Camera, Video, List, Sliders, Tag, Settings, Minus, X, Trash2, Edit2, Clock
-} from 'lucide-react';
+import React, { useState } from 'react';
 import { Category, Product } from '../../types';
+import { MobileStandardProductCreator } from './MobileStandardProductCreator';
+import { MobileBadgeItem, MobileLabelGroup } from './productMeta';
+import { Check, ChevronLeft, Printer, ShoppingBag, Smartphone, Store, X } from 'lucide-react';
 
 interface Props {
   product: Product;
   onBack: () => void;
   categories: Category[];
+  activeChannel?: 'all' | 'mini' | 'meituan' | 'taobao' | 'pos';
+  labelGroups: MobileLabelGroup[];
+  badges: MobileBadgeItem[];
+  onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
+  onBadgesChange: (badges: MobileBadgeItem[]) => void;
+  onSave?: (updates: Partial<Product>, options?: { mode: 'all' | 'partial'; channels: string[] }) => void;
 }
 
-type TabType = 'basic' | 'attr' | 'sales' | 'display';
+export const MobileProductEditor: React.FC<Props> = ({
+  product,
+  onBack,
+  categories,
+  activeChannel = 'all',
+  labelGroups,
+  badges,
+  onLabelGroupsChange,
+  onBadgesChange,
+  onSave,
+}) => {
+  const initialChannels = getInitialChannels(activeChannel);
+  const [pendingPayload, setPendingPayload] = useState<null | {
+    name: string;
+    category: string;
+    basePrice: string;
+    specItems: { name: string; price: string }[];
+  }>(null);
+  const [applyMode, setApplyMode] = useState<'all' | 'partial'>('all');
+  const [effectiveChannels, setEffectiveChannels] = useState<string[]>(['mini', 'meituan', 'taobao', 'pos']);
 
-export const MobileProductEditor: React.FC<Props> = ({ product, onBack, categories }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('basic');
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
-  const sectionRefs = {
-    basic: useRef<HTMLDivElement>(null),
-    attr: useRef<HTMLDivElement>(null),
-    sales: useRef<HTMLDivElement>(null),
-    display: useRef<HTMLDivElement>(null),
-  };
+  const submitEdit = (
+    payload: { name: string; category: string; basePrice: string; specItems: { name: string; price: string }[] },
+    options?: { mode: 'all' | 'partial'; channels: string[] }
+  ) => {
+    const nextPrice = Number(payload.basePrice) || product.price;
+    const nextSpecs = product.isMultiSpec && payload.specItems.length
+      ? payload.specItems.map((item, index) => ({
+          ...product.specs?.[index],
+          name: item.name,
+          price: Number(item.price) || product.specs?.[index]?.price || nextPrice,
+          stock: product.specs?.[index]?.stock ?? 0,
+        }))
+      : product.specs;
 
-  const [formData, setFormData] = useState({
-    name: product.name,
-    category: product.category,
-    price: product.price.toString(),
-    stock: product.stock === -1 ? '' : product.stock?.toString() || '0',
-    type: product.type || 'standard',
-    status: product.status,
-  });
-
-  const tabs: { id: TabType; label: string }[] = [
-    { id: 'basic', label: '基础信息' },
-    { id: 'attr', label: '商品属性' },
-    { id: 'sales', label: '销售属性' },
-    { id: 'display', label: '展示信息' },
-  ];
-
-  // 滑动自动切换 Tab 逻辑
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-        const scrollPos = container.scrollTop + 100;
-        let current: TabType = 'basic';
-        
-        if (sectionRefs.display.current && scrollPos >= sectionRefs.display.current.offsetTop) current = 'display';
-        else if (sectionRefs.sales.current && scrollPos >= sectionRefs.sales.current.offsetTop) current = 'sales';
-        else if (sectionRefs.attr.current && scrollPos >= sectionRefs.attr.current.offsetTop) current = 'attr';
-        else current = 'basic';
-
-        setActiveTab(current);
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const scrollTo = (tabId: TabType) => {
-    const target = sectionRefs[tabId].current;
-    if (target && scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTo({ top: target.offsetTop - 60, behavior: 'smooth' });
-    }
+    onSave?.({
+      name: payload.name,
+      category: payload.category,
+      price: nextPrice,
+      specs: nextSpecs,
+    }, options);
+    onBack();
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F5F6FA] h-full relative overflow-hidden font-sans select-none animate-in slide-in-from-right duration-300">
-      {/* Header */}
-      <div className="h-[50px] bg-white border-b border-gray-100 flex items-center px-4 shrink-0 z-30">
-        <button onClick={onBack} className="p-2 -ml-2 text-gray-600"><ChevronLeft size={24} /></button>
-        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">编辑商品</span>
-      </div>
+    <>
+      <MobileStandardProductCreator
+        onBack={onBack}
+        categories={categories}
+        productType={product.type || 'standard'}
+        mode="edit"
+        title="编辑商品"
+        hideSecondaryAction
+        primaryActionText="保存修改"
+        lockSpecEdit
+        lockStockEdit
+        channelSelectorHelperText="渠道开启后商品将在门店上架售卖，关闭后商品将从渠道移除。"
+        labelGroups={labelGroups}
+        badges={badges}
+        onLabelGroupsChange={onLabelGroupsChange}
+        onBadgesChange={onBadgesChange}
+        initialData={{
+          name: product.name,
+          category: product.category,
+          basePrice: String(product.price),
+          stock: product.stock === -1 ? '' : String(product.stock ?? ''),
+          specType: product.isMultiSpec ? 'multi' : 'single',
+          channels: initialChannels,
+          detailContent: '',
+          listDesc: '',
+          selectedLabelIds: [],
+          selectedBadgeId: '',
+          badgeStartDate: '',
+          badgeEndDate: '',
+          specItems: (product.specs || []).map(spec => ({
+            name: spec.name,
+            price: String(spec.price ?? product.price),
+          })),
+        }}
+        onPrimaryAction={data => {
+          const payload = {
+            name: data.name,
+            category: data.category,
+            basePrice: data.basePrice,
+            specItems: data.specItems,
+          };
+          if (activeChannel === 'all') {
+            setPendingPayload(payload);
+            setApplyMode('all');
+            return;
+          }
+          submitEdit(payload, { mode: 'partial', channels: initialChannels });
+        }}
+      />
 
-      {/* 顶部 Tab 导航 */}
-      <div className="bg-white px-2 border-b border-gray-100 shrink-0 z-20 flex overflow-x-auto no-scrollbar shadow-sm">
-        {tabs.map(tab => (
-          <div 
-            key={tab.id}
-            onClick={() => scrollTo(tab.id)}
-            className={`relative px-4 py-3 text-[13px] font-bold transition-all whitespace-nowrap cursor-pointer ${activeTab === tab.id ? 'text-[#00C06B]' : 'text-gray-500'}`}
-          >
-            {tab.label}
-            {activeTab === tab.id && <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-[#00C06B] rounded-full animate-in fade-in slide-in-from-bottom-1"></div>}
+      {pendingPayload ? (
+        <ApplyChannelModal
+          mode={applyMode}
+          selectedChannels={effectiveChannels}
+          onClose={() => setPendingPayload(null)}
+          onModeChange={setApplyMode}
+          onToggleChannel={channel =>
+            setEffectiveChannels(prev => prev.includes(channel) ? prev.filter(item => item !== channel) : [...prev, channel])
+          }
+          onConfirm={() => submitEdit(pendingPayload, {
+            mode: applyMode,
+            channels: applyMode === 'all' ? ['mini', 'meituan', 'taobao', 'pos'] : effectiveChannels,
+          })}
+        />
+      ) : null}
+    </>
+  );
+};
+
+const getInitialChannels = (activeChannel: Props['activeChannel']) => {
+  if (activeChannel === 'all') return ['mini', 'mini_dine', 'mini_take', 'meituan', 'taobao', 'pos'];
+  if (activeChannel === 'mini') return ['mini', 'mini_dine', 'mini_take'];
+  return activeChannel ? [activeChannel] : ['mini', 'mini_dine', 'mini_take', 'meituan', 'taobao', 'pos'];
+};
+
+const APPLY_CHANNEL_OPTIONS = [
+  { id: 'mini', label: '小程序', icon: <Smartphone size={16} />, color: 'text-green-600', bg: 'bg-green-50' },
+  { id: 'meituan', label: '美团外卖', icon: <Store size={16} />, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+  { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={16} />, color: 'text-orange-600', bg: 'bg-orange-50' },
+  { id: 'pos', label: 'POS收银', icon: <Printer size={16} />, color: 'text-blue-600', bg: 'bg-blue-50' },
+];
+
+const ApplyChannelModal = ({
+  mode,
+  selectedChannels,
+  onClose,
+  onModeChange,
+  onToggleChannel,
+  onConfirm,
+}: {
+  mode: 'all' | 'partial';
+  selectedChannels: string[];
+  onClose: () => void;
+  onModeChange: (mode: 'all' | 'partial') => void;
+  onToggleChannel: (channel: string) => void;
+  onConfirm: () => void;
+}) => (
+  <div className="absolute inset-0 z-[120] flex flex-col justify-end bg-black/50 animate-in fade-in">
+    <div className="flex-1" onClick={onClose}></div>
+    <div className="rounded-t-[24px] bg-white p-4 pb-8 animate-in slide-in-from-bottom duration-300">
+      <div className="flex items-center justify-between px-1">
+        <div className="text-lg font-black text-[#1F2129]">选择生效渠道</div>
+        <button onClick={onClose} className="rounded-full bg-[#F5F5F5] p-1.5 text-[#98A0B3]"><X size={16} /></button>
+      </div>
+      <div className="mt-4 space-y-3">
+        <button
+          onClick={() => onModeChange('all')}
+          className={`flex w-full items-start rounded-2xl border px-4 py-4 text-left ${mode === 'all' ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#EEF1F5] bg-white'}`}
+        >
+          <div className="flex-1">
+            <div className="text-sm font-black text-[#1F2129]">同步到所有渠道</div>
+            <div className="mt-1 text-[11px] text-[#98A1B3]">本次修改会同步到小程序、美团外卖、淘宝闪购、POS 收银</div>
           </div>
-        ))}
+          {mode === 'all' ? <Check size={18} className="text-[#00C06B]" /> : null}
+        </button>
+        <button
+          onClick={() => onModeChange('partial')}
+          className={`flex w-full items-start rounded-2xl border px-4 py-4 text-left ${mode === 'partial' ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#EEF1F5] bg-white'}`}
+        >
+          <div className="flex-1">
+            <div className="text-sm font-black text-[#1F2129]">指定渠道修改</div>
+            <div className="mt-1 text-[11px] text-[#98A1B3]">仅对本次勾选的渠道生效</div>
+          </div>
+          {mode === 'partial' ? <Check size={18} className="text-[#00C06B]" /> : null}
+        </button>
       </div>
-
-      {/* 主表单区域 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 pb-40 scroll-smooth">
-        
-        {/* 1. 基本信息 */}
-        <div ref={sectionRefs.basic} className="bg-white p-5 rounded-2xl shadow-sm space-y-5">
-            <h3 className="font-black text-base text-gray-800">基本信息</h3>
-            
-            <div className="py-2 border-b border-gray-50">
-                <label className="text-sm font-bold text-gray-700 block mb-2">商品主图 <span className="text-red-500">*</span></label>
-                <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden relative mb-3">
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] text-center py-0.5">修改</div>
-                </div>
-            </div>
-
-            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <label className="text-sm font-bold text-gray-700">商品名称 <span className="text-red-500">*</span></label>
-                <input 
-                    className="text-right text-sm font-medium outline-none placeholder-gray-300 flex-1 ml-4 text-gray-800" 
-                    placeholder="请输入商品名称" 
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                />
-            </div>
-            
-            <div className="flex justify-between items-center py-2 border-b border-gray-50 cursor-pointer active:bg-gray-50 transition-colors">
-                <label className="text-sm font-bold text-gray-700">商品分类 <span className="text-red-500">*</span></label>
-                <div className="flex items-center text-sm text-[#333] font-bold">
-                    <span>{formData.category}</span>
-                    <ChevronRight size={16} className="ml-1 text-gray-400"/>
-                </div>
-            </div>
-
-            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <label className="text-sm font-bold text-gray-700">商品类型</label>
-                <div className="text-sm font-medium text-gray-500">
-                    {formData.type === 'combo' ? '套餐商品' : '标准商品'}
-                </div>
-            </div>
+      {mode === 'partial' ? (
+        <div className="mt-4 rounded-2xl bg-[#F7F9FC] p-3">
+          <div className="mb-3 text-[12px] font-bold text-[#667085]">选择渠道</div>
+          <div className="grid grid-cols-2 gap-2">
+            {APPLY_CHANNEL_OPTIONS.map(option => {
+              const active = selectedChannels.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => onToggleChannel(option.id)}
+                  className={`flex items-center rounded-2xl border px-3 py-3 ${active ? 'border-[#00C06B] bg-white' : 'border-[#E5E7EB] bg-white'}`}
+                >
+                  <div className={`mr-3 rounded-xl p-2 ${active ? `${option.bg} ${option.color}` : 'bg-[#F3F4F6] text-[#98A1B3]'}`}>{option.icon}</div>
+                  <span className={`text-sm font-bold ${active ? 'text-[#1F2129]' : 'text-[#98A1B3]'}`}>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-
-        {/* 2. 商品属性 */}
-        <div ref={sectionRefs.attr} className="bg-white p-5 rounded-2xl shadow-sm space-y-5">
-            <h3 className="font-black text-base text-gray-800">商品属性</h3>
-            <div className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-xl">
-                多规格、做法、加料等属性设置
-            </div>
-        </div>
-
-        {/* 3. 销售属性 */}
-        <div ref={sectionRefs.sales} className="bg-white p-5 rounded-2xl shadow-sm space-y-5">
-            <h3 className="font-black text-base text-gray-800">销售属性</h3>
-            
-            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <label className="text-sm font-bold text-gray-700">售卖价格 <span className="text-red-500">*</span></label>
-                <div className="flex items-center">
-                    <span className="text-sm font-bold mr-1">¥</span>
-                    <input 
-                        type="number"
-                        className="text-right text-base font-black outline-none placeholder-gray-300 w-20 text-[#1F2129]" 
-                        placeholder="0.00" 
-                        value={formData.price}
-                        onChange={e => setFormData({...formData, price: e.target.value})}
-                    />
-                </div>
-            </div>
-
-            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <label className="text-sm font-bold text-gray-700">商品库存</label>
-                <input 
-                    type="number"
-                    className="text-right text-sm font-medium outline-none placeholder-gray-300 w-20" 
-                    placeholder="无限" 
-                    value={formData.stock}
-                    onChange={e => setFormData({...formData, stock: e.target.value})}
-                />
-            </div>
-        </div>
-
-        {/* 4. 展示信息 */}
-        <div ref={sectionRefs.display} className="bg-white p-5 rounded-2xl shadow-sm space-y-5">
-            <h3 className="font-black text-base text-gray-800">展示信息</h3>
-            <div className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-xl">
-                图文详情、视频、商品标签等展示设置
-            </div>
-        </div>
-
-      </div>
-
-      {/* 底部按钮 */}
-      <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-30">
-        <button onClick={onBack} className="w-full h-12 bg-[#00C06B] text-white rounded-xl font-bold text-base shadow-lg shadow-green-100 active:scale-95 transition-transform">
-          保存修改
+      ) : null}
+      <div className="mt-5 flex gap-3">
+        <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E7EB] text-sm font-bold text-[#667085]">取消</button>
+        <button
+          onClick={onConfirm}
+          disabled={mode === 'partial' && selectedChannels.length === 0}
+          className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white disabled:opacity-40"
+        >
+          确认保存
         </button>
       </div>
     </div>
-  );
-};
+  </div>
+);

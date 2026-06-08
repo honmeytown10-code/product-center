@@ -19,8 +19,11 @@ import { MobileProductSorter } from './mobile/MobileProductSorter';
 import { MobileCategorySorter } from './mobile/MobileCategorySorter';
 import { MobileProductEditor } from './mobile/MobileProductEditor';
 import { BatchOperationSelect, BatchConfigStep, BatchActionMenu, BatchActionType, BatchStep } from './mobile/MobileBatchComponents';
+import { MobileLabelManager } from './mobile/MobileLabelManager';
+import { MobileBadgeManager } from './mobile/MobileBadgeManager';
+import { cloneBadges, cloneLabelGroups, DEFAULT_STORE_BADGES, DEFAULT_STORE_LABEL_GROUPS, MobileBadgeItem, MobileLabelGroup } from './mobile/productMeta';
 
-type Screen = 'dashboard' | 'product_tools' | 'brand_product_tools' | 'product_list' | 'product_create' | 'product_edit' | 'category_list' | 'addon_list' | 'addon_type_list' | 'method_list' | 'spec_list' | 'combo_list' | 'batch_operation_select' | 'batch_config' | 'product_sort' | 'category_sort';
+type Screen = 'dashboard' | 'product_tools' | 'brand_product_tools' | 'product_list' | 'product_create' | 'product_edit' | 'category_list' | 'addon_list' | 'addon_type_list' | 'method_list' | 'spec_list' | 'combo_list' | 'label_list' | 'badge_list' | 'batch_operation_select' | 'batch_config' | 'product_sort' | 'category_sort';
 type OrgType = 'brand' | 'region' | 'store';
 
 interface OrgNode {
@@ -59,6 +62,8 @@ export const MobileApp: React.FC = () => {
   const [showOrgSelector, setShowOrgSelector] = useState(false);
   const [returnScreen, setReturnScreen] = useState<Screen>('dashboard');
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [storeLabelGroups, setStoreLabelGroups] = useState<MobileLabelGroup[]>(() => cloneLabelGroups(DEFAULT_STORE_LABEL_GROUPS));
+  const [storeBadges, setStoreBadges] = useState<MobileBadgeItem[]>(() => cloneBadges(DEFAULT_STORE_BADGES));
 
   // Batch Mode State (Shared between List and Batch Screens)
   const [isBatchMode, setIsBatchMode] = useState(false);
@@ -332,8 +337,8 @@ export const MobileApp: React.FC = () => {
                         activeOrgType={activeOrg.type}
                         toggleShelfStatus={toggleShelfStatus}
                         onUpdateProduct={updateProduct}
-                        onEditProduct={(p) => {
-                            setEditingProduct(p);
+                        onEditProduct={(p, activeChannel) => {
+                            setEditingProduct({ product: p, activeChannel });
                             navigateTo('product_edit', 'product_list');
                         }}
                         isStockShared={isStockShared}
@@ -358,9 +363,39 @@ export const MobileApp: React.FC = () => {
                 </>
             );
           case 'product_create': 
-            return <MobileProductCreator onBack={() => setCurrentScreen(returnScreen)} categories={categories} />;
+            return (
+              <MobileProductCreator
+                onBack={() => setCurrentScreen(returnScreen)}
+                categories={categories}
+                labelGroups={storeLabelGroups}
+                badges={storeBadges}
+                onLabelGroupsChange={setStoreLabelGroups}
+                onBadgesChange={setStoreBadges}
+              />
+            );
           case 'product_edit':
-            return <MobileProductEditor product={editingProduct} onBack={() => setCurrentScreen('product_list')} categories={categories} />;
+            return (
+              <MobileProductEditor
+                product={editingProduct?.product}
+                activeChannel={editingProduct?.activeChannel}
+                onBack={() => setCurrentScreen('product_list')}
+                categories={categories}
+                labelGroups={storeLabelGroups}
+                badges={storeBadges}
+                onLabelGroupsChange={setStoreLabelGroups}
+                onBadgesChange={setStoreBadges}
+                onSave={(updates, options) => {
+                  if (editingProduct?.product?.id) {
+                    updateProduct(editingProduct.product.id, updates);
+                    if (options) {
+                      alert(options.mode === 'all'
+                        ? '本次修改已同步到所有渠道'
+                        : `本次修改已同步到指定渠道：${options.channels.join('、')}`);
+                    }
+                  }
+                }}
+              />
+            );
           case 'category_list': 
             return <MobileCategoryManager onBack={() => setCurrentScreen(returnScreen)} />;
           case 'addon_list':
@@ -373,6 +408,10 @@ export const MobileApp: React.FC = () => {
             return <MobileMethodManager onBack={() => setCurrentScreen(returnScreen)} products={products} />;
           case 'combo_list': 
             return <MobileComboGroupManager onBack={() => setCurrentScreen(returnScreen)} />;
+          case 'label_list':
+            return <MobileLabelManager onBack={() => setCurrentScreen(returnScreen)} groups={storeLabelGroups} onChange={setStoreLabelGroups} />;
+          case 'badge_list':
+            return <MobileBadgeManager onBack={() => setCurrentScreen(returnScreen)} badges={storeBadges} onChange={setStoreBadges} />;
           case 'product_sort':
             return <MobileProductSorter products={products} onBack={() => setCurrentScreen('product_list')} onSave={() => setCurrentScreen('product_list')} onNavigate={(t) => setCurrentScreen(t as Screen)}/>;
           case 'category_sort':

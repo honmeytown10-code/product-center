@@ -1,7 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  ChevronLeft, Plus, ChevronRight, Check, 
+  ChevronLeft, Plus, ChevronRight, Check,
   ImageIcon, Smartphone, Printer, Store, ShoppingBag,
   Info, Camera, Video, List, Sliders, Tag, Settings, Minus, X, Trash2, Edit2, Clock
 } from 'lucide-react';
@@ -9,13 +8,41 @@ import { Category } from '../../types';
 import { MobileCategorySelector } from './MobileCategorySelector';
 import { MobileProductAttributeSorter } from './MobileProductAttributeSorter';
 import { MobileProductChannelSelector } from './MobileProductChannelSelector';
+import { MobileBadgeItem, MobileLabelGroup, VisualStyleType } from './productMeta';
 
 interface Props {
   onBack: () => void;
   categories: Category[];
+  productType?: 'standard' | 'combo';
+  mode?: 'create' | 'edit';
+  title?: string;
+  hideSecondaryAction?: boolean;
+  primaryActionText?: string;
+  secondaryActionText?: string;
+  lockSpecEdit?: boolean;
+  lockStockEdit?: boolean;
+  showEffectiveChannels?: boolean;
+  channelSelectorHelperText?: string;
   categoryName?: string;
   saveMode?: 'default' | 'ai_confirm';
   onSaveDraft?: (data: { name: string; basePrice: string; category: string }) => void;
+  onPrimaryAction?: (data: {
+    name: string;
+    category: string;
+    basePrice: string;
+    channels: string[];
+    detailContent: string;
+    selectedLabelIds: string[];
+    selectedBadgeId: string;
+    badgeStartDate: string;
+    badgeEndDate: string;
+    listDesc: string;
+    specItems: { name: string; price: string }[];
+  }) => void;
+  labelGroups: MobileLabelGroup[];
+  badges: MobileBadgeItem[];
+  onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
+  onBadgesChange: (badges: MobileBadgeItem[]) => void;
   initialData?: {
     name?: string;
     basePrice?: string;
@@ -24,6 +51,15 @@ interface Props {
     sourceMode?: 'scan' | 'voice';
     sourceLabel?: string;
     sourceHint?: string;
+    channels?: string[];
+    specType?: 'single' | 'multi';
+    listDesc?: string;
+    detailContent?: string;
+    selectedLabelIds?: string[];
+    selectedBadgeId?: string;
+    badgeStartDate?: string;
+    badgeEndDate?: string;
+    specItems?: { name: string; price: string }[];
   };
 }
 
@@ -41,12 +77,46 @@ interface TimeSalesConfig {
   rules: TimeRule[];
 }
 
-export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, categoryName, initialData, saveMode = 'default', onSaveDraft }) => {
+export const MobileStandardProductCreator: React.FC<Props> = ({
+  onBack,
+  categoryName,
+  initialData,
+  saveMode = 'default',
+  onSaveDraft,
+  onPrimaryAction,
+  labelGroups,
+  badges,
+  onLabelGroupsChange,
+  onBadgesChange,
+  productType = 'standard',
+  mode = 'create',
+  title,
+  hideSecondaryAction = false,
+  primaryActionText,
+  secondaryActionText,
+  lockSpecEdit = false,
+  lockStockEdit = false,
+  showEffectiveChannels = false,
+  channelSelectorHelperText,
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [showTimeSalesEditor, setShowTimeSalesEditor] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [showAttributeSorter, setShowAttributeSorter] = useState(false);
   const [showChannelSelector, setShowChannelSelector] = useState(false);
+  const [showLabelSheet, setShowLabelSheet] = useState(false);
+  const [showBadgeSheet, setShowBadgeSheet] = useState(false);
+  const [quickCreator, setQuickCreator] = useState<null | {
+    mode: 'group' | 'label' | 'badge';
+    name: string;
+    groupId?: string;
+    styleType: VisualStyleType;
+    backgroundColor: string;
+    textColor: string;
+    imageName?: string;
+    startDate: string;
+    endDate: string;
+  }>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const sectionRefs = {
@@ -59,8 +129,8 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
     category: initialData?.category || categoryName || '通用菜品',
-    channels: ['mini', 'pos', 'mini_dine', 'mini_take'],
-    specType: 'single', // 'single' | 'multi'
+    channels: initialData?.channels || ['mini', 'pos', 'mini_dine', 'mini_take'],
+    specType: initialData?.specType || 'single', // 'single' | 'multi'
     basePrice: initialData?.basePrice || '',
     stock: initialData?.stock || '',
     salesMode: 'normal', // 'normal' | 'combo_only'
@@ -74,7 +144,18 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
     limitType: 'per_order', // 'per_order' | 'per_person_day'
     // Time Sales State
     timeSales: null as TimeSalesConfig | null,
+    detailContent: initialData?.detailContent || '',
+    listDesc: initialData?.listDesc || '',
+    selectedLabelIds: initialData?.selectedLabelIds || [] as string[],
+    selectedBadgeId: initialData?.selectedBadgeId || '',
+    badgeStartDate: initialData?.badgeStartDate || '',
+    badgeEndDate: initialData?.badgeEndDate || '',
+    specItems: initialData?.specItems || [] as { name: string; price: string }[],
   });
+
+  const flatLabels = labelGroups.flatMap(group => group.items.map(item => ({ ...item, groupId: group.id, groupName: group.name })));
+  const selectedLabels = flatLabels.filter(item => formData.selectedLabelIds.includes(item.id));
+  const selectedBadge = badges.find(item => item.id === formData.selectedBadgeId) || null;
 
   const tabs: { id: TabType; label: string }[] = [
     { id: 'basic', label: '基础信息' },
@@ -131,7 +212,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
       {/* Header */}
       <div className="h-[50px] bg-white border-b border-gray-100 flex items-center px-4 shrink-0 z-30">
         <button onClick={onBack} className="p-2 -ml-2 text-gray-600"><ChevronLeft size={24} /></button>
-        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">{saveMode === 'ai_confirm' ? '编辑商品' : '创建标准商品'}</span>
+        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">{title || (saveMode === 'ai_confirm' ? '编辑商品' : mode === 'edit' ? '编辑商品' : '创建标准商品')}</span>
       </div>
 
       {/* 顶部 Tab 导航 */}
@@ -224,20 +305,22 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
             <h3 className="font-black text-base text-gray-800">商品属性</h3>
             <div className="flex justify-between items-center py-2 border-b border-gray-50">
                 <label className="text-sm font-bold text-gray-700">规格 <span className="text-red-500">*</span></label>
-                <div className="flex space-x-6">
-                    <label className="flex items-center space-x-2 cursor-pointer" onClick={() => setFormData({...formData, specType: 'single'})}>
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${formData.specType === 'single' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
-                            {formData.specType === 'single' && <div className="w-2.5 h-2.5 bg-[#00C06B] rounded-full animate-in zoom-in-50"></div>}
-                        </div>
-                        <span className="text-xs font-bold text-gray-600">统一规格</span>
-                    </label>
-                    <label className="flex items-center space-x-2 cursor-pointer" onClick={() => setFormData({...formData, specType: 'multi'})}>
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${formData.specType === 'multi' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
-                            {formData.specType === 'multi' && <div className="w-2.5 h-2.5 bg-[#00C06B] rounded-full animate-in zoom-in-50"></div>}
-                        </div>
-                        <span className="text-xs font-bold text-gray-600">多规格</span>
-                    </label>
-                </div>
+                {lockSpecEdit ? null : (
+                  <div className="flex space-x-6">
+                      <label className="flex items-center space-x-2 cursor-pointer" onClick={() => setFormData({...formData, specType: 'single'})}>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${formData.specType === 'single' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
+                              {formData.specType === 'single' && <div className="w-2.5 h-2.5 bg-[#00C06B] rounded-full animate-in zoom-in-50"></div>}
+                          </div>
+                          <span className="text-xs font-bold text-gray-600">统一规格</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer" onClick={() => setFormData({...formData, specType: 'multi'})}>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${formData.specType === 'multi' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
+                              {formData.specType === 'multi' && <div className="w-2.5 h-2.5 bg-[#00C06B] rounded-full animate-in zoom-in-50"></div>}
+                          </div>
+                          <span className="text-xs font-bold text-gray-600">多规格</span>
+                      </label>
+                  </div>
+                )}
             </div>
             
             {formData.specType === 'single' ? (
@@ -253,24 +336,52 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
                             />
                         </div>
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-gray-50 animate-in fade-in">
-                        <label className="text-sm font-bold text-gray-700">库存</label>
-                        <input 
-                            className="text-right text-sm font-bold outline-none placeholder-gray-300 flex-1 ml-4" 
-                            placeholder="无限" 
-                            type="number"
-                            value={formData.stock} 
-                            onChange={e => setFormData({...formData, stock: e.target.value})} 
-                        />
-                    </div>
+                    {!lockStockEdit && (
+                      <div className="flex justify-between items-center py-2 border-b border-gray-50 animate-in fade-in">
+                          <label className="text-sm font-bold text-gray-700">库存</label>
+                          <input 
+                              className="text-right text-sm font-bold outline-none placeholder-gray-300 flex-1 ml-4" 
+                              placeholder="无限" 
+                              type="number"
+                              value={formData.stock} 
+                              onChange={e => setFormData({...formData, stock: e.target.value})} 
+                          />
+                      </div>
+                    )}
                 </>
             ) : (
-                <div className="flex justify-between items-center py-2 border-b border-gray-50 animate-in fade-in">
-                    <label className="text-sm font-bold text-gray-700">规格设置 <span className="text-red-500">*</span></label>
-                    <div className="flex items-center text-sm text-gray-400 font-bold">
-                        <span>去选择</span>
-                        <ChevronRight size={16} className="ml-1"/>
+                <div className="space-y-3 border-b border-gray-50 pb-4 animate-in fade-in">
+                    <div className="flex justify-between items-center py-2">
+                        <label className="text-sm font-bold text-gray-700">规格设置 <span className="text-red-500">*</span></label>
+                        {lockSpecEdit ? null : (
+                          <div className="flex items-center text-sm text-gray-400 font-bold">
+                              <span>去选择</span>
+                              <ChevronRight size={16} className="ml-1"/>
+                          </div>
+                        )}
                     </div>
+                    {lockSpecEdit && formData.specItems.length > 0 ? (
+                      <div className="space-y-2">
+                        {formData.specItems.map((item, index) => (
+                          <div key={`${item.name}-${index}`} className="flex items-center justify-between rounded-2xl bg-[#F7F9FC] px-3 py-3">
+                            <div className="min-w-0 pr-3">
+                              <div className="truncate text-[13px] font-bold text-[#1F2129]">{item.name}</div>
+                            </div>
+                            <div className="flex items-center rounded-xl bg-white px-3 py-2 shadow-sm">
+                              <span className="mr-1 text-sm font-black text-[#1F2129]">¥</span>
+                              <input
+                                value={item.price}
+                                onChange={e => setFormData(prev => ({
+                                  ...prev,
+                                  specItems: prev.specItems.map((spec, specIndex) => specIndex === index ? { ...spec, price: e.target.value } : spec),
+                                }))}
+                                className="w-16 bg-transparent text-right text-sm font-black text-[#1F2129] outline-none"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                 </div>
             )}
 
@@ -455,30 +566,103 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
             {/* 列表页展示 */}
             <div className="space-y-5">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-gray-800">列表页展示</span>
-                    <span className="text-[10px] text-gray-400">配置同步至商品列表页</span>
+                    <span className="text-sm font-black text-gray-800">列表展示</span>
                 </div>
                 <div className="py-2">
                     <label className="text-sm font-bold text-gray-700 block mb-3">商品封面</label>
                     <div className="w-24 h-14 bg-gray-50 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-gray-400 mb-3 active:bg-gray-100 transition-colors">
                         <Plus size={20} />
                     </div>
-                    <div className="text-[10px] text-gray-400 space-y-2 leading-relaxed">
-                        <p>1、装修模版2、3中使用：建议尺寸：265*132.5PX，单张大小不超过300K <span className="text-[#00C06B] font-bold">查看示例</span></p>
-                        <p>2、装修模版4中使用：建议尺寸：1:1，单张大小不超过300K <span className="text-[#00C06B] font-bold">查看示例</span></p>
-                    </div>
+                    <div className="text-[10px] text-gray-400">建议上传清晰封面图。</div>
                 </div>
                 <div className="flex justify-between items-center py-2">
                     <label className="text-sm font-bold text-gray-700">商品列表简述</label>
-                    <input className="text-right text-sm font-medium outline-none placeholder-gray-300 flex-1 ml-4" placeholder="请输入商品列表简述" />
+                    <input
+                      className="text-right text-sm font-medium outline-none placeholder-gray-300 flex-1 ml-4"
+                      placeholder="请输入商品列表简述"
+                      value={formData.listDesc}
+                      onChange={e => setFormData({ ...formData, listDesc: e.target.value })}
+                    />
                 </div>
+                <div
+                  className="flex justify-between items-center py-2 border-t border-gray-50 cursor-pointer active:bg-gray-50"
+                  onClick={() => setShowLabelSheet(true)}
+                >
+                  <label className="text-sm font-bold text-gray-700">描述标签</label>
+                  <div className="flex items-center text-sm text-gray-400 font-bold">
+                    <span>{selectedLabels.length ? `已选 ${selectedLabels.length}/3` : '去设置'}</span>
+                    <ChevronRight size={16} className="ml-1"/>
+                  </div>
+                </div>
+                {selectedLabels.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedLabels.map(item => (
+                      item.styleType === 'image' ? (
+                        <div key={item.id} className="inline-flex items-center rounded-2xl border border-[#EEF1F5] bg-white px-2 py-2">
+                          <ImagePreviewChip name={item.imageName || item.name} compact />
+                          <button
+                            onClick={() => setFormData(prev => ({ ...prev, selectedLabelIds: prev.selectedLabelIds.filter(id => id !== item.id) }))}
+                            className="ml-1 rounded-full p-1 text-[#98A1B3]"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span key={item.id} className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold" style={{ backgroundColor: item.backgroundColor, color: item.textColor }}>
+                          {item.name}
+                          <button
+                            onClick={() => setFormData(prev => ({ ...prev, selectedLabelIds: prev.selectedLabelIds.filter(id => id !== item.id) }))}
+                            className="ml-1.5 rounded-full"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      )
+                    ))}
+                  </div>
+                )}
+                <div
+                  className="flex justify-between items-center py-2 border-t border-gray-50 cursor-pointer active:bg-gray-50"
+                  onClick={() => setShowBadgeSheet(true)}
+                >
+                  <label className="text-sm font-bold text-gray-700">商品角标</label>
+                  <div className="flex items-center text-sm text-gray-400 font-bold">
+                    <span>{selectedBadge ? selectedBadge.name : '去设置'}</span>
+                    <ChevronRight size={16} className="ml-1"/>
+                  </div>
+                </div>
+                {selectedBadge && (
+                  <div className="rounded-xl bg-[#F7F9FC] p-3">
+                    <div className="flex items-center justify-between">
+                      {selectedBadge.badgeType === 'image' ? (
+                        <ImagePreviewChip name={selectedBadge.imageName || selectedBadge.name} />
+                      ) : (
+                        <span className="inline-flex rounded-full px-3 py-1 text-[11px] font-bold text-white" style={{ backgroundColor: selectedBadge.backgroundColor }}>
+                          {selectedBadge.name}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setFormData(prev => ({ ...prev, selectedBadgeId: '', badgeStartDate: '', badgeEndDate: '' }))}
+                        className="rounded-full bg-white p-1.5 text-[#98A1B3]"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      <input type="datetime-local" step={1} value={normalizeDateTimeValue(formData.badgeStartDate)} onChange={e => setFormData({ ...formData, badgeStartDate: e.target.value })} className="h-10 rounded-xl bg-white border border-gray-200 px-3 text-xs font-bold outline-none" />
+                      <input type="datetime-local" step={1} value={normalizeDateTimeValue(formData.badgeEndDate)} onChange={e => setFormData({ ...formData, badgeEndDate: e.target.value })} className="h-10 rounded-xl bg-white border border-gray-200 px-3 text-xs font-bold outline-none" />
+                    </div>
+                    <div className="mt-2 text-[11px] text-[#99A1B1] break-all">
+                      {formatDateTimeDisplay(formData.badgeStartDate)} 至 {formatDateTimeDisplay(formData.badgeEndDate)}
+                    </div>
+                  </div>
+                )}
             </div>
 
             {/* 详情页展示 */}
             <div className="space-y-6 pt-6 border-t border-gray-50">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-gray-800">详情页展示</span>
-                    <span className="text-[10px] text-gray-400">配置展示在商品详情页</span>
+                    <span className="text-sm font-black text-gray-800">详情展示</span>
                 </div>
                 <div 
                   className="flex justify-between items-center py-2 border-b border-gray-50 cursor-pointer active:bg-gray-50"
@@ -490,14 +674,14 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
                         <ChevronRight size={16} className="ml-1"/>
                     </div>
                 </div>
-                <div className="py-2 border-b border-gray-50 pb-6">
-                    <label className="text-sm font-bold text-gray-700 block mb-3">商品详情图</label>
-                    <div className="w-16 h-16 bg-gray-50 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-gray-400 mb-4 active:bg-gray-100 transition-colors">
-                        <Plus size={20} />
-                    </div>
-                    <p className="text-[10px] text-gray-400 leading-relaxed">
-                        建议尺寸：800*450PX，单张大小不超过1M。
-                    </p>
+                <div className="py-2">
+                    <label className="text-sm font-bold text-gray-700 block mb-3">商品详情描述</label>
+                    <textarea
+                      value={formData.detailContent}
+                      onChange={e => setFormData({ ...formData, detailContent: e.target.value })}
+                      placeholder="请输入商品详情"
+                      className="min-h-[120px] w-full rounded-2xl border border-gray-200 bg-[#FAFBFC] px-4 py-3 text-sm font-medium leading-6 outline-none focus:border-[#00C06B]"
+                    />
                 </div>
             </div>
         </div>
@@ -514,8 +698,29 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
           </button>
         ) : (
           <>
-            <button className="flex-1 h-12 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 text-sm active:bg-gray-50 active:scale-95 transition-all">保存</button>
-            <button className="flex-[1.5] h-12 bg-[#00C06B] text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98] transition-all">保存并继续添加</button>
+            <button
+              onClick={() => onPrimaryAction?.({
+                name: formData.name,
+                category: formData.category,
+                basePrice: formData.basePrice,
+                channels: formData.channels,
+                detailContent: formData.detailContent,
+                selectedLabelIds: formData.selectedLabelIds,
+                selectedBadgeId: formData.selectedBadgeId,
+                badgeStartDate: formData.badgeStartDate,
+                badgeEndDate: formData.badgeEndDate,
+                listDesc: formData.listDesc,
+                specItems: formData.specItems,
+              })}
+              className={`${hideSecondaryAction ? 'w-full bg-[#00C06B] text-white shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98]' : 'flex-1 bg-white border border-gray-200 text-gray-700 active:bg-gray-50 active:scale-95'} h-12 rounded-xl font-bold text-sm transition-all`}
+            >
+              {primaryActionText || (mode === 'edit' ? '保存修改' : '保存')}
+            </button>
+            {!hideSecondaryAction && (
+              <button className="flex-[1.5] h-12 bg-[#00C06B] text-white rounded-xl font-bold text-sm shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98] transition-all">
+                {secondaryActionText || '保存并继续添加'}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -535,6 +740,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
         onClose={() => setShowCategorySelector(false)}
         onSelect={handleCategorySelect}
         initialCategoryName={formData.category}
+        productType={productType}
       />
 
       {/* NEW: Attribute Sorter */}
@@ -549,13 +755,421 @@ export const MobileStandardProductCreator: React.FC<Props> = ({ onBack, category
       {showChannelSelector && (
         <MobileProductChannelSelector 
           selectedChannels={formData.channels}
+          helperText={channelSelectorHelperText}
           onBack={() => setShowChannelSelector(false)}
           onSave={handleChannelsSave}
+        />
+      )}
+
+      {showLabelSheet && (
+        <LabelSelectorSheet
+          groups={labelGroups}
+          selectedIds={formData.selectedLabelIds}
+          onClose={() => setShowLabelSheet(false)}
+          onChange={ids => setFormData({ ...formData, selectedLabelIds: ids })}
+          onCreateGroup={() => setQuickCreator({ mode: 'group', name: '', styleType: 'text', backgroundColor: '#EAF8EF', textColor: '#00A35B', imageName: '', startDate: '2026-06-08', endDate: '2026-06-30' })}
+          onCreateLabel={groupId => setQuickCreator({ mode: 'label', groupId, name: '', styleType: 'text', backgroundColor: '#EAF8EF', textColor: '#00A35B', imageName: '', startDate: '2026-06-08', endDate: '2026-06-30' })}
+        />
+      )}
+
+      {showBadgeSheet && (
+        <BadgeSelectorSheet
+          badges={badges}
+          selectedId={formData.selectedBadgeId}
+          onClose={() => setShowBadgeSheet(false)}
+          onSelect={badge => setFormData({
+            ...formData,
+            selectedBadgeId: badge.id,
+            badgeStartDate: normalizeDateTimeValue(badge.startDate),
+            badgeEndDate: normalizeDateTimeValue(badge.endDate),
+          })}
+          onClear={() => setFormData({ ...formData, selectedBadgeId: '', badgeStartDate: '', badgeEndDate: '' })}
+          onCreate={() => setQuickCreator({ mode: 'badge', name: '', styleType: 'text', backgroundColor: '#00C06B', textColor: '#FFFFFF', imageName: '', startDate: '2026-06-08', endDate: '2026-06-30' })}
+        />
+      )}
+
+      {quickCreator && (
+        <QuickCreateMetaModal
+          state={quickCreator}
+          groups={labelGroups}
+          onClose={() => setQuickCreator(null)}
+          onChange={setQuickCreator}
+          onSave={() => {
+            const nextName = quickCreator.name.trim();
+            if (!nextName) return;
+            if (quickCreator.mode === 'group') {
+              const nextGroup = { id: `store_group_${Date.now()}`, name: nextName, source: 'store' as const, items: [] };
+              onLabelGroupsChange([...labelGroups, nextGroup]);
+              setQuickCreator(null);
+              setShowLabelSheet(true);
+              return;
+            }
+            if (quickCreator.mode === 'label' && quickCreator.groupId) {
+              const nextLabel = {
+                id: `store_label_${Date.now()}`,
+                name: nextName,
+                styleType: quickCreator.styleType,
+                backgroundColor: quickCreator.backgroundColor,
+                textColor: quickCreator.textColor,
+                imageName: quickCreator.imageName,
+                source: 'store' as const,
+              };
+              onLabelGroupsChange(labelGroups.map(group => (
+                group.id === quickCreator.groupId ? { ...group, items: [...group.items, nextLabel] } : group
+              )));
+              setFormData(prev => ({ ...prev, selectedLabelIds: [...prev.selectedLabelIds, nextLabel.id] }));
+              setQuickCreator(null);
+              setShowLabelSheet(true);
+              return;
+            }
+            if (quickCreator.mode === 'badge') {
+              const nextBadge = {
+                id: `store_badge_${Date.now()}`,
+                name: nextName,
+                badgeType: quickCreator.styleType,
+                backgroundColor: quickCreator.backgroundColor,
+                imageName: quickCreator.imageName,
+                startDate: quickCreator.startDate,
+                endDate: quickCreator.endDate,
+                source: 'store' as const,
+              };
+              onBadgesChange([nextBadge, ...badges]);
+              setFormData(prev => ({
+                ...prev,
+                selectedBadgeId: nextBadge.id,
+                badgeStartDate: normalizeDateTimeValue(nextBadge.startDate),
+                badgeEndDate: normalizeDateTimeValue(nextBadge.endDate),
+              }));
+              setQuickCreator(null);
+              setShowBadgeSheet(true);
+            }
+          }}
         />
       )}
     </div>
   );
 };
+
+const LabelSelectorSheet = ({
+  groups,
+  selectedIds,
+  onClose,
+  onChange,
+  onCreateGroup,
+  onCreateLabel,
+}: {
+  groups: MobileLabelGroup[];
+  selectedIds: string[];
+  onClose: () => void;
+  onChange: (ids: string[]) => void;
+  onCreateGroup: () => void;
+  onCreateLabel: (groupId: string) => void;
+}) => {
+  const [keyword, setKeyword] = useState('');
+  const toggle = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter(item => item !== id));
+      return;
+    }
+    if (selectedIds.length >= 3) return;
+    onChange([...selectedIds, id]);
+  };
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const visibleGroups = groups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => !normalizedKeyword || item.name.toLowerCase().includes(normalizedKeyword)),
+    }))
+    .filter(group => !normalizedKeyword || group.name.toLowerCase().includes(normalizedKeyword) || group.items.length > 0);
+
+  return (
+    <div className="absolute inset-0 z-[120] flex flex-col justify-end bg-black/50 animate-in fade-in">
+      <div className="flex-1" onClick={onClose}></div>
+      <div className="max-h-[80vh] rounded-t-[24px] bg-white p-4 pb-8 animate-in slide-in-from-bottom duration-300">
+        <div className="flex items-center justify-between px-1">
+          <div className="text-lg font-black text-[#1F2129]">选择描述标签</div>
+          <button onClick={onClose} className="rounded-full bg-[#F5F5F5] p-1.5 text-[#98A0B3]"><X size={16} /></button>
+        </div>
+        <div className="mt-3 relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A0B3]" />
+          <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="搜索标签名称" className="h-10 w-full rounded-xl bg-[#F5F6FA] pl-9 pr-3 text-sm font-medium outline-none" />
+          <div className="mt-2 text-[11px] text-[#99A1B1]">最多选择 3 个</div>
+        </div>
+        <div className="mt-4 max-h-[52vh] overflow-y-auto no-scrollbar space-y-3">
+          {visibleGroups.map(group => (
+            <div key={group.id} className="rounded-2xl bg-[#F7F9FC] p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-black text-[#1F2129]">{group.name}</span>
+                <button onClick={() => onCreateLabel(group.id)} className={`text-[11px] font-bold ${group.source === 'brand' ? 'text-[#C0C4CF]' : 'text-[#00A35B]'}`} disabled={group.source === 'brand'}>
+                  新增标签
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {group.items.map(item => {
+                  const active = selectedIds.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggle(item.id)}
+                      className={`rounded-2xl border ${item.styleType === 'image' ? 'px-2 py-2' : 'px-3 py-1.5'} text-[12px] font-bold ${active ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-transparent bg-white'} ${!active && selectedIds.length >= 3 ? 'opacity-40' : ''}`}
+                    >
+                      {item.styleType === 'image'
+                        ? <ImagePreviewChip name={item.imageName || item.name} compact />
+                        : <span style={{ color: item.textColor }}>{item.name}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex gap-3">
+          <button onClick={onCreateGroup} className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-bold text-[#333]">新增标签分组</button>
+          <button onClick={onClose} className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white">完成</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BadgeSelectorSheet = ({
+  badges,
+  selectedId,
+  onClose,
+  onSelect,
+  onClear,
+  onCreate,
+}: {
+  badges: MobileBadgeItem[];
+  selectedId: string;
+  onClose: () => void;
+  onSelect: (badge: MobileBadgeItem) => void;
+  onClear: () => void;
+  onCreate: () => void;
+}) => {
+  const [keyword, setKeyword] = useState('');
+  const filteredBadges = badges.filter(item => !keyword.trim() || item.name.toLowerCase().includes(keyword.trim().toLowerCase()));
+  return (
+    <div className="absolute inset-0 z-[120] flex flex-col justify-end bg-black/50 animate-in fade-in">
+      <div className="flex-1" onClick={onClose}></div>
+      <div className="max-h-[80vh] rounded-t-[24px] bg-white p-4 pb-8 animate-in slide-in-from-bottom duration-300">
+        <div className="flex items-center justify-between px-1">
+          <div className="text-lg font-black text-[#1F2129]">选择商品角标</div>
+          <button onClick={onClose} className="rounded-full bg-[#F5F5F5] p-1.5 text-[#98A0B3]"><X size={16} /></button>
+        </div>
+        <div className="mt-3 relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A0B3]" />
+          <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="搜索角标名称" className="h-10 w-full rounded-xl bg-[#F5F6FA] pl-9 pr-3 text-sm font-medium outline-none" />
+        </div>
+        <div className="mt-4 max-h-[52vh] overflow-y-auto no-scrollbar space-y-3">
+        {filteredBadges.map(item => {
+          const active = selectedId === item.id;
+          return (
+            <button key={item.id} onClick={() => onSelect(item)} className={`w-full rounded-2xl border px-4 py-4 text-left ${active ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#EEF1F5] bg-white'}`}>
+              <div className="flex items-center justify-between">
+                {item.badgeType === 'image'
+                  ? <ImagePreviewChip name={item.imageName || item.name} />
+                  : <span className="inline-flex rounded-full px-3 py-1 text-[12px] font-bold text-white" style={{ backgroundColor: item.backgroundColor }}>{item.name}</span>}
+                {active ? <Check size={18} className="text-[#00C06B]" /> : null}
+              </div>
+              <div className="mt-2 text-[11px] leading-5 text-[#99A1B1] break-all">{formatDateTimeDisplay(item.startDate)} 至 {formatDateTimeDisplay(item.endDate)}</div>
+            </button>
+          );
+        })}
+        </div>
+        <div className="mt-4 flex gap-3">
+          <button onClick={onCreate} className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-bold text-[#333]">新增角标</button>
+          <button onClick={onClear} className="h-11 rounded-xl border border-gray-200 px-4 text-sm font-bold text-[#666]">清空</button>
+          <button onClick={onClose} className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white">完成</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const QuickCreateMetaModal = ({
+  state,
+  groups,
+  onClose,
+  onSave,
+  onChange,
+}: {
+  state: NonNullable<Parameters<typeof MobileStandardProductCreator>[0]['labelGroups']> extends never ? never : {
+    mode: 'group' | 'label' | 'badge';
+    name: string;
+    groupId?: string;
+    styleType: VisualStyleType;
+    backgroundColor: string;
+    textColor: string;
+    imageName?: string;
+    startDate: string;
+    endDate: string;
+  };
+  groups: MobileLabelGroup[];
+  onClose: () => void;
+  onSave: () => void;
+  onChange: React.Dispatch<React.SetStateAction<any>>;
+}) => (
+  <div className="absolute inset-0 z-[140] flex items-center justify-center bg-black/45 px-5">
+    <div className="w-full rounded-[24px] bg-white p-5 shadow-2xl">
+      <div className="flex items-center justify-between">
+        <div className="text-[18px] font-black text-[#1F2129]">
+          {state.mode === 'group' ? '新增标签分组' : state.mode === 'label' ? '新增标签' : '新增角标'}
+        </div>
+        <button onClick={onClose} className="rounded-full bg-[#F5F5F5] p-1.5 text-[#98A0B3]"><X size={16} /></button>
+      </div>
+      {state.mode === 'label' ? (
+        <div className="mt-1 text-[11px] text-[#99A1B1]">所属分组：{groups.find(group => group.id === state.groupId)?.name || '-'}</div>
+      ) : null}
+      <div className="mt-5 space-y-4">
+        <input value={state.name} onChange={e => onChange((prev: any) => prev ? { ...prev, name: e.target.value.slice(0, 10) } : prev)} placeholder={state.mode === 'group' ? '请输入标签分组名称' : state.mode === 'label' ? '请输入标签名称' : '请输入角标名称'} className="h-[44px] w-full rounded-xl bg-[#F5F6FA] px-4 text-sm font-bold outline-none" />
+        {state.mode !== 'group' && (
+          <>
+            <div className="flex gap-2">
+              {(['text', 'image'] as VisualStyleType[]).map(type => (
+                <button key={type} onClick={() => onChange((prev: any) => prev ? { ...prev, styleType: type } : prev)} className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold ${state.styleType === type ? 'border-[#00C06B] bg-[#F3FCF7] text-[#00A35B]' : 'border-gray-200 text-gray-500'}`}>
+                  {type === 'text' ? '文字' : '图片'}
+                </button>
+              ))}
+            </div>
+            {state.styleType === 'text' ? (
+              <>
+                <ColorPaletteField
+                  label="背景颜色"
+                  value={state.backgroundColor}
+                  onChange={value => onChange((prev: any) => prev ? { ...prev, backgroundColor: value } : prev)}
+                  palette={['#00C06B', '#FF8A00', '#7A5AF8', '#2F6FED', '#111827', '#E84C84']}
+                />
+                {state.mode === 'label' ? (
+                  <ColorPaletteField
+                    label="文字颜色"
+                    value={state.textColor}
+                    onChange={value => onChange((prev: any) => prev ? { ...prev, textColor: value } : prev)}
+                    palette={['#FFFFFF', '#111827', '#00A35B', '#B54708', '#7A5AF8', '#2F6FED']}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <ImageUploadField
+                value={state.imageName}
+                title={state.mode === 'label' ? '标签图片' : '角标图片'}
+                onSelect={value => onChange((prev: any) => prev ? { ...prev, imageName: value } : prev)}
+              />
+            )}
+            {state.mode === 'badge' ? (
+              <div className="grid grid-cols-[1fr_24px_1fr] gap-2">
+                <input type="datetime-local" step={1} value={normalizeDateTimeValue(state.startDate)} onChange={e => onChange((prev: any) => prev ? { ...prev, startDate: e.target.value } : prev)} className="h-[42px] rounded-xl bg-[#F5F6FA] px-3 text-sm font-bold outline-none" />
+                <div className="flex items-center justify-center text-sm text-[#A0A6B7]">至</div>
+                <input type="datetime-local" step={1} value={normalizeDateTimeValue(state.endDate)} onChange={e => onChange((prev: any) => prev ? { ...prev, endDate: e.target.value } : prev)} className="h-[42px] rounded-xl bg-[#F5F6FA] px-3 text-sm font-bold outline-none" />
+              </div>
+            ) : null}
+            <div className="rounded-2xl bg-[#F7F9FC] p-3">
+              <div className="text-[11px] font-bold text-[#99A1B1]">预览</div>
+              <div className="mt-2">
+                {state.styleType === 'image'
+                  ? <ImagePreviewChip name={state.imageName || state.name || '图片样式'} />
+                  : state.mode === 'badge'
+                    ? <span className="inline-flex rounded-full px-3 py-1 text-[12px] font-bold text-white" style={{ backgroundColor: state.backgroundColor }}>{state.name || '角标'}</span>
+                    : <span className="inline-flex rounded-full px-3 py-1 text-[12px] font-bold" style={{ backgroundColor: state.backgroundColor, color: state.textColor }}>{state.name || '标签'}</span>}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="mt-6 flex gap-3">
+        <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-bold text-[#666]">取消</button>
+        <button onClick={onSave} className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white">确定</button>
+      </div>
+    </div>
+  </div>
+);
+
+const ImagePreviewChip = ({ name, compact = false }: { name: string; compact?: boolean }) => (
+  <div className={`inline-flex items-center rounded-xl border border-[#DCE3EC] bg-white ${compact ? 'px-2 py-1.5' : 'px-2.5 py-2'}`}>
+    <div className={`flex items-center justify-center rounded-lg bg-[#F1F5F9] text-[#64748B] ${compact ? 'h-7 w-7' : 'h-9 w-9'}`}>
+      <ImageIcon size={compact ? 14 : 16} />
+    </div>
+    <div className="ml-2">
+      <div className={`font-bold text-[#1F2129] ${compact ? 'text-[11px]' : 'text-[12px]'}`}>{name}</div>
+      {!compact ? <div className="text-[10px] text-[#99A1B1]">图片样式</div> : null}
+    </div>
+  </div>
+);
+
+const normalizeDateTimeValue = (value: string) => {
+  if (!value) return '';
+  if (value.includes('T')) {
+    const parts = value.split('T');
+    const time = parts[1] || '00:00:00';
+    return `${parts[0]}T${time.length === 5 ? `${time}:00` : time}`;
+  }
+  return `${value}T00:00:00`;
+};
+
+const formatDateTimeDisplay = (value: string) => {
+  const normalized = normalizeDateTimeValue(value);
+  if (!normalized) return '--';
+  return normalized.replace('T', ' ');
+};
+
+const ColorPaletteField = ({
+  label,
+  value,
+  onChange,
+  palette,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  palette: string[];
+}) => (
+  <div className="space-y-2">
+    <div className="text-[12px] font-bold text-[#667085]">{label}</div>
+    <div className="flex flex-wrap gap-2">
+      {palette.map(color => {
+        const active = value.toLowerCase() === color.toLowerCase();
+        return (
+          <button
+            key={color}
+            onClick={() => onChange(color)}
+            className={`relative h-10 w-10 rounded-2xl border-2 ${active ? 'border-[#111827]' : 'border-white'}`}
+            style={{ backgroundColor: color }}
+          >
+            {active ? <Check size={14} className="absolute inset-0 m-auto text-white" strokeWidth={3} /> : null}
+          </button>
+        );
+      })}
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="h-10 min-w-0 flex-1 rounded-xl bg-[#F5F6FA] px-3 text-[12px] font-bold outline-none"
+      />
+    </div>
+  </div>
+);
+
+const ImageUploadField = ({
+  value,
+  title,
+  onSelect,
+}: {
+  value?: string;
+  title: string;
+  onSelect: (value: string) => void;
+}) => (
+  <div className="space-y-2">
+    <div className="text-[12px] font-bold text-[#667085]">{title}</div>
+    <div className="rounded-2xl border border-dashed border-[#D5DAE1] bg-[#FAFBFC] p-3">
+      <div className="flex items-center justify-between">
+        {value ? <ImagePreviewChip name={value} /> : <div className="text-[12px] text-[#99A1B1]">上传后可直接预览图片样式</div>}
+        <div className="flex gap-2">
+          <button onClick={() => onSelect('拍照上传图')} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#333] shadow-sm">拍照</button>
+          <button onClick={() => onSelect('相册图片')} className="rounded-full bg-[#1F2129] px-3 py-1.5 text-[11px] font-bold text-white">相册</button>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 // --- 子组件: 分时段销售编辑器 ---
 const TimeSalesEditor = ({ data, onBack, onSave }: { data: TimeSalesConfig | null, onBack: () => void, onSave: (config: TimeSalesConfig) => void }) => {

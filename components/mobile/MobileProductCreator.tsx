@@ -21,8 +21,9 @@ import {
 import { Category } from '../../types';
 import { MobileComboProductCreator } from './MobileComboProductCreator';
 import { MobileStandardProductCreator } from './MobileStandardProductCreator';
+import { MobileQuickCreate, QuickCreateSavedDraft, QuickEntryScreen } from './MobileQuickCreate';
 
-type CreateStep = 'type_select' | 'photo_intro' | 'voice_intro' | 'voice_recording' | 'ai_processing' | 'ai_confirm' | 'form' | 'success';
+type CreateStep = 'type_select' | 'quick' | 'photo_intro' | 'voice_intro' | 'voice_recording' | 'ai_processing' | 'ai_confirm' | 'form' | 'success';
 type CreateMode = 'manual' | 'scan' | 'voice';
 type ScanSource = 'camera' | 'upload' | null;
 
@@ -112,6 +113,7 @@ const VOICE_EXAMPLES: VoiceExample[] = [
 export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) => {
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
+  const [quickMode, setQuickMode] = useState<'photo' | 'voice'>('photo');
   const [targetProductType, setTargetProductType] = useState<'standard' | 'combo'>('standard');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showPhotoActionSheet, setShowPhotoActionSheet] = useState(false);
@@ -130,6 +132,8 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [processingBaseItems, setProcessingBaseItems] = useState<AiDraftItem[]>([]);
   const [confirmFilter, setConfirmFilter] = useState<'all' | 'uncategorized' | string>('all');
+  const [quickDraft, setQuickDraft] = useState<QuickCreateSavedDraft | null>(null);
+  const [resumeQuickDraft, setResumeQuickDraft] = useState(false);
   const timerRefs = useRef<number[]>([]);
   const voiceHoldingRef = useRef(false);
   const voiceAppendRef = useRef(false);
@@ -240,11 +244,10 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   const handleStartCreation = (mode: CreateMode) => {
     setCreateMode(mode);
     if (mode === 'manual') return;
-    setShowCategoryModal(false);
-    setCreationFormData({});
-    setCreationCategory(null);
-    resetAiFlow();
-    setCreateStep(mode === 'voice' ? 'voice_intro' : 'photo_intro');
+    setResumeQuickDraft(false);
+    // 拍菜单 / 语音录入：进入重设计后的快捷录入链路
+    setQuickMode(mode === 'voice' ? 'voice' : 'photo');
+    setCreateStep('quick');
   };
 
   const handleTypeSelect = (type: 'standard' | 'combo') => {
@@ -442,6 +445,30 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
   };
 
   const renderTypeSelection = () => (
+    <div className="flex-1 min-h-0 flex flex-col relative h-full animate-in slide-in-from-right duration-300">
+      <QuickEntryScreen
+        draft={quickDraft?.meta || null}
+        onPick={(k) => {
+          if (k === 'resume') {
+            if (!quickDraft) return;
+            setResumeQuickDraft(true);
+            setQuickMode(quickDraft.source);
+            setCreateStep('quick');
+          } else if (k === 'discard') {
+            setQuickDraft(null);
+            setResumeQuickDraft(false);
+          } else if (k === 'photo') handleStartCreation('scan');
+          else if (k === 'voice') handleStartCreation('voice');
+          else if (k === 'standard') handleTypeSelect('standard');
+          else if (k === 'combo') handleTypeSelect('combo');
+          // 'weigh' 暂未开放
+        }}
+      />
+    </div>
+  );
+
+  // 保留旧版 type-select（设计稿之前的入口），如需对比可启用
+  const renderLegacyTypeSelection = () => (
     <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] relative h-full animate-in slide-in-from-right duration-300">
       <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 pt-4 pb-8">
         <div className="mb-5 text-[13px] font-bold text-[#9AA2B1]">智能录入 · 推荐</div>
@@ -991,7 +1018,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-white relative h-full">
-      {createStep !== 'form' && (
+      {createStep !== 'form' && createStep !== 'quick' && (
         <div className="h-[50px] flex items-center justify-between px-4 border-b border-gray-100 shrink-0 relative z-20 bg-white">
           <button onClick={handleBack} className="p-2 -ml-2 text-gray-600">
             <ChevronLeft size={24} />
@@ -1008,6 +1035,29 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories }) =>
       )}
 
       {createStep === 'type_select' && renderTypeSelection()}
+      {createStep === 'quick' && (
+        <div className="flex-1 min-h-0">
+          <MobileQuickCreate
+            initialMode={quickMode}
+            categories={categories}
+            initialDraft={resumeQuickDraft ? quickDraft : null}
+            onExit={() => {
+              setResumeQuickDraft(false);
+              setCreateStep('type_select');
+            }}
+            onSaveDraft={(draft) => {
+              setQuickDraft(draft);
+              setResumeQuickDraft(false);
+              setCreateStep('type_select');
+            }}
+            onClearDraft={() => {
+              setQuickDraft(null);
+              setResumeQuickDraft(false);
+            }}
+            onViewList={onBack}
+          />
+        </div>
+      )}
       {createStep === 'photo_intro' && renderPhotoIntro()}
       {(createStep === 'voice_intro' || createStep === 'voice_recording') && renderVoiceEntry()}
       {createStep === 'ai_processing' && renderRecognizing()}

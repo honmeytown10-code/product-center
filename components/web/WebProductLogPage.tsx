@@ -81,6 +81,15 @@ type SnapshotSection = {
 type LogSnapshot = {
   title: string;
   sections: SnapshotSection[];
+  displayMode?: 'after_only' | 'before_after';
+};
+
+type DetailList = {
+  title: string;
+  beforeTitle: string;
+  afterTitle: string;
+  beforeItems: string[];
+  afterItems: string[];
 };
 
 type LogRecord = {
@@ -110,6 +119,7 @@ type LogRecord = {
   operationModule: string;
   operationIp?: string;
   snapshot?: LogSnapshot;
+  detailList?: DetailList;
 };
 
 type FilterDef = {
@@ -197,7 +207,21 @@ const COMMON_OPERATOR_FILTER: FilterDef = {
 
 const operationOptions = (items: string[]) => [{ value: '', label: '全部' }, ...items.map(item => ({ value: item, label: item }))];
 
-const snapshot = (title: string, sections: SnapshotSection[]): LogSnapshot => ({ title, sections });
+const snapshot = (title: string, sections: SnapshotSection[], displayMode: LogSnapshot['displayMode'] = 'before_after'): LogSnapshot => ({
+  title,
+  sections,
+  displayMode,
+});
+
+const getChangeView = (record: LogRecord) => {
+  if (record.sourceType) {
+    if (['商品库下发', '批量修改工具', '商品同步'].includes(record.sourceType)) {
+      return '品牌视角';
+    }
+    return '门店视角';
+  }
+  return record.storeName ? '门店视角' : '品牌视角';
+};
 
 const DOMAIN_META: Array<{ id: DomainId; name: string; icon: React.ReactNode; description: string }> = [
   {
@@ -277,8 +301,8 @@ const addonTypeColumn: ColumnDef = {
 const sourceTypeColumn: ColumnDef = {
   key: 'sourceType',
   label: '变更来源',
-  minWidth: 'min-w-[130px]',
-  render: record => <span className="whitespace-nowrap">{record.sourceType || '--'}</span>,
+  minWidth: 'min-w-[180px]',
+  render: record => <span className="whitespace-nowrap">{record.sourceType ? `${getChangeView(record)} / ${record.sourceType}` : '--'}</span>,
 };
 
 const taskNameColumn: ColumnDef = {
@@ -313,7 +337,11 @@ const operationContentColumn: ColumnDef = {
   key: 'operationContent',
   label: '操作内容',
   minWidth: 'min-w-[300px]',
-  render: record => <div className="line-clamp-2 text-[#667085]">{record.operationContent}</div>,
+  render: record => (
+    <div className="text-[#667085]">
+      <div className="line-clamp-2">{`${getChangeView(record)} - ${record.operationContent}`}</div>
+    </div>
+  ),
 };
 
 const beforeColumn: ColumnDef = {
@@ -407,10 +435,10 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008601',
         objectType: '标准商品',
         operationType: '商品新建',
-        operationContent: '新建标准商品，完成商品资料初始化。',
+        operationContent: '新建标准商品并保存商品资料。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
-        operationPlatform: 'PC后台',
+        operationPlatform: '开放平台',
         operationTime: '2026-05-28 11:35:53',
         operationModule: '商品库商品',
       },
@@ -420,7 +448,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008645',
         objectType: '标准商品',
         operationType: '商品停售',
-        operationContent: '商品由启售调整为停售。',
+        operationContent: '商品状态由启售调整为停售。',
         beforeChange: '启售',
         afterChange: '停售',
         operatorName: '运营小雨',
@@ -435,7 +463,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008892',
         objectType: '标准商品',
         operationType: '商品启售',
-        operationContent: '商品由停售调整为启售。',
+        operationContent: '商品状态由停售调整为启售。',
         beforeChange: '停售',
         afterChange: '启售',
         operatorName: '运营小雨',
@@ -465,7 +493,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008790',
         objectType: '标准商品',
         operationType: '商品资料变更',
-        operationContent: '编辑了商品资料，更新基础信息、商品属性、展示设置和销售属性。',
+        operationContent: '编辑商品资料，更新基础信息、商品属性、展示设置和销售属性。',
         operatorName: '产品同学',
         operatorAccount: '16688005231',
         operationPlatform: 'PC后台',
@@ -521,7 +549,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
               { label: '商品分享', before: '', after: '分享标题：轻芝葡萄冰\n分享描述：葡萄果香更清爽' },
             ],
           },
-        ]),
+        ], 'after_only'),
       },
       {
         id: 'archive-product-6',
@@ -673,7 +701,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
               { label: '商品分享', before: '', after: '分享标题：双人欢聚套餐\n分享描述：双人点单更省心' },
             ],
           },
-        ]),
+        ], 'after_only'),
       },
     ],
     enableSnapshot: true,
@@ -693,7 +721,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
       COMMON_OPERATOR_FILTER,
       { key: 'keyword', label: '关键词', type: 'text', placeholder: '请输入关键词' },
     ],
-    columns: [nameColumn('分类名称'), categoryTypeColumn, categoryLevelColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, timeColumn],
+    columns: [nameColumn('分类名称'), categoryTypeColumn, categoryLevelColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
     records: [
       {
         id: 'archive-category-1',
@@ -732,7 +760,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         categoryType: '前台分类',
         categoryLevel: '一级分类',
         operationType: '分类编辑',
-        operationContent: '编辑了前台分类信息，更新图标、banner 和展示渠道。',
+        operationContent: '编辑前台分类信息，更新图标、banner 和展示渠道。',
         operatorName: '产品同学',
         operatorAccount: '16688005231',
         operationPlatform: 'PC后台',
@@ -742,20 +770,20 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '基础信息',
             fields: [
-              { label: '分类名称', before: '', after: '春季新品' },
-              { label: '分类标识', before: '', after: 'spring-new' },
-              { label: '分类标签', before: '', after: '新品' },
-              { label: '分类描述', before: '', after: '春季限定饮品优先展示' },
-              { label: '分类备注', before: '', after: '首页活动期间置顶展示' },
-              { label: '图标', before: '', after: '已上传 1 张' },
-              { label: '分类banner', before: '', after: '已上传 1 张' },
+              { label: '分类名称', before: '春日上新', after: '春季新品' },
+              { label: '分类标识', before: 'spring-special', after: 'spring-new' },
+              { label: '分类标签', before: '春日', after: '新品' },
+              { label: '分类描述', before: '春季活动饮品', after: '春季限定饮品优先展示' },
+              { label: '分类备注', before: '活动期默认展示', after: '首页活动期间置顶展示' },
+              { label: '图标', before: '已上传 0 张', after: '已上传 1 张' },
+              { label: '分类banner', before: '已上传 0 张', after: '已上传 1 张' },
             ],
           },
           {
             title: '分类设置',
             fields: [
-              { label: '排序', before: '', after: '2' },
-              { label: '展示渠道', before: '', after: '微信小程序 / 企迈POS / 企迈H5' },
+              { label: '排序', before: '5', after: '2' },
+              { label: '展示渠道', before: '微信小程序 / 企迈POS', after: '微信小程序 / 企迈POS / 企迈H5' },
             ],
           },
         ]),
@@ -821,7 +849,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '温度',
         objectId: 'SPEC018',
         operationType: '规格编辑',
-        operationContent: '编辑了规格组信息。',
+        operationContent: '编辑规格组信息。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -831,15 +859,15 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '规格组信息',
             fields: [
-              { label: '规格名称', before: '', after: '温度' },
-              { label: '规格描述', before: '', after: '默认提供标准温度及微冰选项' },
+              { label: '规格名称', before: '商品温度', after: '温度' },
+              { label: '规格描述', before: '默认温度设置', after: '默认提供标准温度及微冰选项' },
             ],
           },
           {
             title: '规格值设置',
             fields: [
-              { label: '规格值', before: '', after: '热 / 常温 / 去冰 / 少冰 / 正常冰 / 微冰' },
-              { label: '规格值编码', before: '', after: 'HOT / NORMAL / NOICE / LESS / ICE / MICROICE' },
+              { label: '规格值', before: '热 / 常温 / 去冰 / 少冰 / 正常冰', after: '热 / 常温 / 去冰 / 少冰 / 正常冰 / 微冰' },
+              { label: '规格值编码', before: 'HOT / NORMAL / NOICE / LESS / ICE', after: 'HOT / NORMAL / NOICE / LESS / ICE / MICROICE' },
             ],
           },
         ]),
@@ -885,9 +913,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '规格值设置',
             fields: [
-              { label: '规格名称', before: '', after: '糖度' },
-              { label: '规格值', before: '', after: '无糖 / 半糖 / 标准糖' },
-              { label: '规格值编码', before: '', after: 'NO-SUGAR / HALF-SUGAR / NORMAL-SUGAR' },
+              { label: '规格名称', before: '糖度', after: '糖度' },
+              { label: '规格值', before: '无糖 / 半糖 / 全糖', after: '无糖 / 半糖 / 标准糖' },
+              { label: '规格值编码', before: 'NO-SUGAR / HALF-SUGAR / FULL-SUGAR', after: 'NO-SUGAR / HALF-SUGAR / NORMAL-SUGAR' },
             ],
           },
         ]),
@@ -942,7 +970,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '温度',
         objectId: 'METHOD003',
         operationType: '做法编辑',
-        operationContent: '编辑了做法组基础信息。',
+        operationContent: '编辑做法组基础信息。',
         methodValue: '--',
         operatorName: '产品同学',
         operatorAccount: '16688005231',
@@ -953,18 +981,18 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '做法组信息',
             fields: [
-              { label: '做法名称', before: '', after: '温度' },
-              { label: '备注', before: '', after: '基础温度做法' },
-              { label: '温馨提示', before: '', after: '微冰口感更轻' },
-              { label: '做法值多选', before: '', after: '关闭' },
-              { label: '做法选项', before: '', after: '必选' },
+              { label: '做法名称', before: '商品温度', after: '温度' },
+              { label: '备注', before: '门店通用温度', after: '基础温度做法' },
+              { label: '温馨提示', before: '少冰口感更佳', after: '微冰口感更轻' },
+              { label: '做法值多选', before: '开启', after: '关闭' },
+              { label: '做法选项', before: '非必选', after: '必选' },
             ],
           },
           {
             title: '做法值设置',
             fields: [
-              { label: '做法值', before: '', after: '正常冰 / 少冰 / 微冰 / 去冰' },
-              { label: '做法标识码', before: '', after: 'ICE / LESS / MICROICE / NOICE' },
+              { label: '做法值', before: '正常冰 / 少冰 / 去冰', after: '正常冰 / 少冰 / 微冰 / 去冰' },
+              { label: '做法标识码', before: 'ICE / LESS / NOICE', after: 'ICE / LESS / MICROICE / NOICE' },
             ],
           },
         ]),
@@ -1000,7 +1028,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '糖度',
         objectId: 'METHOD001',
         operationType: '做法值编辑',
-        operationContent: '编辑了做法值信息。',
+        operationContent: '编辑做法值信息。',
         methodValue: '七分糖',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
@@ -1011,11 +1039,11 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '做法值设置',
             fields: [
-              { label: '做法名称', before: '', after: '糖度' },
-              { label: '做法值', before: '', after: '七分糖' },
-              { label: '做法标识码', before: '', after: 'SEVEN-SUGAR' },
-              { label: '备注', before: '', after: '推荐茶饮默认糖度' },
-              { label: '温馨提示', before: '', after: '口感较清爽' },
+              { label: '做法名称', before: '糖度', after: '糖度' },
+              { label: '做法值', before: '全糖', after: '七分糖' },
+              { label: '做法标识码', before: 'FULL-SUGAR', after: 'SEVEN-SUGAR' },
+              { label: '备注', before: '默认推荐甜度', after: '推荐茶饮默认糖度' },
+              { label: '温馨提示', before: '口感偏甜', after: '口感较清爽' },
             ],
           },
         ]),
@@ -1071,7 +1099,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'ATYPE001',
         addonType: '0506加料',
         operationType: '加料类型编辑',
-        operationContent: '调整了加料类型基础信息。',
+        operationContent: '编辑加料类型基础信息。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -1081,9 +1109,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '加料类型信息',
             fields: [
-              { label: '加料类型', before: '', after: '0506加料' },
-              { label: '排序', before: '', after: '3' },
-              { label: '描述', before: '', after: '水果类加料，支持多选' },
+              { label: '加料类型', before: '0506水果加料', after: '0506加料' },
+              { label: '排序', before: '5', after: '3' },
+              { label: '描述', before: '水果加料', after: '水果类加料，支持多选' },
             ],
           },
         ]),
@@ -1107,7 +1135,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'ADDON056',
         addonType: '0506加料',
         operationType: '加料编辑',
-        operationContent: '调整了加料商品基础信息。',
+        operationContent: '编辑加料商品基础信息。',
         operatorName: '运营小雨',
         operatorAccount: '18362905581',
         operationPlatform: 'PC后台',
@@ -1117,12 +1145,12 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '基础信息',
             fields: [
-              { label: '加料商品名称', before: '', after: '0506葡萄改' },
-              { label: '加料类型', before: '', after: '0506加料' },
-              { label: '加料商品编码', before: '', after: 'ADDON-0506-G' },
-              { label: '初始价格', before: '', after: '8.88 元' },
-              { label: '库存设置', before: '', after: '自定义库存' },
-              { label: '商品状态', before: '', after: '启用' },
+              { label: '加料商品名称', before: '0506葡萄', after: '0506葡萄改' },
+              { label: '加料类型', before: '默认类型', after: '0506加料' },
+              { label: '加料商品编码', before: 'ADDON-0506', after: 'ADDON-0506-G' },
+              { label: '初始价格', before: '6.88 元', after: '8.88 元' },
+              { label: '库存设置', before: '不限库存', after: '自定义库存' },
+              { label: '商品状态', before: '禁用', after: '启用' },
             ],
           },
         ]),
@@ -1220,7 +1248,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '冰量随心配',
         objectId: 'DIY001',
         operationType: '随心配变更',
-        operationContent: '编辑了随心配信息、分组选项和关联商品。',
+        operationContent: '编辑随心配信息、分组选项和关联商品。',
         operatorName: '产品同学',
         operatorAccount: '16688005231',
         operationPlatform: 'PC后台',
@@ -1230,27 +1258,27 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '基础信息',
             fields: [
-              { label: '分组ID', before: '', after: '1259918567343030272' },
-              { label: '分组名称', before: '', after: '冰量随心配' },
-              { label: '分组编码', before: '', after: 'ICE-GROUP-02' },
-              { label: '备注', before: '', after: '默认冰量分组，补充套餐商品适配' },
+              { label: '分组ID', before: '1259918567343030272', after: '1259918567343030272' },
+              { label: '分组名称', before: '冰量默认组', after: '冰量随心配' },
+              { label: '分组编码', before: 'ICE-GROUP-01', after: 'ICE-GROUP-02' },
+              { label: '备注', before: '默认冰量分组', after: '默认冰量分组，补充套餐商品适配' },
             ],
           },
           {
             title: '商品信息',
             fields: [
-              { label: '商品标识', before: '', after: 'DIY-ICE-001' },
-              { label: '商品条码', before: '', after: '8800001221' },
-              { label: '关联商品', before: '', after: '多肉葡萄（标准商品）\n轻芝葡萄冰（标准商品）\n双人欢聚套餐（套餐商品）' },
+              { label: '商品标识', before: 'DIY-ICE-001', after: 'DIY-ICE-001' },
+              { label: '商品条码', before: '8800001221', after: '8800001221' },
+              { label: '关联商品', before: '多肉葡萄（标准商品）\n轻芝葡萄冰（标准商品）', after: '多肉葡萄（标准商品）\n轻芝葡萄冰（标准商品）\n双人欢聚套餐（套餐商品）' },
             ],
           },
           {
             title: '分组选项',
             fields: [
-              { label: '分组设置', before: '', after: '随机可选' },
-              { label: '随机可选', before: '', after: '3 选 1' },
-              { label: '单个商品可多选', before: '', after: '关闭' },
-              { label: '最少购买数 / 最多购买数', before: '', after: '1 / 1' },
+              { label: '分组设置', before: '单选', after: '随机可选' },
+              { label: '随机可选', before: '2 选 1', after: '3 选 1' },
+              { label: '单个商品可多选', before: '开启', after: '关闭' },
+              { label: '最少购买数 / 最多购买数', before: '1 / 2', after: '1 / 1' },
             ],
           },
         ]),
@@ -1284,7 +1312,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
       { key: 'channel', label: '适用渠道', type: 'select', options: CHANNEL_OPTIONS },
       COMMON_OPERATOR_FILTER,
     ],
-    columns: [templateColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, timeColumn, moduleColumn],
+    columns: [templateColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn, moduleColumn],
     records: [
       {
         id: 'ops-template-1',
@@ -1315,7 +1343,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'TPL003',
         templateName: '通用奶茶模板',
         operationType: '模板编辑',
-        operationContent: '编辑了模板基础信息。',
+        operationContent: '编辑模板基础信息。',
         operatorName: '小雨',
         operatorAccount: '18362905581',
         operationPlatform: 'PC后台',
@@ -1325,9 +1353,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '模板基础信息',
             fields: [
-              { label: '模板名称', before: '', after: '通用奶茶模板' },
-              { label: '适用门店', before: '', after: '一级门店5 / 一级门店8 / 南山万象店' },
-              { label: '适用渠道', before: '', after: 'POS / 小程序堂食 / 小程序外卖' },
+              { label: '模板名称', before: '门店奶茶模板', after: '通用奶茶模板' },
+              { label: '适用门店', before: '一级门店5 / 一级门店8', after: '一级门店5 / 一级门店8 / 南山万象店' },
+              { label: '适用渠道', before: 'POS / 小程序堂食', after: 'POS / 小程序堂食 / 小程序外卖' },
             ],
           },
         ]),
@@ -1338,7 +1366,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'TPL001',
         templateName: '春季饮品模板',
         operationType: '模板适用门店变更',
-        operationContent: '调整了模板适用门店。',
+        operationContent: '模板适用门店由 18 家调整为 32 家。',
         beforeChange: '18 家门店',
         afterChange: '32 家门店',
         operatorName: '运营静静',
@@ -1346,22 +1374,13 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operationPlatform: 'PC后台',
         operationTime: '2026-05-27 16:04:31',
         operationModule: '商品模板',
-        snapshot: snapshot('商品模板变更快照', [
-          {
-            title: '模板基础信息',
-            fields: [
-              { label: '模板名称', before: '', after: '春季饮品模板' },
-              { label: '适用渠道', before: '', after: 'POS / 小程序堂食' },
-            ],
-          },
-          {
-            title: '适用门店',
-            fields: [
-              { label: '门店数量', before: '', after: '32 家' },
-              { label: '适用门店明细', before: '', after: '一级门店5 / 一级门店8 / 南山万象店等' },
-            ],
-          },
-        ]),
+        detailList: {
+          title: '模板适用门店明细',
+          beforeTitle: '变更前门店',
+          afterTitle: '变更后门店',
+          beforeItems: ['一级门店5', '一级门店8', '华强北店', '海岸城店', '车公庙店', '南头古城店'],
+          afterItems: ['一级门店5', '一级门店8', '华强北店', '海岸城店', '车公庙店', '南头古城店', '南山万象店', '欢乐海岸店'],
+        },
       },
       {
         id: 'ops-template-4',
@@ -1408,7 +1427,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
       { key: 'objectId', label: '商品ID', type: 'text', placeholder: '请输入商品ID' },
       COMMON_OPERATOR_FILTER,
     ],
-    columns: [templateColumn, nameColumn('商品名称'), operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, timeColumn],
+    columns: [templateColumn, nameColumn('商品名称'), operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
     records: [
       {
         id: 'ops-template-product-1',
@@ -1416,7 +1435,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008622',
         templateName: '春季饮品模板',
         operationType: '模板商品新增',
-        operationContent: '商品新增到模板。',
+        operationContent: '模板内新增商品。',
         operatorName: '运营静静',
         operatorAccount: '15051404240',
         operationPlatform: 'PC后台',
@@ -1429,7 +1448,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008622',
         templateName: '春季饮品模板',
         operationType: '模板商品售价变更',
-        operationContent: '模板商品售价调整。',
+        operationContent: '模板商品售价由 16 元调整为 18 元。',
         beforeChange: '16 元',
         afterChange: '18 元',
         operatorName: '运营静静',
@@ -1444,7 +1463,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'P1008741',
         templateName: '夏季饮品模板',
         operationType: '模板商品更新',
-        operationContent: '编辑了模板商品基础信息。',
+        operationContent: '编辑模板商品基础信息。',
         operatorName: '产品同学',
         operatorAccount: '16688005231',
         operationPlatform: 'PC后台',
@@ -1466,7 +1485,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
               { label: '默认规格', before: '', after: '大杯' },
             ],
           },
-        ]),
+        ], 'after_only'),
       },
       {
         id: 'ops-template-product-4',
@@ -1535,15 +1554,15 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
     domain: 'operations',
     name: '价格体系价格变动日志',
     subtitle: '记录价格体系基础信息、适用范围及商品体系价格变化。',
-    operationOptions: operationOptions(['价格体系新建', '价格体系删除', '价格体系生效日期变更', '价格体系生效渠道变更', '价格体系基础信息编辑', '价格体系适用门店变更', '商品体系价格变更']),
+    operationOptions: operationOptions(['价格体系新建', '价格体系删除', '价格体系启用', '价格体系禁用', '价格体系生效日期变更', '价格体系生效渠道变更', '价格体系基础信息编辑', '价格体系适用门店变更', '商品体系价格变更']),
     filterDefs: [
-      { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['价格体系新建', '价格体系删除', '价格体系生效日期变更', '价格体系生效渠道变更', '价格体系基础信息编辑', '价格体系适用门店变更', '商品体系价格变更']) },
+      { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['价格体系新建', '价格体系删除', '价格体系启用', '价格体系禁用', '价格体系生效日期变更', '价格体系生效渠道变更', '价格体系基础信息编辑', '价格体系适用门店变更', '商品体系价格变更']) },
       { key: 'strategyName', label: '价格体系名称', type: 'text', placeholder: '请输入价格体系名称' },
       { key: 'objectName', label: '商品名称', type: 'text', placeholder: '请输入商品名称' },
       { key: 'objectId', label: '商品ID', type: 'text', placeholder: '请输入商品ID' },
       COMMON_OPERATOR_FILTER,
     ],
-    columns: [strategyColumn, nameColumn('商品名称'), operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, timeColumn],
+    columns: [strategyColumn, nameColumn('商品名称'), operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
     records: [
       {
         id: 'ops-price-1',
@@ -1551,7 +1570,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: '',
         strategyName: '春季活动价格体系',
         operationType: '价格体系新建',
-        operationContent: '新建价格体系。',
+        operationContent: '新建价格体系并配置生效时间与渠道。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -1585,6 +1604,36 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         id: 'ops-price-3',
         objectName: '--',
         objectId: '',
+        strategyName: '春季活动价格体系',
+        operationType: '价格体系启用',
+        operationContent: '价格体系由禁用调整为启用。',
+        beforeChange: '禁用',
+        afterChange: '启用',
+        operatorName: '企迈静静',
+        operatorAccount: '18656028950',
+        operationPlatform: '供应链',
+        operationTime: '2026-05-28 16:10:26',
+        operationModule: '价格体系',
+      },
+      {
+        id: 'ops-price-4',
+        objectName: '--',
+        objectId: '',
+        strategyName: '周末活动价格体系',
+        operationType: '价格体系禁用',
+        operationContent: '价格体系由启用调整为禁用。',
+        beforeChange: '启用',
+        afterChange: '禁用',
+        operatorName: '运营小雨',
+        operatorAccount: '18362905581',
+        operationPlatform: 'PC后台',
+        operationTime: '2026-05-28 13:12:43',
+        operationModule: '价格体系',
+      },
+      {
+        id: 'ops-price-5',
+        objectName: '--',
+        objectId: '',
         strategyName: '五一促销价格体系',
         operationType: '价格体系生效日期变更',
         operationContent: '调整了价格体系生效日期。',
@@ -1597,7 +1646,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operationModule: '价格体系',
       },
       {
-        id: 'ops-price-4',
+        id: 'ops-price-6',
         objectName: '--',
         objectId: '',
         strategyName: '节日活动价格体系',
@@ -1612,12 +1661,12 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operationModule: '价格体系',
       },
       {
-        id: 'ops-price-5',
+        id: 'ops-price-7',
         objectName: '--',
         objectId: '',
         strategyName: '周末活动价格体系',
         operationType: '价格体系基础信息编辑',
-        operationContent: '编辑了价格体系基础信息。',
+        operationContent: '编辑价格体系基础信息。',
         operatorName: '运营小雨',
         operatorAccount: '18362905581',
         operationPlatform: 'PC后台',
@@ -1627,15 +1676,15 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '基础信息',
             fields: [
-              { label: '价格体系名称', before: '', after: '周末活动价格体系' },
-              { label: '生效日期', before: '', after: '2026-05-30 至 2026-06-02' },
-              { label: '生效渠道', before: '', after: 'POS / 小程序外卖' },
+              { label: '价格体系名称', before: '周末专享价格体系', after: '周末活动价格体系' },
+              { label: '生效日期', before: '2026-05-29 至 2026-06-01', after: '2026-05-30 至 2026-06-02' },
+              { label: '生效渠道', before: 'POS', after: 'POS / 小程序外卖' },
             ],
           },
         ]),
       },
       {
-        id: 'ops-price-6',
+        id: 'ops-price-8',
         objectName: '--',
         objectId: '',
         strategyName: '周末活动价格体系',
@@ -1650,12 +1699,12 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operationModule: '价格体系',
       },
       {
-        id: 'ops-price-7',
+        id: 'ops-price-9',
         objectName: '茉莉奶绿',
         objectId: 'P1008613',
         strategyName: '五一促销价格体系',
         operationType: '商品体系价格变更',
-        operationContent: '调整了价格体系内商品售价。',
+        operationContent: '价格体系内商品售价由中杯 19 元 / 大杯 21 元调整为中杯 17 元 / 大杯 19 元。',
         beforeChange: '中杯 19 元 / 大杯 21 元',
         afterChange: '中杯 17 元 / 大杯 19 元',
         operatorName: '运营小雨',
@@ -1736,7 +1785,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         afterChange: '剩余 1000（自动补足最大值 1000）',
         operatorName: 'chesster',
         operatorAccount: '18654050176',
-        operationPlatform: 'reactNative',
+        operationPlatform: '企迈数店App',
         operationTime: '2026-05-28 11:24:19',
         operationModule: '门店商品',
       },
@@ -1799,7 +1848,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
               { label: '加料配置', before: '珍珠 +2 元', after: '珍珠 +2 元；椰果 +2 元' },
             ],
           },
-        ]),
+        ], 'after_only'),
       },
       {
         id: 'store-product-6',
@@ -1816,7 +1865,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         afterChange: '下架',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
-        operationPlatform: 'PC后台',
+        operationPlatform: 'POS',
         operationTime: '2026-05-27 19:42:06',
         operationModule: '门店商品',
       },
@@ -1885,7 +1934,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         taskName: '商品库归档同步任务',
         taskId: 'SYNC-20260527-0012',
         operationType: '商品删除',
-        operationContent: '商品库归档',
+        operationContent: '商品库归档同步删除门店商品',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -1906,17 +1955,19 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
     filterDefs: [
       { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['分类新建', '分类删除', '分类名称编辑', '分类排序变更', '分类基础信息变更', '分类关联商品调整']) },
       { key: 'storeName', label: '机构门店', type: 'select', options: STORE_OPTIONS },
+      { key: 'sourceType', label: '变更来源', type: 'select', options: SOURCE_OPTIONS },
       { key: 'objectName', label: '分类名称', type: 'text', placeholder: '请输入分类名称' },
       { key: 'objectId', label: '分类ID', type: 'text', placeholder: '请输入分类ID' },
       COMMON_OPERATOR_FILTER,
     ],
-    columns: [nameColumn('分类名称'), storeColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
+    columns: [nameColumn('分类名称'), storeColumn, sourceTypeColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
     records: [
       {
         id: 'store-category-1',
         objectName: '门店饮品',
         objectId: 'SC1001',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '分类新建',
         operationContent: '门店新建商品分类。',
         operatorName: '督导王芳',
@@ -1930,8 +1981,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '门店饮品',
         objectId: 'SC1001',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '分类排序变更',
-        operationContent: '调整了分类排序。',
+        operationContent: '门店分类排序由 4 调整为 1。',
         beforeChange: '4',
         afterChange: '1',
         operatorName: '督导王芳',
@@ -1945,8 +1997,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '门店新品专区',
         objectId: 'SC1009',
         storeName: '一级门店5',
+        sourceType: '商品库下发',
         operationType: '分类基础信息变更',
-        operationContent: '调整了分类展示说明和营业时段。',
+        operationContent: '商品库下发：分类展示说明和营业时段更新。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -1956,9 +2009,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '基础信息',
             fields: [
-              { label: '分类名称', before: '', after: '门店新品专区' },
-              { label: '展示说明', before: '', after: '春季新品专区' },
-              { label: '营业时段', before: '', after: '10:00 - 21:00' },
+              { label: '分类名称', before: '门店新品', after: '门店新品专区' },
+              { label: '展示说明', before: '新品展示', after: '春季新品专区' },
+              { label: '营业时段', before: '09:00 - 20:00', after: '10:00 - 21:00' },
             ],
           },
         ]),
@@ -1968,6 +2021,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '门店饮品',
         objectId: 'SC1001',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '分类名称编辑',
         operationContent: '分类名称由“门店茶饮”调整为“门店饮品”。',
         beforeChange: '门店茶饮',
@@ -1983,8 +2037,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '门店新品专区',
         objectId: 'SC1009',
         storeName: '一级门店5',
+        sourceType: '商品库下发',
         operationType: '分类关联商品调整',
-        operationContent: '调整了分类下关联商品。',
+        operationContent: '商品库下发：分类关联商品更新。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -1994,8 +2049,8 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '关联商品',
             fields: [
-              { label: '分类名称', before: '', after: '门店新品专区' },
-              { label: '关联商品', before: '', after: '轻芝葡萄冰\n多肉葡萄\n杨枝甘露' },
+              { label: '分类名称', before: '门店新品专区', after: '门店新品专区' },
+              { label: '关联商品', before: '轻芝葡萄冰\n多肉葡萄', after: '轻芝葡萄冰\n多肉葡萄\n杨枝甘露' },
             ],
           },
         ]),
@@ -2005,6 +2060,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '门店季节限定',
         objectId: 'SC1018',
         storeName: '一级门店5',
+        sourceType: '门店手工修改',
         operationType: '分类删除',
         operationContent: '删除门店分类。',
         operatorName: '企迈静静',
@@ -2026,22 +2082,24 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
     filterDefs: [
       { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['启用', '禁用']) },
       { key: 'storeName', label: '机构门店', type: 'select', options: STORE_OPTIONS },
+      { key: 'sourceType', label: '变更来源', type: 'select', options: SOURCE_OPTIONS },
       { key: 'objectName', label: '做法名称', type: 'text', placeholder: '请输入做法名称' },
       { key: 'methodValue', label: '做法值', type: 'text', placeholder: '请输入做法值' },
       COMMON_OPERATOR_FILTER,
     ],
-    columns: [nameColumn('做法名称'), methodValueColumn, storeColumn, operationTypeColumn, operationContentColumn, operatorColumn, platformColumn, timeColumn],
+    columns: [nameColumn('做法名称'), methodValueColumn, storeColumn, sourceTypeColumn, operationTypeColumn, operationContentColumn, operatorColumn, platformColumn, timeColumn],
     records: [
       {
         id: 'store-method-1',
         objectName: 'KOI温度',
         methodValue: '正常冰',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '禁用',
-        operationContent: '单个禁用',
+        operationContent: '门店做法值单个禁用',
         operatorName: 'chesster',
         operatorAccount: '18654050176',
-        operationPlatform: 'reactNative',
+        operationPlatform: '企迈数店App',
         operationTime: '2026-05-28 13:11:28',
         operationModule: '门店做法',
       },
@@ -2050,11 +2108,12 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: 'KOI温度',
         methodValue: '去冰',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '启用',
-        operationContent: '单个启用',
+        operationContent: '门店做法值单个启用',
         operatorName: 'chesster',
         operatorAccount: '18654050176',
-        operationPlatform: 'reactNative',
+        operationPlatform: '企迈数店App',
         operationTime: '2026-05-28 10:02:47',
         operationModule: '门店做法',
       },
@@ -2063,8 +2122,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: 'KOI甜度',
         methodValue: '全糖',
         storeName: '一级门店5',
+        sourceType: '门店手工修改',
         operationType: '禁用',
-        operationContent: '单个禁用',
+        operationContent: '门店做法值单个禁用',
         operatorName: '督导王芳',
         operatorAccount: '18900012311',
         operationPlatform: 'PC后台',
@@ -2084,15 +2144,17 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
     filterDefs: [
       { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['售价变动', '库存变动', '上下架', '新建加料', '删除加料', '加料变更']) },
       { key: 'storeName', label: '机构门店', type: 'select', options: STORE_OPTIONS },
+      { key: 'sourceType', label: '变更来源', type: 'select', options: SOURCE_OPTIONS },
       { key: 'objectName', label: '加料名称', type: 'text', placeholder: '请输入加料名称' },
       COMMON_OPERATOR_FILTER,
     ],
-    columns: [nameColumn('加料名称'), storeColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
+    columns: [nameColumn('加料名称'), storeColumn, sourceTypeColumn, operationTypeColumn, operationContentColumn, beforeColumn, afterColumn, operatorColumn, platformColumn, timeColumn],
     records: [
       {
         id: 'store-addon-1',
         objectName: '珍珠',
         storeName: '一级门店5',
+        sourceType: '门店手工修改',
         operationType: '新建加料',
         operationContent: '门店新建加料。',
         operatorName: '企迈静静',
@@ -2105,8 +2167,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         id: 'store-addon-2',
         objectName: '珍珠',
         storeName: '一级门店5',
+        sourceType: '门店手工修改',
         operationType: '售价变动',
-        operationContent: '门店加料售价调整。',
+        operationContent: '门店加料售价由 2 元调整为 3 元。',
         beforeChange: '2 元',
         afterChange: '3 元',
         operatorName: '企迈静静',
@@ -2119,8 +2182,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         id: 'store-addon-3',
         objectName: '椰果',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '库存变动',
-        operationContent: '调整了门店加料库存。',
+        operationContent: '门店加料库存由 15 调整为 8。',
         beforeChange: '15',
         afterChange: '8',
         operatorName: '督导王芳',
@@ -2133,6 +2197,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         id: 'store-addon-4',
         objectName: '椰果',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '上下架',
         operationContent: '门店加料由上架调整为下架。',
         beforeChange: '上架',
@@ -2147,6 +2212,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         id: 'store-addon-5',
         objectName: '西柚粒',
         storeName: '一级门店8',
+        sourceType: '门店手工修改',
         operationType: '删除加料',
         operationContent: '删除门店加料。',
         operatorName: '督导王芳',
@@ -2159,8 +2225,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         id: 'store-addon-6',
         objectName: '珍珠',
         storeName: '一级门店5',
+        sourceType: '商品库下发',
         operationType: '加料变更',
-        operationContent: '调整了门店加料基础信息。',
+        operationContent: '商品库下发：门店加料基础信息更新。',
         operatorName: '企迈静静',
         operatorAccount: '18656028950',
         operationPlatform: 'PC后台',
@@ -2282,6 +2349,7 @@ export const WebProductLogPage: React.FC = () => {
   const [appliedFilters, setAppliedFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSnapshot, setSelectedSnapshot] = useState<{ record: LogRecord; title: string } | null>(null);
+  const [selectedDetailList, setSelectedDetailList] = useState<{ record: LogRecord; title: string } | null>(null);
 
   useEffect(() => {
     setDraftFilters(DEFAULT_FILTERS);
@@ -2418,7 +2486,9 @@ export const WebProductLogPage: React.FC = () => {
     </div>
   );
 
-  const renderTable = (config: LogTypeConfig) => (
+  const renderTable = (config: LogTypeConfig) => {
+    const hasAction = config.records.some(record => record.snapshot || record.detailList);
+    return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-separate border-spacing-0">
         <thead>
@@ -2428,7 +2498,7 @@ export const WebProductLogPage: React.FC = () => {
                 {column.label}
               </th>
             ))}
-            {config.enableSnapshot ? <th className={stickyActionHeadClassName}>操作</th> : null}
+            {hasAction ? <th className={stickyActionHeadClassName}>操作</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -2439,7 +2509,7 @@ export const WebProductLogPage: React.FC = () => {
                   {column.render(record)}
                 </td>
               ))}
-              {config.enableSnapshot ? (
+              {hasAction ? (
                 <td className={stickyActionCellClassName}>
                   {record.snapshot ? (
                     <button
@@ -2448,6 +2518,14 @@ export const WebProductLogPage: React.FC = () => {
                     >
                       <Eye size={14} className="mr-1" />
                       查看变更快照
+                    </button>
+                  ) : record.detailList ? (
+                    <button
+                      onClick={() => setSelectedDetailList({ record, title: config.name })}
+                      className="inline-flex items-center whitespace-nowrap rounded-md px-2 py-1 text-[13px] font-medium text-[#00C06B] transition-all hover:bg-[#F3FCF7]"
+                    >
+                      <Eye size={14} className="mr-1" />
+                      查看门店明细
                     </button>
                   ) : (
                     <EmptyCell />
@@ -2459,7 +2537,8 @@ export const WebProductLogPage: React.FC = () => {
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   const renderLogPage = (config: LogTypeConfig) => (
     <div className="space-y-4">
@@ -2575,18 +2654,114 @@ export const WebProductLogPage: React.FC = () => {
                 {selectedSnapshot.record.snapshot.sections.map(section => (
                   <div key={section.title} className="overflow-hidden rounded-2xl border border-[#E7ECF1]">
                     <div className="border-b border-[#EEF2F6] bg-[#FAFBFC] px-5 py-3 text-[14px] font-bold text-[#111827]">{section.title}</div>
-                    <div className="divide-y divide-[#EEF2F6] bg-white">
-                      {section.fields.map(field => (
-                        <div key={`${section.title}-${field.label}`} className="grid gap-3 px-5 py-4 md:grid-cols-[180px_minmax(0,1fr)]">
-                          <div className="pt-1 text-[13px] font-medium text-[#667085]">{field.label}</div>
-                          <div className="min-w-0 rounded-xl border border-[#E7ECF1] bg-[#FCFCFD] px-4 py-3 text-[13px] leading-6 text-[#111827] whitespace-pre-wrap break-words">
-                            {field.after || '--'}
+                    {selectedSnapshot.record.snapshot.displayMode === 'after_only' ? (
+                      <div className="divide-y divide-[#EEF2F6] bg-white">
+                        {section.fields.map(field => (
+                          <div key={`${section.title}-${field.label}`} className="grid gap-3 px-5 py-4 md:grid-cols-[180px_minmax(0,1fr)]">
+                            <div className="pt-1 text-[13px] font-medium text-[#667085]">{field.label}</div>
+                            <div className="min-w-0 rounded-xl border border-[#E7ECF1] bg-[#FCFCFD] px-4 py-3 text-[13px] leading-6 text-[#111827] whitespace-pre-wrap break-words">
+                              {field.after || '--'}
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-white">
+                        <div className="grid gap-3 border-b border-[#EEF2F6] bg-[#FCFCFD] px-5 py-3 text-[12px] font-medium text-[#98A2B3] md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+                          <div>字段</div>
+                          <div>变更前</div>
+                          <div>变更后</div>
+                        </div>
+                        <div className="divide-y divide-[#EEF2F6]">
+                          {section.fields.map(field => (
+                            <div key={`${section.title}-${field.label}`} className="grid gap-3 px-5 py-4 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+                              <div className="pt-1 text-[13px] font-medium text-[#667085]">{field.label}</div>
+                              <div className="min-w-0 rounded-xl border border-[#E7ECF1] bg-[#FFF7ED] px-4 py-3 text-[13px] leading-6 text-[#9A3412] whitespace-pre-wrap break-words">
+                                {field.before || '--'}
+                              </div>
+                              <div className="min-w-0 rounded-xl border border-[#E7ECF1] bg-[#ECFDF3] px-4 py-3 text-[13px] leading-6 text-[#166534] whitespace-pre-wrap break-words">
+                                {field.after || '--'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedDetailList?.record.detailList ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-6">
+          <div className="max-h-[88vh] w-full max-w-[980px] overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgba(15,23,42,0.28)]">
+            <div className="flex items-center justify-between border-b border-[#EEF2F6] px-6 py-4">
+              <div>
+                <div className="text-[18px] font-bold text-[#111827]">{selectedDetailList.record.detailList.title}</div>
+                <div className="mt-1 text-[13px] text-[#667085]">
+                  {selectedDetailList.title} / {selectedDetailList.record.templateName || selectedDetailList.record.objectName} / {selectedDetailList.record.operationTime}
+                </div>
+              </div>
+              <button onClick={() => setSelectedDetailList(null)} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#667085] transition-all hover:bg-[#F5F6FA]">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(88vh-80px)] overflow-auto px-6 py-5">
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="rounded-xl bg-[#F8FAFC] p-4">
+                  <div className="text-[12px] text-[#98A2B3]">模板名称</div>
+                  <div className="mt-2 text-[14px] font-bold text-[#111827]">{selectedDetailList.record.templateName || '--'}</div>
+                </div>
+                <div className="rounded-xl bg-[#F8FAFC] p-4">
+                  <div className="text-[12px] text-[#98A2B3]">操作类型</div>
+                  <div className="mt-2"><OperationBadge value={selectedDetailList.record.operationType} /></div>
+                </div>
+                <div className="rounded-xl bg-[#F8FAFC] p-4">
+                  <div className="text-[12px] text-[#98A2B3]">操作人</div>
+                  <div className="mt-2 text-[14px] font-bold text-[#111827]">{selectedDetailList.record.operatorName}</div>
+                  <div className="mt-1 text-[12px] text-[#667085]">{selectedDetailList.record.operatorAccount}</div>
+                </div>
+                <div className="rounded-xl bg-[#F8FAFC] p-4">
+                  <div className="text-[12px] text-[#98A2B3]">操作平台</div>
+                  <div className="mt-2 text-[14px] font-bold text-[#111827]">{selectedDetailList.record.operationPlatform}</div>
+                  <div className="mt-1 text-[12px] text-[#667085]">{selectedDetailList.record.operationTime}</div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div className="overflow-hidden rounded-2xl border border-[#E7ECF1] bg-white">
+                  <div className="border-b border-[#EEF2F6] bg-[#FFF7ED] px-5 py-3 text-[14px] font-bold text-[#9A3412]">
+                    {selectedDetailList.record.detailList.beforeTitle}（{selectedDetailList.record.detailList.beforeItems.length} 家）
+                  </div>
+                  <div className="max-h-[420px] overflow-auto px-5 py-4">
+                    <div className="space-y-2">
+                      {selectedDetailList.record.detailList.beforeItems.map(item => (
+                        <div key={`before-${item}`} className="rounded-lg bg-[#FFF7ED] px-3 py-2 text-[13px] text-[#7C2D12]">
+                          {item}
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-[#E7ECF1] bg-white">
+                  <div className="border-b border-[#EEF2F6] bg-[#ECFDF3] px-5 py-3 text-[14px] font-bold text-[#166534]">
+                    {selectedDetailList.record.detailList.afterTitle}（{selectedDetailList.record.detailList.afterItems.length} 家）
+                  </div>
+                  <div className="max-h-[420px] overflow-auto px-5 py-4">
+                    <div className="space-y-2">
+                      {selectedDetailList.record.detailList.afterItems.map(item => (
+                        <div key={`after-${item}`} className="rounded-lg bg-[#ECFDF3] px-3 py-2 text-[13px] text-[#166534]">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

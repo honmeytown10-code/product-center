@@ -4,7 +4,7 @@ import {
   Box, ChevronDown, ChevronUp, Search, Bell, LayoutGrid, Clock, Settings, Store
 } from 'lucide-react';
 import { useProducts } from '../context';
-import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY } from '../types';
+import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, resolveChildRequiredConfigs } from '../types';
 import { SidebarItem } from './web/WebCommon';
 import { WebProductList } from './web/WebProductList';
 import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new component
@@ -54,21 +54,44 @@ const COMMON_FIELD_PRIORITY: Record<'standard' | 'combo', string[]> = {
 
 const getCommonFieldConfigKey = (type: 'standard' | 'combo', categoryId: string) => `${type}:${categoryId}`;
 
-const buildChildConfigs = (fieldId: string, current?: Record<string, boolean>) => {
+const normalizeChildDisplayMode = (
+  value: boolean | 'visible' | 'collapsed' | 'hidden' | undefined,
+  isDefaultSelected: boolean
+) => {
+  if (value === 'visible') return 'visible';
+  if (value === 'hidden') return 'hidden';
+  if (value === 'collapsed') return 'visible';
+  if (typeof value === 'boolean') return value ? 'visible' : 'hidden';
+  return isDefaultSelected ? 'visible' : 'hidden';
+};
+
+const buildChildConfigs = (
+  fieldId: string,
+  current?: Record<string, boolean | 'visible' | 'collapsed' | 'hidden'>,
+  currentRequiredConfigs?: Record<string, boolean>
+) => {
   const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[fieldId] || [];
   if (childTemplates.length === 0) return undefined;
-  return childTemplates.reduce<Record<string, boolean>>((acc, child) => {
-    acc[child.id] = current?.[child.id] ?? !!(child.isDefaultSelected || child.isSystem);
+  return childTemplates.reduce<Record<string, 'visible' | 'collapsed' | 'hidden'>>((acc, child) => {
+    const normalizedMode = normalizeChildDisplayMode(current?.[child.id], !!(child.isDefaultSelected || child.isSystem));
+    acc[child.id] = child.isSystem || !!currentRequiredConfigs?.[child.id] ? 'visible' : normalizedMode;
     return acc;
   }, {});
 };
 
-const buildCommonFieldConfigEntry = (fieldConfig: CategoryFieldConfig): CategoryFieldConfig => ({
-  id: fieldConfig.id,
-  isRequired: fieldConfig.isRequired,
-  childConfigs: buildChildConfigs(fieldConfig.id, fieldConfig.childConfigs),
-  childRequiredConfigs: fieldConfig.childRequiredConfigs,
-});
+const buildCommonFieldConfigEntry = (
+  fieldConfig: CategoryFieldConfig,
+  fieldConfigMap: Map<string, CategoryFieldConfig>
+): CategoryFieldConfig => {
+  const childRequiredConfigs = resolveChildRequiredConfigs(fieldConfig.id, fieldConfigMap, fieldConfig.childRequiredConfigs);
+  return {
+    id: fieldConfig.id,
+    isRequired: fieldConfig.isRequired,
+    displayMode: fieldConfig.displayMode ?? 'visible',
+    childConfigs: buildChildConfigs(fieldConfig.id, fieldConfig.childConfigs, childRequiredConfigs),
+    childRequiredConfigs,
+  };
+};
 
 const buildDefaultCommonFieldIds = (category: WebCategory) => {
   const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
@@ -82,10 +105,11 @@ const buildDefaultCommonFieldIds = (category: WebCategory) => {
 const buildInitialCommonFieldConfigs = (categories: WebCategory[]): CommonFieldConfigs => (
   categories.reduce<CommonFieldConfigs>((acc, category) => {
     const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
+    const fieldConfigMap = new Map(fieldConfigs.map(field => [field.id, field]));
     const defaultIds = new Set(buildDefaultCommonFieldIds(category));
     acc[getCommonFieldConfigKey(category.classification, category.id)] = fieldConfigs
       .filter(field => defaultIds.has(field.id))
-      .map(buildCommonFieldConfigEntry);
+      .map(field => buildCommonFieldConfigEntry(field, fieldConfigMap));
     return acc;
   }, {})
 );
@@ -247,8 +271,14 @@ export const WebAdmin: React.FC = () => {
             const prevField = prevEntries.find(item => item.id === fieldId);
             return buildCommonFieldConfigEntry({
               ...sourceField,
-              childConfigs: buildChildConfigs(fieldId, prevField?.childConfigs || sourceField.childConfigs),
-            });
+              displayMode: prevField?.displayMode ?? sourceField.displayMode ?? 'visible',
+              childConfigs: buildChildConfigs(
+                fieldId,
+                prevField?.childConfigs || sourceField.childConfigs,
+                resolveChildRequiredConfigs(fieldId, fieldMap, prevField?.childRequiredConfigs || sourceField.childRequiredConfigs)
+              ),
+              childRequiredConfigs: prevField?.childRequiredConfigs || sourceField.childRequiredConfigs,
+            }, fieldMap);
           })
           .filter((item): item is CategoryFieldConfig => !!item);
       });

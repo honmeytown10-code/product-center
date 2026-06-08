@@ -5,7 +5,7 @@ import {
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
   CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical, X, CircleHelp
 } from 'lucide-react';
-import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, DynamicFieldConfig } from '../../types';
+import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, resolveChildRequiredConfigs } from '../../types';
 import { Switch, SectionHeader, FormRow } from './WebCommon';
 import { WebCategorySelectModal } from './WebModals';
 
@@ -356,6 +356,12 @@ const OTHER_MORE_FIELD_MAPPINGS = [
     { id: 'o_more_barcodes', label: '更多条码' },
     { id: 'o_product_share', label: '商品分享' },
 ] as const;
+const DEFAULT_COLLAPSED_FIELD_IDS = Array.from(new Set([
+    ...COLLAPSIBLE_BASIC_FIELD_IDS,
+    ...DISPLAY_MORE_FIELD_MAPPINGS.map(item => item.id),
+    ...SALES_MORE_FIELD_MAPPINGS.map(item => item.id),
+    ...OTHER_MORE_FIELD_MAPPINGS.map(item => item.id),
+]));
 const COMBO_FALLBACK_FIELDS: CategoryFieldConfig[] = [
     { id: 'p_name', isRequired: true },
     { id: 'p_alias', isRequired: false },
@@ -750,7 +756,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const stickyToolbarRef = useRef<HTMLDivElement | null>(null);
     const specTableScrollRef = useRef<HTMLDivElement | null>(null);
     const specSectionHeaderRefs = useRef<Partial<Record<SpecConfigModuleKey, HTMLTableCellElement | null>>>({});
-    const [activeFormSection, setActiveFormSection] = useState('basic');
+    const [activeFormSection, setActiveFormSection] = useState<SectionId>('basic');
     const [pageView, setPageView] = useState<PageView>('form');
     const [currentCategory, setCurrentCategory] = useState(category);
     const [prepEnabled, setPrepEnabled] = useState(true);
@@ -885,7 +891,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         return stickyHeight + 16;
     };
 
-    const scrollToSection = (id: string) => {
+    const scrollToSection = (id: SectionId) => {
         setActiveFormSection(id);
         const container = formContentRef.current;
         const element = document.getElementById(id);
@@ -910,9 +916,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const getValidationTargetId = (itemKey: string) => {
-        if (['spec-price', 'spec-stock', 'spec-pack', 's_specs'].includes(itemKey)) return 'field-s_specs';
-        const rawKey = itemKey.startsWith('recommend-') ? itemKey.replace('recommend-', '') : itemKey;
-        return `field-${rawKey}`;
+        const anchorId = getValidationAnchorId(itemKey);
+        if (typeof document !== 'undefined' && document.getElementById(anchorId)) return anchorId;
+        return getValidationModuleTargetId(itemKey);
     };
 
     const currentFieldConfigs = useMemo(() => {
@@ -937,16 +943,72 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const currentFieldConfigMap = useMemo(() => new Map(currentFieldConfigs.map(field => [field.id, field])), [currentFieldConfigs]);
     const commonFieldConfigKey = getCommonFieldConfigKey(type, currentCategory.id);
     const commonFieldConfigList = useMemo(() => (commonFieldConfigs[commonFieldConfigKey] || []).filter(item => currentCategoryFieldIdSet.has(item.id)), [commonFieldConfigKey, commonFieldConfigs, currentCategoryFieldIdSet]);
-    const commonFieldConfigMap = useMemo(() => new Map(commonFieldConfigList.map(item => [item.id, item])), [commonFieldConfigList]);
-    const configuredCommonFieldIds = useMemo(() => {
+    const resolvedCommonFieldConfigList = useMemo(() => {
         const requiredIds = currentFieldConfigs
             .filter(field => field.isRequired || AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === field.id)?.isRequired)
             .map(field => field.id);
-        const savedIds = commonFieldConfigList.map(item => item.id);
-        const fallbackIds = currentCategoryFieldIds.slice(0, Math.min(8, currentCategoryFieldIds.length));
-        return Array.from(new Set([...(savedIds.length > 0 ? savedIds : fallbackIds), ...requiredIds]));
-    }, [commonFieldConfigList, currentCategoryFieldIds, currentFieldConfigs]);
-    const commonFieldIdSet = useMemo(() => new Set(configuredCommonFieldIds), [configuredCommonFieldIds]);
+        if (commonFieldConfigList.length > 0) {
+            const configuredIdSet = new Set(commonFieldConfigList.map(item => item.id));
+            const childModuleFallbackIds = Object.keys(COMMON_FIELD_CHILD_CONFIG_LIBRARY).filter(id => (
+                currentCategoryFieldIdSet.has(id)
+                && !configuredIdSet.has(id)
+                && !requiredIds.includes(id)
+            ));
+            return Array.from(new Map(
+                [
+                    ...commonFieldConfigList,
+                    ...childModuleFallbackIds.map(id => ({
+                        ...(currentFieldConfigMap.get(id) || { id, isRequired: false }),
+                        displayMode: currentFieldConfigMap.get(id)?.displayMode ?? 'visible' as const,
+                    })),
+                    ...requiredIds.map(id => ({
+                        ...(currentFieldConfigMap.get(id) || { id, isRequired: true }),
+                        displayMode: 'visible' as const,
+                    }))
+                ]
+                    .map(item => [
+                        item.id,
+                        {
+                            ...item,
+                            displayMode: requiredIds.includes(item.id) ? 'visible' : (item.displayMode ?? 'visible'),
+                        },
+                    ])
+            ).values());
+        }
+
+        const fallbackVisibleIds = Array.from(new Set([
+            ...currentCategoryFieldIds.slice(0, Math.min(8, currentCategoryFieldIds.length)),
+            ...requiredIds,
+        ]));
+        const fallbackVisibleIdSet = new Set(fallbackVisibleIds);
+        const fallbackCollapsedIds = DEFAULT_COLLAPSED_FIELD_IDS.filter(id => (
+            currentCategoryFieldIdSet.has(id) && !fallbackVisibleIdSet.has(id)
+        ));
+
+        return [
+            ...fallbackVisibleIds.map(id => ({
+                ...(currentFieldConfigMap.get(id) || { id, isRequired: requiredIds.includes(id) }),
+                displayMode: 'visible' as const,
+            })),
+            ...fallbackCollapsedIds.map(id => ({
+                ...(currentFieldConfigMap.get(id) || { id, isRequired: false }),
+                displayMode: 'collapsed' as const,
+            })),
+        ];
+    }, [commonFieldConfigList, currentCategoryFieldIdSet, currentCategoryFieldIds, currentFieldConfigMap, currentFieldConfigs]);
+    const resolvedCommonFieldConfigMap = useMemo(() => new Map(resolvedCommonFieldConfigList.map(item => [item.id, item])), [resolvedCommonFieldConfigList]);
+    const configuredCommonFieldIds = useMemo(
+        () => resolvedCommonFieldConfigList.filter(item => (item.displayMode ?? 'visible') !== 'hidden').map(item => item.id),
+        [resolvedCommonFieldConfigList]
+    );
+    const commonFieldIdSet = useMemo(
+        () => new Set(resolvedCommonFieldConfigList.filter(item => (item.displayMode ?? 'visible') === 'visible').map(item => item.id)),
+        [resolvedCommonFieldConfigList]
+    );
+    const collapsedCommonFieldIdSet = useMemo(
+        () => new Set(resolvedCommonFieldConfigList.filter(item => item.displayMode === 'collapsed').map(item => item.id)),
+        [resolvedCommonFieldConfigList]
+    );
     const visibleFieldIds = useMemo(() => new Set(configuredCommonFieldIds), [configuredCommonFieldIds]);
     const moreFieldMappings = useMemo(() => ([
         ...COLLAPSIBLE_BASIC_FIELD_IDS.map(id => {
@@ -956,10 +1018,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         ...DISPLAY_MORE_FIELD_MAPPINGS,
         ...SALES_MORE_FIELD_MAPPINGS,
         ...OTHER_MORE_FIELD_MAPPINGS,
-    ].filter(item => visibleFieldIds.has(item.id) && !commonFieldIdSet.has(item.id))), [commonFieldIdSet, visibleFieldIds]);
+        { id: 's_specs', label: '规格信息' },
+        { id: 'm_methods', label: '做法' },
+        { id: 'a_addons', label: '加料' },
+    ].filter(item => collapsedCommonFieldIdSet.has(item.id))), [collapsedCommonFieldIdSet]);
     const expandedMoreFieldSet = useMemo(() => new Set(expandedMoreFields), [expandedMoreFields]);
     const isCommonFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId) && commonFieldIdSet.has(fieldId);
-    const isMoreFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId) && !commonFieldIdSet.has(fieldId) && expandedMoreFieldSet.has(fieldId);
+    const isMoreFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId) && collapsedCommonFieldIdSet.has(fieldId) && expandedMoreFieldSet.has(fieldId);
+    const isFieldRendered = (fieldId: string) => isCommonFieldEnabled(fieldId) || isMoreFieldEnabled(fieldId);
     const expandedBasicFields = useMemo(
         () => COLLAPSIBLE_BASIC_FIELD_IDS.filter(id => expandedMoreFieldSet.has(id)),
         [expandedMoreFieldSet]
@@ -979,6 +1045,34 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const expandedDisplayDetailFields = useMemo(
         () => DISPLAY_MORE_FIELD_MAPPINGS.filter(item => ['p_detail_bottom_img', 'p_video'].includes(item.id)).map(item => item.id).filter(id => expandedMoreFieldSet.has(id)),
         [expandedMoreFieldSet]
+    );
+    const basicCollapsedFieldMappings = useMemo(
+        () => COLLAPSIBLE_BASIC_FIELD_IDS
+            .map(id => {
+                const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === id);
+                return field && collapsedCommonFieldIdSet.has(id) ? { id, label: field.label } : null;
+            })
+            .filter((item): item is { id: string; label: string } => !!item),
+        [collapsedCommonFieldIdSet]
+    );
+    const displayCollapsedFieldMappings = useMemo(
+        () => DISPLAY_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
+        [collapsedCommonFieldIdSet]
+    );
+    const salesCollapsedFieldMappings = useMemo(
+        () => SALES_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
+        [collapsedCommonFieldIdSet]
+    );
+    const otherCollapsedFieldMappings = useMemo(
+        () => OTHER_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
+        [collapsedCommonFieldIdSet]
+    );
+    const collapsedAttrModuleMappings = useMemo(
+        () => [
+            { id: 'm_methods', label: '做法' },
+            { id: 'a_addons', label: '加料' },
+        ].filter(item => collapsedCommonFieldIdSet.has(item.id) && currentCategoryFieldIdSet.has(item.id)),
+        [collapsedCommonFieldIdSet, currentCategoryFieldIdSet]
     );
     const getImpactedFieldsForCategory = (targetCategory: Category) => {
         const nextFieldIds = new Set((type === 'combo' ? targetCategory.comboFields : targetCategory.standardFields).map(field => field.id));
@@ -1005,12 +1099,103 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const getFieldConfig = (fieldId: string) => currentFieldConfigMap.get(fieldId);
     const isFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId);
-    const getEnabledChildIds = (fieldId: string, fallbackIds: string[]) => {
-        const childConfigs = commonFieldConfigMap.get(fieldId)?.childConfigs || getFieldConfig(fieldId)?.childConfigs;
-        if (!childConfigs) return fallbackIds;
-        const enabled = fallbackIds.filter(id => childConfigs[id] !== false);
-        return enabled.length > 0 ? enabled : fallbackIds;
+    const normalizeChildDisplayMode = (
+        value: boolean | 'visible' | 'collapsed' | 'hidden' | undefined,
+        isDefaultSelected: boolean
+    ) => {
+        if (value === 'visible') return 'visible';
+        if (value === 'hidden') return 'hidden';
+        if (value === 'collapsed') return 'visible';
+        if (typeof value === 'boolean') return value ? 'visible' : 'hidden';
+        return isDefaultSelected ? 'visible' : 'hidden';
     };
+    const getChildDisplayModes = (fieldId: string, fallbackIds: string[]) => {
+        const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[fieldId] || [];
+        if (childTemplates.length === 0) {
+            return fallbackIds.reduce<Record<string, 'visible' | 'collapsed' | 'hidden'>>((acc, id) => {
+                acc[id] = 'visible';
+                return acc;
+            }, {});
+        }
+        const childConfigs = resolvedCommonFieldConfigMap.get(fieldId)?.childConfigs || getFieldConfig(fieldId)?.childConfigs;
+        const childRequiredConfigs = resolveChildRequiredConfigs(
+            fieldId,
+            currentFieldConfigMap,
+            resolvedCommonFieldConfigMap.get(fieldId)?.childRequiredConfigs || getFieldConfig(fieldId)?.childRequiredConfigs
+        );
+        return childTemplates.reduce<Record<string, 'visible' | 'hidden'>>((acc, child) => {
+            const normalizedMode = normalizeChildDisplayMode(childConfigs?.[child.id], !!(child.isDefaultSelected || child.isSystem));
+            acc[child.id] = child.isSystem || !!childRequiredConfigs?.[child.id] ? 'visible' : normalizedMode;
+            return acc;
+        }, {});
+    };
+    const getEnabledChildIds = (fieldId: string, fallbackIds: string[]) => {
+        const childModes = getChildDisplayModes(fieldId, fallbackIds);
+        return fallbackIds.filter(id => childModes[id] !== 'hidden');
+    };
+    const specChildDisplayModes = useMemo(() => getChildDisplayModes('s_specs', [
+        's_spec_name',
+        's_spec_price',
+        's_spec_market',
+        's_spec_cost',
+        's_spec_barcode',
+        's_spec_mark',
+        's_spec_sku_code',
+        's_spec_code',
+        's_spec_stock',
+        's_spec_plan_stock',
+        's_spec_img',
+        's_spec_large_img',
+        's_spec_alias',
+        's_spec_amount',
+        's_spec_store_pack_fee',
+        's_spec_store_pack_mark',
+        's_spec_take_pack_fee',
+        's_spec_take_pack_mark',
+    ]), [currentFieldConfigMap, resolvedCommonFieldConfigMap]);
+    const methodChildDisplayModes = useMemo(() => getChildDisplayModes('m_methods', [
+        'm_method_name',
+        'm_method_sync',
+        'm_method_markup',
+        'm_method_code',
+        'm_method_remark',
+        'm_method_tip',
+    ]), [currentFieldConfigMap, resolvedCommonFieldConfigMap]);
+    const addonChildDisplayModes = useMemo(() => getChildDisplayModes('a_addons', [
+        'a_rule_scope',
+        'a_rule_unlimited',
+        'a_rule_limit',
+        'a_rule_required',
+        'a_addon_name',
+        'a_addon_code',
+        'a_addon_limit',
+        'a_addon_price',
+        'a_addon_spec_price',
+        'a_addon_status',
+        'a_empty_tip',
+    ]), [currentFieldConfigMap, resolvedCommonFieldConfigMap]);
+    const specVisibleChildIds = useMemo(
+        () => Object.entries(specChildDisplayModes).filter(([, mode]) => mode === 'visible').map(([id]) => id),
+        [specChildDisplayModes]
+    );
+    const methodVisibleChildIds = useMemo(
+        () => Object.entries(methodChildDisplayModes).filter(([, mode]) => mode === 'visible').map(([id]) => id),
+        [methodChildDisplayModes]
+    );
+    const addonVisibleChildIds = useMemo(
+        () => Object.entries(addonChildDisplayModes).filter(([, mode]) => mode === 'visible').map(([id]) => id),
+        [addonChildDisplayModes]
+    );
+    const renderedSpecChildIds = specVisibleChildIds;
+    const renderedMethodChildIds = methodVisibleChildIds;
+    const renderedAddonChildIds = addonVisibleChildIds;
+    const enabledSpecChildIds = specVisibleChildIds;
+    const enabledMethodChildIds = methodVisibleChildIds;
+    const enabledAddonChildIds = addonVisibleChildIds;
+    const hasSpecModuleEnabled = isFieldRendered('s_specs');
+    const hasRenderableSpecFields = enabledSpecChildIds.length > 0;
+    const hasMethodModuleEnabled = isFieldRendered('m_methods') && enabledMethodChildIds.length > 0;
+    const hasAddonModuleEnabled = isFieldRendered('a_addons') && enabledAddonChildIds.length > 0;
 
     const isDynamicFieldFilled = (field: DynamicFieldConfig) => {
         const value = dynamicFormData[field.id];
@@ -1064,6 +1249,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         () => visibleSpecRows.every(row => String(row.s_spec_store_pack_fee ?? '').trim() !== '' || String(row.s_spec_take_pack_fee ?? '').trim() !== ''),
         [visibleSpecRows]
     );
+    const isSpecPriceRequired = useMemo(
+        () => !!(currentFieldConfigMap.get('s_price')?.isRequired || AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === 's_price')?.isRequired),
+        [currentFieldConfigMap]
+    );
+    const isSpecStockRequired = useMemo(
+        () => !!currentFieldConfigMap.get('s_stock')?.isRequired,
+        [currentFieldConfigMap]
+    );
+    const isSpecPackRequired = useMemo(
+        () => !!currentFieldConfigMap.get('s_pack_fee')?.isRequired,
+        [currentFieldConfigMap]
+    );
 
     const validationItems = useMemo<ValidationItem[]>(() => {
         const items: ValidationItem[] = [];
@@ -1093,7 +1290,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             }
         });
 
-        if (visibleFieldIds.has('s_price')) {
+        if (hasRenderableSpecFields && enabledSpecChildIds.includes('s_spec_price') && isSpecPriceRequired) {
             items.push({
                 key: 'spec-price',
                 label: '规格销售价',
@@ -1103,7 +1300,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             });
         }
 
-        if (visibleFieldIds.has('s_stock')) {
+        if (hasRenderableSpecFields && enabledSpecChildIds.includes('s_spec_stock') && isSpecStockRequired) {
             items.push({
                 key: 'spec-stock',
                 label: '规格库存',
@@ -1113,7 +1310,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             });
         }
 
-        if ((currentFieldConfigMap.get('s_pack_fee')?.isRequired || false) && visibleFieldIds.has('s_pack_fee')) {
+        if (
+            hasRenderableSpecFields
+            && isSpecPackRequired
+            && enabledSpecChildIds.some(id => ['s_spec_store_pack_fee', 's_spec_take_pack_fee'].includes(id))
+        ) {
             items.push({
                 key: 'spec-pack',
                 label: '规格包装费',
@@ -1123,35 +1324,32 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             });
         }
 
-        if (visibleFieldIds.has('s_specs')) {
-            items.push({
-                key: 's_specs',
-                label: '规格信息配置',
-                section: 'method',
-                filled: visibleSpecRows.length > 0,
-                type: 'recommended',
-            });
-        }
-
         return items;
-    }, [currentCategory.id, currentFieldConfigMap, currentFieldConfigs, dynamicFormData, isSpecPackFilled, isSpecPriceFilled, isSpecStockFilled, visibleFieldIds, visibleSpecRows.length]);
+    }, [currentCategory.id, currentFieldConfigs, dynamicFormData, enabledSpecChildIds, hasRenderableSpecFields, isSpecPackFilled, isSpecPackRequired, isSpecPriceFilled, isSpecPriceRequired, isSpecStockFilled, isSpecStockRequired, visibleFieldIds, visibleSpecRows.length]);
 
     const requiredMissingItems = useMemo(
         () => validationItems.filter(item => item.type === 'required' && !item.filled),
         [validationItems]
     );
-    const recommendedMissingItems = useMemo(() => {
+    const requiredStatusItems = useMemo(
+        () => validationItems.filter(item => item.type === 'required'),
+        [validationItems]
+    );
+    const recommendedStatusItems = useMemo(() => {
         const requiredRawKeys = new Set(
             validationItems
                 .filter(item => item.type === 'required')
-                .map(item => item.key.startsWith('recommend-') ? item.key.replace('recommend-', '') : item.key)
+                .map(item => item.key.replace('recommend-', ''))
         );
         return validationItems.filter(item => (
             item.type === 'recommended'
-            && !item.filled
             && !requiredRawKeys.has(item.key.replace('recommend-', ''))
         ));
     }, [validationItems]);
+    const recommendedMissingItems = useMemo(
+        () => recommendedStatusItems.filter(item => !item.filled),
+        [recommendedStatusItems]
+    );
     const sectionProgress = useMemo(() => (
         SECTION_ORDER.reduce((acc, sectionId) => {
             const sectionItems = validationItems.filter(item => item.section === sectionId && item.type === 'required');
@@ -1163,11 +1361,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             };
             return acc;
         }, {} as Record<SectionId, { total: number; completed: number; status: 'completed' | 'partial' | 'pending' | 'optional' }>)
-    ), [validationItems]);
+    ), [requiredStatusItems, validationItems]);
     const completionSummary = useMemo(() => {
-        const total = validationItems.filter(item => item.type === 'required').length;
-        return { total, completed: total - requiredMissingItems.length };
-    }, [requiredMissingItems.length, validationItems]);
+        const total = requiredStatusItems.length;
+        return { total, completed: requiredStatusItems.filter(item => item.filled).length };
+    }, [requiredStatusItems]);
+    const expandedBasicDynamicFields = useMemo(
+        () => AVAILABLE_DYNAMIC_FIELDS.filter(field => expandedBasicFields.includes(field.id)),
+        [expandedBasicFields]
+    );
     const visibleBasicFields = useMemo(
         () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
             isCommonFieldEnabled(field.id)
@@ -1177,7 +1379,74 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         )),
         [isCommonFieldEnabled]
     );
+    const hasMethodSection = useMemo(() => (
+        isComboProduct
+            ? hasSpecModuleEnabled || visibleFieldIds.has('c_groups') || hasMethodModuleEnabled
+            : hasSpecModuleEnabled || hasMethodModuleEnabled || hasAddonModuleEnabled || collapsedAttrModuleMappings.length > 0
+    ), [collapsedAttrModuleMappings.length, hasAddonModuleEnabled, hasMethodModuleEnabled, hasSpecModuleEnabled, isComboProduct, visibleFieldIds]);
+    const hasDisplaySection = useMemo(() => (
+        [
+            'p_img',
+            'p_list_desc',
+            'p_desc_tags',
+            'p_order_tags',
+            'p_badge',
+            'p_badge_date',
+            'p_rich_desc',
+            'p_detail_bottom_img',
+            'p_video',
+        ].some(fieldId => visibleFieldIds.has(fieldId))
+    ), [visibleFieldIds]);
+    const hasSalesSection = useMemo(() => (
+        [
+            's_price',
+            's_cost',
+            's_market_price',
+            's_pack_fee',
+            's_stock',
+            's_limit',
+            's_pos_edit',
+            's_min_purchase_toggle',
+            's_min_purchase_value',
+            's_max_purchase_toggle',
+            's_max_purchase_value',
+            's_time_sale_toggle',
+            's_time_sale_rule',
+            's_sale_mode',
+            's_takeout_rule',
+            's_sale_settings',
+            's_tax_rate',
+            'p_points_exchange_rule',
+            's_jump_third_mini_program',
+            's_third_mini_program_path',
+            's_sales_commission_amount',
+        ].some(fieldId => visibleFieldIds.has(fieldId))
+    ), [visibleFieldIds]);
+    const hasOtherSection = useMemo(() => (
+        AVAILABLE_DYNAMIC_FIELDS.some(field => (
+            field.module === 'others' && visibleFieldIds.has(field.id)
+        ))
+    ), [visibleFieldIds]);
+    const sectionVisibility = useMemo<Record<SectionId, boolean>>(() => ({
+        basic: visibleBasicFields.length > 0,
+        method: hasMethodSection,
+        display: hasDisplaySection,
+        spec: hasSalesSection,
+        settings: hasOtherSection,
+    }), [hasDisplaySection, hasMethodSection, hasOtherSection, hasSalesSection, visibleBasicFields.length]);
+    const visibleSectionOrder = useMemo(
+        () => SECTION_ORDER.filter(section => sectionVisibility[section]),
+        [sectionVisibility]
+    );
+    const firstVisibleSection = visibleSectionOrder[0] || 'basic';
     const isWeightProduct = !!dynamicFormData.p_weight_flag;
+
+    useEffect(() => {
+        if (visibleSectionOrder.length === 0) return;
+        if (!visibleSectionOrder.includes(activeFormSection)) {
+            setActiveFormSection(firstVisibleSection);
+        }
+    }, [activeFormSection, firstVisibleSection, visibleSectionOrder]);
 
     useEffect(() => {
         if (isWeightProduct && specDisplayMode !== 'single') {
@@ -1191,6 +1460,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             setSpecBulkDraft({});
         }
     }, [specDisplayMode]);
+
+    useEffect(() => {
+        const validFieldIds = new Set(moreFieldMappings.map(item => item.id));
+        setExpandedMoreFields(prev => prev.filter(id => validFieldIds.has(id)));
+    }, [moreFieldMappings]);
 
     useEffect(() => {
         if (!isComboProduct) return;
@@ -1215,6 +1489,41 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         return field.label;
     };
 
+    const getValidationAnchorId = (itemKey: string) => `required-field-${itemKey.replace('recommend-', '')}`;
+    const getValidationModuleTargetId = (itemKey: string) => {
+        if (['spec-price', 'spec-stock', 'spec-pack', 's_specs', 'c_groups'].includes(itemKey)) return 'field-s_specs';
+        const rawKey = itemKey.replace('recommend-', '');
+        return `field-${rawKey}`;
+    };
+    const locateValidationItem = (item: ValidationItem) => {
+        scrollToTarget(getValidationTargetId(item.key), item.section);
+    };
+    const locateValidationModule = (item: ValidationItem) => {
+        scrollToTarget(getValidationModuleTargetId(item.key), item.section);
+    };
+    const renderSectionCollapsedEntry = (
+        items: Array<{ id: string; label: string }>
+    ) => {
+        if (items.length === 0) return null;
+        const itemIds = items.map(item => item.id);
+        const localExpandedIds = expandedMoreFields.filter(id => itemIds.includes(id));
+        return (
+            <div className="pt-1">
+                {renderCollapsedFieldControls(
+                    items,
+                    localExpandedIds,
+                    () => setExpandedMoreFields(prev => Array.from(new Set([...prev, ...itemIds]))),
+                    fieldId => setExpandedMoreFields(prev => (prev.includes(fieldId) ? prev : [...prev, fieldId])),
+                    () => setExpandedMoreFields(prev => prev.filter(id => !itemIds.includes(id))),
+                    {
+                        gapClass: 'gap-2',
+                        buttonClassName: 'px-3 py-1.5 text-xs',
+                        chipClassName: 'px-3 py-1.5 text-xs',
+                    }
+                )}
+            </div>
+        );
+    };
     const renderSectionMeta = (sectionId: SectionId) => {
         const info = sectionProgress[sectionId];
         if (!info || info.status === 'optional') return null;
@@ -1359,7 +1668,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         setDraftSaved(false);
         setSaveAttempted(true);
         if (requiredMissingItems.length > 0) {
-            scrollToTarget(getValidationTargetId(requiredMissingItems[0].key), requiredMissingItems[0].section);
+            locateValidationItem(requiredMissingItems[0]);
             return;
         }
         const nextSuccessMode = hasSavedProduct ? 'edit' : 'create';
@@ -1426,7 +1735,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         setSuccessMode('create');
         setSelectedSuccessAction(null);
         setActivePreviewField('default');
-        setActiveFormSection('basic');
+        setActiveFormSection('required');
         setCurrentCategory(category);
         setPageView('form');
         formContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
@@ -1467,7 +1776,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const handleCategorySelect = (nextCategory: Category) => {
         setCurrentCategory(nextCategory);
         setShowCategoryPickerModal(false);
-        setActiveFormSection('basic');
+        setActiveFormSection('required');
     };
 
     const renderCollapsedFieldControls = (
@@ -1525,18 +1834,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 )}
             </div>
         );
-    };
-
-    const handleOpenAllMoreFields = () => {
-        setExpandedMoreFields(moreFieldMappings.map(item => item.id));
-    };
-
-    const handleOpenSingleMoreField = (fieldId: string) => {
-        setExpandedMoreFields(prev => (prev.includes(fieldId) ? prev : [...prev, fieldId]));
-    };
-
-    const handleResetMoreFields = () => {
-        setExpandedMoreFields([]);
     };
 
     const buildCategoryValue = (parentName: string, childName?: string) => childName ? `${parentName} / ${childName}` : parentName;
@@ -3590,141 +3887,147 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             </div>
         );
 
-        const showMainImage = isFieldEnabled('p_img');
-        const showListDesc = isFieldEnabled('p_list_desc');
-        const showDescTags = isFieldEnabled('p_desc_tags');
-        const showOrderTags = isFieldEnabled('p_order_tags');
-        const showBadge = isFieldEnabled('p_badge');
-        const showBadgeDate = isFieldEnabled('p_badge_date');
-        const showRichDesc = isFieldEnabled('p_rich_desc');
+        const showMainImage = isFieldRendered('p_img');
+        const showListDesc = isFieldRendered('p_list_desc');
+        const showDescTags = isFieldRendered('p_desc_tags');
+        const showOrderTags = isFieldRendered('p_order_tags');
+        const showBadge = isMoreFieldEnabled('p_badge');
+        const showBadgeDate = isMoreFieldEnabled('p_badge_date');
+        const showRichDesc = isFieldRendered('p_rich_desc');
+        const showDisplayListGroup = showMainImage || showListDesc || showDescTags || showOrderTags || showBadge || showBadgeDate;
+        const showDisplayDetailGroup = showRichDesc || expandedDisplayDetailFields.length > 0;
 
         return (
             <div className="space-y-2.5">
-                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
-                    <div>
-                        <div className="text-base font-black text-[#1F2129]">列表页展示</div>
-                        <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品列表页。</div>
-                    </div>
+                {showDisplayListGroup && (
+                    <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
+                        <div>
+                            <div className="text-base font-black text-[#1F2129]">列表页展示</div>
+                            <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品列表页。</div>
+                        </div>
 
-                    <div className="space-y-2 rounded-2xl bg-white p-3">
-                        {showMainImage && renderDisplayMainImageField({ compact: true })}
+                        <div className="space-y-2 rounded-2xl bg-white p-3">
+                            {showMainImage && renderDisplayMainImageField({ compact: true })}
 
-                        {showListDesc && (
-                            <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                                <div className="pt-2 text-sm font-bold text-[#1F2129]">商品列表简述</div>
-                                <div>
-                                    <textarea
-                                        className="q-form-input min-h-[92px] py-3"
-                                        placeholder="请输入商品列表页简述"
-                                        value={listDescValue}
-                                        onFocus={() => setActivePreviewField('p_list_desc')}
-                                        onChange={e => setDynamicFormData(prev => ({ ...prev, p_list_desc: e.target.value.slice(0, 100) }))}
-                                    />
-                                    <div className="mt-2 text-right text-xs text-gray-400">{String(listDescValue).length}/100</div>
-                                </div>
-                            </div>
-                        )}
-
-                        {showDescTags && renderGroupedTagField('描述标签', 'p_desc_tags', '请选择描述标签')}
-                        {showOrderTags && renderGroupedTagField('点单标签', 'p_order_tags', '请选择点单标签')}
-
-                        <div className="pt-1 space-y-2.5">
-                            {showBadge && renderBadgeField('商品角标', '请选择角标')}
-                            {showBadgeDate && (
+                            {showListDesc && (
                                 <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                                    <div className="pt-2 text-sm font-bold text-[#1F2129]">角标展示日期</div>
-                                    <div className="grid grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] gap-3">
-                                        <input
-                                            type="date"
-                                            className="q-form-input"
-                                            value={badgeStartDate}
-                                            onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_start_date: e.target.value }))}
+                                    <div className="pt-2 text-sm font-bold text-[#1F2129]">商品列表简述</div>
+                                    <div>
+                                        <textarea
+                                            className="q-form-input min-h-[92px] py-3"
+                                            placeholder="请输入商品列表页简述"
+                                            value={listDescValue}
+                                            onFocus={() => setActivePreviewField('p_list_desc')}
+                                            onChange={e => setDynamicFormData(prev => ({ ...prev, p_list_desc: e.target.value.slice(0, 100) }))}
                                         />
-                                        <div className="flex items-center justify-center text-sm font-bold text-gray-400">至</div>
-                                        <input
-                                            type="date"
-                                            className="q-form-input"
-                                            value={badgeEndDate}
-                                            onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_end_date: e.target.value }))}
-                                        />
+                                        <div className="mt-2 text-right text-xs text-gray-400">{String(listDescValue).length}/100</div>
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-                </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
-                    <div>
-                        <div className="text-base font-black text-[#1F2129]">详情页展示</div>
-                        <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品详情页。</div>
-                    </div>
+                            {showDescTags && renderGroupedTagField('描述标签', 'p_desc_tags', '请选择描述标签')}
+                            {showOrderTags && renderGroupedTagField('点单标签', 'p_order_tags', '请选择点单标签')}
 
-                    <div className="space-y-2 rounded-2xl bg-white p-3">
-                        {showRichDesc && (
-                            <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                                <div className="pt-2 text-sm font-bold text-[#1F2129]">商品详情</div>
-                                <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                                    <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 text-sm text-gray-400">
-                                        {['B', 'I', 'A', '默认字号', '撤销', '重做', '全屏'].map(tool => (
-                                            <button
-                                                key={tool}
-                                                type="button"
-                                                onClick={() => setActivePreviewField('default')}
-                                                className="rounded-lg px-2 py-1 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
-                                            >
-                                                {tool}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <textarea
-                                        className="min-h-[180px] w-full resize-none border-0 px-4 py-3 text-sm text-[#1F2129] focus:outline-none"
-                                        placeholder="请输入商品详情内容"
-                                        value={detailContent}
-                                        onChange={e => setDynamicFormData(prev => ({ ...prev, p_rich_desc: e.target.value }))}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="pt-1 space-y-2.5">
-                            {expandedDisplayDetailFields.length > 0 && (
-                                <>
-                                    {expandedDisplayDetailFields.includes('p_detail_bottom_img') && (
-                                        <>
-                                            {renderDisplayUploadField({
-                                                fieldId: 'p_detail_bottom_img',
-                                                label: '商品详情页底图',
-                                                tip: '图片将在规格做法加料区下方展示，建议尺寸：高度不限，宽度建议 690。',
-                                                widthClass: 'h-28 w-36',
-                                            })}
-                                        </>
-                                    )}
-                                    {expandedDisplayDetailFields.includes('p_video') && (
-                                        <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
-                                            <div className="pt-2 text-sm font-bold text-[#1F2129]">商品视频</div>
-                                            <div className="space-y-2">
-                                                <input
-                                                    className="q-form-input"
-                                                    placeholder="请输入商品视频路径"
-                                                    value={detailVideoValue}
-                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, p_video: e.target.value }))}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDynamicFormData(prev => ({ ...prev, p_video: prev.p_video || 'https://video.example.com/product-demo.mp4' }))}
-                                                    className="text-sm font-bold text-[#00A35B] hover:text-[#008A4D]"
-                                                >
-                                                    点我查看视频转换链接教程
-                                                </button>
-                                            </div>
+                            <div className="pt-1 space-y-2.5">
+                                {showBadge && renderBadgeField('商品角标', '请选择角标')}
+                                {showBadgeDate && (
+                                    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                        <div className="pt-2 text-sm font-bold text-[#1F2129]">角标展示日期</div>
+                                        <div className="grid grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] gap-3">
+                                            <input
+                                                type="date"
+                                                className="q-form-input"
+                                                value={badgeStartDate}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_start_date: e.target.value }))}
+                                            />
+                                            <div className="flex items-center justify-center text-sm font-bold text-gray-400">至</div>
+                                            <input
+                                                type="date"
+                                                className="q-form-input"
+                                                value={badgeEndDate}
+                                                onChange={e => setDynamicFormData(prev => ({ ...prev, p_badge_end_date: e.target.value }))}
+                                            />
                                         </div>
-                                    )}
-                                </>
-                            )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
+
+                {showDisplayDetailGroup && (
+                    <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
+                        <div>
+                            <div className="text-base font-black text-[#1F2129]">详情页展示</div>
+                            <div className="mt-1 text-xs text-gray-400">以下配置会直接展示在小程序商品详情页。</div>
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl bg-white p-3">
+                            {showRichDesc && (
+                                <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                    <div className="pt-2 text-sm font-bold text-[#1F2129]">商品详情</div>
+                                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                        <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 text-sm text-gray-400">
+                                            {['B', 'I', 'A', '默认字号', '撤销', '重做', '全屏'].map(tool => (
+                                                <button
+                                                    key={tool}
+                                                    type="button"
+                                                    onClick={() => setActivePreviewField('default')}
+                                                    className="rounded-lg px-2 py-1 hover:bg-[#F7F8FA] hover:text-[#1F2129]"
+                                                >
+                                                    {tool}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <textarea
+                                            className="min-h-[180px] w-full resize-none border-0 px-4 py-3 text-sm text-[#1F2129] focus:outline-none"
+                                            placeholder="请输入商品详情内容"
+                                            value={detailContent}
+                                            onChange={e => setDynamicFormData(prev => ({ ...prev, p_rich_desc: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-1 space-y-2.5">
+                                {expandedDisplayDetailFields.length > 0 && (
+                                    <>
+                                        {expandedDisplayDetailFields.includes('p_detail_bottom_img') && (
+                                            <>
+                                                {renderDisplayUploadField({
+                                                    fieldId: 'p_detail_bottom_img',
+                                                    label: '商品详情页底图',
+                                                    tip: '图片将在规格做法加料区下方展示，建议尺寸：高度不限，宽度建议 690。',
+                                                    widthClass: 'h-28 w-36',
+                                                })}
+                                            </>
+                                        )}
+                                        {expandedDisplayDetailFields.includes('p_video') && (
+                                            <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 items-start">
+                                                <div className="pt-2 text-sm font-bold text-[#1F2129]">商品视频</div>
+                                                <div className="space-y-2">
+                                                    <input
+                                                        className="q-form-input"
+                                                        placeholder="请输入商品视频路径"
+                                                        value={detailVideoValue}
+                                                        onChange={e => setDynamicFormData(prev => ({ ...prev, p_video: e.target.value }))}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDynamicFormData(prev => ({ ...prev, p_video: prev.p_video || 'https://video.example.com/product-demo.mp4' }))}
+                                                        className="text-sm font-bold text-[#00A35B] hover:text-[#008A4D]"
+                                                    >
+                                                        点我查看视频转换链接教程
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };
@@ -4388,43 +4691,24 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             's_spec_store_pack_fee',
             's_spec_take_pack_fee',
         ]);
-        const enabledSpecChildIds = new Set(getEnabledChildIds('s_specs', [
-            's_spec_name',
-            's_spec_price',
-            's_spec_market',
-            's_spec_cost',
-            's_spec_barcode',
-            's_spec_mark',
-            's_spec_sku_code',
-            's_spec_code',
-            's_spec_stock',
-            's_spec_plan_stock',
-            's_spec_img',
-            's_spec_large_img',
-            's_spec_alias',
-            's_spec_amount',
-            's_spec_store_pack_fee',
-            's_spec_store_pack_mark',
-            's_spec_take_pack_fee',
-            's_spec_take_pack_mark',
-        ]));
-        const showSpecPrice = enabledSpecChildIds.has('s_spec_price');
-        const showSpecMarket = enabledSpecChildIds.has('s_spec_market');
-        const showSpecCost = enabledSpecChildIds.has('s_spec_cost');
-        const showSpecBarcode = enabledSpecChildIds.has('s_spec_barcode');
-        const showSpecMark = enabledSpecChildIds.has('s_spec_mark');
-        const showSpecSkuCode = enabledSpecChildIds.has('s_spec_sku_code');
-        const showSpecCode = enabledSpecChildIds.has('s_spec_code');
-        const showSpecStock = enabledSpecChildIds.has('s_spec_stock');
-        const showSpecPlanStock = enabledSpecChildIds.has('s_spec_plan_stock');
-        const showSpecImg = enabledSpecChildIds.has('s_spec_img');
-        const showSpecLargeImg = enabledSpecChildIds.has('s_spec_large_img');
-        const showSpecAlias = enabledSpecChildIds.has('s_spec_alias');
-        const showSpecAmount = enabledSpecChildIds.has('s_spec_amount');
-        const showSpecStorePackFee = enabledSpecChildIds.has('s_spec_store_pack_fee');
-        const showSpecStorePackMark = enabledSpecChildIds.has('s_spec_store_pack_mark');
-        const showSpecTakePackFee = enabledSpecChildIds.has('s_spec_take_pack_fee');
-        const showSpecTakePackMark = enabledSpecChildIds.has('s_spec_take_pack_mark');
+        const renderedSpecChildIdSet = new Set(renderedSpecChildIds);
+        const showSpecPrice = renderedSpecChildIdSet.has('s_spec_price');
+        const showSpecMarket = renderedSpecChildIdSet.has('s_spec_market');
+        const showSpecCost = renderedSpecChildIdSet.has('s_spec_cost');
+        const showSpecBarcode = renderedSpecChildIdSet.has('s_spec_barcode');
+        const showSpecMark = renderedSpecChildIdSet.has('s_spec_mark');
+        const showSpecSkuCode = renderedSpecChildIdSet.has('s_spec_sku_code');
+        const showSpecCode = renderedSpecChildIdSet.has('s_spec_code');
+        const showSpecStock = renderedSpecChildIdSet.has('s_spec_stock');
+        const showSpecPlanStock = renderedSpecChildIdSet.has('s_spec_plan_stock');
+        const showSpecImg = renderedSpecChildIdSet.has('s_spec_img');
+        const showSpecLargeImg = renderedSpecChildIdSet.has('s_spec_large_img');
+        const showSpecAlias = renderedSpecChildIdSet.has('s_spec_alias');
+        const showSpecAmount = renderedSpecChildIdSet.has('s_spec_amount');
+        const showSpecStorePackFee = renderedSpecChildIdSet.has('s_spec_store_pack_fee');
+        const showSpecStorePackMark = renderedSpecChildIdSet.has('s_spec_store_pack_mark');
+        const showSpecTakePackFee = renderedSpecChildIdSet.has('s_spec_take_pack_fee');
+        const showSpecTakePackMark = renderedSpecChildIdSet.has('s_spec_take_pack_mark');
         const priceColSpan = [showSpecPrice, showSpecMarket, showSpecCost].filter(Boolean).length;
         const identityColSpan = [showSpecBarcode, showSpecMark, showSpecSkuCode, showSpecCode].filter(Boolean).length;
         const inventoryColSpan = [showSpecStock, showSpecPlanStock].filter(Boolean).reduce((sum, visible, index) => {
@@ -4433,6 +4717,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         }, 0);
         const infoColSpan = [showSpecImg, showSpecLargeImg, showSpecAlias, showSpecAmount].filter(Boolean).length;
         const packagingColSpan = [showSpecStorePackFee, showSpecStorePackMark, showSpecTakePackFee, showSpecTakePackMark].filter(Boolean).length;
+        const visibleSpecModules = SPEC_CONFIG_MODULES.filter(module => (
+            (module.key === 'price' && priceColSpan > 0)
+            || (module.key === 'identity' && identityColSpan > 0)
+            || (module.key === 'inventory' && inventoryColSpan > 0)
+            || (module.key === 'info' && infoColSpan > 0)
+            || (module.key === 'packaging' && packagingColSpan > 0)
+        ));
 
         const renderSpecNameCell = (row: SpecConfigRow) => (
             <td className="sticky left-0 z-20 border-b border-gray-100 bg-white bg-clip-padding px-4 py-4 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]">
@@ -4711,7 +5002,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <>
                         <div className="border-b border-gray-100 px-5 py-3">
                             <div className="flex flex-wrap items-center gap-2.5">
-                                {SPEC_CONFIG_MODULES.map(module => (
+                                {visibleSpecModules.map(module => (
                                     <button
                                         key={module.key}
                                         type="button"
@@ -4949,6 +5240,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const comboPackMode = dynamicFormData.combo_pack_mode || 'whole';
         const comboPriceStyle = dynamicFormData.combo_price_style || 'markup';
         const comboDisplayPrice = dynamicFormData.combo_display_price || '';
+        const showComboSpecGroup = hasSpecModuleEnabled;
+        const showComboInfoGroup = isFieldEnabled('c_groups');
         const optionalComboFields = [
             { id: 'combo_packaging', label: '包装费配置' },
             { id: 'combo_display_price', label: '展示价格' },
@@ -4985,76 +5278,80 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
         return (
             <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
-                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
-                    <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐计价类型</div>
-                    <div className="space-y-4">
-                        {[
-                            { key: 'markup', label: '销售加价', desc: '套餐基础价格作为基本费用，总价根据随心配商品加价波动', badge: '推荐' },
-                            { key: 'total', label: '合并计价', desc: '套餐内所有商品独立收费，总价根据用户选择商品合并计算' },
-                        ].map(option => (
-                            <label key={option.key} className="flex items-start gap-3 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    checked={comboPriceType === option.key}
-                                    onChange={() => setDynamicFormData(prev => ({ ...prev, combo_price_type: option.key }))}
-                                    className="mt-1 h-4 w-4 border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
-                                />
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
-                                        <span>{option.label}</span>
-                                        {option.badge ? <span className="rounded-full bg-[#FEE2E2] px-1.5 py-0.5 text-[10px] text-[#DC2626]">{option.badge}</span> : null}
-                                    </div>
-                                    <div className="mt-1 text-xs text-gray-400">{option.desc}</div>
-                                </div>
-                            </label>
-                        ))}
-                        {renderSpecConfigTable({ embedded: true, title: '规格设置' })}
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
-                    <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐信息</div>
-                    <div className="rounded-2xl bg-[#FAFAFA] p-4 space-y-4">
-                        <div className="flex flex-wrap gap-3">
-                            {comboButtons.map(button => (
-                                <button
-                                    key={button.key}
-                                    type="button"
-                                    onClick={() => addComboCard(button.key)}
-                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                >
-                                    <Plus size={15} className="mr-2" />
-                                    {button.label}
-                                </button>
-                            ))}
-                        </div>
-                        {comboGroupCards.length > 0 ? (
-                            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                                {comboGroupCards.map(card => (
-                                    <div key={card.id} className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div>
-                                                <div className="text-sm font-bold text-[#1F2129]">{card.title}</div>
-                                                <div className="mt-1 text-xs text-gray-400">{card.desc}</div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
-                                                className="text-xs font-bold text-gray-400 hover:text-[#00A35B]"
-                                            >
-                                                删除
-                                            </button>
+                {showComboSpecGroup && (
+                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐计价类型</div>
+                        <div className="space-y-4">
+                            {[
+                                { key: 'markup', label: '销售加价', desc: '套餐基础价格作为基本费用，总价根据随心配商品加价波动', badge: '推荐' },
+                                { key: 'total', label: '合并计价', desc: '套餐内所有商品独立收费，总价根据用户选择商品合并计算' },
+                            ].map(option => (
+                                <label key={option.key} className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        checked={comboPriceType === option.key}
+                                        onChange={() => setDynamicFormData(prev => ({ ...prev, combo_price_type: option.key }))}
+                                        className="mt-1 h-4 w-4 border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
+                                            <span>{option.label}</span>
+                                            {option.badge ? <span className="rounded-full bg-[#FEE2E2] px-1.5 py-0.5 text-[10px] text-[#DC2626]">{option.badge}</span> : null}
                                         </div>
+                                        <div className="mt-1 text-xs text-gray-400">{option.desc}</div>
                                     </div>
+                                </label>
+                            ))}
+                            {renderSpecConfigTable({ embedded: true, title: '规格设置' })}
+                        </div>
+                    </div>
+                )}
+
+                {showComboInfoGroup && (
+                    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐信息</div>
+                        <div className="rounded-2xl bg-[#FAFAFA] p-4 space-y-4">
+                            <div className="flex flex-wrap gap-3">
+                                {comboButtons.map(button => (
+                                    <button
+                                        key={button.key}
+                                        type="button"
+                                        onClick={() => addComboCard(button.key)}
+                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                    >
+                                        <Plus size={15} className="mr-2" />
+                                        {button.label}
+                                    </button>
                                 ))}
                             </div>
-                        ) : (
-                            <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-400">
-                                暂未添加套餐信息，请按需添加固定搭配、可选分组或随心配。
-                            </div>
-                        )}
+                            {comboGroupCards.length > 0 ? (
+                                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                                    {comboGroupCards.map(card => (
+                                        <div key={card.id} className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <div className="text-sm font-bold text-[#1F2129]">{card.title}</div>
+                                                    <div className="mt-1 text-xs text-gray-400">{card.desc}</div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
+                                                    className="text-xs font-bold text-gray-400 hover:text-[#00A35B]"
+                                                >
+                                                    删除
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-400">
+                                    暂未添加套餐信息，请按需添加固定搭配、可选分组或随心配。
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {isFieldEnabled('m_methods') && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
@@ -5175,44 +5472,25 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const selectedAddonCount = addonConfigRows.length;
         const methodGroups = Array.from(new Set(methodConfigRows.map(row => row.groupName)));
         const addonGroups = Array.from(new Set(addonConfigRows.map(row => row.groupName)));
-        const enabledMethodChildIds = new Set(getEnabledChildIds('m_methods', [
-            'm_method_name',
-            'm_method_sync',
-            'm_method_markup',
-            'm_method_code',
-            'm_method_remark',
-            'm_method_tip',
-        ]));
-        const enabledAddonChildIds = new Set(getEnabledChildIds('a_addons', [
-            'a_rule_scope',
-            'a_rule_unlimited',
-            'a_rule_limit',
-            'a_rule_required',
-            'a_addon_name',
-            'a_addon_code',
-            'a_addon_limit',
-            'a_addon_price',
-            'a_addon_spec_price',
-            'a_addon_status',
-            'a_empty_tip',
-        ]));
-        const showMethodName = enabledMethodChildIds.has('m_method_name');
-        const showMethodSync = enabledMethodChildIds.has('m_method_sync');
-        const showMethodMarkup = enabledMethodChildIds.has('m_method_markup');
-        const showMethodCode = enabledMethodChildIds.has('m_method_code');
-        const showMethodRemark = enabledMethodChildIds.has('m_method_remark');
-        const showMethodTip = enabledMethodChildIds.has('m_method_tip');
-        const showAddonRuleScope = enabledAddonChildIds.has('a_rule_scope');
-        const showAddonRuleUnlimited = enabledAddonChildIds.has('a_rule_unlimited');
-        const showAddonRuleLimit = enabledAddonChildIds.has('a_rule_limit');
-        const showAddonRuleRequired = enabledAddonChildIds.has('a_rule_required');
-        const showAddonName = enabledAddonChildIds.has('a_addon_name');
-        const showAddonCode = enabledAddonChildIds.has('a_addon_code');
-        const showAddonLimit = enabledAddonChildIds.has('a_addon_limit');
-        const showAddonPrice = enabledAddonChildIds.has('a_addon_price');
-        const showAddonSpecPrice = enabledAddonChildIds.has('a_addon_spec_price');
-        const showAddonStatus = enabledAddonChildIds.has('a_addon_status');
-        const showAddonEmptyTip = enabledAddonChildIds.has('a_empty_tip');
+        const renderedMethodChildIdSet = new Set(renderedMethodChildIds);
+        const renderedAddonChildIdSet = new Set(renderedAddonChildIds);
+        const showMethodName = renderedMethodChildIdSet.has('m_method_name');
+        const showMethodSync = renderedMethodChildIdSet.has('m_method_sync');
+        const showMethodMarkup = renderedMethodChildIdSet.has('m_method_markup');
+        const showMethodCode = renderedMethodChildIdSet.has('m_method_code');
+        const showMethodRemark = renderedMethodChildIdSet.has('m_method_remark');
+        const showMethodTip = renderedMethodChildIdSet.has('m_method_tip');
+        const showAddonRuleScope = renderedAddonChildIdSet.has('a_rule_scope');
+        const showAddonRuleUnlimited = renderedAddonChildIdSet.has('a_rule_unlimited');
+        const showAddonRuleLimit = renderedAddonChildIdSet.has('a_rule_limit');
+        const showAddonRuleRequired = renderedAddonChildIdSet.has('a_rule_required');
+        const showAddonName = renderedAddonChildIdSet.has('a_addon_name');
+        const showAddonCode = renderedAddonChildIdSet.has('a_addon_code');
+        const showAddonLimit = renderedAddonChildIdSet.has('a_addon_limit');
+        const showAddonPrice = renderedAddonChildIdSet.has('a_addon_price');
+        const showAddonSpecPrice = renderedAddonChildIdSet.has('a_addon_spec_price');
+        const showAddonStatus = renderedAddonChildIdSet.has('a_addon_status');
+        const showAddonEmptyTip = renderedAddonChildIdSet.has('a_empty_tip');
 
         const updateMethodRow = (id: string, key: keyof MethodConfigRow, value: string | boolean) => {
             setMethodConfigRows(prev => prev.map(row => row.id === id ? { ...row, [key]: value } : row));
@@ -5232,7 +5510,21 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
         return (
             <div className={embedded ? 'space-y-6' : 'rounded-2xl border border-gray-200 bg-white p-5 space-y-6'}>
-                {isFieldEnabled('m_methods') && (
+                {!isComboProduct && hasSpecModuleEnabled && (
+                    <div id="field-s_specs" className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">规格</div>
+                        <div className="rounded-2xl bg-[#FAFAFA] p-4">
+                            {hasRenderableSpecFields ? (
+                                renderSpecConfigTable({ embedded: true, title: '规格设置' })
+                            ) : (
+                                <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-400">
+                                    当前未配置任何规格字段，请在“常用字段设置”中选择需要展示的规格字段。
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+                {hasMethodModuleEnabled && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">做法</div>
                         <div className="space-y-4">
@@ -5320,7 +5612,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     </div>
                 )}
 
-                {!isComboProduct && isFieldEnabled('a_addons') && (
+                {!isComboProduct && hasAddonModuleEnabled && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">加料</div>
                         <div className="space-y-4">
@@ -5439,6 +5731,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         </div>
                     </div>
                 )}
+
+                                {renderSectionCollapsedEntry(collapsedAttrModuleMappings)}
 
                 {showAttrSort && (specDisplayMode === 'multi' || selectedMethodCount > 0 || (!isComboProduct && selectedAddonCount > 0)) && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
@@ -7015,9 +7309,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div ref={stickyToolbarRef} className="sticky top-0 z-10 -mx-1 px-1 pb-2 bg-[#FAFAFA]">
                             <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden">
                                 <div className="px-4 pt-2.5 pb-1.5 border-b border-gray-100">
-                                    <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-start justify-between gap-4">
                                         <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
-                                            {SECTION_ORDER.map(section => (
+                                            {visibleSectionOrder.map(section => (
                                                 <button
                                                     key={section}
                                                     type="button"
@@ -7032,54 +7326,61 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 </button>
                                             ))}
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => onOpenCommonFieldSettings?.(type, currentCategory.id)}
-                                            className="shrink-0 inline-flex items-center rounded-xl border border-[#B7E7CB] bg-[#F7FFF9] px-3.5 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
-                                        >
-                                            <Settings size={14} className="mr-2" />
-                                            常用字段设置
-                                        </button>
+                                        <div className="shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => onOpenCommonFieldSettings?.(type, currentCategory.id)}
+                                                className="inline-flex items-center rounded-xl border border-[#B7E7CB] bg-[#F7FFF9] px-3.5 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
+                                            >
+                                                <Settings size={14} className="mr-2" />
+                                                常用字段设置
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="px-4 py-2 bg-[#FCFCFD]">
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                            <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
-                                            <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-[#1F2129]">
-                                                {completionSummary.completed}/{completionSummary.total}
-                                            </div>
-                                            {requiredMissingItems.length > 0 ? (
-                                                <>
-                                                    {requiredMissingItems.map(item => (
-                                                        <button
-                                                            key={item.key}
-                                                            type="button"
-                                                            onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
-                                                            className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
-                                                        >
-                                                            <CircleAlert size={12} className="mr-1.5" />
-                                                            {item.label}
-                                                        </button>
-                                                    ))}
-                                                </>
-                                            ) : (
-                                                <div className="inline-flex items-center rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-2 py-1 text-[11px] font-bold text-[#166534]">
-                                                    <CheckCircle2 size={12} className="mr-1" />
-                                                    可保存
-                                                </div>
-                                            )}
-                                            {requiredMissingItems.length === 0 && recommendedMissingItems.map(item => (
-                                                <button
-                                                    key={item.key}
-                                                    type="button"
-                                                    onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
-                                                    className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-50 transition-colors"
-                                                >
-                                                    建议补充: {item.label}
-                                                </button>
-                                            ))}
+                                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                        <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
+                                        <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-[#1F2129]">
+                                            {completionSummary.completed}/{completionSummary.total}
                                         </div>
+                                        {requiredStatusItems.map(item => (
+                                            <button
+                                                key={item.key}
+                                                type="button"
+                                                onClick={() => locateValidationItem(item)}
+                                                className={`inline-flex items-center rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+                                                    item.filled
+                                                        ? 'border-[#BBF7D0] bg-[#F0FDF4] text-[#166534] hover:bg-[#ECFDF3]'
+                                                        : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                                }`}
+                                            >
+                                                {item.filled ? <CheckCircle2 size={12} className="mr-1.5" /> : <CircleAlert size={12} className="mr-1.5" />}
+                                                {item.label}
+                                            </button>
+                                        ))}
+                                        {recommendedStatusItems.map(item => (
+                                            <button
+                                                key={item.key}
+                                                type="button"
+                                                onClick={() => scrollToTarget(getValidationTargetId(item.key), item.section)}
+                                                className={`inline-flex items-center rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors ${
+                                                    item.filled
+                                                        ? 'border-[#D1FAE5] bg-white text-[#166534] hover:bg-[#F0FDF4]'
+                                                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span className={`mr-1.5 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                                                    item.filled
+                                                        ? 'bg-[#F0FDF4] text-[#166534]'
+                                                        : 'bg-[#F5F6FA] text-gray-500'
+                                                }`}>
+                                                    建议
+                                                </span>
+                                                {item.filled ? <CheckCircle2 size={12} className="mr-1.5 text-[#16A34A]" /> : null}
+                                                {item.label}
+                                            </button>
+                                        ))}
                                     </div>
                                     <div className="mt-1.5 flex items-center gap-2">
                                         <div className="h-1.5 flex-1 rounded-full bg-gray-100 overflow-hidden">
@@ -7092,111 +7393,136 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             {completionSummary.total === 0 ? '100%' : `${Math.round((completionSummary.completed / completionSummary.total) * 100)}%`}
                                         </div>
                                     </div>
-                                    {saveAttempted && requiredMissingItems.length > 0 && (
-                                        <div className="mt-1.5 rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-[11px] text-red-600">
-                                            仍有 {requiredMissingItems.length} 项必填信息未完成。
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>
                         {/* Basic Section */}
-                        <div id="basic" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-1.5' : 'p-4 xl:p-5 space-y-2'}`}>
-                            <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
-                            <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
-                                {visibleBasicFields.map(field => {
-                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                    const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
-                                    return (
-                                        <div
-                                            id={`field-${field.id}`}
-                                            key={field.id}
-                                            className={
-                                                isFullWidth
-                                                    ? 'col-span-full'
-                                                    : 'col-span-1'
-                                            }
-                                        >
-                                            <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
-                                                <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
-                                                    {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                                </FormRow>
+                        {sectionVisibility.basic && (
+                            <div id="basic" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-1.5' : 'p-4 xl:p-5 space-y-2'}`}>
+                                <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
+                                <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
+                                    {visibleBasicFields.map(field => {
+                                        const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                        const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
+                                        return (
+                                            <div
+                                                id={`field-${field.id}`}
+                                                key={field.id}
+                                                className={
+                                                    isFullWidth
+                                                        ? 'col-span-full'
+                                                        : 'col-span-1'
+                                                }
+                                            >
+                                                <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                    <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
+                                                        {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                                    </FormRow>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
+                                {expandedBasicDynamicFields.length > 0 && (
+                                    <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
+                                        {expandedBasicDynamicFields.map(field => {
+                                            const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                            const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
+                                            return (
+                                                <div
+                                                    id={`field-${field.id}`}
+                                                    key={field.id}
+                                                    className={isFullWidth ? 'col-span-full' : 'col-span-1'}
+                                                >
+                                                    <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                        <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
+                                                            {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                                        </FormRow>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                                {renderSectionCollapsedEntry(basicCollapsedFieldMappings)}
                             </div>
-                        </div>
+                        )}
 
                         <>
                         {/* Product Attr Section */}
-                        <div id="method" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                            <SectionHeader title="商品属性" icon={<ChefHat size={20}/>} meta={renderSectionMeta('method')} />
-                            {isComboProduct ? (
-                                <div id="field-s_specs">
-                                    {renderComboProductPanel()}
-                                </div>
-                            ) : (
-                                <>
+                        {sectionVisibility.method && (
+                            <div id="method" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title="商品属性" icon={<ChefHat size={20}/>} meta={renderSectionMeta('method')} />
+                                {isComboProduct ? (
                                     <div id="field-s_specs">
-                                        {renderSpecConfigTable()}
+                                        {renderComboProductPanel()}
                                     </div>
-                                    {renderMethodAddonPanel()}
-                                </>
-                            )}
-                        </div>
+                                ) : (
+                                    renderMethodAddonPanel()
+                                )}
+                            </div>
+                        )}
 
                         {/* Display Section */}
-                        <div id="display" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                            <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
-                            {renderDisplaySettingsSection()}
-                        </div>
+                        {sectionVisibility.display && (
+                            <div id="display" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
+                                {renderDisplaySettingsSection()}
+                                {renderSectionCollapsedEntry(displayCollapsedFieldMappings)}
+                            </div>
+                        )}
 
                         {/* Sales Section */}
-                        <div id="spec" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                            <SectionHeader title="销售属性" icon={<Scale size={20}/>} meta={renderSectionMeta('spec')} />
-                            {renderSalesAttributePanel()}
-                            <div className={`grid ${compactFormMode ? 'grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-2' : 'grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5'}`}>
-                                {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
-                                    f.module === 'sales'
-                                    && visibleFieldIds.has(f.id)
-                                    && ![
-                                        's_price',
-                                        's_cost',
-                                        's_market_price',
-                                        's_pack_fee',
-                                        's_stock',
-                                        's_specs',
-                                        's_limit',
-                                        's_pos_edit',
-                                        's_min_purchase_toggle',
-                                        's_min_purchase_value',
-                                        's_max_purchase_toggle',
-                                        's_max_purchase_value',
-                                        's_time_sale_toggle',
-                                        's_time_sale_rule',
-                                        's_sale_mode',
-                                        's_sale_settings',
-                                        's_takeout_rule',
-                                        's_tax_rate'
-                                    ].includes(f.id)
-                                )).map(field => {
-                                    const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
-                                    return (
-                                    <div id={`field-${field.id}`} key={field.id} className={field.type === 'textarea' ? 'col-span-full' : 'col-span-1'}>
-                                        <FormRow label={field.label} required={isRequired}>
-                                            {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
-                                        </FormRow>
-                                    </div>
-                                )})}
+                        {sectionVisibility.spec && (
+                            <div id="spec" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title="销售属性" icon={<Scale size={20}/>} meta={renderSectionMeta('spec')} />
+                                {renderSalesAttributePanel()}
+                                <div className={`grid ${compactFormMode ? 'grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-2' : 'grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5'}`}>
+                                    {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
+                                        f.module === 'sales'
+                                        && visibleFieldIds.has(f.id)
+                                        && ![
+                                            's_price',
+                                            's_cost',
+                                            's_market_price',
+                                            's_pack_fee',
+                                            's_stock',
+                                            's_specs',
+                                            's_limit',
+                                            's_pos_edit',
+                                            's_min_purchase_toggle',
+                                            's_min_purchase_value',
+                                            's_max_purchase_toggle',
+                                            's_max_purchase_value',
+                                            's_time_sale_toggle',
+                                            's_time_sale_rule',
+                                            's_sale_mode',
+                                            's_sale_settings',
+                                            's_takeout_rule',
+                                            's_tax_rate'
+                                        ].includes(f.id)
+                                    )).map(field => {
+                                        const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                        return (
+                                        <div id={`field-${field.id}`} key={field.id} className={field.type === 'textarea' ? 'col-span-full' : 'col-span-1'}>
+                                            <FormRow label={field.label} required={isRequired}>
+                                                {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                            </FormRow>
+                                        </div>
+                                    )})}
+                                </div>
+                                {renderSectionCollapsedEntry(salesCollapsedFieldMappings)}
                             </div>
-                        </div>
+                        )}
 
                         {/* Others Section */}
-                        <div id="settings" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm min-w-0 overflow-hidden ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                            <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
-                            {renderOthersAttributePanel()}
-                        </div>
+                        {sectionVisibility.settings && (
+                            <div id="settings" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm min-w-0 overflow-hidden ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
+                                {renderOthersAttributePanel()}
+                                {renderSectionCollapsedEntry(otherCollapsedFieldMappings)}
+                            </div>
+                        )}
                         </>
                         </>
                         )}

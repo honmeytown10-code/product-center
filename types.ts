@@ -255,9 +255,43 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
 export interface CategoryFieldConfig {
   id: string;
   isRequired: boolean;
-  childConfigs?: Record<string, boolean>; // 子字段状态 (ID -> 是否启用)
+  displayMode?: 'visible' | 'collapsed' | 'hidden'; // 字段展示模式
+  childConfigs?: Record<string, boolean | 'visible' | 'collapsed' | 'hidden'>; // 子字段展示状态，仅支持 visible/hidden，兼容历史 collapsed
   childRequiredConfigs?: Record<string, boolean>; // 子字段必填状态 (ID -> 是否必填)
 }
+
+export const CHILD_REQUIRED_FIELD_DEPENDENCIES: Record<string, Record<string, string[]>> = {
+  s_specs: {
+    s_spec_price: ['s_price'],
+    s_spec_stock: ['s_stock'],
+    s_spec_store_pack_fee: ['s_pack_fee'],
+    s_spec_take_pack_fee: ['s_pack_fee'],
+  },
+};
+
+export const resolveChildRequiredConfigs = (
+  fieldId: string,
+  fieldConfigs: CategoryFieldConfig[] | Map<string, CategoryFieldConfig>,
+  currentRequiredConfigs?: Record<string, boolean>
+) => {
+  const dependencies = CHILD_REQUIRED_FIELD_DEPENDENCIES[fieldId];
+  const mergedRequiredConfigs = { ...(currentRequiredConfigs || {}) };
+
+  if (dependencies) {
+    const configMap = fieldConfigs instanceof Map
+      ? fieldConfigs
+      : new Map(fieldConfigs.map(item => [item.id, item]));
+
+    Object.entries(dependencies).forEach(([childId, requiredFieldIds]) => {
+      if (mergedRequiredConfigs[childId]) return;
+      if (requiredFieldIds.some(requiredFieldId => !!configMap.get(requiredFieldId)?.isRequired)) {
+        mergedRequiredConfigs[childId] = true;
+      }
+    });
+  }
+
+  return Object.keys(mergedRequiredConfigs).length > 0 ? mergedRequiredConfigs : undefined;
+};
 
 export interface Category {
   id: string;

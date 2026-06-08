@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, FolderTree, Layers3, RotateCcw, Save, ShieldCheck, Sparkles } from 'lucide-react';
-import { AVAILABLE_DYNAMIC_FIELDS, Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig } from '../../types';
+import { AVAILABLE_DYNAMIC_FIELDS, Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, resolveChildRequiredConfigs } from '../../types';
 
 type WebCategoryLike = Category & {
     classification: 'standard' | 'combo';
@@ -74,22 +74,44 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
 
 const getConfigKey = (type: 'standard' | 'combo', categoryId: string) => `${type}:${categoryId}`;
 const SALES_FIELDS_HIDDEN_WHEN_SPECS = new Set(['s_price', 's_cost', 's_market_price', 's_pack_fee', 's_stock']);
+const normalizeChildDisplayMode = (
+    value: boolean | 'visible' | 'collapsed' | 'hidden' | undefined,
+    isDefaultSelected: boolean
+) => {
+    if (value === 'visible') return 'visible';
+    if (value === 'hidden') return 'hidden';
+    if (value === 'collapsed') return 'visible';
+    if (typeof value === 'boolean') return value ? 'visible' : 'hidden';
+    return isDefaultSelected ? 'visible' : 'hidden';
+};
 
-const buildChildConfigs = (fieldId: string, current?: Record<string, boolean>) => {
+const buildChildConfigs = (
+    fieldId: string,
+    current?: Record<string, boolean | 'visible' | 'collapsed' | 'hidden'>,
+    currentRequiredConfigs?: Record<string, boolean>
+) => {
     const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[fieldId] || [];
     if (childTemplates.length === 0) return undefined;
-    return childTemplates.reduce<Record<string, boolean>>((acc, child) => {
-        acc[child.id] = current?.[child.id] ?? !!(child.isDefaultSelected || child.isSystem);
+    return childTemplates.reduce<Record<string, 'visible' | 'collapsed' | 'hidden'>>((acc, child) => {
+        const normalizedMode = normalizeChildDisplayMode(current?.[child.id], !!(child.isDefaultSelected || child.isSystem));
+        acc[child.id] = child.isSystem || !!currentRequiredConfigs?.[child.id] ? 'visible' : normalizedMode;
         return acc;
     }, {});
 };
 
-const buildDraftFieldConfig = (config: CategoryFieldConfig): CategoryFieldConfig => ({
-    id: config.id,
-    isRequired: config.isRequired,
-    childConfigs: buildChildConfigs(config.id, config.childConfigs),
-    childRequiredConfigs: config.childRequiredConfigs,
-});
+const buildDraftFieldConfig = (
+    config: CategoryFieldConfig,
+    fieldConfigMap: Map<string, CategoryFieldConfig>
+): CategoryFieldConfig => {
+    const childRequiredConfigs = resolveChildRequiredConfigs(config.id, fieldConfigMap, config.childRequiredConfigs);
+    return {
+        id: config.id,
+        isRequired: config.isRequired,
+        displayMode: config.displayMode ?? 'visible',
+        childConfigs: buildChildConfigs(config.id, config.childConfigs, childRequiredConfigs),
+        childRequiredConfigs,
+    };
+};
 
 interface Props {
     categories: WebCategoryLike[];
@@ -142,6 +164,10 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
         if (!selectedCategory) return [];
         return activeType === 'standard' ? selectedCategory.standardFields : selectedCategory.comboFields;
     }, [activeType, selectedCategory]);
+    const categoryFieldConfigMap = useMemo(
+        () => new Map(categoryFieldConfigs.map(config => [config.id, config])),
+        [categoryFieldConfigs]
+    );
 
     const availableCategoryFields = useMemo(() => (
         categoryFieldConfigs
@@ -159,9 +185,9 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
             return;
         }
         const configKey = getConfigKey(activeType, selectedCategory.id);
-        setDraftFieldConfigs((configs[configKey] || []).map(buildDraftFieldConfig));
+        setDraftFieldConfigs((configs[configKey] || []).map(config => buildDraftFieldConfig(config, categoryFieldConfigMap)));
         setSavedMessage('');
-    }, [activeType, configs, selectedCategory]);
+    }, [activeType, categoryFieldConfigMap, configs, selectedCategory]);
 
     const requiredFieldIds = useMemo(() => (
         availableCategoryFields
@@ -177,23 +203,30 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
         draftFieldConfigs
             .filter(item => availableIds.has(item.id))
             .forEach(item => {
-                nextMap.set(item.id, buildDraftFieldConfig(item));
+                nextMap.set(item.id, buildDraftFieldConfig(item, categoryFieldConfigMap));
             });
 
         requiredFieldIds.forEach(fieldId => {
             const source = fieldMap.get(fieldId);
             if (!source) return;
             const existing = nextMap.get(fieldId);
-            nextMap.set(fieldId, buildDraftFieldConfig(existing || source.config));
+            nextMap.set(fieldId, buildDraftFieldConfig(existing || source.config, categoryFieldConfigMap));
         });
 
         return Array.from(nextMap.values());
-    }, [availableCategoryFields, draftFieldConfigs, requiredFieldIds]);
+    }, [availableCategoryFields, categoryFieldConfigMap, draftFieldConfigs, requiredFieldIds]);
 
     const draftIdSet = useMemo(() => new Set(normalizedDraftConfigs.map(item => item.id)), [normalizedDraftConfigs]);
     const normalizedDraftConfigMap = useMemo(() => new Map(normalizedDraftConfigs.map(item => [item.id, item])), [normalizedDraftConfigs]);
 
     const fieldLookup = useMemo(() => new Map(availableCategoryFields.map(item => [item.field.id, item])), [availableCategoryFields]);
+    const getChildLockedState = (parentId: string, childId: string, child: { isSystem?: boolean }) => {
+        const parentConfig = normalizedDraftConfigMap.get(parentId) || fieldLookup.get(parentId)?.config;
+        return {
+            required: !!parentConfig?.childRequiredConfigs?.[childId],
+            locked: !!child.isSystem || !!parentConfig?.childRequiredConfigs?.[childId],
+        };
+    };
 
     const groupedFields = useMemo(() => (
         FORM_STRUCTURE.map(section => ({
@@ -215,32 +248,66 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
     const persistedSelection = configs[currentConfigKey] || [];
     const hasChanges = JSON.stringify(normalizedDraftConfigs) !== JSON.stringify(persistedSelection);
 
-    const handleToggleField = (fieldId: string) => {
+    const getFieldDisplayMode = (config?: CategoryFieldConfig, locked = false) => {
+        if (locked) return 'visible' as const;
+        return config?.displayMode ?? 'visible';
+    };
+
+    const visibleFieldCount = useMemo(
+        () => normalizedDraftConfigs.filter(item => (item.displayMode ?? 'visible') === 'visible').length,
+        [normalizedDraftConfigs]
+    );
+    const collapsedFieldCount = useMemo(
+        () => normalizedDraftConfigs.filter(item => item.displayMode === 'collapsed').length,
+        [normalizedDraftConfigs]
+    );
+
+    const handleSetFieldDisplayMode = (fieldId: string, displayMode: 'visible' | 'collapsed' | 'hidden') => {
         if (requiredFieldIds.includes(fieldId)) return;
         setSavedMessage('');
         setDraftFieldConfigs(prev => {
-            const exists = prev.some(item => item.id === fieldId);
+            const exists = prev.find(item => item.id === fieldId);
             if (exists) {
-                return prev.filter(item => item.id !== fieldId);
+                return prev.map(item => item.id === fieldId ? { ...item, displayMode } : item);
             }
             const sourceField = availableCategoryFields.find(item => item.field.id === fieldId);
             if (!sourceField) return prev;
-            return [...prev, buildDraftFieldConfig(sourceField.config)];
+            return [...prev, { ...buildDraftFieldConfig(sourceField.config, categoryFieldConfigMap), displayMode }];
         });
     };
 
-    const handleToggleChildField = (parentId: string, childId: string) => {
+    const handleSetChildFieldDisplayMode = (parentId: string, childId: string, displayMode: 'visible' | 'hidden') => {
+        const childTemplate = (COMMON_FIELD_CHILD_CONFIG_LIBRARY[parentId] || []).find(item => item.id === childId);
+        if (childTemplate && getChildLockedState(parentId, childId, childTemplate).locked) return;
         setSavedMessage('');
-        setDraftFieldConfigs(prev => prev.map(item => {
-            if (item.id !== parentId) return item;
-            return {
-                ...item,
+        setDraftFieldConfigs(prev => {
+            const existing = prev.find(item => item.id === parentId);
+            if (existing) {
+                return prev.map(item => {
+                    if (item.id !== parentId) return item;
+                    const childRequiredConfigs = resolveChildRequiredConfigs(parentId, categoryFieldConfigMap, item.childRequiredConfigs);
+                    return {
+                        ...item,
+                        childConfigs: {
+                            ...buildChildConfigs(parentId, item.childConfigs, childRequiredConfigs),
+                            [childId]: displayMode,
+                        },
+                        childRequiredConfigs,
+                    };
+                });
+            }
+
+            const sourceField = availableCategoryFields.find(item => item.field.id === parentId);
+            if (!sourceField) return prev;
+            const nextItem = buildDraftFieldConfig(sourceField.config, categoryFieldConfigMap);
+            return [...prev, {
+                ...nextItem,
                 childConfigs: {
-                    ...buildChildConfigs(parentId, item.childConfigs),
-                    [childId]: !(item.childConfigs?.[childId] ?? false),
+                    ...buildChildConfigs(parentId, nextItem.childConfigs, nextItem.childRequiredConfigs),
+                    [childId]: displayMode,
                 },
-            };
-        }));
+            }];
+        });
     };
 
     const handleSave = () => {
@@ -273,7 +340,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                 品牌级按类目生效
                             </span>
                         </div>
-                        <div className="mt-1 text-sm text-gray-400">为不同商品类目配置默认展示字段，创建商品时不再依赖统一展示或折叠交互。</div>
+                        <div className="mt-1 text-sm text-gray-400">为不同商品类目配置默认字段的展示方式，支持直接显示、折叠显示和隐藏。</div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -323,7 +390,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                 配置规则
                             </div>
                             <div className="mt-2 text-xs leading-6 text-gray-500">
-                                系统必填字段默认勾选且不可取消，保存后当前品牌该类目的创建表单会默认展示这些常用字段。
+                                系统必填字段默认直接显示且不可取消，保存后当前品牌该类目的创建表单会按你的显示/折叠规则渲染。
                             </div>
                         </div>
                     </div>
@@ -372,7 +439,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                         </span>
                                     </div>
                                     <div className="mt-3 text-sm leading-6 text-gray-500">
-                                        勾选后，这些字段会直接展示在商品创建页；未勾选的类目字段将不再出现在创建表单中。
+                                        可按类目配置字段的默认展示方式：高频字段直接显示，低频但仍会用到的字段默认折叠，其余字段隐藏。
                                     </div>
                                 </div>
                                 <div className="rounded-[24px] border border-[#E8F7EF] bg-[#F7FFF9] p-6 shadow-sm">
@@ -382,7 +449,15 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                     </div>
                                     <div className="mt-4 grid grid-cols-2 gap-3">
                                         <div className="rounded-2xl bg-white px-4 py-3">
-                                            <div className="text-xs text-gray-400">常用字段</div>
+                                            <div className="text-xs text-gray-400">直接显示</div>
+                                            <div className="mt-1 text-2xl font-black text-[#1F2129]">{visibleFieldCount}</div>
+                                        </div>
+                                        <div className="rounded-2xl bg-white px-4 py-3">
+                                            <div className="text-xs text-gray-400">折叠字段</div>
+                                            <div className="mt-1 text-2xl font-black text-[#1F2129]">{collapsedFieldCount}</div>
+                                        </div>
+                                        <div className="rounded-2xl bg-white px-4 py-3">
+                                            <div className="text-xs text-gray-400">已配置字段</div>
                                             <div className="mt-1 text-2xl font-black text-[#1F2129]">{normalizedDraftConfigs.length}</div>
                                         </div>
                                         <div className="rounded-2xl bg-white px-4 py-3">
@@ -428,25 +503,50 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                 )}
                                                 <div className={`${group.showHeader ? 'mt-4' : ''} grid grid-cols-1 gap-3 lg:grid-cols-2`}>
                                                     {group.items.map(({ field, config }) => {
-                                                        const checked = draftIdSet.has(field.id);
                                                         const disabled = requiredFieldIds.includes(field.id);
                                                         const currentDraftConfig = normalizedDraftConfigMap.get(field.id);
                                                         const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[field.id] || [];
-                                                        const enabledChildCount = childTemplates.filter(child => currentDraftConfig?.childConfigs?.[child.id] ?? !!(child.isDefaultSelected || child.isSystem)).length;
+                                                        const hasChildControls = childTemplates.length > 0;
+                                                        const effectiveConfig = currentDraftConfig || (childTemplates.length > 0 ? buildDraftFieldConfig(config, categoryFieldConfigMap) : undefined);
+                                                        const childModeMap = childTemplates.reduce<Record<string, 'visible' | 'hidden'>>((acc, child) => {
+                                                            const childState = getChildLockedState(field.id, child.id, child);
+                                                            acc[child.id] = normalizeChildDisplayMode(
+                                                                effectiveConfig?.childConfigs?.[child.id],
+                                                                !!(child.isDefaultSelected || child.isSystem)
+                                                            );
+                                                            if (childState.locked) {
+                                                                acc[child.id] = 'visible';
+                                                            }
+                                                            return acc;
+                                                        }, {});
+                                                        const visibleChildCount = childTemplates.filter(child => childModeMap[child.id] === 'visible').length;
+                                                        const hiddenChildCount = childTemplates.length - visibleChildCount;
+                                                        const displayMode = disabled ? 'visible' : (currentDraftConfig?.displayMode ?? 'hidden');
+                                                        const isVisible = displayMode === 'visible';
+                                                        const isCollapsed = displayMode === 'collapsed';
+                                                        const isHidden = displayMode === 'hidden';
                                                         const useFullWidthLayout = childTemplates.length > 0;
                                                         return (
                                                             <div
                                                                 key={field.id}
-                                                                className={`${useFullWidthLayout ? 'lg:col-span-2' : ''} rounded-[22px] border px-5 py-5 transition-colors ${checked ? 'border-[#BBF7D0] bg-[#F6FFF9] shadow-sm' : 'border-gray-200 bg-white hover:bg-[#FCFCFD]'}`}
+                                                                className={`${useFullWidthLayout ? 'lg:col-span-2' : ''} rounded-[22px] border px-5 py-5 transition-colors ${
+                                                                    isVisible
+                                                                        ? 'border-[#BBF7D0] bg-[#F6FFF9] shadow-sm'
+                                                                        : isCollapsed
+                                                                            ? 'border-[#FDE68A] bg-[#FFFBEB] shadow-sm'
+                                                                            : 'border-gray-200 bg-white hover:bg-[#FCFCFD]'
+                                                                }`}
                                                             >
-                                                                <label className={`flex items-start gap-3 ${disabled ? 'cursor-default' : 'cursor-pointer'}`}>
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
-                                                                        checked={checked}
-                                                                        disabled={disabled}
-                                                                        onChange={() => handleToggleField(field.id)}
-                                                                    />
+                                                                <div className="flex items-start gap-3">
+                                                                    <div className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-black ${
+                                                                        isVisible
+                                                                            ? 'border-[#00C06B] bg-[#00C06B] text-white'
+                                                                            : isCollapsed
+                                                                                ? 'border-[#F59E0B] bg-[#F59E0B] text-white'
+                                                                                : 'border-gray-300 bg-white text-transparent'
+                                                                    }`}>
+                                                                        ✓
+                                                                    </div>
                                                                     <div className="min-w-0 flex-1">
                                                                         <div className="flex flex-wrap items-center gap-2">
                                                                             <span className="text-sm font-black text-[#1F2129]">{field.label}</span>
@@ -464,15 +564,58 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                                         <div className="mt-1 text-xs leading-5 text-gray-400">
                                                                             {field.description || '用于当前类目商品创建时的默认录入字段。'}
                                                                         </div>
+                                                                        <div className="mt-3 flex flex-wrap gap-2">
+                                                                            {disabled ? (
+                                                                                <span className="inline-flex items-center rounded-full bg-[#ECFDF3] px-3 py-1 text-[11px] font-bold text-[#166534]">
+                                                                                    必填字段，默认直接显示
+                                                                                </span>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleSetFieldDisplayMode(field.id, 'visible')}
+                                                                                        className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold transition-colors ${
+                                                                                            isVisible
+                                                                                                ? 'bg-[#00C06B] text-white'
+                                                                                                : 'bg-[#F5F6FA] text-gray-500 hover:bg-[#EAF9F1] hover:text-[#00A35B]'
+                                                                                        }`}
+                                                                                    >
+                                                                                        直接显示
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleSetFieldDisplayMode(field.id, 'collapsed')}
+                                                                                        className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold transition-colors ${
+                                                                                            isCollapsed
+                                                                                                ? 'bg-[#F59E0B] text-white'
+                                                                                                : 'bg-[#F5F6FA] text-gray-500 hover:bg-[#FFF7ED] hover:text-[#B45309]'
+                                                                                        }`}
+                                                                                    >
+                                                                                        折叠显示
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleSetFieldDisplayMode(field.id, 'hidden')}
+                                                                                        className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold transition-colors ${
+                                                                                            isHidden
+                                                                                                ? 'bg-[#1F2129] text-white'
+                                                                                                : 'bg-[#F5F6FA] text-gray-500 hover:bg-gray-200 hover:text-[#1F2129]'
+                                                                                        }`}
+                                                                                    >
+                                                                                        隐藏
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
                                                                         {childTemplates.length > 0 && (
                                                                             <div className="mt-3 inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-bold text-[#166534] shadow-sm">
-                                                                                已启用 {checked ? enabledChildCount : 0}/{childTemplates.length} 个子字段
+                                                                                直接显示 {visibleChildCount} 项，已隐藏 {hiddenChildCount} 项
                                                                             </div>
                                                                         )}
                                                                         <div className="mt-2 text-[11px] text-gray-300">字段 ID: {field.id}</div>
                                                                     </div>
-                                                                </label>
-                                                                {checked && childTemplates.length > 0 && currentDraftConfig && (
+                                                                </div>
+                                                                {childTemplates.length > 0 && (
                                                                     <div className="mt-5 rounded-[22px] border border-[#DDEEE4] bg-white px-5 py-5 shadow-[0_4px_14px_rgba(16,185,129,0.06)]">
                                                                         <div className="mb-4 flex items-center justify-between gap-3">
                                                                             <div className="flex items-center gap-2">
@@ -480,48 +623,87 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                                                 <div className="text-sm font-black text-[#1F2129]">子字段配置</div>
                                                                             </div>
                                                                             <div className="rounded-full bg-[#F0FDF4] px-3 py-1 text-[11px] font-bold text-[#166534]">
-                                                                                {enabledChildCount}/{childTemplates.length}
+                                                                                {visibleChildCount}/{childTemplates.length}
                                                                             </div>
-                                                                        </div>
-                                                                        <div className="mb-4 text-xs leading-6 text-gray-400">
-                                                                            列表字段支持继续配置二级列项，勾选后会同步影响创建商品时的表格列和规则区域展示。
                                                                         </div>
                                                                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                                                             {childTemplates.map(child => {
-                                                                                const childChecked = currentDraftConfig.childConfigs?.[child.id] ?? !!(child.isDefaultSelected || child.isSystem);
-                                                                                const childLocked = !!child.isSystem;
+                                                                                const childMode = childModeMap[child.id];
+                                                                                const childState = getChildLockedState(field.id, child.id, child);
+                                                                                const childLocked = childState.locked;
+                                                                                const hideChildActions = !!child.isSystem;
                                                                                 return (
-                                                                                    <button
+                                                                                    <div
                                                                                         key={child.id}
-                                                                                        type="button"
-                                                                                        disabled={childLocked}
-                                                                                        onClick={() => handleToggleChildField(field.id, child.id)}
-                                                                                        className={`flex min-h-[88px] items-start justify-between rounded-[20px] border px-4 py-4 text-left transition-colors ${childChecked ? 'border-[#BBF7D0] bg-[#F0FDF4]' : 'border-gray-200 bg-[#FAFAFA]'} ${childLocked ? 'cursor-default' : 'hover:border-[#86EFAC] hover:bg-white'}`}
+                                                                                        className={`min-h-[88px] rounded-[20px] border px-4 py-4 transition-colors ${
+                                                                                            childMode === 'visible'
+                                                                                                ? 'border-[#BBF7D0] bg-[#F0FDF4]'
+                                                                                                : 'border-gray-200 bg-[#FAFAFA]'
+                                                                                        }`}
                                                                                     >
-                                                                                        <div className="min-w-0 pr-3">
-                                                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                                                <div className="text-sm font-black text-[#1F2129]">{child.label}</div>
-                                                                                                {childLocked && (
-                                                                                                    <span className="rounded-full bg-[#F5F6FA] px-2 py-0.5 text-[10px] font-bold text-gray-500">
-                                                                                                        系统内置
-                                                                                                    </span>
+                                                                                        <div className="flex items-start justify-between gap-3">
+                                                                                            <div className="min-w-0 pr-3">
+                                                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                                                    <div className="text-sm font-black text-[#1F2129]">{child.label}</div>
+                                                                                                    {childState.required && (
+                                                                                                        <span className="rounded-full bg-[#FFF1F2] px-2 py-0.5 text-[10px] font-bold text-[#E11D48]">
+                                                                                                            必填
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                    {childLocked && (
+                                                                                                        <span className="rounded-full bg-[#F5F6FA] px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                                                                                                            {child.isSystem ? '系统内置' : '固定显示'}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                {child.description && (
+                                                                                                    <div className="mt-1.5 text-xs leading-5 text-gray-400">{child.description}</div>
                                                                                                 )}
+                                                                                                <div className="mt-3 text-[11px] text-gray-300">code: {child.id}</div>
                                                                                             </div>
-                                                                                            {child.description && (
-                                                                                                <div className="mt-1.5 text-xs leading-5 text-gray-400">{child.description}</div>
-                                                                                            )}
-                                                                                            <div className="mt-3 text-[11px] text-gray-300">code: {child.id}</div>
+                                                                                            <div className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-black ${
+                                                                                                childMode === 'visible'
+                                                                                                    ? 'border-[#00C06B] bg-[#00C06B] text-white'
+                                                                                                    : 'border-gray-300 bg-white text-transparent'
+                                                                                            }`}>
+                                                                                                ✓
+                                                                                            </div>
                                                                                         </div>
-                                                                                        <div className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-black ${childChecked ? 'border-[#00C06B] bg-[#00C06B] text-white' : 'border-gray-300 text-transparent'}`}>
-                                                                                            ✓
-                                                                                        </div>
-                                                                                    </button>
+                                                                                        {!hideChildActions && (
+                                                                                            <div className="mt-4 flex flex-wrap gap-2">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    disabled={childLocked}
+                                                                                                    onClick={() => handleSetChildFieldDisplayMode(field.id, child.id, 'visible')}
+                                                                                                    className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold transition-colors ${
+                                                                                                        childMode === 'visible'
+                                                                                                            ? 'bg-[#00C06B] text-white'
+                                                                                                            : 'bg-[#F5F6FA] text-gray-500 hover:bg-[#EAF9F1] hover:text-[#00A35B]'
+                                                                                                    } ${childLocked ? 'cursor-not-allowed opacity-60' : ''}`}
+                                                                                                >
+                                                                                                    直接显示
+                                                                                                </button>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    disabled={childLocked}
+                                                                                                    onClick={() => handleSetChildFieldDisplayMode(field.id, child.id, 'hidden')}
+                                                                                                    className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold transition-colors ${
+                                                                                                        childMode === 'hidden'
+                                                                                                            ? 'bg-[#1F2129] text-white'
+                                                                                                            : 'bg-[#F5F6FA] text-gray-500 hover:bg-gray-200 hover:text-[#1F2129]'
+                                                                                                    } ${childLocked ? 'cursor-not-allowed opacity-60' : ''}`}
+                                                                                                >
+                                                                                                    隐藏
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
                                                                                 );
                                                                             })}
                                                                         </div>
                                                                     </div>
                                                                 )}
-                                                                {checked && field.children && field.children.length > 0 && childTemplates.length === 0 && (
+                                                                {currentDraftConfig && field.children && field.children.length > 0 && childTemplates.length === 0 && (
                                                                     <div className="mt-3 rounded-2xl bg-white/90 px-3 py-3">
                                                                         <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">对应子字段</div>
                                                                         <div className="mt-2 flex flex-wrap gap-2">

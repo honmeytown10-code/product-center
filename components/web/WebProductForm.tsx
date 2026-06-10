@@ -6254,11 +6254,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 steps: ['选择商品', '选择门店&设置', '完成'],
             },
             template: {
-                title: successMode === 'edit' ? '更新模板商品' : '加入模板',
-                subtitle: successMode === 'edit' ? '选择待更新模板' : '选择加入模板',
+                title: successMode === 'edit' ? '更新模板商品' : '加入商品模板',
+                subtitle: successMode === 'edit' ? '选择待更新模板' : '选择加入商品模板',
                 desc: successMode === 'edit'
                     ? '选择需要更新的模板，并勾选本次要同步到模板的属性范围。提交后将生成异步模板更新任务。'
-                    : '选择需要加入的模板，确认后将当前商品加入模板，并生成异步模板任务。',
+                    : '选择需要加入的商品模板，确认后将当前商品加入模板，并生成异步模板任务。',
                 steps: ['选择模板', '提交成功'],
             },
             detail: {
@@ -6605,11 +6605,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 <div className="border-b border-gray-100 p-6">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                         <div>
-                            <div className="text-base font-black text-[#1F2129]">{successMode === 'edit' ? '选择待更新模板' : '选择加入模板'}</div>
+                            <div className="text-base font-black text-[#1F2129]">{successMode === 'edit' ? '选择待更新模板' : '选择加入商品模板'}</div>
                             <div className="mt-1 text-xs text-gray-400">
                                 {successMode === 'edit'
                                     ? '已自动带出商品所在模板，也可删除或继续添加模板，并勾选本次要同步到模板的商品属性。'
-                                    : '请选择要加入的模板，支持后续继续添加或移除模板后再提交。'}
+                                    : '请选择要加入的商品模板，支持后续继续添加或移除模板后再提交。'}
                             </div>
                         </div>
                         <button
@@ -7285,8 +7285,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <div className="mt-4 text-[28px] leading-none font-black text-[#1F2129]">{successMode === 'edit' ? '商品已更新完成' : '商品已创建完成'}</div>
                                         <div className="mt-3 text-sm text-gray-500">
                                             {successMode === 'edit'
-                                                ? '商品修改已保存成功，你可以直接下发门店，也可以先更新模板商品供后续批量处理。'
-                                                : '商品创建完成后，你可以直接下发门店，也可以先加入模板用于后续批量复用。'}
+                                                ? '商品修改已保存成功，你可以直接下发门店，也可以先更新模板商品，统一维护模板下的门店商品差异。'
+                                                : '商品创建完成后，你可以直接下发门店，也可以先加入商品模板，统一维护同一商品在不同门店的属性差异。'}
                                         </div>
                                         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
                                             <button
@@ -7314,8 +7314,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                     <div className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-black text-gray-500 border border-gray-200">备选方式</div>
                                                     <ClipboardList size={18} className="text-[#00A35B]" />
                                                 </div>
-                                                <div className="mt-4 text-lg font-black text-[#1F2129]">{successMode === 'edit' ? '更新模板商品' : '加入模板'}</div>
-                                                <div className="mt-1.5 text-sm text-gray-500">{successMode === 'edit' ? '适合当前商品已在模板中复用，需要按属性范围更新模板内容。' : '适合后续还会复用，或需要先沉淀到模板统一维护。'}</div>
+                                                <div className="mt-4 text-lg font-black text-[#1F2129]">{successMode === 'edit' ? '更新模板商品' : '加入商品模板'}</div>
+                                                <div className="mt-1.5 text-sm text-gray-500">{successMode === 'edit' ? '适合通过模板管理门店商品，且此次改动需要更新模板商品。' : '适合同一商品在不同门店做差异化配置，可基于模板统一维护门店属性。'}</div>
                                                 <div className="mt-4 inline-flex items-center text-sm font-bold text-[#00A35B]">
                                                     {successMode === 'edit' ? '选择模板并更新' : '选择模板并加入'}
                                                     <ArrowRight size={16} className="ml-1" />

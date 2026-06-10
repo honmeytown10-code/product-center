@@ -336,6 +336,8 @@ export interface Product {
   stock?: number; // 单规格库存，-1表示无限(9999)
   specs?: { name: string; stock: number; price?: number; unlimited?: boolean }[];
   timeSales?: TimeSalesConfig | null;
+  linkedStallIds?: string[];
+  comboItemIds?: string[];
 }
 
 const mockFields = (ids: string[]) => ids.map(id => ({ id, isRequired: false }));
@@ -368,8 +370,8 @@ export const INITIAL_PRODUCTS: Product[] = [
   { id: '8', name: '精品挂耳咖啡', price: 59, category: '零售商品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=200&h=200&fit=crop', skuCode: '5001', stock: 500 },
   // 新增 Mock 数据以覆盖更多场景
   { id: '9', name: '季节限定樱花拿铁', price: 35, category: '现制饮品', status: 'off_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=200&h=200&fit=crop', skuCode: '1005', stock: 100 }, // 已下架
-  { id: '10', name: '超值双人套餐', price: 88, category: '西式快餐', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=200&h=200&fit=crop', skuCode: '3002', stock: 20, type: 'combo' }, // 套餐
+  { id: '10', name: '超值双人套餐', price: 88, category: '西式快餐', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=200&h=200&fit=crop', skuCode: '3002', stock: 20, type: 'combo', comboItemIds: ['1', '6'] }, // 套餐
   { id: '11', name: '库存紧张示例商品', price: 15, category: '零售商品', status: 'on_shelf', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1584736286279-4a858e984928?w=200&h=200&fit=crop', skuCode: '5002', stock: 5, isMultiSpec: true, specs: [{name: '小', stock: 2}, {name: '大', stock: 3}] }, // 库存紧张
   { id: '12', name: '杨枝甘露测试稿', price: 26, category: '现制饮品', status: 'draft', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=200&h=200&fit=crop', skuCode: '1006', stock: 0 },
-  { id: '13', name: '午市双人套餐草稿', price: 96, category: '西式快餐', status: 'draft', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&h=200&fit=crop', skuCode: '3003', stock: 0, type: 'combo' },
+  { id: '13', name: '午市双人套餐草稿', price: 96, category: '西式快餐', status: 'draft', stockStatus: 'available', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&h=200&fit=crop', skuCode: '3003', stock: 0, type: 'combo', comboItemIds: ['1', '2'] },
 ];

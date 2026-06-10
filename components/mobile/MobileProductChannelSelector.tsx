@@ -6,6 +6,7 @@ interface Props {
   onBack: () => void;
   onSave: (next: string[]) => void;
   helperText?: string;
+  onBeforeChannelToggle?: (channelId: string, nextEnabled: boolean, nextChannels: string[], prevChannels: string[]) => string[];
 }
 
 const CHANNEL_OPTIONS = [
@@ -15,26 +16,33 @@ const CHANNEL_OPTIONS = [
   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={18}/>, color: 'text-orange-600', bg: 'bg-orange-50' },
 ];
 
-export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels, onBack, onSave, helperText }) => {
+export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels, onBack, onSave, helperText, onBeforeChannelToggle }) => {
   const [localChannels, setLocalChannels] = useState<string[]>(selectedChannels);
+  const [blockedInfo, setBlockedInfo] = useState<{ channelLabel: string; comboNames: string[] } | null>(null);
 
   const toggleChannel = (id: string) => {
-    setLocalChannels(prev => {
-      let next = [...prev];
-      if (next.includes(id)) {
-        next = next.filter(c => c !== id);
-        if (id === 'mini') {
-          next = next.filter(c => c !== 'mini_dine' && c !== 'mini_take');
-        }
-      } else {
-        next.push(id);
-        if (id === 'mini') {
-          if (!next.includes('mini_dine')) next.push('mini_dine');
-          if (!next.includes('mini_take')) next.push('mini_take');
-        }
+    const prev = localChannels;
+    let next = [...prev];
+    const nextEnabled = !next.includes(id);
+    if (!nextEnabled) {
+      next = next.filter(c => c !== id);
+      if (id === 'mini') {
+        next = next.filter(c => c !== 'mini_dine' && c !== 'mini_take');
       }
-      return next;
-    });
+    } else {
+      next.push(id);
+      if (id === 'mini') {
+        if (!next.includes('mini_dine')) next.push('mini_dine');
+        if (!next.includes('mini_take')) next.push('mini_take');
+      }
+    }
+    const blockedCombos = onBeforeChannelToggle?.(id, nextEnabled, next, prev) || [];
+    if (!nextEnabled && blockedCombos.length > 0) {
+      const channelLabel = CHANNEL_OPTIONS.find(option => option.id === id)?.label || '当前渠道';
+      setBlockedInfo({ channelLabel, comboNames: blockedCombos });
+      return;
+    }
+    setLocalChannels(next);
   };
 
   const toggleSub = (id: string) => {
@@ -133,6 +141,30 @@ export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels
           确定配置
         </button>
       </div>
+
+      {blockedInfo ? (
+        <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/45 px-5">
+          <div className="w-full rounded-[24px] bg-white p-5 shadow-2xl">
+            <div className="text-[18px] font-black text-[#1F2129]">暂不支持关闭 {blockedInfo.channelLabel}</div>
+            <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-[12px] leading-5 text-orange-700">
+              当前商品已被以下套餐商品关联，请先解除套餐关联后再关闭该渠道售卖。
+            </div>
+            <div className="mt-4 rounded-2xl bg-[#F7F9FC] p-4">
+              <div className="text-[12px] font-bold text-[#667085]">关联套餐商品</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {blockedInfo.comboNames.map(name => (
+                  <span key={name} className="inline-flex rounded-full bg-white px-3 py-1.5 text-[12px] font-bold text-[#1F2129]">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="mt-6">
+              <button onClick={() => setBlockedInfo(null)} className="h-11 w-full rounded-xl bg-[#1F2129] text-sm font-bold text-white">我知道了</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

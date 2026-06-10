@@ -126,7 +126,7 @@ export const MobileBadgeManager: React.FC<Props> = ({ onBack, badges, onChange }
                     </div>
                   )
                 ) : (
-                  <div className="ml-3">{isSelected ? <CheckCircle2 className="text-[#00C06B]" size={20} fill="currentColor" color="white" /> : <Circle className="text-gray-300" size={20} />}</div>
+                  isBrand ? null : <div className="ml-3">{isSelected ? <CheckCircle2 className="text-[#00C06B]" size={20} fill="currentColor" color="white" /> : <Circle className="text-gray-300" size={20} />}</div>
                 )}
               </div>
             </div>
@@ -212,9 +212,9 @@ const BadgeEditorModal = ({
         )}
         <Field label="有效期">
           <div className="grid grid-cols-[1fr_24px_1fr] gap-2">
-            <input type="date" value={editor.startDate} onChange={e => onChange(prev => prev ? { ...prev, startDate: e.target.value } : prev)} className="h-[42px] rounded-xl bg-gray-50 px-3 text-sm font-bold outline-none" />
+            <input type="datetime-local" step={1} value={normalizeDateTimeValue(editor.startDate)} onChange={e => onChange(prev => prev ? { ...prev, startDate: e.target.value } : prev)} className="h-[42px] rounded-xl bg-gray-50 px-3 text-sm font-bold outline-none" />
             <div className="flex items-center justify-center text-sm text-[#A0A6B7]">至</div>
-            <input type="date" value={editor.endDate} onChange={e => onChange(prev => prev ? { ...prev, endDate: e.target.value } : prev)} className="h-[42px] rounded-xl bg-gray-50 px-3 text-sm font-bold outline-none" />
+            <input type="datetime-local" step={1} value={normalizeDateTimeValue(editor.endDate)} onChange={e => onChange(prev => prev ? { ...prev, endDate: e.target.value } : prev)} className="h-[42px] rounded-xl bg-gray-50 px-3 text-sm font-bold outline-none" />
           </div>
         </Field>
         <Field label="预览">
@@ -239,28 +239,54 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 );
 
 const ColorPalette = ({ value, onChange, colors }: { value: string; onChange: (value: string) => void; colors: string[] }) => (
-  <div className="flex flex-wrap gap-2">
-    {colors.map(color => {
-      const active = value.toLowerCase() === color.toLowerCase();
-      return (
-        <button key={color} onClick={() => onChange(color)} className={`relative h-10 w-10 rounded-2xl border-2 ${active ? 'border-[#111827]' : 'border-white'}`} style={{ backgroundColor: color }}>
-          {active ? <CheckCircle2 size={16} className="absolute inset-0 m-auto text-white" fill="currentColor" color="white" /> : null}
-        </button>
-      );
-    })}
-    <input value={value} onChange={e => onChange(e.target.value)} className="h-[42px] min-w-0 flex-1 rounded-xl bg-gray-50 px-4 text-sm font-bold outline-none" />
+  <div className="rounded-2xl border border-[#E5E7EB] bg-[#FAFBFC] p-3">
+    <div className="flex items-center gap-3">
+      <label className="relative h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-white shadow-sm">
+        <input
+          type="color"
+          value={normalizeColorValue(value, colors[0] || '#00C06B')}
+          onChange={e => onChange(e.target.value.toUpperCase())}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+        <span className="block h-full w-full" style={{ backgroundColor: normalizeColorValue(value, colors[0] || '#00C06B') }} />
+      </label>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-bold text-[#667085]">点击色块选择颜色</div>
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value.toUpperCase())}
+          className="mt-2 h-[42px] w-full rounded-xl bg-white px-4 text-sm font-bold outline-none"
+          placeholder="#00C06B"
+        />
+      </div>
+    </div>
+    <div className="mt-3 text-[11px] leading-5 text-[#98A1B3]">移动端更适合直接唤起系统色盘，再配合 HEX 色值微调。</div>
   </div>
 );
+
+const normalizeColorValue = (value: string, fallback: string) => {
+  const next = value?.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(next || '')) return next!;
+  return fallback;
+};
+
+const normalizeDateTimeValue = (value: string) => {
+  if (!value) return '';
+  if (value.includes('T')) {
+    const parts = value.split('T');
+    const time = parts[1] || '00:00:00';
+    return `${parts[0]}T${time.length === 5 ? `${time}:00` : time}`;
+  }
+  return `${value}T00:00:00`;
+};
 
 const ImageUploadPanel = ({ value, onChange }: { value?: string; onChange: (value: string) => void }) => (
   <div className="rounded-2xl border border-dashed border-[#D5DAE1] bg-[#FAFBFC] p-3">
     <div className="flex items-center justify-between gap-3">
       {value ? <ImageStylePreview name={value} /> : <div className="text-[12px] text-[#99A1B1]">上传后展示图片样式</div>}
-      <div className="flex gap-2">
-        <button onClick={() => onChange('拍照上传图')} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#333] shadow-sm">拍照</button>
-        <button onClick={() => onChange('相册图片')} className="rounded-full bg-[#1F2129] px-3 py-1.5 text-[11px] font-bold text-white">相册</button>
-      </div>
+      <button onClick={() => onChange('相册图片')} className="rounded-full bg-[#1F2129] px-3 py-1.5 text-[11px] font-bold text-white">从相册选择</button>
     </div>
+    <div className="mt-3 text-[11px] leading-5 text-[#99A1B1]">建议宽、高不超过 80px*40px</div>
   </div>
 );
 

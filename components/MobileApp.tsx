@@ -339,7 +339,7 @@ export const MobileApp: React.FC = () => {
                         onUpdateProduct={updateProduct}
                         onEditProduct={(p, activeChannel) => {
                             setEditingProduct({ product: p, activeChannel });
-                            navigateTo('product_edit', 'product_list');
+                            setCurrentScreen('product_edit');
                         }}
                         isStockShared={isStockShared}
                         isShelvesUnited={isShelvesUnited}
@@ -388,9 +388,7 @@ export const MobileApp: React.FC = () => {
                   if (editingProduct?.product?.id) {
                     updateProduct(editingProduct.product.id, updates);
                     if (options) {
-                      alert(options.mode === 'all'
-                        ? '本次修改已同步到所有渠道'
-                        : `本次修改已同步到指定渠道：${options.channels.join('、')}`);
+                      alert(`本次修改已用当前商品完整信息覆盖以下渠道：${options.channels.join('、')}`);
                     }
                   }
                 }}

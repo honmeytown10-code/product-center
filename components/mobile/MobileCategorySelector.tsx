@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Search, Check, Plus, SearchCheck, ChevronRight, FolderPlus } from 'lucide-react';
+import { X, Search, Check, Plus, SearchCheck, FolderPlus } from 'lucide-react';
 import { MobileCategoryNode, STORE_CREATION_CATEGORIES } from './productMeta';
 
 interface CategoryItem {
@@ -54,6 +54,12 @@ export const MobileCategorySelector: React.FC<Props> = ({
 
   const activeParent = categoryTree.find(item => item.id === activeParentId) || categoryTree[0];
   const childOptions = activeParent?.children || [];
+  const selectedParent = categoryTree.find(item => item.id === selectedId)
+    || categoryTree.find(item => item.children?.some(child => child.id === selectedId))
+    || null;
+  const selectedChildIds = selectedParent?.id === selectedId
+    ? (selectedParent.children || []).map(child => child.id)
+    : [selectedId].filter(Boolean);
 
   const handleCreateCategory = () => {
     const nextName = creatorState?.name.trim();
@@ -139,59 +145,59 @@ export const MobileCategorySelector: React.FC<Props> = ({
             searchQuery ? (
               <div className="px-4 pb-6">
                 {filteredCategories.map((cat, idx) => {
-                  const isSelected = selectedId === cat.id;
+                  const isSelected = selectedId === cat.id || selectedChildIds.includes(cat.id);
                   return (
-                    <div
+                    <button
                       key={`${cat.id}-${idx}`}
                       onClick={() => {
                         setSelectedId(cat.id);
                         const parentId = findParentId(categoryTree, cat.id);
                         if (parentId) setActiveParentId(parentId);
                       }}
-                      className={`mb-3 min-h-[62px] rounded-2xl border px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'border-[#00C06B] bg-[#F3FCF7] text-[#00C06B]' : 'border-[#EEF1F5] bg-white text-[#333]'}`}
+                      className={`mb-2 flex min-h-[56px] w-full items-center justify-between rounded-[12px] px-4 py-3 text-left transition-colors ${isSelected ? 'bg-[#F3FCF7] text-[#00A35B]' : 'bg-[#F7F8FA] text-[#333]'}`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0">
+                      <div className="flex min-w-0 items-center">
+                        <Checkbox checked={isSelected} />
+                        <div className="ml-3 min-w-0">
                           <div className="text-[15px] font-bold">{cat.name}</div>
                           {cat.parentName ? <div className="mt-1 text-[11px] text-[#99A1B1]">{cat.parentName}</div> : null}
                         </div>
-                        {isSelected && <Check size={20} strokeWidth={3} />}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             ) : (
-              <div className="px-4 pb-6 space-y-3">
+              <div className="px-4 pb-6">
                 {categoryTree.map(parent => {
-                  const isActive = activeParentId === parent.id;
                   const parentSelected = selectedId === parent.id;
                   const hasChildren = Boolean(parent.children?.length);
                   return (
                     <div
                       key={parent.id}
-                      className={`overflow-hidden rounded-[20px] border transition-all ${isActive ? 'border-[#00C06B] bg-[#F7FDF9]' : 'border-[#EEF1F5] bg-white'}`}
+                      className="border-b border-[#F0F2F5] py-4 last:border-b-0"
                     >
                       <button
                         onClick={() => {
                           setActiveParentId(parent.id);
-                          if (!hasChildren) setSelectedId(parent.id);
+                          setSelectedId(parent.id);
                         }}
-                        className="flex w-full items-center justify-between px-4 py-4 text-left"
+                        className="flex w-full items-center justify-between text-left"
                       >
-                        <div>
-                          <div className={`text-[15px] font-black ${isActive ? 'text-[#00A35B]' : 'text-[#1F2129]'}`}>{parent.name}</div>
-                          <div className="mt-1 text-[11px] text-[#99A1B1]">
-                            {hasChildren ? '选择下方二级分类' : '当前分类可直接使用'}
+                        <div className="flex min-w-0 items-center">
+                          <Checkbox checked={parentSelected} />
+                          <div className="ml-3">
+                            <div className={`text-[15px] font-black ${parentSelected ? 'text-[#00A35B]' : 'text-[#1F2129]'}`}>{parent.name}</div>
+                            <div className="mt-1 text-[11px] text-[#99A1B1]">
+                              {hasChildren ? '勾选一级分类时默认勾选全部二级分类' : '可直接选择一级分类'}
+                            </div>
                           </div>
                         </div>
-                        {parentSelected && !hasChildren ? <Check size={18} className="text-[#00C06B]" /> : <ChevronRight size={16} className="text-[#C0C4CF]" />}
                       </button>
                       {hasChildren ? (
-                        <div className="border-t border-[#EEF1F5] bg-[#FAFBFC] px-3 py-3">
-                          <div className="grid grid-cols-2 gap-2">
+                        <div className="mt-3 space-y-2 pl-9">
                             {parent.children?.map(child => {
-                              const childSelected = selectedId === child.id;
+                              const childSelected = parentSelected || selectedId === child.id;
                               return (
                                 <button
                                   key={child.id}
@@ -199,16 +205,13 @@ export const MobileCategorySelector: React.FC<Props> = ({
                                     setActiveParentId(parent.id);
                                     setSelectedId(child.id);
                                   }}
-                                  className={`min-h-[48px] rounded-2xl border px-3 py-3 text-left text-[13px] font-bold transition-all ${childSelected ? 'border-[#00C06B] bg-[#F3FCF7] text-[#00A35B]' : 'border-[#E7EBF0] bg-white text-[#344054]'}`}
+                                  className={`flex min-h-[44px] w-full items-center rounded-[12px] px-3 py-2 text-left text-[13px] font-bold transition-all ${childSelected ? 'bg-[#F3FCF7] text-[#00A35B]' : 'bg-[#F7F8FA] text-[#344054]'}`}
                                 >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate">{child.name}</span>
-                                    {childSelected ? <Check size={16} /> : null}
-                                  </div>
+                                  <Checkbox checked={childSelected} small />
+                                  <span className="ml-3 truncate">{child.name}</span>
                                 </button>
                               );
                             })}
-                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -283,6 +286,14 @@ export const MobileCategorySelector: React.FC<Props> = ({
     </div>
   );
 };
+
+const Checkbox = ({ checked, small = false }: { checked: boolean; small?: boolean }) => (
+  <div
+    className={`flex items-center justify-center rounded-md border ${small ? 'h-4 w-4' : 'h-5 w-5'} ${checked ? 'border-[#00C06B] bg-[#00C06B]' : 'border-[#D0D5DD] bg-white'}`}
+  >
+    {checked ? <Check size={small ? 12 : 14} className="text-white" strokeWidth={3} /> : null}
+  </div>
+);
 
 const flattenCategories = (categories: MobileCategoryNode[]) =>
   categories.flatMap(category => {

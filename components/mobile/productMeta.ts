@@ -41,6 +41,11 @@ export interface MobileBadgeItem {
   source: StoreDataSource;
 }
 
+export interface MobileStallOption {
+  id: string;
+  name: string;
+}
+
 export const STORE_CREATION_CATEGORIES: Record<'standard' | 'combo', MobileCategoryNode[]> = {
   standard: [
     {
@@ -197,6 +202,16 @@ export const DEFAULT_STORE_BADGES: MobileBadgeItem[] = [
   },
 ];
 
+export const DEFAULT_STORE_STALLS: MobileStallOption[] = [
+  { id: 'stall_1', name: '玛琪专属' },
+  { id: 'stall_2', name: '档口-C' },
+  { id: 'stall_3', name: '档口-B' },
+  { id: 'stall_4', name: '档口-A' },
+  { id: 'stall_5', name: '重复商品1' },
+  { id: 'stall_6', name: '重复商品2' },
+  { id: 'stall_7', name: '1912店啤酒' },
+];
+
 export const cloneCategoryTree = (categories: MobileCategoryNode[]) =>
   categories.map(category => ({
     ...category,
@@ -211,3 +226,6 @@ export const cloneLabelGroups = (groups: MobileLabelGroup[]) =>
 
 export const cloneBadges = (badges: MobileBadgeItem[]) =>
   badges.map(item => ({ ...item }));
+
+export const cloneStalls = (stalls: MobileStallOption[]) =>
+  stalls.map(item => ({ ...item }));

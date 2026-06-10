@@ -1,14 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   ChevronLeft, Plus, ChevronRight, Check,
   ImageIcon, Smartphone, Printer, Store, ShoppingBag,
-  Info, Camera, Video, List, Sliders, Tag, Settings, Minus, X, Trash2, Edit2, Clock
+  Info, Camera, Video, List, Sliders, Tag, Settings, Minus, X, Trash2, Edit2, Clock, Search
 } from 'lucide-react';
 import { Category } from '../../types';
 import { MobileCategorySelector } from './MobileCategorySelector';
 import { MobileProductAttributeSorter } from './MobileProductAttributeSorter';
 import { MobileProductChannelSelector } from './MobileProductChannelSelector';
-import { MobileBadgeItem, MobileLabelGroup, VisualStyleType } from './productMeta';
+import { LocalSpec } from './types';
+import { MobileBadgeItem, MobileLabelGroup, MobileStallOption, VisualStyleType, DEFAULT_STORE_STALLS } from './productMeta';
+import { MobileStallSelector } from './MobileStallSelector';
 
 interface Props {
   onBack: () => void;
@@ -23,6 +25,7 @@ interface Props {
   lockStockEdit?: boolean;
   showEffectiveChannels?: boolean;
   channelSelectorHelperText?: string;
+  onBeforeChannelToggle?: (channelId: string, nextEnabled: boolean, nextChannels: string[], prevChannels: string[]) => string[];
   categoryName?: string;
   saveMode?: 'default' | 'ai_confirm';
   onSaveDraft?: (data: { name: string; basePrice: string; category: string }) => void;
@@ -37,7 +40,8 @@ interface Props {
     badgeStartDate: string;
     badgeEndDate: string;
     listDesc: string;
-    specItems: { name: string; price: string }[];
+    specItems: SpecItemDraft[];
+    linkedStallIds: string[];
   }) => void;
   labelGroups: MobileLabelGroup[];
   badges: MobileBadgeItem[];
@@ -59,7 +63,10 @@ interface Props {
     selectedBadgeId?: string;
     badgeStartDate?: string;
     badgeEndDate?: string;
-    specItems?: { name: string; price: string }[];
+    specItems?: SpecItemDraft[];
+    specSelection?: SpecFlowSelection;
+    specLibrary?: LocalSpec[];
+    linkedStallIds?: string[];
   };
 }
 
@@ -76,6 +83,25 @@ interface TimeSalesConfig {
   endDate: string;
   rules: TimeRule[];
 }
+
+interface SpecItemDraft {
+  name: string;
+  price: string;
+  stock: string;
+  unlimited: boolean;
+}
+
+interface SpecFlowSelection {
+  groupIds: string[];
+  valueMap: Record<string, string[]>;
+}
+
+const DEFAULT_SPEC_LIBRARY: LocalSpec[] = [
+  { id: 'spec_capacity', name: '杯型', source: 'brand', values: ['小杯', '中杯', '大杯'] },
+  { id: 'spec_volume', name: '规格值', source: 'brand', values: ['200ml', '300ml', '500ml'] },
+  { id: 'spec_temp', name: '温度', source: 'brand', values: ['热', '常温', '少冰'] },
+  { id: 'spec_empty', name: '规格组', source: 'store', values: [] },
+];
 
 export const MobileStandardProductCreator: React.FC<Props> = ({
   onBack,
@@ -98,6 +124,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   lockStockEdit = false,
   showEffectiveChannels = false,
   channelSelectorHelperText,
+  onBeforeChannelToggle,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [showTimeSalesEditor, setShowTimeSalesEditor] = useState(false);
@@ -106,6 +133,8 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   const [showChannelSelector, setShowChannelSelector] = useState(false);
   const [showLabelSheet, setShowLabelSheet] = useState(false);
   const [showBadgeSheet, setShowBadgeSheet] = useState(false);
+  const [showStallSelector, setShowStallSelector] = useState(false);
+  const [showSpecFlow, setShowSpecFlow] = useState(false);
   const [quickCreator, setQuickCreator] = useState<null | {
     mode: 'group' | 'label' | 'badge';
     name: string;
@@ -150,12 +179,32 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
     selectedBadgeId: initialData?.selectedBadgeId || '',
     badgeStartDate: initialData?.badgeStartDate || '',
     badgeEndDate: initialData?.badgeEndDate || '',
-    specItems: initialData?.specItems || [] as { name: string; price: string }[],
+    specItems: initialData?.specItems || [] as SpecItemDraft[],
+    linkedStallIds: initialData?.linkedStallIds || [] as string[],
   });
+  const [specLibrary, setSpecLibrary] = useState<LocalSpec[]>(initialData?.specLibrary || DEFAULT_SPEC_LIBRARY);
+  const [specFlowSelection, setSpecFlowSelection] = useState<SpecFlowSelection>(
+    initialData?.specSelection || { groupIds: [], valueMap: {} }
+  );
 
   const flatLabels = labelGroups.flatMap(group => group.items.map(item => ({ ...item, groupId: group.id, groupName: group.name })));
   const selectedLabels = flatLabels.filter(item => formData.selectedLabelIds.includes(item.id));
   const selectedBadge = badges.find(item => item.id === formData.selectedBadgeId) || null;
+  const stallOptions: MobileStallOption[] = DEFAULT_STORE_STALLS;
+  const selectedStalls = stallOptions.filter(item => formData.linkedStallIds.includes(item.id));
+  const selectedStallSummary = selectedStalls.length
+    ? (selectedStalls.length <= 2
+      ? selectedStalls.map(item => item.name).join('、')
+      : `${selectedStalls[0].name} 等 ${selectedStalls.length} 个`)
+    : '请选择关联档口';
+  const selectedSpecGroupNames = specFlowSelection.groupIds
+    .map(id => specLibrary.find(group => group.id === id)?.name)
+    .filter(Boolean) as string[];
+  const specSettingSummary = formData.specItems.length > 0
+    ? (selectedSpecGroupNames.length > 0
+      ? `${selectedSpecGroupNames.join('、')} · ${formData.specItems.length} 个规格`
+      : `已设置 ${formData.specItems.length} 个规格`)
+    : '去设置';
 
   const tabs: { id: TabType; label: string }[] = [
     { id: 'basic', label: '基础信息' },
@@ -205,6 +254,41 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   const handleChannelsSave = (nextChannels: string[]) => {
     setFormData({ ...formData, channels: nextChannels });
     setShowChannelSelector(false);
+  };
+
+  const handleStallSave = (nextIds: string[]) => {
+    setFormData(prev => ({ ...prev, linkedStallIds: nextIds }));
+    setShowStallSelector(false);
+  };
+
+  const ensureMultiSpecDraft = () => {
+    setFormData(prev => ({ ...prev, specType: 'multi' }));
+    setShowSpecFlow(true);
+  };
+
+  const handleSpecItemChange = (index: number, field: 'name' | 'price' | 'stock', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      specItems: prev.specItems.map((item, itemIndex) => (
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: field === 'price' || field === 'stock' ? value.replace(/[^\d.]/g, '') : value,
+            }
+          : item
+      )),
+    }));
+  };
+
+  const handleSpecFlowSave = (payload: {
+    library: LocalSpec[];
+    selection: SpecFlowSelection;
+    items: SpecItemDraft[];
+  }) => {
+    setSpecLibrary(payload.library);
+    setSpecFlowSelection(payload.selection);
+    setFormData(prev => ({ ...prev, specItems: payload.items, specType: 'multi' }));
+    setShowSpecFlow(false);
   };
 
   return (
@@ -313,7 +397,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
                           </div>
                           <span className="text-xs font-bold text-gray-600">统一规格</span>
                       </label>
-                      <label className="flex items-center space-x-2 cursor-pointer" onClick={() => setFormData({...formData, specType: 'multi'})}>
+                      <label className="flex items-center space-x-2 cursor-pointer" onClick={ensureMultiSpecDraft}>
                           <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${formData.specType === 'multi' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
                               {formData.specType === 'multi' && <div className="w-2.5 h-2.5 bg-[#00C06B] rounded-full animate-in zoom-in-50"></div>}
                           </div>
@@ -350,38 +434,61 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
                     )}
                 </>
             ) : (
-                <div className="space-y-3 border-b border-gray-50 pb-4 animate-in fade-in">
-                    <div className="flex justify-between items-center py-2">
-                        <label className="text-sm font-bold text-gray-700">规格设置 <span className="text-red-500">*</span></label>
-                        {lockSpecEdit ? null : (
-                          <div className="flex items-center text-sm text-gray-400 font-bold">
-                              <span>去选择</span>
-                              <ChevronRight size={16} className="ml-1"/>
-                          </div>
-                        )}
+                <div className="border-b border-gray-50 pb-4 animate-in fade-in">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2">
+                      <label className="text-sm font-bold text-gray-700">商品规格 <span className="text-red-500">*</span></label>
+                      {lockSpecEdit ? null : (
+                        <button
+                          onClick={() => setShowSpecFlow(true)}
+                          className="flex items-center text-sm font-bold text-[#00C06B]"
+                        >
+                          <span>{formData.specItems.length > 0 ? '修改' : '设置'}</span>
+                          <ChevronRight size={16} className="ml-1 text-[#98A1B3]" />
+                        </button>
+                      )}
                     </div>
-                    {lockSpecEdit && formData.specItems.length > 0 ? (
-                      <div className="space-y-2">
+                    {formData.specItems.length > 0 ? (
+                      <div className="space-y-3">
                         {formData.specItems.map((item, index) => (
-                          <div key={`${item.name}-${index}`} className="flex items-center justify-between rounded-2xl bg-[#F7F9FC] px-3 py-3">
-                            <div className="min-w-0 pr-3">
-                              <div className="truncate text-[13px] font-bold text-[#1F2129]">{item.name}</div>
-                            </div>
-                            <div className="flex items-center rounded-xl bg-white px-3 py-2 shadow-sm">
-                              <span className="mr-1 text-sm font-black text-[#1F2129]">¥</span>
-                              <input
-                                value={item.price}
-                                onChange={e => setFormData(prev => ({
-                                  ...prev,
-                                  specItems: prev.specItems.map((spec, specIndex) => specIndex === index ? { ...spec, price: e.target.value } : spec),
-                                }))}
-                                className="w-16 bg-transparent text-right text-sm font-black text-[#1F2129] outline-none"
-                              />
+                          <div key={`${item.name}-${index}`} className="rounded-2xl bg-[#F7F7F8] px-4 py-3">
+                            <div className="text-[14px] font-bold text-[#333333]">{item.name}</div>
+                            <div className="mt-3 grid grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-[12px] text-[#999999]">价格 (元)</div>
+                                {lockSpecEdit ? (
+                                  <input
+                                    value={item.price}
+                                    onChange={e => handleSpecItemChange(index, 'price', e.target.value)}
+                                    className="mt-2 w-full bg-transparent text-[16px] font-bold text-[#333333] outline-none"
+                                  />
+                                ) : (
+                                  <div className="mt-2 text-[16px] font-bold text-[#333333]">{item.price || '--'}</div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-[12px] text-[#999999]">库存</div>
+                                <div className="mt-2 text-[16px] font-bold text-[#333333]">
+                                  {item.unlimited ? '无限库存' : (item.stock || '--')}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    ) : null}
+                    ) : (
+                      <button
+                        onClick={() => setShowSpecFlow(true)}
+                        className="flex w-full items-center justify-between rounded-[20px] bg-[#F7F9FC] px-4 py-4 text-left active:bg-[#EEF2F6]"
+                      >
+                        <div className="min-w-0 pr-3">
+                          <div className="text-sm font-black text-[#1F2129]">规格设置 <span className="text-red-500">*</span></div>
+                          <div className="mt-1 truncate text-[12px] text-[#98A1B3]">{specSettingSummary}</div>
+                        </div>
+                        <ChevronRight size={18} className="shrink-0 text-[#98A1B3]" />
+                      </button>
+                    )}
+                  </div>
                 </div>
             )}
 
@@ -500,6 +607,19 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
                             </label>
                         </div>
                         <p className="text-[10px] text-gray-400 text-right leading-tight">设置“仅在套餐中售卖”，则顾客在门店中看不见此商品</p>
+                    </div>
+                </div>
+
+                <div className="h-px bg-gray-50"></div>
+
+                <div
+                  className="flex justify-between items-center py-2 cursor-pointer active:bg-gray-50 transition-colors"
+                  onClick={() => setShowStallSelector(true)}
+                >
+                    <label className="text-sm font-bold text-gray-700">关联档口</label>
+                    <div className="ml-4 flex min-w-0 items-center text-sm text-gray-400 font-bold">
+                        <span className="truncate">{selectedStallSummary}</span>
+                        <ChevronRight size={16} className="ml-1 flex-shrink-0"/>
                     </div>
                 </div>
 
@@ -711,6 +831,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
                 badgeEndDate: formData.badgeEndDate,
                 listDesc: formData.listDesc,
                 specItems: formData.specItems,
+                linkedStallIds: formData.linkedStallIds,
               })}
               className={`${hideSecondaryAction ? 'w-full bg-[#00C06B] text-white shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98]' : 'flex-1 bg-white border border-gray-200 text-gray-700 active:bg-gray-50 active:scale-95'} h-12 rounded-xl font-bold text-sm transition-all`}
             >
@@ -756,8 +877,27 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
         <MobileProductChannelSelector 
           selectedChannels={formData.channels}
           helperText={channelSelectorHelperText}
+          onBeforeChannelToggle={onBeforeChannelToggle}
           onBack={() => setShowChannelSelector(false)}
           onSave={handleChannelsSave}
+        />
+      )}
+
+      <MobileStallSelector
+        isOpen={showStallSelector}
+        options={stallOptions}
+        selectedIds={formData.linkedStallIds}
+        onClose={() => setShowStallSelector(false)}
+        onSave={handleStallSave}
+      />
+
+      {showSpecFlow && (
+        <SpecSetupFlow
+          library={specLibrary}
+          selection={specFlowSelection}
+          items={formData.specItems}
+          onClose={() => setShowSpecFlow(false)}
+          onSave={handleSpecFlowSave}
         />
       )}
 
@@ -849,6 +989,412 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
     </div>
   );
 };
+
+const SpecSetupFlow = ({
+  library,
+  selection,
+  items,
+  onClose,
+  onSave,
+}: {
+  library: LocalSpec[];
+  selection: SpecFlowSelection;
+  items: SpecItemDraft[];
+  onClose: () => void;
+  onSave: (payload: { library: LocalSpec[]; selection: SpecFlowSelection; items: SpecItemDraft[] }) => void;
+}) => {
+  const [step, setStep] = useState<'values' | 'pricing'>(
+    items.length > 0 && selection.groupIds.length > 0 ? 'pricing' : 'values'
+  );
+  const [keyword, setKeyword] = useState('');
+  const [localLibrary, setLocalLibrary] = useState<LocalSpec[]>(library);
+  const [valueMap, setValueMap] = useState<Record<string, string[]>>(selection.valueMap);
+  const [activeGroupId, setActiveGroupId] = useState<string>(selection.groupIds[0] || library[0]?.id || '');
+  const [priceItems, setPriceItems] = useState<SpecItemDraft[]>(items);
+  const [priceErrors, setPriceErrors] = useState<string[]>([]);
+  const [stockErrors, setStockErrors] = useState<string[]>([]);
+  const [showGroupCreator, setShowGroupCreator] = useState(false);
+  const [showValueCreator, setShowValueCreator] = useState(false);
+
+  const filteredGroups = useMemo(() => (
+    localLibrary.filter(group => !keyword.trim() || group.name.toLowerCase().includes(keyword.trim().toLowerCase()))
+  ), [keyword, localLibrary]);
+
+  const selectedGroupIds = useMemo(() => (
+    localLibrary
+      .filter(group => (valueMap[group.id] || []).length > 0)
+      .map(group => group.id)
+  ), [localLibrary, valueMap]);
+
+  const selectedGroups = useMemo(() => (
+    selectedGroupIds
+      .map(id => localLibrary.find(group => group.id === id))
+      .filter(Boolean) as LocalSpec[]
+  ), [localLibrary, selectedGroupIds]);
+
+  const activeGroup = filteredGroups.find(group => group.id === activeGroupId)
+    || localLibrary.find(group => group.id === activeGroupId)
+    || filteredGroups[0]
+    || localLibrary[0]
+    || null;
+
+  useEffect(() => {
+    if (!localLibrary.length) {
+      setActiveGroupId('');
+      return;
+    }
+    if (!activeGroupId || !localLibrary.some(group => group.id === activeGroupId)) {
+      setActiveGroupId(localLibrary[0].id);
+    }
+  }, [activeGroupId, localLibrary]);
+
+  const toggleValue = (groupId: string, value: string) => {
+    setValueMap(prev => {
+      const current = prev[groupId] || [];
+      const nextValues = current.includes(value)
+        ? current.filter(item => item !== value)
+        : [...current, value];
+      const nextMap = { ...prev };
+      if (nextValues.length > 0) {
+        nextMap[groupId] = nextValues;
+      } else {
+        delete nextMap[groupId];
+      }
+      return nextMap;
+    });
+  };
+
+  const handleNextFromValues = () => {
+    if (!selectedGroupIds.length) return;
+    const nextNames = buildSpecCombinationNames(localLibrary, selectedGroupIds, valueMap);
+    const currentItemMap = new Map(priceItems.map(item => [item.name, item]));
+    setPriceItems(nextNames.map(name => {
+      const current = currentItemMap.get(name);
+      return current || { name, price: '', stock: '', unlimited: true };
+    }));
+    setPriceErrors([]);
+    setStockErrors([]);
+    setStep('pricing');
+  };
+
+  const handlePriceChange = (index: number, value: string) => {
+    const nextValue = value.replace(/[^\d.]/g, '');
+    setPriceItems(prev => prev.map((item, itemIndex) => itemIndex === index ? { ...item, price: nextValue } : item));
+    setPriceErrors(prev => prev.filter(name => name !== priceItems[index]?.name));
+  };
+
+  const handleStockChange = (index: number, value: string) => {
+    const nextValue = value.replace(/[^\d]/g, '');
+    setPriceItems(prev => prev.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, stock: nextValue, unlimited: false } : item
+    )));
+    setStockErrors(prev => prev.filter(name => name !== priceItems[index]?.name));
+  };
+
+  const toggleUnlimited = (index: number) => {
+    setPriceItems(prev => prev.map((item, itemIndex) => (
+      itemIndex === index
+        ? { ...item, unlimited: !item.unlimited, stock: item.unlimited ? item.stock : '' }
+        : item
+    )));
+    setStockErrors(prev => prev.filter(name => name !== priceItems[index]?.name));
+  };
+
+  const handleSave = () => {
+    const missingPriceNames = priceItems.filter(item => !item.price.trim()).map(item => item.name);
+    const missingStockNames = priceItems
+      .filter(item => !item.unlimited && !item.stock.trim())
+      .map(item => item.name);
+    if (missingPriceNames.length > 0 || missingStockNames.length > 0) {
+      setPriceErrors(missingPriceNames);
+      setStockErrors(missingStockNames);
+      return;
+    }
+    onSave({
+      library: localLibrary,
+      selection: { groupIds: selectedGroupIds, valueMap },
+      items: priceItems,
+    });
+  };
+
+  const handleCreateGroup = (name: string) => {
+    const nextGroup: LocalSpec = {
+      id: `spec_store_${Date.now()}`,
+      name,
+      source: 'store',
+      values: [],
+    };
+    setLocalLibrary(prev => [...prev, nextGroup]);
+    setActiveGroupId(nextGroup.id);
+    setShowGroupCreator(false);
+  };
+
+  const handleCreateValue = (name: string) => {
+    if (!activeGroup) return;
+    setLocalLibrary(prev => prev.map(group => (
+      group.id === activeGroup.id
+        ? { ...group, values: group.values.includes(name) ? group.values : [...group.values, name] }
+        : group
+    )));
+    setValueMap(prev => ({
+      ...prev,
+      [activeGroup.id]: [...new Set([...(prev[activeGroup.id] || []), name])],
+    }));
+    setShowValueCreator(false);
+  };
+
+  const selectedValueSummary = summarizeSpecSelections(selectedGroups, valueMap);
+
+  return (
+    <div className="absolute inset-0 z-[135] flex flex-col bg-[#F5F6FA] animate-in slide-in-from-right duration-300">
+      <div className="h-[50px] bg-white border-b border-gray-100 flex items-center px-4 shrink-0">
+        <button
+          onClick={() => {
+            if (step === 'values') onClose();
+            else setStep('values');
+          }}
+          className="p-2 -ml-2 text-gray-600"
+        >
+          <ChevronLeft size={24} />
+        </button>
+        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">
+          {step === 'pricing' ? '规格设置' : '选择规格'}
+        </span>
+      </div>
+
+      {step === 'values' ? (
+        <>
+          <div className="bg-white px-4 py-3 border-b border-gray-100">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A0B3]" />
+              <input
+                value={keyword}
+                onChange={e => setKeyword(e.target.value)}
+                placeholder="搜索规格组"
+                className="h-10 w-full rounded-xl bg-[#F5F6FA] pl-9 pr-3 text-sm font-medium outline-none"
+              />
+            </div>
+          </div>
+          <div className="bg-[#EAFBF2] px-4 py-3 text-[12px] font-bold text-[#12A150]">
+            {selectedValueSummary || '请选择需要设置的规格值'}
+          </div>
+          <div className="min-h-0 flex-1 flex overflow-hidden">
+            <div className="w-[92px] shrink-0 overflow-y-auto bg-[#F8FAFB] border-r border-gray-100">
+              {(filteredGroups.length ? filteredGroups : localLibrary).map(group => (
+                <button
+                  key={group.id}
+                  onClick={() => setActiveGroupId(group.id)}
+                  className={`flex min-h-[72px] w-full items-center justify-center border-l-4 px-2 text-center text-[12px] font-bold ${activeGroup?.id === group.id ? 'border-[#00C06B] bg-white text-[#00C06B]' : 'border-transparent text-[#667085]'}`}
+                >
+                  {group.name}
+                </button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar p-4">
+              {activeGroup ? (
+                <>
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black text-[#1F2129]">{activeGroup.name}</div>
+                      <div className="mt-1 text-[11px] text-[#98A1B3]">请选择要参与组合的规格值</div>
+                    </div>
+                    {activeGroup.source === 'store' ? (
+                      <button onClick={() => setShowValueCreator(true)} className="text-[12px] font-bold text-[#00A35B]">新增规格值</button>
+                    ) : null}
+                  </div>
+                  {activeGroup.values.length > 0 ? (
+                    <div className="space-y-2">
+                      {activeGroup.values.map(value => {
+                        const checked = (valueMap[activeGroup.id] || []).includes(value);
+                        return (
+                          <button
+                            key={value}
+                            onClick={() => toggleValue(activeGroup.id, value)}
+                            className={`flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left ${checked ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#EEF1F5] bg-white'}`}
+                          >
+                            <span className="text-sm font-bold text-[#1F2129]">{value}</span>
+                            <div className={`flex h-5 w-5 items-center justify-center rounded border ${checked ? 'border-[#00C06B] bg-[#00C06B]' : 'border-[#D0D5DD] bg-white'}`}>
+                              {checked ? <Check size={14} className="text-white" strokeWidth={3} /> : null}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex h-full min-h-[280px] flex-col items-center justify-center rounded-[24px] bg-white px-6 text-center">
+                      <div className="text-sm font-bold text-[#98A1B3]">该规格组暂无规格值</div>
+                      {activeGroup.source === 'store' ? (
+                        <button onClick={() => setShowValueCreator(true)} className="mt-4 rounded-xl bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white">新增规格值</button>
+                      ) : (
+                        <div className="mt-3 text-[12px] text-[#98A1B3]">请先在规格管理中补充规格值</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="bg-white border-t border-gray-100 p-4 pb-8 flex gap-3">
+            <button onClick={() => setShowGroupCreator(true)} className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-bold text-[#333]">新增规格组</button>
+            <button
+              onClick={handleNextFromValues}
+              disabled={!selectedGroupIds.length}
+              className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
+            >
+              下一步
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      {step === 'pricing' ? (
+        <>
+          <div className="bg-[#EAFBF2] px-4 py-3 text-[12px] font-bold text-[#12A150]">
+            {selectedValueSummary || '请先选择规格值'}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar p-4 space-y-3">
+            {priceItems.map((item, index) => {
+              const hasPriceError = priceErrors.includes(item.name);
+              const hasStockError = stockErrors.includes(item.name);
+              return (
+                <div key={item.name} className="rounded-[20px] bg-white p-4 shadow-sm">
+                  <div className="text-[14px] font-black text-[#1F2129]">{item.name}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className={`rounded-xl border bg-[#FAFBFC] px-3 ${hasPriceError ? 'border-[#F97066]' : 'border-[#E5E7EB]'}`}>
+                      <div className="pt-2 text-[11px] text-[#98A1B3]">价格 (元)</div>
+                      <div className="flex items-center">
+                        <span className="mr-1 text-sm font-black text-[#1F2129]">¥</span>
+                        <input
+                          value={item.price}
+                          onChange={e => handlePriceChange(index, e.target.value)}
+                          placeholder="请输入"
+                          className="h-10 w-full bg-transparent text-right text-sm font-bold text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
+                        />
+                      </div>
+                    </div>
+                    <div className={`rounded-xl border bg-[#FAFBFC] px-3 ${hasStockError ? 'border-[#F97066]' : 'border-[#E5E7EB]'}`}>
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-[11px] text-[#98A1B3]">库存</span>
+                        <button onClick={() => toggleUnlimited(index)} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${item.unlimited ? 'bg-[#EAFBF2] text-[#12A150]' : 'bg-[#EEF2F6] text-[#667085]'}`}>
+                          {item.unlimited ? '无限库存' : '设为无限'}
+                        </button>
+                      </div>
+                      {item.unlimited ? (
+                        <div className="h-10 flex items-center justify-end text-sm font-bold text-[#1F2129]">无限库存</div>
+                      ) : (
+                        <input
+                          value={item.stock}
+                          onChange={e => handleStockChange(index, e.target.value)}
+                          placeholder="请输入"
+                          className="h-10 w-full bg-transparent text-right text-sm font-bold text-[#1F2129] outline-none placeholder:text-[#C0C4CF]"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="bg-white border-t border-gray-100 p-4 pb-8 flex gap-3">
+            <button onClick={() => setStep('values')} className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-bold text-[#333]">重新选择</button>
+            <button onClick={handleSave} className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white">保存</button>
+          </div>
+        </>
+      ) : null}
+
+      {showGroupCreator && (
+        <SpecTextCreateModal
+          title="新增规格组"
+          placeholder="请输入规格组名称"
+          onClose={() => setShowGroupCreator(false)}
+          onSave={handleCreateGroup}
+        />
+      )}
+
+      {showValueCreator && activeGroup ? (
+        <SpecTextCreateModal
+          title={`新增${activeGroup.name}规格值`}
+          placeholder="请输入规格值"
+          onClose={() => setShowValueCreator(false)}
+          onSave={handleCreateValue}
+        />
+      ) : null}
+    </div>
+  );
+};
+
+const SpecTextCreateModal = ({
+  title,
+  placeholder,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  placeholder: string;
+  onClose: () => void;
+  onSave: (value: string) => void;
+}) => {
+  const [value, setValue] = useState('');
+  return (
+    <div className="absolute inset-0 z-[145] flex flex-col justify-end bg-black/50 animate-in fade-in">
+      <div className="flex-1" onClick={onClose}></div>
+      <div className="rounded-t-[24px] bg-white p-5 pb-8 animate-in slide-in-from-bottom duration-300">
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-black text-[#1F2129]">{title}</div>
+          <button onClick={onClose} className="rounded-full bg-[#F5F5F5] p-1.5 text-[#98A0B3]"><X size={16} /></button>
+        </div>
+        <input
+          autoFocus
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={placeholder}
+          className="mt-5 h-11 w-full rounded-xl bg-[#F5F6FA] px-4 text-sm font-bold outline-none"
+        />
+        <div className="mt-5 flex gap-3">
+          <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-bold text-[#666]">取消</button>
+          <button onClick={() => value.trim() && onSave(value.trim())} className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white disabled:bg-gray-200" disabled={!value.trim()}>确定</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const buildSpecCombinationNames = (
+  library: LocalSpec[],
+  groupIds: string[],
+  valueMap: Record<string, string[]>
+) => {
+  const selectedValues = groupIds
+    .map(groupId => {
+      const group = library.find(item => item.id === groupId);
+      return {
+        groupId,
+        groupName: group?.name || '',
+        values: valueMap[groupId] || [],
+      };
+    })
+    .filter(item => item.values.length > 0);
+
+  if (!selectedValues.length) return [];
+
+  let combinations: string[][] = [[]];
+  selectedValues.forEach(group => {
+    const next: string[][] = [];
+    combinations.forEach(base => {
+      group.values.forEach(value => next.push([...base, value]));
+    });
+    combinations = next;
+  });
+
+  return combinations.map(parts => parts.join(' '));
+};
+
+const summarizeSpecSelections = (groups: LocalSpec[], valueMap: Record<string, string[]>) => (
+  groups
+    .map(group => `${group.name}：${(valueMap[group.id] || []).join('、')}`)
+    .filter(Boolean)
+    .join('；')
+);
 
 const LabelSelectorSheet = ({
   groups,
@@ -1053,6 +1599,9 @@ const QuickCreateMetaModal = ({
               <ImageUploadField
                 value={state.imageName}
                 title={state.mode === 'label' ? '标签图片' : '角标图片'}
+                helperText={state.mode === 'label'
+                  ? '建议宽高108*36px，比例3:1，图片不超过30kb'
+                  : '建议宽、高不超过80px*40px'}
                 onSelect={value => onChange((prev: any) => prev ? { ...prev, imageName: value } : prev)}
               />
             )}
@@ -1125,48 +1674,57 @@ const ColorPaletteField = ({
 }) => (
   <div className="space-y-2">
     <div className="text-[12px] font-bold text-[#667085]">{label}</div>
-    <div className="flex flex-wrap gap-2">
-      {palette.map(color => {
-        const active = value.toLowerCase() === color.toLowerCase();
-        return (
-          <button
-            key={color}
-            onClick={() => onChange(color)}
-            className={`relative h-10 w-10 rounded-2xl border-2 ${active ? 'border-[#111827]' : 'border-white'}`}
-            style={{ backgroundColor: color }}
-          >
-            {active ? <Check size={14} className="absolute inset-0 m-auto text-white" strokeWidth={3} /> : null}
-          </button>
-        );
-      })}
-      <input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="h-10 min-w-0 flex-1 rounded-xl bg-[#F5F6FA] px-3 text-[12px] font-bold outline-none"
-      />
+    <div className="rounded-2xl border border-[#E5E7EB] bg-[#FAFBFC] p-3">
+      <div className="flex items-center gap-3">
+        <label className="relative h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-white shadow-sm">
+          <input
+            type="color"
+            value={normalizeHexColor(value, palette[0] || '#00C06B')}
+            onChange={e => onChange(e.target.value.toUpperCase())}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+          <span className="block h-full w-full" style={{ backgroundColor: normalizeHexColor(value, palette[0] || '#00C06B') }} />
+        </label>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold text-[#667085]">点击色块选择颜色</div>
+          <input
+            value={value}
+            onChange={e => onChange(e.target.value.toUpperCase())}
+            className="mt-2 h-10 w-full rounded-xl bg-white px-3 text-[12px] font-bold outline-none"
+            placeholder="#00C06B"
+          />
+        </div>
+      </div>
+      <div className="mt-3 text-[11px] leading-5 text-[#98A1B3]">移动端更适合使用系统色盘选择，再通过 HEX 色值微调。</div>
     </div>
   </div>
 );
+
+const normalizeHexColor = (value: string, fallback: string) => {
+  const next = value?.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(next || '')) return next!;
+  return fallback;
+};
 
 const ImageUploadField = ({
   value,
   title,
   onSelect,
+  helperText,
 }: {
   value?: string;
   title: string;
   onSelect: (value: string) => void;
+  helperText: string;
 }) => (
   <div className="space-y-2">
     <div className="text-[12px] font-bold text-[#667085]">{title}</div>
     <div className="rounded-2xl border border-dashed border-[#D5DAE1] bg-[#FAFBFC] p-3">
       <div className="flex items-center justify-between">
         {value ? <ImagePreviewChip name={value} /> : <div className="text-[12px] text-[#99A1B1]">上传后可直接预览图片样式</div>}
-        <div className="flex gap-2">
-          <button onClick={() => onSelect('拍照上传图')} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#333] shadow-sm">拍照</button>
-          <button onClick={() => onSelect('相册图片')} className="rounded-full bg-[#1F2129] px-3 py-1.5 text-[11px] font-bold text-white">相册</button>
-        </div>
+        <button onClick={() => onSelect('相册图片')} className="rounded-full bg-[#1F2129] px-3 py-1.5 text-[11px] font-bold text-white">从相册选择</button>
       </div>
+      <div className="mt-3 text-[11px] leading-5 text-[#99A1B1]">{helperText}</div>
     </div>
   </div>
 );

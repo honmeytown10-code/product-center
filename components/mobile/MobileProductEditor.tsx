@@ -1,8 +1,24 @@
 import React, { useState } from 'react';
 import { Category, Product } from '../../types';
+import { useProducts } from '../../context';
 import { MobileStandardProductCreator } from './MobileStandardProductCreator';
 import { MobileBadgeItem, MobileLabelGroup } from './productMeta';
-import { Check, ChevronLeft, Printer, ShoppingBag, Smartphone, Store, X } from 'lucide-react';
+import { ChevronLeft, Printer, ShoppingBag, Smartphone, Store, X } from 'lucide-react';
+import { LocalSpec } from './types';
+
+interface SpecItemDraft {
+  name: string;
+  price: string;
+  stock: string;
+  unlimited: boolean;
+}
+
+const DEFAULT_SPEC_LIBRARY: LocalSpec[] = [
+  { id: 'spec_capacity', name: '杯型', source: 'brand', values: ['小杯', '中杯', '大杯'] },
+  { id: 'spec_volume', name: '规格值', source: 'brand', values: ['200ml', '300ml', '500ml'] },
+  { id: 'spec_temp', name: '温度', source: 'brand', values: ['热', '常温', '少冰'] },
+  { id: 'spec_empty', name: '规格组', source: 'store', values: [] },
+];
 
 interface Props {
   product: Product;
@@ -27,18 +43,30 @@ export const MobileProductEditor: React.FC<Props> = ({
   onBadgesChange,
   onSave,
 }) => {
+  const { products } = useProducts();
   const initialChannels = getInitialChannels(activeChannel);
   const [pendingPayload, setPendingPayload] = useState<null | {
     name: string;
     category: string;
     basePrice: string;
-    specItems: { name: string; price: string }[];
+    specItems: SpecItemDraft[];
+    linkedStallIds: string[];
   }>(null);
-  const [applyMode, setApplyMode] = useState<'all' | 'partial'>('all');
   const [effectiveChannels, setEffectiveChannels] = useState<string[]>(['mini', 'meituan', 'taobao', 'pos']);
 
+  const getRelatedComboNames = (currentProduct: Product) => (
+    products
+      .filter(item => item.type === 'combo' && item.comboItemIds?.includes(currentProduct.id))
+      .map(item => item.name)
+  );
+
+  const guardChannelClose = (_channelId: string, nextEnabled: boolean, _nextChannels: string[], _prevChannels: string[]) => {
+    if (nextEnabled) return [];
+    return getRelatedComboNames(product);
+  };
+
   const submitEdit = (
-    payload: { name: string; category: string; basePrice: string; specItems: { name: string; price: string }[] },
+    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[] },
     options?: { mode: 'all' | 'partial'; channels: string[] }
   ) => {
     const nextPrice = Number(payload.basePrice) || product.price;
@@ -47,7 +75,8 @@ export const MobileProductEditor: React.FC<Props> = ({
           ...product.specs?.[index],
           name: item.name,
           price: Number(item.price) || product.specs?.[index]?.price || nextPrice,
-          stock: product.specs?.[index]?.stock ?? 0,
+          stock: item.unlimited ? -1 : (Number(item.stock) || product.specs?.[index]?.stock || 0),
+          unlimited: item.unlimited,
         }))
       : product.specs;
 
@@ -56,6 +85,7 @@ export const MobileProductEditor: React.FC<Props> = ({
       category: payload.category,
       price: nextPrice,
       specs: nextSpecs,
+      linkedStallIds: payload.linkedStallIds,
     }, options);
     onBack();
   };
@@ -73,6 +103,7 @@ export const MobileProductEditor: React.FC<Props> = ({
         lockSpecEdit
         lockStockEdit
         channelSelectorHelperText="渠道开启后商品将在门店上架售卖，关闭后商品将从渠道移除。"
+        onBeforeChannelToggle={guardChannelClose}
         labelGroups={labelGroups}
         badges={badges}
         onLabelGroupsChange={onLabelGroupsChange}
@@ -93,7 +124,12 @@ export const MobileProductEditor: React.FC<Props> = ({
           specItems: (product.specs || []).map(spec => ({
             name: spec.name,
             price: String(spec.price ?? product.price),
+            stock: spec.unlimited || spec.stock === -1 ? '' : String(spec.stock ?? ''),
+            unlimited: !!spec.unlimited || spec.stock === -1,
           })),
+          specSelection: inferSpecSelection((product.specs || []).map(spec => spec.name), DEFAULT_SPEC_LIBRARY),
+          specLibrary: DEFAULT_SPEC_LIBRARY,
+          linkedStallIds: product.linkedStallIds || [],
         }}
         onPrimaryAction={data => {
           const payload = {
@@ -101,10 +137,11 @@ export const MobileProductEditor: React.FC<Props> = ({
             category: data.category,
             basePrice: data.basePrice,
             specItems: data.specItems,
+            linkedStallIds: data.linkedStallIds,
           };
           if (activeChannel === 'all') {
             setPendingPayload(payload);
-            setApplyMode('all');
+            setEffectiveChannels(['mini', 'meituan', 'taobao', 'pos']);
             return;
           }
           submitEdit(payload, { mode: 'partial', channels: initialChannels });
@@ -113,16 +150,14 @@ export const MobileProductEditor: React.FC<Props> = ({
 
       {pendingPayload ? (
         <ApplyChannelModal
-          mode={applyMode}
           selectedChannels={effectiveChannels}
           onClose={() => setPendingPayload(null)}
-          onModeChange={setApplyMode}
           onToggleChannel={channel =>
             setEffectiveChannels(prev => prev.includes(channel) ? prev.filter(item => item !== channel) : [...prev, channel])
           }
           onConfirm={() => submitEdit(pendingPayload, {
-            mode: applyMode,
-            channels: applyMode === 'all' ? ['mini', 'meituan', 'taobao', 'pos'] : effectiveChannels,
+            mode: 'partial',
+            channels: effectiveChannels,
           })}
         />
       ) : null}
@@ -143,18 +178,30 @@ const APPLY_CHANNEL_OPTIONS = [
   { id: 'pos', label: 'POS收银', icon: <Printer size={16} />, color: 'text-blue-600', bg: 'bg-blue-50' },
 ];
 
+const inferSpecSelection = (specNames: string[], library: LocalSpec[]) => {
+  const valueMap: Record<string, string[]> = {};
+  library.forEach(group => {
+    const matchedValues = group.values.filter(value =>
+      specNames.some(name => name.includes(value))
+    );
+    if (matchedValues.length > 0) {
+      valueMap[group.id] = matchedValues;
+    }
+  });
+  return {
+    groupIds: library.filter(group => (valueMap[group.id] || []).length > 0).map(group => group.id),
+    valueMap,
+  };
+};
+
 const ApplyChannelModal = ({
-  mode,
   selectedChannels,
   onClose,
-  onModeChange,
   onToggleChannel,
   onConfirm,
 }: {
-  mode: 'all' | 'partial';
   selectedChannels: string[];
   onClose: () => void;
-  onModeChange: (mode: 'all' | 'partial') => void;
   onToggleChannel: (channel: string) => void;
   onConfirm: () => void;
 }) => (
@@ -165,53 +212,34 @@ const ApplyChannelModal = ({
         <div className="text-lg font-black text-[#1F2129]">选择生效渠道</div>
         <button onClick={onClose} className="rounded-full bg-[#F5F5F5] p-1.5 text-[#98A0B3]"><X size={16} /></button>
       </div>
-      <div className="mt-4 space-y-3">
-        <button
-          onClick={() => onModeChange('all')}
-          className={`flex w-full items-start rounded-2xl border px-4 py-4 text-left ${mode === 'all' ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#EEF1F5] bg-white'}`}
-        >
-          <div className="flex-1">
-            <div className="text-sm font-black text-[#1F2129]">同步到所有渠道</div>
-            <div className="mt-1 text-[11px] text-[#98A1B3]">本次修改会同步到小程序、美团外卖、淘宝闪购、POS 收银</div>
-          </div>
-          {mode === 'all' ? <Check size={18} className="text-[#00C06B]" /> : null}
-        </button>
-        <button
-          onClick={() => onModeChange('partial')}
-          className={`flex w-full items-start rounded-2xl border px-4 py-4 text-left ${mode === 'partial' ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#EEF1F5] bg-white'}`}
-        >
-          <div className="flex-1">
-            <div className="text-sm font-black text-[#1F2129]">指定渠道修改</div>
-            <div className="mt-1 text-[11px] text-[#98A1B3]">仅对本次勾选的渠道生效</div>
-          </div>
-          {mode === 'partial' ? <Check size={18} className="text-[#00C06B]" /> : null}
-        </button>
-      </div>
-      {mode === 'partial' ? (
-        <div className="mt-4 rounded-2xl bg-[#F7F9FC] p-3">
-          <div className="mb-3 text-[12px] font-bold text-[#667085]">选择渠道</div>
-          <div className="grid grid-cols-2 gap-2">
-            {APPLY_CHANNEL_OPTIONS.map(option => {
-              const active = selectedChannels.includes(option.id);
-              return (
-                <button
-                  key={option.id}
-                  onClick={() => onToggleChannel(option.id)}
-                  className={`flex items-center rounded-2xl border px-3 py-3 ${active ? 'border-[#00C06B] bg-white' : 'border-[#E5E7EB] bg-white'}`}
-                >
-                  <div className={`mr-3 rounded-xl p-2 ${active ? `${option.bg} ${option.color}` : 'bg-[#F3F4F6] text-[#98A1B3]'}`}>{option.icon}</div>
-                  <span className={`text-sm font-bold ${active ? 'text-[#1F2129]' : 'text-[#98A1B3]'}`}>{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
+      <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+        <div className="text-[12px] leading-5 font-medium text-orange-700">
+          本次保存会用当前整条商品信息覆盖所选渠道中的商品内容，不仅同步本次修改的字段，请谨慎选择生效渠道。
         </div>
-      ) : null}
+      </div>
+      <div className="mt-4 rounded-2xl bg-[#F7F9FC] p-3">
+        <div className="mb-3 text-[12px] font-bold text-[#667085]">选择渠道</div>
+        <div className="grid grid-cols-2 gap-2">
+          {APPLY_CHANNEL_OPTIONS.map(option => {
+            const active = selectedChannels.includes(option.id);
+            return (
+              <button
+                key={option.id}
+                onClick={() => onToggleChannel(option.id)}
+                className={`flex items-center rounded-2xl border px-3 py-3 ${active ? 'border-[#00C06B] bg-white' : 'border-[#E5E7EB] bg-white'}`}
+              >
+                <div className={`mr-3 rounded-xl p-2 ${active ? `${option.bg} ${option.color}` : 'bg-[#F3F4F6] text-[#98A1B3]'}`}>{option.icon}</div>
+                <span className={`text-sm font-bold ${active ? 'text-[#1F2129]' : 'text-[#98A1B3]'}`}>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="mt-5 flex gap-3">
         <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E7EB] text-sm font-bold text-[#667085]">取消</button>
         <button
           onClick={onConfirm}
-          disabled={mode === 'partial' && selectedChannels.length === 0}
+          disabled={selectedChannels.length === 0}
           className="flex-1 h-11 rounded-xl bg-[#00C06B] text-sm font-bold text-white disabled:opacity-40"
         >
           确认保存

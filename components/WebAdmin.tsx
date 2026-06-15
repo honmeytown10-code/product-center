@@ -18,7 +18,7 @@ import { WebRequiredProductPolicyEditor } from './web/WebRequiredProductPolicyEd
 import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
 import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
-import { WebCategorySelectModal, WebImportModal } from './web/WebModals';
+import { WebCategorySelectModal, WebImportModal, WebThirdPartyImportRecordsModal } from './web/WebModals';
 import { BadgeOptionConfig, DEFAULT_BADGE_OPTIONS, DEFAULT_GROUPED_TAG_OPTIONS, GroupedTagFieldId, GroupedTagGroup, WebProductForm } from './web/WebProductForm';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
@@ -242,6 +242,7 @@ export const WebAdmin: React.FC = () => {
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isThirdPartyImportRecordsOpen, setIsThirdPartyImportRecordsOpen] = useState(false);
   const [categorySelectContext, setCategorySelectContext] = useState<{ type: 'standard' | 'combo'; scope: TopNavView } | null>(null);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
   const [creationContext, setCreationContext] = useState<CreationContext | null>(null); // Triggers Form Page
@@ -691,6 +692,7 @@ export const WebAdmin: React.FC = () => {
               setCategorySelectContext({ type, scope: 'brand' });
             }}
             onImportClick={() => setIsImportModalOpen(true)} 
+            onImportRecordsClick={() => setIsThirdPartyImportRecordsOpen(true)}
             onViewDetail={(p: any) => setDetailContext(p)}
             onEditProduct={(p: any) => {
               const matchedCategory = webCategories
@@ -1038,6 +1040,12 @@ export const WebAdmin: React.FC = () => {
 
       {/* Global Modals */}
       {isImportModalOpen && <WebImportModal onClose={() => setIsImportModalOpen(false)} />}
+      {isThirdPartyImportRecordsOpen && (
+        <WebThirdPartyImportRecordsModal
+          onClose={() => setIsThirdPartyImportRecordsOpen(false)}
+          onStartImport={() => setIsImportModalOpen(true)}
+        />
+      )}
       {categorySelectContext && (
         <WebCategorySelectModal
           type={categorySelectContext.type}

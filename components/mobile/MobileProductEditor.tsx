@@ -30,6 +30,8 @@ interface Props {
   onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
   onBadgesChange: (badges: MobileBadgeItem[]) => void;
   onSave?: (updates: Partial<Product>, options?: { mode: 'all' | 'partial'; channels: string[] }) => void;
+  draftBasePrice?: string;
+  draftSpecItems?: SpecItemDraft[];
 }
 
 export const MobileProductEditor: React.FC<Props> = ({
@@ -42,6 +44,8 @@ export const MobileProductEditor: React.FC<Props> = ({
   onLabelGroupsChange,
   onBadgesChange,
   onSave,
+  draftBasePrice,
+  draftSpecItems,
 }) => {
   const { products } = useProducts();
   const initialChannels = getInitialChannels(activeChannel);
@@ -111,7 +115,7 @@ export const MobileProductEditor: React.FC<Props> = ({
         initialData={{
           name: product.name,
           category: product.category,
-          basePrice: String(product.price),
+          basePrice: draftBasePrice ?? String(product.price),
           stock: product.stock === -1 ? '' : String(product.stock ?? ''),
           specType: product.isMultiSpec ? 'multi' : 'single',
           channels: initialChannels,
@@ -121,7 +125,7 @@ export const MobileProductEditor: React.FC<Props> = ({
           selectedBadgeId: '',
           badgeStartDate: '',
           badgeEndDate: '',
-          specItems: (product.specs || []).map(spec => ({
+          specItems: draftSpecItems ?? (product.specs || []).map(spec => ({
             name: spec.name,
             price: String(spec.price ?? product.price),
             stock: spec.unlimited || spec.stock === -1 ? '' : String(spec.stock ?? ''),

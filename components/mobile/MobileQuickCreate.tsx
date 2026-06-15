@@ -88,6 +88,7 @@ const Ic: Record<string, (p?: IcProps) => React.ReactElement> = {
   stop: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 18} height={p.s || 18} fill={p.c || 'currentColor'}><rect x="6" y="6" width="12" height="12" rx="2.5" /></svg>),
   flash: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 20} height={p.s || 20} fill="none" stroke={p.c || 'currentColor'} strokeWidth={p.w || 1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L5 13h6l-1 9 8-12h-6z" /></svg>),
   list: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 18} height={p.s || 18} fill="none" stroke={p.c || 'currentColor'} strokeWidth={p.w || 1.9} strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" /></svg>),
+  link: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 18} height={p.s || 18} fill="none" stroke={p.c || 'currentColor'} strokeWidth={p.w || 1.9} strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.1 0l2-2a5 5 0 00-7.1-7.1l-1.1 1.1" /><path d="M14 11a5 5 0 00-7.1 0l-2 2A5 5 0 0012 20.1l1.1-1.1" /></svg>),
   cup: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 22} height={p.s || 22} fill="none" stroke={p.c || 'currentColor'} strokeWidth={p.w || 1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M6 8h12l-1 11a2 2 0 01-2 1.8H9a2 2 0 01-2-1.8zM7.5 8l.7-3.2A1.5 1.5 0 019.7 3.6h4.6a1.5 1.5 0 011.5 1.2L16.5 8" /><path d="M9 12.5h6" /></svg>),
   combo: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 22} height={p.s || 22} fill="none" stroke={p.c || 'currentColor'} strokeWidth={p.w || 1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M5 3v8a2 2 0 002 2v8M9 3v6M6.5 3v6M19 3c-1.5 0-2.5 2-2.5 5s1 4 2.5 4v8" /></svg>),
   scale: (p = {}) => (<svg viewBox="0 0 24 24" width={p.s || 22} height={p.s || 22} fill="none" stroke={p.c || 'currentColor'} strokeWidth={p.w || 1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M7 6h10M12 6l-5 8a3 3 0 006 0zM12 6l5 8a3 3 0 01-6 0M9 21h6" /></svg>),
@@ -1176,33 +1177,33 @@ function SuccessScreen({ count, source, onMore, onList }: { count: number; sourc
 function AICard({ kind, accent, title, sub, badge, onClick }: {
   kind: 'photo' | 'voice'; accent: Accent; title: string; sub: string; badge: string; onClick: () => void;
 }) {
-  const icon = kind === 'photo' ? Ic.camera({ s: 24, c: '#fff' }) : Ic.mic({ s: 24, c: '#fff' });
+  const icon = kind === 'photo' ? Ic.camera({ s: 21, c: '#fff' }) : Ic.mic({ s: 21, c: '#fff' });
   return (
     <button onClick={onClick} style={{
       flex: 1, minWidth: 0, textAlign: 'left', border: 'none', cursor: 'pointer',
-      background: T.surface, borderRadius: 22, padding: '16px 14px 14px', position: 'relative',
-      boxShadow: '0 6px 20px rgba(20,30,50,0.06)', overflow: 'hidden',
-      display: 'flex', flexDirection: 'column', gap: 0, minHeight: 156, fontFamily: FONT,
+      background: T.surface, borderRadius: 20, padding: '14px 13px', position: 'relative',
+      boxShadow: '0 4px 14px rgba(20,30,50,0.05)', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', gap: 0, minHeight: 132, fontFamily: FONT,
     }}>
       {/* 柔光角 */}
-      <div style={{ position: 'absolute', right: -30, top: -30, width: 100, height: 100, borderRadius: '50%', background: accent.tint, opacity: 0.8 }} />
+      <div style={{ position: 'absolute', right: -36, top: -36, width: 96, height: 96, borderRadius: '50%', background: accent.tint, opacity: 0.65 }} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-        <div style={{ width: 46, height: 46, borderRadius: 14, flexShrink: 0, background: accent.main, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 8px 18px ${accent.main}38` }}>{icon}</div>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 7px', borderRadius: 8, background: accent.tint, color: accent.dk, fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+        <div style={{ width: 42, height: 42, borderRadius: 13, flexShrink: 0, background: accent.main, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 7px 16px ${accent.main}32` }}>{icon}</div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 7, background: accent.tint, color: accent.dk, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
           {Ic.bolt({ s: 10, c: accent.dk })}{badge}</span>
       </div>
-      <div style={{ position: 'relative', marginTop: 'auto', paddingTop: 14 }}>
-        <div style={{ fontSize: 15.5, fontWeight: 800, color: T.ink, display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ position: 'relative', marginTop: 'auto', paddingTop: 12 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.ink, display: 'flex', alignItems: 'center', gap: 5 }}>
           {title}
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: accent.main, background: accent.tint, padding: '1px 5px', borderRadius: 5 }}>AI</span>
+          <span style={{ fontSize: 9, fontWeight: 800, color: accent.main, background: accent.tint, padding: '1px 5px', borderRadius: 5 }}>AI</span>
         </div>
-        <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 5, lineHeight: 1.5 }}>{sub}</div>
+        <div style={{ fontSize: 11, color: T.ink2, marginTop: 4, lineHeight: 1.45 }}>{sub}</div>
       </div>
     </button>
   );
 }
 
-type EntryPick = 'photo' | 'voice' | 'standard' | 'combo' | 'weigh' | 'resume' | 'discard';
+type EntryPick = 'photo' | 'voice' | 'standard' | 'combo' | 'weigh' | 'third_auth' | 'resume' | 'discard';
 
 export interface QuickEntryDraft { count: number; from: string; time: string }
 export interface QuickCreateSavedDraft {
@@ -1231,11 +1232,11 @@ export const QuickEntryScreen: React.FC<{
   return (
     <div className="qk-root" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: T.bg }}>
       {_styleOnce}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 28px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 22px' }}>
         {/* 引导语 */}
-        <div style={{ fontFamily: FONT, marginBottom: 14 }}>
-          <div style={{ fontSize: 19, fontWeight: 800, color: T.ink, letterSpacing: 0.2 }}>用 AI 快速建一批菜</div>
-          <div style={{ fontSize: 12.5, color: T.ink2, marginTop: 5 }}>拍菜单或说菜名，几秒生成商品草稿，确认即上架</div>
+        <div style={{ fontFamily: FONT, marginBottom: 12 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink, letterSpacing: 0 }}>选择创建方式</div>
+          <div style={{ fontSize: 12, color: T.ink2, marginTop: 4 }}>按日常新增、AI录入或平台导入创建商品</div>
         </div>
 
         {/* 续传草稿 */}
@@ -1257,32 +1258,21 @@ export const QuickEntryScreen: React.FC<{
           </div>
         )}
 
-        {/* 两张 AI 卡 */}
-        <div style={{ display: 'flex', gap: 12 }}>
-          <AICard kind="photo" accent={gAcc} title="拍照录入" badge="整本菜单" sub="拍下菜单照片，一次识别一整批商品" onClick={() => onPick('photo')} />
-          <AICard kind="voice" accent={vAcc} title="语音录入" badge="最快" sub="说出菜名和价格，边说边生成草稿" onClick={() => onPick('voice')} />
-        </div>
-
-        {/* 分隔 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 4px 12px' }}>
-          <div style={{ flex: 1, height: 1, background: T.hair }} />
-          <span style={{ fontFamily: FONT, fontSize: 12, color: T.ink3, fontWeight: 600 }}>或手动创建</span>
-          <div style={{ flex: 1, height: 1, background: T.hair }} />
-        </div>
-
-        {/* 手动创建三类 */}
-        <div style={{ background: '#fff', borderRadius: 18, overflow: 'hidden', boxShadow: '0 4px 16px rgba(20,30,50,0.04)' }}>
+        {/* 日常新建 */}
+        <div style={{ fontFamily: FONT }}>
+          <div style={{ fontSize: 11.5, color: T.ink3, fontWeight: 800, margin: '0 2px 7px' }}>日常新建</div>
+          <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 3px 12px rgba(20,30,50,0.04)' }}>
           {manualTypes.map((m, i) => (
             <React.Fragment key={m.k}>
-              {i > 0 && <div style={{ height: 1, background: T.hair, marginLeft: 72 }} />}
+              {i > 0 && <div style={{ height: 1, background: T.hair, marginLeft: 66 }} />}
               <button onClick={() => !m.soon && onPick(m.k)} disabled={m.soon} style={{
                 width: '100%', border: 'none', background: 'transparent', cursor: m.soon ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 14, padding: '15px 16px', fontFamily: FONT, opacity: m.soon ? 0.62 : 1,
+                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', fontFamily: FONT, opacity: m.soon ? 0.62 : 1,
               }}>
-                <div style={{ width: 46, height: 46, borderRadius: 13, background: m.tile, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Ic[m.ic]({ s: 23, c: m.ico })}</div>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: m.tile, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Ic[m.ic]({ s: 20, c: m.ico })}</div>
                 <div style={{ flex: 1, textAlign: 'left' }}>
-                  <div style={{ fontSize: 14.5, fontWeight: 800, color: T.ink }}>{m.title}</div>
-                  <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 3 }}>{m.sub}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: T.ink }}>{m.title}</div>
+                  <div style={{ fontSize: 11, color: T.ink2, marginTop: 3 }}>{m.sub}</div>
                 </div>
                 {m.soon
                   ? <span style={{ fontSize: 11, fontWeight: 700, color: T.ink3, background: '#F1F3F6', padding: '3px 9px', borderRadius: 999 }}>暂未开放</span>
@@ -1290,12 +1280,41 @@ export const QuickEntryScreen: React.FC<{
               </button>
             </React.Fragment>
           ))}
+          </div>
         </div>
 
-        {/* 底部提示 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 22, fontFamily: FONT, fontSize: 11.5, color: T.ink3 }}>
-          {Ic.sparkle({ s: 13, c: T.ink3 })} AI 识别结果均生成为草稿，确认后才会正式创建
+        {/* AI录入 */}
+        <div style={{ marginTop: 14, fontFamily: FONT }}>
+          <div style={{ fontSize: 11.5, color: T.ink3, fontWeight: 800, margin: '0 2px 7px' }}>AI录入</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <AICard kind="photo" accent={gAcc} title="拍照录入" badge="整本菜单" sub="拍下菜单照片，一次识别一整批商品" onClick={() => onPick('photo')} />
+            <AICard kind="voice" accent={vAcc} title="语音录入" badge="最快" sub="说出菜名和价格，边说边生成草稿" onClick={() => onPick('voice')} />
+          </div>
         </div>
+
+        {/* 平台导入 */}
+        <div style={{ marginTop: 14, fontFamily: FONT }}>
+          <div style={{ fontSize: 11.5, color: T.ink3, fontWeight: 800, margin: '0 2px 7px' }}>平台导入</div>
+          <button onClick={() => onPick('third_auth')} style={{
+            width: '100%', border: 'none', cursor: 'pointer', background: '#fff', borderRadius: 16,
+            padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
+            boxShadow: '0 3px 12px rgba(20,30,50,0.04)', fontFamily: FONT,
+          }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: T.greenTint, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {Ic.link({ s: 20, c: T.greenDk })}
+            </div>
+            <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: T.ink }}>三方授权导入</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: T.greenDk, background: T.greenTint, padding: '2px 6px', borderRadius: 999 }}>美团/淘宝闪购</span>
+              </div>
+              <div style={{ fontSize: 11, color: T.ink2, marginTop: 3 }}>授权当前门店后拉取商品资料</div>
+            </div>
+            {Ic.chevR({ s: 18, c: T.ink3 })}
+          </button>
+        </div>
+
+        <div style={{ height: 10 }} />
       </div>
     </div>
   );

@@ -55,9 +55,10 @@ const buildCopyProduct = (product: Product): Product => {
 export const WebProductList: React.FC<{
   onCreateClick: (type: 'standard' | 'combo') => void;
   onImportClick: () => void;
+  onImportRecordsClick?: () => void;
   onViewDetail?: (product: any) => void;
   onEditProduct?: (product: any) => void;
-}> = ({ onCreateClick, onImportClick, onViewDetail, onEditProduct }) => {
+}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct }) => {
   const { products, categories, addProduct, toggleShelfStatus } = useProducts();
   const [activeTab, setActiveTab] = useState<ProductTab>('on_shelf');
   const [searchQuery, setSearchQuery] = useState('');
@@ -444,11 +445,27 @@ export const WebProductList: React.FC<{
                     导入/导出 <ChevronDown size={14} className="ml-1" />
                   </button>
                   {showImportDropdown && (
-                    <div className="absolute left-0 top-[38px] z-20 w-36 overflow-hidden rounded-lg border border-gray-100 bg-white shadow-xl">
-                      <button onClick={onImportClick} className="w-full px-4 py-3 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]">
+                    <div className="absolute left-0 top-[38px] z-20 w-40 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-xl">
+                      <button
+                        onClick={() => {
+                          onImportClick();
+                          setShowImportDropdown(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]"
+                      >
                         批量导入商品
                       </button>
-                      <button className="w-full px-4 py-3 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]">
+                      <button
+                        onClick={() => {
+                          onImportRecordsClick?.();
+                          setShowImportDropdown(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]"
+                      >
+                        授权导入记录
+                      </button>
+                      <div className="my-1 h-px bg-gray-100" />
+                      <button className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]">
                         导出选中商品
                       </button>
                     </div>

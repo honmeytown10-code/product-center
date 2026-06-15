@@ -1,32 +1,64 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle,
   Camera,
   CakeSlice,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
   CupSoda,
+  Edit3,
   Flame,
   ImageIcon,
   Loader2,
   Mic,
   Scale,
+  Search,
   ShoppingBag,
+  SlidersHorizontal,
+  Store,
   Trash2,
   Utensils,
   X,
 } from 'lucide-react';
-import { Category } from '../../types';
+import { Category, Product } from '../../types';
+import { MobileProductEditor } from './MobileProductEditor';
 import { MobileComboProductCreator } from './MobileComboProductCreator';
 import { MobileStandardProductCreator } from './MobileStandardProductCreator';
 import { MobileQuickCreate, QuickCreateSavedDraft, QuickEntryScreen } from './MobileQuickCreate';
 import { MobileBadgeItem, MobileLabelGroup, STORE_CREATION_CATEGORIES } from './productMeta';
 
-type CreateStep = 'type_select' | 'quick' | 'photo_intro' | 'voice_intro' | 'voice_recording' | 'ai_processing' | 'ai_confirm' | 'form' | 'success';
+type CreateStep =
+  | 'type_select'
+  | 'quick'
+  | 'photo_intro'
+  | 'voice_intro'
+  | 'voice_recording'
+  | 'ai_processing'
+  | 'ai_confirm'
+  | 'form'
+  | 'success'
+  | 'third_auth_setup'
+  | 'third_auth_platform'
+  | 'third_auth_pulling'
+  | 'third_auth_confirm'
+  | 'third_auth_success';
 type CreateMode = 'manual' | 'scan' | 'voice';
 type ScanSource = 'camera' | 'upload' | null;
+type MobileThirdPlatform = 'meituan' | 'taobao';
+
+type MobileThirdProduct = {
+  id: string;
+  name: string;
+  productType: 'standard' | 'combo';
+  category: string;
+  price: string;
+  multiSpec?: boolean;
+  specs?: Array<{ id: string; name: string; price: string }>;
+  methods: string[];
+  addons: string[];
+  sameName?: boolean;
+};
 
 type AiDraftItem = {
   id: string;
@@ -98,6 +130,110 @@ const VOICE_EXAMPLES: VoiceExample[] = [
   },
 ];
 
+const MOBILE_THIRD_PLATFORM_META: Record<MobileThirdPlatform, {
+  label: string;
+  desc: string;
+  mark: string;
+  color: string;
+  tint: string;
+}> = {
+  meituan: {
+    label: '美团外卖',
+    desc: '授权后拉取外卖门店商品资料',
+    mark: '美',
+    color: '#00A862',
+    tint: '#EAF8EF',
+  },
+  taobao: {
+    label: '淘宝闪购',
+    desc: '授权后拉取闪购商品资料',
+    mark: '淘',
+    color: '#FF7A00',
+    tint: '#FFF3E8',
+  },
+};
+
+const MOBILE_THIRD_BINDING_TYPES: Record<MobileThirdPlatform, string[]> = {
+  meituan: ['外卖接单-服务商', '外卖接单-品牌自研', '非接单-服务商'],
+  taobao: ['服务商', '品牌自研'],
+};
+
+const MOBILE_THIRD_PRODUCTS: Record<MobileThirdPlatform, MobileThirdProduct[]> = {
+  meituan: [
+    {
+      id: 'mt-1',
+      name: '招牌珍珠奶茶',
+      productType: 'standard',
+      category: '招牌奶茶',
+      price: '12',
+      multiSpec: true,
+      specs: [{ id: 'mt-1-s1', name: '中杯', price: '12' }, { id: 'mt-1-s2', name: '大杯', price: '15' }],
+      methods: ['少冰', '正常冰', '多糖'],
+      addons: ['珍珠 +2', '椰果 +2'],
+      sameName: true,
+    },
+    {
+      id: 'mt-2',
+      name: '手打柠檬茶',
+      productType: 'standard',
+      category: '鲜果茶',
+      price: '13',
+      methods: ['少冰', '去冰'],
+      addons: ['青柠片 +1'],
+    },
+    {
+      id: 'mt-3',
+      name: '盐酥鸡',
+      productType: 'standard',
+      category: '小吃',
+      price: '',
+      methods: ['微辣', '不辣'],
+      addons: [],
+    },
+    {
+      id: 'mt-4',
+      name: '双人下午茶套餐',
+      productType: 'combo',
+      category: '套餐',
+      price: '39',
+      methods: ['饮品可选冰/热'],
+      addons: ['含拿铁、可颂'],
+    },
+  ],
+  taobao: [
+    {
+      id: 'tb-1',
+      name: '冰美式',
+      productType: 'standard',
+      category: '现制饮品',
+      price: '12',
+      multiSpec: true,
+      specs: [{ id: 'tb-1-s1', name: '中杯', price: '12' }, { id: 'tb-1-s2', name: '大杯', price: '15' }],
+      methods: ['正常冰', '少冰'],
+      addons: [],
+    },
+    {
+      id: 'tb-2',
+      name: '拿铁',
+      productType: 'standard',
+      category: '现制饮品',
+      price: '18',
+      methods: ['热', '冰'],
+      addons: ['燕麦奶 +3'],
+      sameName: true,
+    },
+    {
+      id: 'tb-3',
+      name: '牛肉饭套餐',
+      productType: 'combo',
+      category: '',
+      price: '20',
+      methods: [],
+      addons: ['煎蛋 +3'],
+    },
+  ],
+};
+
 export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange }) => {
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
@@ -122,6 +258,23 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
   const [confirmFilter, setConfirmFilter] = useState<'all' | 'uncategorized' | string>('all');
   const [quickDraft, setQuickDraft] = useState<QuickCreateSavedDraft | null>(null);
   const [resumeQuickDraft, setResumeQuickDraft] = useState(false);
+  const [thirdPlatform, setThirdPlatform] = useState<MobileThirdPlatform>('meituan');
+  const [thirdAuthorized, setThirdAuthorized] = useState<Record<MobileThirdPlatform, boolean>>({ meituan: false, taobao: true });
+  const [thirdBindingType, setThirdBindingType] = useState<Record<MobileThirdPlatform, string>>({
+    meituan: MOBILE_THIRD_BINDING_TYPES.meituan[0],
+    taobao: MOBILE_THIRD_BINDING_TYPES.taobao[0],
+  });
+  const [thirdSelectedIds, setThirdSelectedIds] = useState<string[]>(MOBILE_THIRD_PRODUCTS.meituan.map(item => item.id));
+  const [thirdRemovedIds, setThirdRemovedIds] = useState<string[]>([]);
+  const [thirdOverrides, setThirdOverrides] = useState<Record<string, Partial<MobileThirdProduct>>>({});
+  const [thirdEditingId, setThirdEditingId] = useState<string | null>(null);
+  const [thirdEditDraft, setThirdEditDraft] = useState<MobileThirdProduct | null>(null);
+  const [thirdImportedCount, setThirdImportedCount] = useState(0);
+  const [thirdConfirmCategory, setThirdConfirmCategory] = useState<'all' | 'issues' | string>('all');
+  const [thirdTypeFilter, setThirdTypeFilter] = useState<'all' | 'standard' | 'combo'>('all');
+  const [thirdOnlySameName, setThirdOnlySameName] = useState(false);
+  const [thirdSearchKeyword, setThirdSearchKeyword] = useState('');
+  const [thirdFilterSheetOpen, setThirdFilterSheetOpen] = useState(false);
   const timerRefs = useRef<number[]>([]);
   const voiceHoldingRef = useRef(false);
   const voiceAppendRef = useRef(false);
@@ -161,6 +314,27 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
         count: recognizedItems.filter(item => item.category === category).length,
       })),
   ].filter(filter => filter.id === 'all' || filter.count > 0);
+  const thirdMeta = MOBILE_THIRD_PLATFORM_META[thirdPlatform];
+  const thirdProducts = MOBILE_THIRD_PRODUCTS[thirdPlatform]
+    .map(item => ({ ...item, ...thirdOverrides[item.id] }))
+    .filter(item => !thirdRemovedIds.includes(item.id));
+  const getThirdSpecPrices = (item: MobileThirdProduct) =>
+    (item.specs || []).map(spec => spec.price).filter(price => price.trim());
+  const getThirdMinPrice = (item: MobileThirdProduct) => {
+    if (!item.multiSpec) return item.price.trim();
+    const prices = getThirdSpecPrices(item).map(Number).filter(price => !Number.isNaN(price));
+    return prices.length ? String(Math.min(...prices)) : '';
+  };
+  const hasThirdValidPrice = (item: MobileThirdProduct) => {
+    if (!item.multiSpec) return !!item.price.trim();
+    return !!item.specs?.length && item.specs.every(spec => spec.price.trim());
+  };
+  const canImportThirdProduct = (item: MobileThirdProduct) =>
+    item.name.trim() && item.category.trim() && hasThirdValidPrice(item);
+  const thirdValidProducts = thirdProducts.filter(canImportThirdProduct);
+  const thirdSelectedValidProducts = thirdProducts.filter(
+    item => thirdSelectedIds.includes(item.id) && canImportThirdProduct(item)
+  );
 
   const clearTimers = () => {
     timerRefs.current.forEach(timer => window.clearTimeout(timer));
@@ -227,6 +401,117 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
     setVoiceInputError('');
     voiceHoldingRef.current = false;
     voiceAppendRef.current = false;
+  };
+
+  const resetThirdAuthFlow = (platform = thirdPlatform) => {
+    setThirdSelectedIds(MOBILE_THIRD_PRODUCTS[platform].map(item => item.id));
+    setThirdRemovedIds([]);
+    setThirdOverrides({});
+    setThirdEditingId(null);
+    setThirdEditDraft(null);
+    setThirdImportedCount(0);
+    setThirdConfirmCategory('all');
+    setThirdTypeFilter('all');
+    setThirdOnlySameName(false);
+    setThirdSearchKeyword('');
+    setThirdFilterSheetOpen(false);
+  };
+
+  const handleThirdPlatformChange = (platform: MobileThirdPlatform) => {
+    setThirdPlatform(platform);
+    resetThirdAuthFlow(platform);
+  };
+
+  const beginThirdPull = () => {
+    clearTimers();
+    setThirdSelectedIds(MOBILE_THIRD_PRODUCTS[thirdPlatform].map(item => item.id));
+    setThirdRemovedIds([]);
+    setThirdOverrides({});
+    setThirdConfirmCategory('all');
+    setThirdTypeFilter('all');
+    setThirdOnlySameName(false);
+    setThirdSearchKeyword('');
+    setThirdFilterSheetOpen(false);
+    setCreateStep('third_auth_pulling');
+    const timer = window.setTimeout(() => {
+      setCreateStep('third_auth_confirm');
+    }, 1500);
+    timerRefs.current.push(timer);
+  };
+
+  const handleThirdAuthorizeDone = () => {
+    setThirdAuthorized(prev => ({ ...prev, [thirdPlatform]: true }));
+    setCreateStep('third_auth_setup');
+  };
+
+  const handleThirdRemoveProduct = (id: string) => {
+    setThirdRemovedIds(prev => [...prev, id]);
+    setThirdSelectedIds(prev => prev.filter(itemId => itemId !== id));
+    if (thirdEditingId === id) {
+      setThirdEditingId(null);
+      setThirdEditDraft(null);
+    }
+  };
+
+  const handleThirdEditProduct = (item: MobileThirdProduct) => {
+    setThirdEditingId(item.id);
+    setThirdEditDraft({ ...item });
+  };
+
+  const toEditableThirdProduct = (item: MobileThirdProduct): Product => {
+    const basePrice = Number(getThirdMinPrice(item) || item.price) || 0;
+    return {
+      id: `third_import_${item.id}`,
+      name: item.name,
+      price: basePrice,
+      category: item.category,
+      status: 'draft',
+      stockStatus: 'available',
+      image: '',
+      skuCode: item.id,
+      type: item.productType,
+      isCombo: item.productType === 'combo',
+      isMultiSpec: !!item.multiSpec,
+      stock: -1,
+      specs: (item.specs || []).map(spec => ({
+        name: spec.name,
+        price: Number(spec.price) || 0,
+        stock: -1,
+        unlimited: true,
+      })),
+    };
+  };
+
+  const handleThirdEditorSave = (sourceId: string, updates: Partial<Product>) => {
+    const source = thirdProducts.find(item => item.id === sourceId);
+    const patch: Partial<MobileThirdProduct> = {};
+    if (typeof updates.name === 'string') patch.name = updates.name;
+    if (typeof updates.category === 'string') patch.category = updates.category;
+    if (typeof updates.price === 'number') patch.price = updates.price > 0 ? String(updates.price) : '';
+    if (updates.specs?.length) {
+      patch.multiSpec = true;
+      patch.specs = updates.specs.map((spec, index) => ({
+        id: source?.specs?.[index]?.id || `${sourceId}-spec-${index}`,
+        name: spec.name,
+        price: spec.price && spec.price > 0 ? String(spec.price) : '',
+      }));
+    }
+    handleThirdFieldChange(sourceId, patch);
+  };
+
+  const handleThirdFieldChange = (id: string, patch: Partial<MobileThirdProduct>) => {
+    setThirdOverrides(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        ...patch,
+      },
+    }));
+  };
+
+  const handleThirdImport = () => {
+    setThirdImportedCount(thirdSelectedValidProducts.length);
+    setCreateStep('third_auth_success');
   };
 
   const handleStartCreation = (mode: CreateMode) => {
@@ -403,6 +688,28 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
       onBack();
       return;
     }
+    if (createStep === 'third_auth_setup') {
+      resetThirdAuthFlow();
+      setCreateStep('type_select');
+      return;
+    }
+    if (createStep === 'third_auth_platform') {
+      setCreateStep('third_auth_setup');
+      return;
+    }
+    if (createStep === 'third_auth_pulling') {
+      clearTimers();
+      setCreateStep('third_auth_setup');
+      return;
+    }
+    if (createStep === 'third_auth_confirm') {
+      setCreateStep('third_auth_setup');
+      return;
+    }
+    if (createStep === 'third_auth_success') {
+      setCreateStep('type_select');
+      return;
+    }
     if (createStep === 'form') {
       if (formEntrySource === 'ai_confirm') {
         setCreateStep('ai_confirm');
@@ -449,6 +756,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
           else if (k === 'voice') handleStartCreation('voice');
           else if (k === 'standard') handleTypeSelect('standard');
           else if (k === 'combo') handleTypeSelect('combo');
+          else if (k === 'third_auth') setCreateStep('third_auth_setup');
           // 'weigh' 暂未开放
         }}
       />
@@ -984,6 +1292,513 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
     </div>
   );
 
+  const renderThirdAuthSetup = () => {
+    const authorized = thirdAuthorized[thirdPlatform];
+
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+        <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 py-3 pb-24">
+          <div className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[12px] font-bold text-[#9AA2B1]">当前门店</div>
+                <div className="mt-1 text-[16px] font-black text-[#1F2129]">静静咖啡国贸店</div>
+                <div className="mt-0.5 text-[12px] font-medium text-[#8B92A3]">门店ID：538 · 导入到当前门店商品库</div>
+              </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EAF8EF] text-[#00A862]">
+                <Store size={20} strokeWidth={2.4} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {(Object.keys(MOBILE_THIRD_PLATFORM_META) as MobileThirdPlatform[]).map(platform => {
+              const meta = MOBILE_THIRD_PLATFORM_META[platform];
+              const active = thirdPlatform === platform;
+              const isAuthorized = thirdAuthorized[platform];
+              return (
+                <button
+                  key={platform}
+                  onClick={() => handleThirdPlatformChange(platform)}
+                  className={`rounded-[20px] border p-3 text-left transition-all active:scale-[0.98] ${
+                    active ? 'border-[#00C06B] bg-[#F0FCF5]' : 'border-transparent bg-white'
+                  } shadow-[0_10px_24px_rgba(15,23,42,0.04)]`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[15px] font-black"
+                      style={{ background: meta.tint, color: meta.color }}
+                    >
+                      {meta.mark}
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
+                      isAuthorized ? 'bg-[#EAF8EF] text-[#00A862]' : 'bg-[#F1F3F6] text-[#8B92A3]'
+                    }`}>
+                      {isAuthorized ? '已授权' : '未授权'}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-[15px] font-black text-[#1F2129]">{meta.label}</div>
+                  <div className="mt-1 text-[11.5px] leading-4 text-[#7D8395]">{meta.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[14px] font-black text-[#1F2129]">{thirdMeta.label}</div>
+                <div className="mt-1 text-[12px] font-medium text-[#8B92A3]">
+                  {authorized ? '当前门店已完成授权，可直接拉取商品。' : '该门店未授权，请先选择授权绑定类型。'}
+                </div>
+              </div>
+              <span className={`rounded-full px-3 py-1.5 text-[12px] font-black ${
+                authorized ? 'bg-[#EAF8EF] text-[#00A862]' : 'bg-[#FFF3E8] text-[#FF7A00]'
+              }`}>
+                {authorized ? '已授权' : '未授权'}
+              </span>
+            </div>
+
+            {!authorized ? (
+              <div className="mt-4">
+                <div className="mb-2 text-[12px] font-black text-[#4D5566]">授权绑定类型</div>
+                <div className="space-y-2">
+                  {MOBILE_THIRD_BINDING_TYPES[thirdPlatform].map(type => {
+                    const checked = thirdBindingType[thirdPlatform] === type;
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => setThirdBindingType(prev => ({ ...prev, [thirdPlatform]: type }))}
+                        className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-2.5 text-left ${
+                          checked ? 'border-[#00C06B] bg-[#F0FCF5]' : 'border-[#EEF1F5] bg-[#F8FAFB]'
+                        }`}
+                      >
+                        <span className="text-[14px] font-bold text-[#1F2129]">{type}</span>
+                        <span className={`h-5 w-5 rounded-full border-2 ${
+                          checked ? 'border-[#00C06B] bg-[#00C06B]' : 'border-[#C8CEDA] bg-white'
+                        }`}>
+                          {checked ? <CheckCircle size={16} className="text-white" /> : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-[18px] bg-[#F7F9FC] px-4 py-3">
+                <div className="text-[12px] font-bold text-[#8B92A3]">预计拉取 {MOBILE_THIRD_PRODUCTS[thirdPlatform].length} 个商品草稿</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-[#EEF1F5] bg-white px-4 py-3 shadow-[0_-6px_20px_rgba(15,23,42,0.05)]">
+          <button
+            onClick={authorized ? beginThirdPull : () => setCreateStep('third_auth_platform')}
+            className="w-full rounded-full bg-[#2DC55D] py-4 text-[16px] font-black text-white shadow-[0_12px_24px_rgba(45,197,93,0.22)]"
+          >
+            {authorized ? '拉取商品' : '立即授权'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderThirdAuthPlatform = () => (
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-5">
+        <div className="rounded-[30px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl text-[18px] font-black"
+              style={{ background: thirdMeta.tint, color: thirdMeta.color }}
+            >
+              {thirdMeta.mark}
+            </div>
+            <div>
+              <div className="text-[18px] font-black text-[#1F2129]">{thirdMeta.label}授权</div>
+              <div className="mt-0.5 text-[12px] font-medium text-[#8B92A3]">模拟平台授权页面</div>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[24px] bg-[#F7F9FC] p-4">
+            <div className="text-[13px] font-black text-[#4D5566]">授权门店</div>
+            <div className="mt-2 text-[18px] font-black text-[#1F2129]">静静咖啡国贸店</div>
+            <div className="mt-1 text-[12px] text-[#8B92A3]">门店ID：538</div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {['读取外卖商品资料', '读取分类、规格、做法、加料', '生成门店商品导入草稿'].map(item => (
+              <div key={item} className="flex items-center gap-3 rounded-[18px] bg-white px-1 py-1">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF8EF] text-[#00A862]">
+                  <CheckCircle size={16} />
+                </div>
+                <span className="text-[14px] font-bold text-[#4D5566]">{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-[#EEF1F5] bg-white px-4 py-3">
+        <button
+          onClick={handleThirdAuthorizeDone}
+          className="w-full rounded-full bg-[#1F2129] py-4 text-[16px] font-black text-white"
+        >
+          同意授权并返回
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderThirdAuthPulling = () => (
+    <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#F4F7F7] px-6 animate-in fade-in duration-300">
+      <div className="w-full rounded-[30px] bg-white p-6 text-center shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+        <div
+          className="mx-auto flex h-20 w-20 items-center justify-center rounded-[28px]"
+          style={{ background: thirdMeta.tint, color: thirdMeta.color }}
+        >
+          <Loader2 size={34} className="animate-spin" />
+        </div>
+        <div className="mt-5 text-[22px] font-black text-[#1F2129]">正在拉取商品</div>
+        <div className="mt-2 text-[13px] leading-6 text-[#7D8395]">
+          正在从{thirdMeta.label}读取商品，并生成确认页。
+        </div>
+        <div className="mt-6 space-y-3 text-left">
+          {['读取商品资料', '清洗分类、规格、做法、加料', `生成${thirdValidProducts.length}个可导入商品草稿`].map((item, index) => (
+            <div key={item} className="flex items-center gap-3 rounded-[18px] bg-[#F7F9FC] px-4 py-3">
+              <div className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                index < 2 ? 'bg-[#EAF8EF] text-[#00A862]' : 'bg-[#EEF1F5] text-[#8B92A3]'
+              }`}>
+                {index < 2 ? <CheckCircle size={15} /> : <Loader2 size={15} className="animate-spin" />}
+              </div>
+              <span className="text-[13px] font-bold text-[#4D5566]">{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderThirdAuthConfirm = () => {
+    const issueCount = thirdProducts.filter(item => !canImportThirdProduct(item)).length;
+    const categoryCounts = thirdProducts.reduce<Record<string, number>>((acc, item) => {
+      const key = item.category.trim() || '未分类';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const categoryOptions: Array<{ id: string; label: string; count: number; alert?: boolean }> = [
+      ...(issueCount ? [{ id: 'issues', label: '待完善', count: issueCount, alert: true }] : []),
+      ...Object.entries(categoryCounts).map(([label, count]) => ({ id: label, label, count })),
+    ];
+    const effectiveThirdConfirmCategory = categoryOptions.some(option => option.id === thirdConfirmCategory)
+      ? thirdConfirmCategory
+      : categoryOptions[0]?.id;
+    const orderedProducts = [...thirdProducts].sort((a, b) => {
+      const aReady = canImportThirdProduct(a);
+      const bReady = canImportThirdProduct(b);
+      if (aReady !== bReady) return Number(aReady) - Number(bReady);
+      if (!!a.sameName !== !!b.sameName) return Number(!!b.sameName) - Number(!!a.sameName);
+      return a.name.localeCompare(b.name, 'zh-Hans-CN');
+    });
+    const keyword = thirdSearchKeyword.trim().toLowerCase();
+    const visibleProducts = orderedProducts.filter(item => {
+      const itemCategory = item.category.trim() || '未分类';
+      const categoryMatched = effectiveThirdConfirmCategory === 'issues'
+        ? !canImportThirdProduct(item)
+        : itemCategory === effectiveThirdConfirmCategory;
+      const typeMatched = thirdTypeFilter === 'all' || item.productType === thirdTypeFilter;
+      const sameNameMatched = !thirdOnlySameName || !!item.sameName;
+      const keywordMatched = !keyword || `${item.name} ${item.category} ${item.methods.join(' ')} ${item.addons.join(' ')}`.toLowerCase().includes(keyword);
+      return categoryMatched && typeMatched && sameNameMatched && keywordMatched;
+    });
+    const activeFilterCount = (thirdTypeFilter !== 'all' ? 1 : 0) + (thirdOnlySameName ? 1 : 0);
+    const getListPriceText = (item: MobileThirdProduct) => {
+      if (item.multiSpec) return getThirdMinPrice(item) ? `￥${getThirdMinPrice(item)}起` : '缺售价';
+      return item.price.trim() ? `￥${item.price}` : '缺售价';
+    };
+
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-[#F4F7F7] animate-in slide-in-from-right duration-300">
+        <div className="shrink-0 bg-white px-4 pb-3 pt-3 shadow-[0_1px_0_rgba(15,23,42,0.05)]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[12px] font-bold text-[#9AA2B1]">{thirdMeta.label}导入结果</div>
+              <div className="mt-0.5 text-[18px] font-black text-[#1F2129]">确认商品 · {thirdProducts.length}</div>
+            </div>
+            <div className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-[12px] font-black ${
+              issueCount === 0 ? 'bg-[#EAF8EF] text-[#00A862]' : 'bg-[#FFF0F0] text-[#E35D5D]'
+            }`}>
+              {issueCount === 0 ? '全部就绪' : `${issueCount} 个待完善`}
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-[#F2F5F6] px-3 py-2.5 text-[#9AA2B1]">
+              <Search size={17} className="mr-2 shrink-0" />
+              <input
+                value={thirdSearchKeyword}
+                onChange={event => setThirdSearchKeyword(event.target.value)}
+                placeholder="搜索商品..."
+                className="min-w-0 flex-1 bg-transparent text-[13px] font-bold text-[#1F2129] outline-none placeholder:text-[#9AA2B1]"
+              />
+            </div>
+            <button
+              onClick={() => setThirdFilterSheetOpen(true)}
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#F2F5F6] text-[#4B5565]"
+            >
+              <SlidersHorizontal size={19} />
+              {activeFilterCount ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#E35D5D] px-1 text-[10px] font-black leading-none text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 flex">
+          <div className="w-[84px] shrink-0 overflow-y-auto border-r border-[#E5EAEE] bg-[#EEF2F3] py-2">
+            {categoryOptions.map(option => {
+              const active = effectiveThirdConfirmCategory === option.id;
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => setThirdConfirmCategory(option.id)}
+                  className={`relative flex w-full flex-col items-start px-3 py-3 text-left ${
+                    active ? 'bg-white' : 'bg-transparent'
+                  }`}
+                >
+                  {active ? <span className="absolute left-0 top-3 h-5 w-1 rounded-r-full bg-[#00A862]" /> : null}
+                  <span className={`max-w-full truncate text-[12.5px] font-black ${
+                    option.alert ? 'text-[#E35D5D]' : active ? 'text-[#00A862]' : 'text-[#6B7280]'
+                  }`}>
+                    {option.label}
+                  </span>
+                  <span className={`mt-0.5 text-[10px] font-bold ${option.alert ? 'text-[#F04438]' : 'text-[#A0A6B7]'}`}>
+                    {option.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="min-w-0 flex-1 overflow-y-auto no-scrollbar px-3 py-3 pb-8">
+            <div className="space-y-2">
+              {visibleProducts.map(item => {
+                const selected = thirdSelectedIds.includes(item.id);
+                const importable = !!canImportThirdProduct(item);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleThirdEditProduct(item)}
+                    className={`rounded-[18px] bg-white p-3 shadow-[0_5px_18px_rgba(15,23,42,0.04)] active:scale-[0.99] ${selected ? '' : 'opacity-60'}`}
+                  >
+                    <div className="flex gap-3">
+                      <div className="relative h-[74px] w-[74px] shrink-0">
+                        <div className={`flex h-full w-full items-center justify-center rounded-2xl text-[17px] font-black shadow-sm ${
+                          item.productType === 'combo' ? 'bg-[#FFF3E6] text-[#B45309]' : 'bg-[#EAF8EF] text-[#00A862]'
+                        }`}>
+                          {(item.name || '商品').slice(0, 2)}
+                        </div>
+                        <button
+                          onClick={event => {
+                            event.stopPropagation();
+                            if (!importable) return;
+                            setThirdSelectedIds(prev => selected ? prev.filter(id => id !== item.id) : [...prev, item.id]);
+                          }}
+                          className={`absolute -left-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white shadow-sm ${
+                            selected ? 'bg-[#00C06B]' : 'bg-[#F2F5F6]'
+                          } ${!importable ? 'opacity-40' : ''}`}
+                        >
+                          {selected ? <CheckCircle size={18} className="text-white" /> : <span className="h-3.5 w-3.5 rounded-full border-2 border-[#AEB6C4]" />}
+                        </button>
+                      </div>
+
+                      <div className="min-w-0 flex-1 self-stretch">
+                        <div className="flex items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[16px] font-black leading-5 text-[#1F2129]">{item.name || '未命名商品'}</div>
+                            {item.sameName ? <div className="mt-1 text-[11px] font-bold text-[#E35D5D]">存在同名商品，请确认后导入</div> : null}
+                          </div>
+                          <button
+                            onClick={event => {
+                              event.stopPropagation();
+                              handleThirdEditProduct(item);
+                            }}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#A0A6B7]"
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            onClick={event => {
+                              event.stopPropagation();
+                              handleThirdRemoveProduct(item.id);
+                            }}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#A0A6B7]"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-black ${
+                            item.productType === 'combo' ? 'bg-[#FFF4E5] text-[#B45309]' : 'bg-[#EAF8EF] text-[#00A862]'
+                          }`}>
+                            {item.productType === 'combo' ? '套餐' : '标准'}
+                          </span>
+                          <span className="rounded-full bg-[#F1F3F6] px-2 py-0.5 text-[10.5px] font-bold text-[#6F7788]">
+                            {item.multiSpec ? '多规格' : '单规格'}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-end justify-end gap-3">
+                          <div className={`shrink-0 text-[15px] font-black ${hasThirdValidPrice(item) ? 'text-[#1F2129]' : 'text-[#E35D5D]'}`}>
+                            {getListPriceText(item)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {!visibleProducts.length ? (
+              <div className="rounded-[18px] bg-white px-4 py-10 text-center text-[13px] font-bold text-[#98A2B3]">
+                当前筛选下暂无商品
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {thirdFilterSheetOpen ? (
+          <div className="absolute inset-0 z-40 flex items-end bg-black/35" onClick={() => setThirdFilterSheetOpen(false)}>
+            <div className="w-full rounded-t-[24px] bg-white px-4 pb-6 pt-4 shadow-[0_-12px_30px_rgba(15,23,42,0.18)]" onClick={event => event.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-[17px] font-black text-[#1F2129]">筛选商品</div>
+                <button onClick={() => setThirdFilterSheetOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F5F6] text-[#6B7280]">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="mb-4">
+                <div className="mb-2 text-[12px] font-black text-[#8B92A3]">商品类型</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'all', label: '全部' },
+                    { id: 'standard', label: '标准商品' },
+                    { id: 'combo', label: '套餐商品' },
+                  ].map(option => (
+                    <button
+                      key={option.id}
+                      onClick={() => setThirdTypeFilter(option.id as typeof thirdTypeFilter)}
+                      className={`rounded-2xl px-2 py-2.5 text-[12px] font-black ${
+                        thirdTypeFilter === option.id ? 'bg-[#EAF8EF] text-[#00A862]' : 'bg-[#F4F6F8] text-[#667085]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setThirdOnlySameName(prev => !prev)}
+                className="mb-5 flex w-full items-center justify-between rounded-2xl bg-[#F4F6F8] px-3 py-3 text-left"
+              >
+                <div>
+                  <div className="text-[13px] font-black text-[#1F2129]">只看同名商品</div>
+                  <div className="mt-0.5 text-[11px] font-bold text-[#98A2B3]">用于快速确认可能重复的商品</div>
+                </div>
+                <span className={`h-6 w-11 rounded-full p-0.5 transition ${thirdOnlySameName ? 'bg-[#00C06B]' : 'bg-[#D8DEE6]'}`}>
+                  <span className={`block h-5 w-5 rounded-full bg-white transition ${thirdOnlySameName ? 'translate-x-5' : 'translate-x-0'}`} />
+                </span>
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setThirdTypeFilter('all');
+                    setThirdOnlySameName(false);
+                  }}
+                  className="flex-1 rounded-full bg-[#F4F6F8] py-3 text-[14px] font-black text-[#667085]"
+                >
+                  重置
+                </button>
+                <button
+                  onClick={() => setThirdFilterSheetOpen(false)}
+                  className="flex-1 rounded-full bg-[#2DC55D] py-3 text-[14px] font-black text-white"
+                >
+                  完成
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="shrink-0 border-t border-[#EEF1F5] bg-white px-4 py-3 shadow-[0_-6px_20px_rgba(15,23,42,0.05)]">
+          <button
+            onClick={handleThirdImport}
+            disabled={!thirdSelectedValidProducts.length}
+            className="w-full rounded-full bg-[#2DC55D] py-4 text-[16px] font-black text-white shadow-[0_12px_24px_rgba(45,197,93,0.22)] disabled:opacity-50"
+          >
+            确认导入 {thirdSelectedValidProducts.length} 个商品
+          </button>
+        </div>
+
+      {thirdEditDraft ? (
+        <div className="absolute inset-0 z-50 bg-white">
+          <MobileProductEditor
+            product={toEditableThirdProduct(thirdEditDraft)}
+            activeChannel={thirdPlatform === 'meituan' ? 'meituan' : 'taobao'}
+            draftBasePrice={thirdEditDraft.multiSpec ? undefined : thirdEditDraft.price}
+            draftSpecItems={(thirdEditDraft.specs || []).map(spec => ({
+              name: spec.name,
+              price: spec.price,
+              stock: '',
+              unlimited: true,
+            }))}
+            onBack={() => {
+              setThirdEditingId(null);
+              setThirdEditDraft(null);
+            }}
+            categories={categories}
+            labelGroups={labelGroups}
+            badges={badges}
+            onLabelGroupsChange={onLabelGroupsChange}
+            onBadgesChange={onBadgesChange}
+            onSave={updates => {
+              if (thirdEditingId) handleThirdEditorSave(thirdEditingId, updates);
+              setThirdEditingId(null);
+              setThirdEditDraft(null);
+            }}
+          />
+        </div>
+      ) : null}
+      </div>
+    );
+  };
+
+  const renderThirdAuthSuccess = () => (
+    <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 animate-in zoom-in-95">
+      <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-green-50">
+        <CheckCircle size={48} className="text-[#00C06B]" />
+      </div>
+      <h2 className="mb-2 text-2xl font-black text-[#1F2129]">导入成功</h2>
+      <p className="mb-6 text-center text-[14px] leading-6 text-gray-500">
+        已从{thirdMeta.label}导入 {thirdImportedCount} 个商品到当前门店商品库。
+      </p>
+      <div className="flex w-full flex-col space-y-3">
+        <button onClick={onBack} className="w-full rounded-xl bg-[#1F2129] py-4 font-bold text-white">查看商品列表</button>
+        <button
+          onClick={() => {
+            resetThirdAuthFlow();
+            setCreateStep('third_auth_setup');
+          }}
+          className="w-full rounded-xl bg-gray-50 py-4 font-bold text-gray-600"
+        >
+          继续授权导入
+        </button>
+      </div>
+    </div>
+  );
+
   const renderSuccess = () => (
     <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 animate-in zoom-in-95">
       <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6">
@@ -1017,7 +1832,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
             <ChevronLeft size={24} />
           </button>
           <span className="font-bold text-lg text-[#1F2129]">
-            {createStep === 'photo_intro'
+            {createStep === 'third_auth_setup' || createStep === 'third_auth_platform' || createStep === 'third_auth_pulling' || createStep === 'third_auth_confirm' || createStep === 'third_auth_success' ? '三方授权导入' : createStep === 'photo_intro'
               ? '拍照录入'
               : createStep === 'voice_intro' || createStep === 'voice_recording'
                 ? '语音录入'
@@ -1055,6 +1870,11 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
       {(createStep === 'voice_intro' || createStep === 'voice_recording') && renderVoiceEntry()}
       {createStep === 'ai_processing' && renderRecognizing()}
       {createStep === 'ai_confirm' && renderAiConfirm()}
+      {createStep === 'third_auth_setup' && renderThirdAuthSetup()}
+      {createStep === 'third_auth_platform' && renderThirdAuthPlatform()}
+      {createStep === 'third_auth_pulling' && renderThirdAuthPulling()}
+      {createStep === 'third_auth_confirm' && renderThirdAuthConfirm()}
+      {createStep === 'third_auth_success' && renderThirdAuthSuccess()}
       {createStep === 'form' && renderCreationForm()}
       {createStep === 'success' && renderSuccess()}
 

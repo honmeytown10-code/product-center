@@ -772,7 +772,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         p_weight_flag: false,
         p_business_type: category.businessType || '',
         p_applicable_people: '1',
-        p_deposit_required: false,
+        p_deposit_required: category.businessType === 'buffet_ticket',
         p_unit: '',
     });
     const formContentRef = useRef<HTMLDivElement | null>(null);
@@ -1794,7 +1794,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             p_weight_flag: false,
             p_business_type: category.businessType || '',
             p_applicable_people: '1',
-            p_deposit_required: false,
+            p_deposit_required: category.businessType === 'buffet_ticket',
             p_unit: '',
         });
         setCommittedStarterName('');
@@ -1844,6 +1844,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const handleCategorySelect = (nextCategory: Category) => {
         setCurrentCategory(nextCategory);
+        if (nextCategory.businessType === 'buffet_ticket') {
+            setDynamicFormData(prev => ({ ...prev, p_deposit_required: true }));
+        }
         setShowCategoryPickerModal(false);
         setActiveFormSection('required');
     };

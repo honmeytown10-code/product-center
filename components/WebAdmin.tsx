@@ -31,6 +31,7 @@ import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
 import { WebProductLogPage } from './web/WebProductLogPage';
 import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
+import { WebOmnichannelProductCenter } from './web/WebOmnichannelProductCenter';
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
@@ -230,8 +231,8 @@ export const WebAdmin: React.FC = () => {
   const { products } = useProducts();
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
-  const [activeTopNav, setActiveTopNav] = useState<TopNavView>('brand');
-  const [activeMenu, setActiveMenu] = useState('product_logs');
+  const [activeTopNav, setActiveTopNav] = useState<TopNavView>('store');
+  const [activeMenu, setActiveMenu] = useState('omnichannel_product_center');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([
@@ -422,6 +423,10 @@ export const WebAdmin: React.FC = () => {
 
   // Determine current content
   const renderContent = () => {
+      if (activeMenu === 'omnichannel_product_center') {
+          return <WebOmnichannelProductCenter />;
+      }
+
       if (activeMenu === 'common_field_settings') {
           return (
               <WebCommonFieldSettings
@@ -875,6 +880,20 @@ export const WebAdmin: React.FC = () => {
               <div className="flex items-center font-bold text-[#333] mb-1">
                  <Box size={18} className="mr-2 text-[#00C06B]"/> 商品管理
               </div>
+           </div>
+
+           <div className="mb-2 px-3">
+              <button
+                onClick={() => { setActiveMenu('omnichannel_product_center'); setCreationContext(null); }}
+                className={`flex w-full items-center justify-between border px-3 py-3 text-left transition-colors ${
+                  activeMenu === 'omnichannel_product_center'
+                    ? 'border-[#1FC069] bg-[#EAF9F1] text-[#159A55]'
+                    : 'border-[#E8E8E8] bg-white text-[#4B5563] hover:border-[#B9E8CE]'
+                }`}
+              >
+                <span className="text-[13px] font-bold">全渠道商品管理</span>
+                <span className="text-[10px] font-semibold">NEW</span>
+              </button>
            </div>
 
            <div className="mb-1">

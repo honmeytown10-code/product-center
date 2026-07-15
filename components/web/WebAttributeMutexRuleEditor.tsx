@@ -8,12 +8,16 @@ type RuleGroup = {
   mutexItems: string[];
 };
 
+const RULE_NAME_MAX_LENGTH = 30;
+const REMARK_MAX_LENGTH = 100;
+
 export const WebAttributeMutexRuleEditor: React.FC<{
   mode: 'create' | 'edit';
   rule?: AttributeMutexRuleRecord | null;
   onBack: () => void;
 }> = ({ mode, rule, onBack }) => {
   const [ruleName, setRuleName] = useState(rule?.name || '');
+  const [remark, setRemark] = useState(rule?.remark || '');
   const [applyScope, setApplyScope] = useState<'all' | 'specific' | 'exclude'>('all');
   const [groups, setGroups] = useState<RuleGroup[]>([
     {
@@ -65,12 +69,33 @@ export const WebAttributeMutexRuleEditor: React.FC<{
 
           <div className="mt-6 space-y-6">
             <EditorRow label="规则名称" required>
-              <input
-                value={ruleName}
-                onChange={e => setRuleName(e.target.value)}
-                placeholder="请输入规则名称"
-                className="h-[38px] w-[360px] rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]"
-              />
+              <div className="relative w-[360px]">
+                <input
+                  value={ruleName}
+                  onChange={e => setRuleName(e.target.value)}
+                  maxLength={RULE_NAME_MAX_LENGTH}
+                  placeholder="请输入规则名称"
+                  className="h-[38px] w-full rounded-lg border border-[#E8E8E8] px-3 pr-16 text-sm outline-none focus:border-[#00C06B]"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#999]">
+                  {ruleName.length}/{RULE_NAME_MAX_LENGTH}
+                </span>
+              </div>
+            </EditorRow>
+
+            <EditorRow label="备注" alignTop>
+              <div className="relative w-[480px]">
+                <textarea
+                  value={remark}
+                  onChange={e => setRemark(e.target.value)}
+                  maxLength={REMARK_MAX_LENGTH}
+                  placeholder="请输入规则目的或描述，最多100个字符"
+                  className="h-[88px] w-full resize-none rounded-lg border border-[#E8E8E8] px-3 py-2 pb-7 pr-16 text-sm leading-5 outline-none focus:border-[#00C06B]"
+                />
+                <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-[#999]">
+                  {remark.length}/{REMARK_MAX_LENGTH}
+                </span>
+              </div>
             </EditorRow>
 
             <EditorRow label="互斥规则" required alignTop>

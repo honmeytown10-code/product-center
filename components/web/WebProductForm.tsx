@@ -189,9 +189,25 @@ type AddonConfigRow = {
     addonName: string;
     addonCode: string;
     addonLimit: string;
+    fixedQuantity: string;
     addonPrice: string;
     addonSpecPrice: string;
     addonStatus: 'on' | 'off';
+};
+type AddonRuleMode = 'unlimited' | 'range' | 'required';
+type AddonScope = 'total' | 'type';
+type AddonCountMetric = 'quantity' | 'distinct';
+type AddonGroupMode = 'customer' | 'fixed';
+type AddonRuleConfig = {
+    ruleMode: AddonRuleMode;
+    min: string;
+    max: string;
+    required: string;
+    isRequired: boolean;
+};
+type AddonGroupRule = AddonRuleConfig & {
+    mode: AddonGroupMode;
+    countMetric: AddonCountMetric;
 };
 type TemplateTaskRecord = {
     id: string;
@@ -562,16 +578,19 @@ const ADDON_LIBRARY = [
         id: 'addon-group-1',
         name: '小料',
         items: [
-            { id: 'addon-item-1', name: '小料1', code: '1210585227812483072', price: '0', status: 'on' as const },
-            { id: 'addon-item-2', name: '小料2', code: '1210585270384668672', price: '0', status: 'on' as const },
+            { id: 'addon-item-1', name: '西米', code: '1210585227812483072', price: '2', defaultLimit: '3', status: 'on' as const },
+            { id: 'addon-item-2', name: '芒果粒', code: '1210585270384668672', price: '3', defaultLimit: '2', status: 'on' as const },
+            { id: 'addon-item-5', name: '红柚粒', code: '1210585270384668675', price: '3', defaultLimit: '2', status: 'on' as const },
+            { id: 'addon-item-6', name: '椰奶冻', code: '1210585270384668676', price: '2', defaultLimit: '3', status: 'on' as const },
+            { id: 'addon-item-7', name: '脆波波', code: '1210585270384668677', price: '2', defaultLimit: '3', status: 'on' as const },
         ],
     },
     {
         id: 'addon-group-2',
         name: '蛋糕夹心',
         items: [
-            { id: 'addon-item-3', name: '草莓夹心', code: '1210585270384668673', price: '6', status: 'on' as const },
-            { id: 'addon-item-4', name: '芒果夹心', code: '1210585270384668674', price: '8', status: 'off' as const },
+            { id: 'addon-item-3', name: '草莓夹心', code: '1210585270384668673', price: '6', defaultLimit: '2', status: 'on' as const },
+            { id: 'addon-item-4', name: '芒果夹心', code: '1210585270384668674', price: '8', defaultLimit: '2', status: 'off' as const },
         ],
     },
 ] as const;
@@ -830,6 +849,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [activeAddonGroupId, setActiveAddonGroupId] = useState<string>(ADDON_LIBRARY[0].id);
     const [tempMethodSelections, setTempMethodSelections] = useState<string[]>([]);
     const [tempAddonSelections, setTempAddonSelections] = useState<string[]>([]);
+    const [addonScope, setAddonScope] = useState<AddonScope>('type');
+    const [addonTotalRule, setAddonTotalRule] = useState<AddonRuleConfig>({
+        ruleMode: 'unlimited',
+        min: '0',
+        max: '10',
+        required: '1',
+        isRequired: false,
+    });
+    const [addonGroupRules, setAddonGroupRules] = useState<Record<string, AddonGroupRule>>({});
     const [comboGroupCards, setComboGroupCards] = useState<ComboGroupCard[]>(() => (
         mode === 'create'
             ? []
@@ -844,14 +872,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             ? ['spec']
             : ['spec', 'addon:小料', 'method:温度哎', 'method:自建做法组']
     ));
-    const [attrDefaultSelections, setAttrDefaultSelections] = useState<Record<string, string>>(() => (
+    const [attrDefaultSelections, setAttrDefaultSelections] = useState<Record<string, string | string[]>>(() => (
         mode === 'create'
             ? { spec: '标准规格' }
             : {
                 spec: '8寸',
                 'method:温度哎': '热',
                 'method:自建做法组': '做法1',
-                'addon:小料': '小料1',
+                'addon:小料': ['西米', '芒果粒'],
             }
     ));
     const [draggingAttrPanelId, setDraggingAttrPanelId] = useState<string | null>(null);
@@ -901,8 +929,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         mode === 'create'
             ? []
             : [
-                { id: 'addon-1', groupName: '小料', addonName: '小料1', addonCode: '1210585227812483072', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
-                { id: 'addon-2', groupName: '小料', addonName: '小料2', addonCode: '1210585270384668672', addonLimit: '', addonPrice: '0', addonSpecPrice: '', addonStatus: 'on' },
+                { id: 'addon-1', groupName: '小料', addonName: '西米', addonCode: '1210585227812483072', addonLimit: '3', fixedQuantity: '1', addonPrice: '2', addonSpecPrice: '', addonStatus: 'on' },
+                { id: 'addon-2', groupName: '小料', addonName: '芒果粒', addonCode: '1210585270384668672', addonLimit: '2', fixedQuantity: '1', addonPrice: '3', addonSpecPrice: '', addonStatus: 'on' },
             ]
     ));
     const getStickyOffset = () => {
@@ -2321,13 +2349,27 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 groupName,
                 addonName,
                 addonCode: addonMeta?.code || '/',
-                addonLimit: '',
+                addonLimit: addonMeta?.defaultLimit || '',
+                fixedQuantity: '1',
                 addonPrice: addonMeta?.price || '0',
                 addonSpecPrice: '',
                 addonStatus: addonMeta?.status || 'on',
             };
         });
         setAddonConfigRows(nextRows);
+        setAttrDefaultSelections(prev => {
+            const next = { ...prev };
+            ADDON_LIBRARY.forEach(group => {
+                const key = `addon:${group.name}`;
+                const currentValue = next[key];
+                const currentValues = Array.isArray(currentValue) ? currentValue : currentValue ? [currentValue] : [];
+                const selectedNames = new Set(nextRows.filter(row => row.groupName === group.name).map(row => row.addonName));
+                const validValues = currentValues.filter(value => selectedNames.has(value));
+                if (validValues.length > 0) next[key] = validValues;
+                else delete next[key];
+            });
+            return next;
+        });
         setDynamicFormData(prev => ({ ...prev, a_addons: nextRows.length ? 'selected' : '' }));
         setShowAddonPickerModal(false);
     };
@@ -2403,6 +2445,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
         const methodGroupNames = Array.from(new Set(methodConfigRows.map(row => row.groupName)));
         const addonGroupNames = Array.from(new Set(addonConfigRows.map(row => row.groupName)));
+        const selectableAddonGroupNames = addonGroupNames.filter(groupName => (addonGroupRules[groupName]?.mode || 'customer') === 'customer');
         const rawGroups = [
             ...(hasSpecAttr ? [{
                 id: 'spec',
@@ -2411,7 +2454,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 items: specConfigRows.map(row => row.s_spec_name),
                 defaultKey: 'spec',
             }] : []),
-            ...addonGroupNames.map(groupName => ({
+            ...selectableAddonGroupNames.map(groupName => ({
                 id: `addon:${groupName}`,
                 title: groupName,
                 tag: '加料',
@@ -2436,7 +2479,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div>
                         <div className="text-lg font-black text-[#1F2129]">商品属性排序</div>
                         <div className="mt-1 text-sm text-gray-400">
-                            标<span className="mx-1 inline-block h-3 w-3 rounded-sm bg-[#00C06B]" />为默认属性，可自定义设置默认规格；规格需必选默认值，属性值支持直接拖动排序
+                            标<span className="mx-1 inline-block h-3 w-3 rounded-sm bg-[#00C06B]" />为默认属性值；规格需设置一个默认值，加料支持设置多个默认值
                         </div>
                     </div>
                     <div className="relative flex items-center gap-3">
@@ -2461,6 +2504,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     {activeGroups.map(group => {
                         const defaultValue = attrDefaultSelections[group.defaultKey];
                         const isSpecGroup = group.id === 'spec';
+                        const isAddonGroup = group.tag === '加料';
+                        const defaultValues = Array.isArray(defaultValue) ? defaultValue : defaultValue ? [defaultValue] : [];
                         return (
                             <div
                                 key={group.id}
@@ -2503,7 +2548,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                                 <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                     {group.items.map(item => {
-                                        const isDefault = defaultValue === item;
+                                        const isDefault = defaultValues.includes(item);
                                         const isDraggingItem = draggingAttrItem?.groupId === group.id && draggingAttrItem.item === item;
                                         return (
                                             <button
@@ -2533,6 +2578,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 onClick={() => {
                                                     setAttrDefaultSelections(prev => {
                                                         if (isSpecGroup) return { ...prev, [group.defaultKey]: item };
+                                                        if (isAddonGroup) {
+                                                            const currentValue = prev[group.defaultKey];
+                                                            const currentValues = Array.isArray(currentValue) ? currentValue : currentValue ? [currentValue] : [];
+                                                            const nextValues = isDefault ? currentValues.filter(value => value !== item) : [...currentValues, item];
+                                                            if (nextValues.length === 0) {
+                                                                const next = { ...prev };
+                                                                delete next[group.defaultKey];
+                                                                return next;
+                                                            }
+                                                            return { ...prev, [group.defaultKey]: nextValues };
+                                                        }
                                                         if (isDefault) {
                                                             const next = { ...prev };
                                                             delete next[group.defaultKey];
@@ -5020,7 +5076,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             </button>
                         )}
                         {isWeightProduct && (
-                            <div className="text-xs font-bold text-amber-600">称重商品不支持多规格，已自动切换为统一规格</div>
+                            <div className="text-xs font-bold text-amber-600">
+                                称重商品不支持多规格，已自动切换为统一规格
+                            </div>
                         )}
                     </div>
                 </div>
@@ -5541,9 +5599,84 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             setMethodConfigRows(prev => prev.filter(row => row.id !== id));
         };
 
-        const updateAddonRow = (id: string, key: keyof AddonConfigRow, value: string) => {
+        const updateAddonRow = (id: string, key: keyof AddonConfigRow, value: string | boolean) => {
             setAddonConfigRows(prev => prev.map(row => row.id === id ? { ...row, [key]: value } : row));
         };
+
+        const getAddonGroupRule = (groupName: string): AddonGroupRule => addonGroupRules[groupName] || {
+            mode: 'customer',
+            countMetric: 'quantity',
+            ruleMode: 'unlimited',
+            min: '0',
+            max: '10',
+            required: '1',
+            isRequired: false,
+        };
+
+        const updateAddonGroupRule = (groupName: string, patch: Partial<AddonGroupRule>) => {
+            setAddonGroupRules(prev => ({
+                ...prev,
+                [groupName]: { ...getAddonGroupRule(groupName), ...patch },
+            }));
+        };
+
+        const changeAddonScope = (scope: AddonScope) => {
+            setAddonScope(scope);
+            if (scope === 'total') {
+                setAddonGroupRules(prev => Object.fromEntries(
+                    Object.entries(prev).map(([groupName, rule]) => [groupName, { ...rule, mode: 'customer' as AddonGroupMode }])
+                ));
+            }
+        };
+
+        const renderRuleInputs = (
+            config: AddonRuleConfig,
+            onChange: (patch: Partial<AddonRuleConfig>) => void,
+            name: string,
+            unit: '份' | '种' = '份'
+        ) => (
+            <div className="flex flex-wrap items-center gap-4">
+                {showAddonRuleUnlimited && (
+                    <label className={`flex items-center gap-2 text-sm ${config.ruleMode === 'unlimited' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
+                        <input type="radio" name={name} checked={config.ruleMode === 'unlimited'} onChange={() => onChange({ ruleMode: 'unlimited' })} className="accent-[#00C06B]" />
+                        {unit === '种' ? '种类不限' : '数量不限'}
+                    </label>
+                )}
+                {showAddonRuleLimit && (
+                    <label className={`flex items-center gap-2 text-sm ${config.ruleMode === 'range' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
+                        <input type="radio" name={name} checked={config.ruleMode === 'range'} onChange={() => onChange({ ruleMode: 'range' })} className="accent-[#00C06B]" />
+                        {unit === '种' ? '起选/限选' : '起购/限购'}
+                    </label>
+                )}
+                {config.ruleMode === 'range' && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <input value={config.min} onChange={e => onChange({ min: e.target.value })} className="w-16 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
+                        <span>至</span>
+                        <input value={config.max} onChange={e => onChange({ max: e.target.value })} className="w-16 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
+                        <span>{unit}</span>
+                    </div>
+                )}
+                {showAddonRuleRequired && config.ruleMode === 'range' && (
+                    <label className={`flex items-center gap-2 text-sm ${config.isRequired ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
+                        <input type="checkbox" checked={config.isRequired} onChange={e => onChange({ isRequired: e.target.checked })} className="h-4 w-4 rounded border-gray-300 accent-[#00C06B]" />
+                        是否必选
+                    </label>
+                )}
+                {showAddonRuleRequired && (
+                    <label className={`flex items-center gap-2 text-sm ${config.ruleMode === 'required' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
+                        <input type="radio" name={name} checked={config.ruleMode === 'required'} onChange={() => onChange({ ruleMode: 'required' })} className="accent-[#00C06B]" />
+                        点餐时必选
+                    </label>
+                )}
+                {config.ruleMode === 'required' && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>{unit === '种' ? '必须选择' : '必须购买'}</span>
+                        <input value={config.required} onChange={e => onChange({ required: e.target.value })} className="w-16 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
+                        <span>{unit}</span>
+                    </div>
+                )}
+            </div>
+        );
 
         const removeAddonRow = (id: string) => {
             setAddonConfigRows(prev => prev.filter(row => row.id !== id));
@@ -5668,89 +5801,97 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             {selectedAddonCount > 0 && (
                                 <>
                                     {(showAddonRuleScope || showAddonRuleUnlimited || showAddonRuleLimit || showAddonRuleRequired) && (
-                                        <div className="flex flex-wrap items-center gap-4">
+                                        <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
                                             {showAddonRuleScope && (
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-sm text-[#1F2129]">加料配置:</span>
-                                                    <select className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2129] outline-none focus:border-[#00C06B]">
-                                                        <option>限制所有加料购买总量</option>
-                                                        <option>限制单个加料购买量</option>
-                                                    </select>
+                                                <div className="flex flex-wrap items-center gap-4">
+                                                    <span className="text-sm font-bold text-[#1F2129]">购买限制范围</span>
+                                                    <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
+                                                        <button type="button" onClick={() => changeAddonScope('total')} className={`rounded-md px-3 py-1.5 text-sm ${addonScope === 'total' ? 'bg-[#E9F9F0] font-bold text-[#00A35B]' : 'text-gray-500'}`}>限制所有加料购买总量</button>
+                                                        <button type="button" onClick={() => setAddonScope('type')} className={`rounded-md px-3 py-1.5 text-sm ${addonScope === 'type' ? 'bg-[#E9F9F0] font-bold text-[#00A35B]' : 'text-gray-500'}`}>按加料类型限制购买数</button>
+                                                    </div>
                                                 </div>
                                             )}
-                                            {showAddonRuleUnlimited && (
-                                                <label className="flex items-center gap-2 text-sm text-[#00A35B] font-bold">
-                                                    <input type="radio" name="addonRule" defaultChecked className="accent-[#00C06B]" />
-                                                    点餐时数量不限
-                                                </label>
-                                            )}
-                                            {showAddonRuleLimit && (
-                                                <label className="flex items-center gap-2 text-sm text-gray-500">
-                                                    <input type="radio" name="addonRule" className="accent-[#00C06B]" />
-                                                    点餐时起购限购数
-                                                </label>
-                                            )}
-                                            {showAddonRuleRequired && (
-                                                <label className="flex items-center gap-2 text-sm text-gray-500">
-                                                    <input type="radio" name="addonRule" className="accent-[#00C06B]" />
-                                                    点餐时必选
-                                                </label>
+                                            {addonScope === 'total' && (
+                                                <div className="border-t border-gray-200 pt-4">
+                                                    <div className="mb-3 text-xs text-gray-500">下方所有加料共用一套购买数量规则。</div>
+                                                    {renderRuleInputs(addonTotalRule, patch => setAddonTotalRule(prev => ({ ...prev, ...patch })), 'addon-total-rule')}
+                                                    {addonTotalRule.ruleMode === 'range' && !addonTotalRule.isRequired && <div className="mt-3 text-xs text-gray-400">非必选；顾客一旦购买，需要满足以上起购/限购规则。</div>}
+                                                </div>
                                             )}
                                         </div>
                                     )}
                                     <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
-                                        {addonGroups.map(groupName => (
-                                            <div key={groupName} className="space-y-3">
-                                                <div className="text-sm font-bold text-[#1F2129]">加料商品类型：{groupName}</div>
-                                                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                                                    <table className="w-full border-collapse table-fixed">
-                                                        <thead className="bg-[#F7F8FA]">
-                                                            <tr className="text-left text-xs font-bold text-gray-500">
-                                                                {showAddonName && <th className="w-[180px] px-3 py-3 border-b border-gray-200">加料商品名称</th>}
-                                                                {showAddonCode && <th className="w-[150px] px-3 py-3 border-b border-gray-200">加料商品编码</th>}
-                                                                {showAddonLimit && <th className="w-[88px] px-3 py-3 border-b border-gray-200">限购</th>}
-                                                                {showAddonPrice && <th className="w-[88px] px-3 py-3 border-b border-gray-200">初始价格</th>}
-                                                                {showAddonSpecPrice && <th className="w-[92px] px-3 py-3 border-b border-gray-200">规格加价</th>}
-                                                                {showAddonStatus && <th className="w-[104px] px-3 py-3 border-b border-gray-200">商品状态</th>}
-                                                                <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {addonConfigRows.filter(row => row.groupName === groupName).map(row => (
-                                                                <tr key={row.id} className="align-top text-[13px] text-[#1F2129]">
-                                                                    {showAddonName && <td className="px-3 py-3 border-b border-gray-100">
-                                                                        <div className="font-bold">{row.addonName}</div>
-                                                                        <div className="mt-1 text-[11px] leading-5 text-gray-400">ID: {row.addonCode}</div>
-                                                                    </td>}
-                                                                    {showAddonCode && <td className="px-3 py-3 border-b border-gray-100 text-gray-400 break-all">{row.addonCode || '/'}</td>}
-                                                                    {showAddonLimit && <td className="px-3 py-3 border-b border-gray-100">
-                                                                        <input value={row.addonLimit} onChange={e => updateAddonRow(row.id, 'addonLimit', e.target.value)} placeholder="/" className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
-                                                                    </td>}
-                                                                    {showAddonPrice && <td className="px-3 py-3 border-b border-gray-100">
-                                                                        <input value={row.addonPrice} onChange={e => updateAddonRow(row.id, 'addonPrice', e.target.value)} className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]" />
-                                                                    </td>}
-                                                                    {showAddonSpecPrice && <td className="px-3 py-3 border-b border-gray-100">
-                                                                        <button type="button" className="text-[13px] font-bold text-[#2563EB] hover:text-[#1D4ED8]">
-                                                                            {row.addonSpecPrice ? row.addonSpecPrice : '未设置'}
-                                                                        </button>
-                                                                    </td>}
-                                                                    {showAddonStatus && <td className="px-3 py-3 border-b border-gray-100">
-                                                                        <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
-                                                                            {row.addonStatus === 'on' ? '启用中' : '已停用'}
-                                                                        </span>
-                                                                    </td>}
-                                                                    <td className="px-3 py-3 border-b border-gray-100">
-                                                                        <button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">
-                                                                            删除
-                                                                        </button>
-                                                                    </td>
+                                        {addonGroups.map(groupName => {
+                                            const groupRows = addonConfigRows.filter(row => row.groupName === groupName);
+                                            const groupRule = getAddonGroupRule(groupName);
+                                            const isFixedGroup = addonScope === 'type' && groupRule.mode === 'fixed';
+                                            const fixedTotal = groupRows.reduce((sum, row) => sum + (Number(row.fixedQuantity) || 0), 0);
+                                            const ruleUnit = groupRule.countMetric === 'distinct' ? '种' : '份';
+                                            return (
+                                                <div key={groupName} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                                    <div className="space-y-3 border-b border-gray-200 px-4 py-3">
+                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-sm font-bold text-[#1F2129]">加料类型：{groupName}</span>
+                                                                {isFixedGroup && <span className="rounded bg-[#E9F9F0] px-2 py-1 text-xs font-bold text-[#00A35B]">固定 {fixedTotal} 份</span>}
+                                                            </div>
+                                                            {addonScope === 'type' && (
+                                                                <div className="inline-flex rounded-lg border border-gray-200 bg-[#FAFAFA] p-1">
+                                                                    <button type="button" onClick={() => updateAddonGroupRule(groupName, { mode: 'customer' })} className={`rounded-md px-3 py-1.5 text-xs ${!isFixedGroup ? 'bg-white font-bold text-[#1F2129] shadow-sm' : 'text-gray-500'}`}>顾客选择</button>
+                                                                    <button type="button" onClick={() => updateAddonGroupRule(groupName, { mode: 'fixed' })} className={`rounded-md px-3 py-1.5 text-xs ${isFixedGroup ? 'bg-white font-bold text-[#1F2129] shadow-sm' : 'text-gray-500'}`}>固定加料</button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {addonScope === 'type' && !isFixedGroup && (
+                                                            <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-gray-100 pt-3">
+                                                                <div className="flex items-center gap-2 text-sm">
+                                                                    <span className="text-gray-500">限制单位</span>
+                                                                    <select value={groupRule.countMetric} onChange={e => updateAddonGroupRule(groupName, { countMetric: e.target.value as AddonCountMetric })} className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 outline-none focus:border-[#00C06B]">
+                                                                        <option value="quantity">购买份数</option>
+                                                                        <option value="distinct">加料种类</option>
+                                                                    </select>
+                                                                </div>
+                                                                {renderRuleInputs(groupRule, patch => updateAddonGroupRule(groupName, patch), `addon-group-rule-${groupName}`, ruleUnit)}
+                                                                {groupRule.ruleMode === 'range' && !groupRule.isRequired && <div className="w-full text-xs text-gray-400">非必选；顾客一旦购买，需要满足以上起购/限购规则。</div>}
+                                                            </div>
+                                                        )}
+                                                        {isFixedGroup && <div className="border-t border-gray-100 pt-3 text-xs text-gray-400">该类型下的加料会随商品固定带入，顾客不可修改；如不需要某项，请从加料类型中移除。</div>}
+                                                    </div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-[860px] w-full border-collapse table-fixed">
+                                                            <thead className="bg-[#F7F8FA]">
+                                                                <tr className="text-left text-xs font-bold text-gray-500">
+                                                                    {showAddonName && <th className="w-[168px] px-3 py-3 border-b border-gray-200">加料商品</th>}
+                                                                    {showAddonCode && <th className="w-[146px] px-3 py-3 border-b border-gray-200">商品编码</th>}
+                                                                    {isFixedGroup && <th className="w-[104px] px-3 py-3 border-b border-gray-200">固定数量</th>}
+                                                                    {showAddonLimit && !isFixedGroup && <th className="w-[104px] px-3 py-3 border-b border-gray-200">单品限购</th>}
+                                                                    {(showAddonPrice || showAddonSpecPrice) && <th className="w-[112px] px-3 py-3 border-b border-gray-200">加料价格</th>}
+                                                                    {showAddonStatus && <th className="w-[92px] px-3 py-3 border-b border-gray-200">商品状态</th>}
+                                                                    <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                            </thead>
+                                                            <tbody>
+                                                                {groupRows.map(row => (
+                                                                        <tr key={row.id} className="align-top text-[13px] text-[#1F2129]">
+                                                                            {showAddonName && <td className="px-3 py-3 border-b border-gray-100"><div className="font-bold">{row.addonName}</div><div className="mt-1 text-[11px] text-gray-400">ID: {row.addonCode}</div></td>}
+                                                                            {showAddonCode && <td className="px-3 py-3 border-b border-gray-100 text-gray-400 break-all">{row.addonCode || '/'}</td>}
+                                                                            {isFixedGroup && <td className="px-3 py-3 border-b border-gray-100">
+                                                                                <input value={row.fixedQuantity} onChange={e => updateAddonRow(row.id, 'fixedQuantity', e.target.value)} className="w-20 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
+                                                                            </td>}
+                                                                            {showAddonLimit && !isFixedGroup && <td className="px-3 py-3 border-b border-gray-100">
+                                                                                <input value={row.addonLimit} onChange={e => updateAddonRow(row.id, 'addonLimit', e.target.value)} className="w-20 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
+                                                                            </td>}
+                                                                            {(showAddonPrice || showAddonSpecPrice) && <td className="px-3 py-3 border-b border-gray-100 font-bold">¥{row.addonPrice}</td>}
+                                                                            {showAddonStatus && <td className="px-3 py-3 border-b border-gray-100"><span className={`inline-flex rounded px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>{row.addonStatus === 'on' ? '启用中' : '已停用'}</span></td>}
+                                                                            <td className="px-3 py-3 border-b border-gray-100"><button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">删除</button></td>
+                                                                        </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                     {showAddonEmptyTip && (
                                     <div className="space-y-3">
@@ -5761,9 +5902,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                         <div className="rounded-xl bg-[#FAFAFA] px-4 py-3 text-xs leading-6 text-gray-400">
                                             <div>说明：</div>
-                                            <div>1、如果单个加料类型的加料多于 7 个，在小程序商品详情页会折叠显示，可前往加料折叠设置中调整。</div>
-                                            <div>2、如果单个加料类型下所有加料都设置限购一份，该加料类型下加料在小程序端将不展示加料“+ -”选择。</div>
-                                            <div>3、如果品牌下所有加料都限购一份，可快速统一设置加料小程序显示设置后，小程序端所有加料将不展示加料“+ -”选择。</div>
+                                            <div>1、顾客选择模式下，默认选中在下方“商品属性排序”中统一配置，顾客自行选择购买数量，此处设置购买限制。</div>
+                                            <div>2、固定加料模式下，关联的加料会随商品固定带入，只需设置每项固定数量。</div>
+                                            <div>3、固定加料和顾客选择属于不同的加料类型；同一类型内不建议混合配置。</div>
                                         </div>
                                     </div>
                                     )}

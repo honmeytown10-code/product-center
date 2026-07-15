@@ -1,12 +1,17 @@
 
 import React, { useMemo, useState } from 'react';
-import { Search, Plus, ChevronDown, MoreHorizontal, Filter, ListFilter, X, Trash2, HelpCircle, Package, ChevronLeft, ChevronRight, Box, Utensils, CupSoda, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Search, Plus, ChevronDown, MoreHorizontal, Filter, ListFilter, X, Trash2, HelpCircle, Package, ChevronLeft, ChevronRight, Box, Utensils, CupSoda, PanelLeftClose, PanelLeftOpen, Upload, ImageIcon, CheckCircle2, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { useProducts } from '../../context';
 import { TabItem } from './WebCommon';
 import type { Product } from '../../types';
 
 type ProductTab = 'all' | 'on_shelf' | 'off_shelf' | 'draft';
 type QuickCategoryView = 'backend' | 'frontend';
+type BatchImageNamingRule = 'productId' | 'skuCode' | 'productMark' | 'productName';
+type BatchImageType = 'main' | 'detail' | 'cover';
+type BatchImageMode = 'append' | 'replace';
+type BatchImageStep = 1 | 2;
+type MatchStatus = 'matched' | 'duplicate' | 'unmatched';
 
 const DEFAULT_FILTERS = {
   productId: '',
@@ -40,6 +45,27 @@ const getBatchActions = (tab: ProductTab) => {
   return [];
 };
 
+const BATCH_IMAGE_TYPES: Array<{ id: BatchImageType; label: string; suffix: string }> = [
+  { id: 'main', label: '商品主图', suffix: 'LB' },
+  { id: 'detail', label: '商品详情图', suffix: 'XQ' },
+  { id: 'cover', label: '商品封面图', suffix: 'FM' },
+];
+
+const BATCH_IMAGE_NAMING_RULES: Array<{ id: BatchImageNamingRule; label: string; tip: string }> = [
+  { id: 'productId', label: '商品ID', tip: '最稳定，适合导出商品后维护图片名称' },
+  { id: 'skuCode', label: '商品条码', tip: '适合门店或供应链已有条码命名' },
+  { id: 'productMark', label: '商品标识', tip: '适合内部编码体系' },
+  { id: 'productName', label: '商品名称', tip: '可减少改名成本，同名商品需人工确认' },
+];
+
+const normalizeMatchText = (value: string) => value.replace(/\.[^.]+$/, '').replace(/-(LB|XQ|FM)-?\d*$/i, '').trim().toLowerCase();
+
+const getImageTypeFromFileName = (fileName: string): BatchImageType => {
+  if (/-XQ/i.test(fileName)) return 'detail';
+  if (/-FM/i.test(fileName)) return 'cover';
+  return 'main';
+};
+
 const buildCopyProduct = (product: Product): Product => {
   const suffix = Date.now().toString().slice(-6);
   return {
@@ -59,7 +85,7 @@ export const WebProductList: React.FC<{
   onViewDetail?: (product: any) => void;
   onEditProduct?: (product: any) => void;
 }> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct }) => {
-  const { products, categories, addProduct, toggleShelfStatus } = useProducts();
+  const { products, categories, addProduct, updateProduct, toggleShelfStatus } = useProducts();
   const [activeTab, setActiveTab] = useState<ProductTab>('on_shelf');
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportDropdown, setShowImportDropdown] = useState(false);
@@ -74,6 +100,7 @@ export const WebProductList: React.FC<{
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [rowMoreMenu, setRowMoreMenu] = useState<{ productId: string; top: number; left: number } | null>(null);
+  const [showBatchImageModal, setShowBatchImageModal] = useState(false);
 
   const tabCounts = useMemo(
     () => ({
@@ -150,6 +177,7 @@ export const WebProductList: React.FC<{
     { label: '批量同步门店', enabled: selectedProductIds.length > 0 },
     { label: '批量门店销售设置', enabled: selectedProductIds.length > 0 },
     { label: '批量打印设置', enabled: selectedProductIds.length > 0 && !hasComboSelection },
+    { label: '批量增/换图片', enabled: products.length > 0 },
     { label: '批量导出商品路径', enabled: selectedProductIds.length > 0 },
   ];
 
@@ -492,7 +520,12 @@ export const WebProductList: React.FC<{
                           className={`w-full px-4 py-2.5 text-left text-[13px] ${
                             action.enabled ? 'text-[#333] hover:bg-[#F7F8FA] hover:text-[#00C06B]' : 'cursor-not-allowed text-[#C0C4CC]'
                           }`}
-                          onClick={() => setShowToolbarMoreDropdown(false)}
+                          onClick={() => {
+                            if (action.label === '批量增/换图片') {
+                              setShowBatchImageModal(true);
+                            }
+                            setShowToolbarMoreDropdown(false);
+                          }}
                         >
                           {action.label}
                         </button>
@@ -707,7 +740,429 @@ export const WebProductList: React.FC<{
             </div>
           </div>
         )}
+        {showBatchImageModal && (
+          <BatchImageImportModal
+            products={products}
+            onClose={() => setShowBatchImageModal(false)}
+            onApply={(updates) => {
+              updates.forEach(item => updateProduct(item.productId, { image: item.imageUrl }));
+            }}
+          />
+        )}
       </div>
     </main>
   );
+};
+
+type SelectedBatchImage = {
+  id: string;
+  fileName: string;
+  imageUrl: string;
+  source: 'upload' | 'material';
+};
+
+type MatchRow = {
+  image: SelectedBatchImage;
+  imageType: BatchImageType;
+  imageTypeLabel: string;
+  status: MatchStatus;
+  product?: Product;
+  candidates?: Product[];
+  reason?: string;
+};
+
+const buildDemoBatchImages = (products: Product[]): SelectedBatchImage[] => {
+  const first = products[0];
+  const second = products[1];
+  const third = products[2] || products[0];
+
+  return [
+    {
+      id: 'batch-image-1',
+      fileName: `${first?.id || '1001'}-LB-01.png`,
+      imageUrl: first?.image || 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?w=200&h=200&fit=crop',
+      source: 'upload',
+    },
+    {
+      id: 'batch-image-2',
+      fileName: `${second?.name || '手打柠檬茶'}-XQ-01.png`,
+      imageUrl: second?.image || 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=200&h=200&fit=crop',
+      source: 'upload',
+    },
+    {
+      id: 'batch-image-3',
+      fileName: `${third?.skuCode || '1003'}-FM-01.png`,
+      imageUrl: third?.image || 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=200&h=200&fit=crop',
+      source: 'material',
+    },
+    {
+      id: 'batch-image-4',
+      fileName: '夏季限定新品-LB-01.png',
+      imageUrl: 'https://images.unsplash.com/photo-1626803775151-61d756612fcd?w=200&h=200&fit=crop',
+      source: 'upload',
+    },
+  ];
+};
+
+const getProductMatchValue = (product: Product, rule: BatchImageNamingRule) => {
+  if (rule === 'productId') return product.id;
+  if (rule === 'skuCode') return product.skuCode;
+  if (rule === 'productMark') return `${product.id}-${product.skuCode}`;
+  return product.name;
+};
+
+const buildMatchRows = (products: Product[], images: SelectedBatchImage[], namingRule: BatchImageNamingRule): MatchRow[] => {
+  const valueMap = new Map<string, Product[]>();
+  products.forEach(product => {
+    const key = normalizeMatchText(getProductMatchValue(product, namingRule));
+    valueMap.set(key, [...(valueMap.get(key) || []), product]);
+  });
+
+  return images.map(image => {
+    const imageType = getImageTypeFromFileName(image.fileName);
+    const imageTypeLabel = BATCH_IMAGE_TYPES.find(item => item.id === imageType)?.label || '商品主图';
+    const key = normalizeMatchText(image.fileName);
+    const candidates = valueMap.get(key) || [];
+
+    if (candidates.length === 1) {
+      return { image, imageType, imageTypeLabel, status: 'matched', product: candidates[0] };
+    }
+
+    if (candidates.length > 1) {
+      return {
+        image,
+        imageType,
+        imageTypeLabel,
+        status: 'duplicate',
+        candidates,
+        reason: '命中多个同名商品，请人工确认后再导入',
+      };
+    }
+
+    return {
+      image,
+      imageType,
+      imageTypeLabel,
+      status: 'unmatched',
+      reason: namingRule === 'productName' ? '未找到同名商品，建议检查图片名称或改用商品ID' : '未匹配到商品',
+    };
+  });
+};
+
+const BatchImageImportModal: React.FC<{
+  products: Product[];
+  onClose: () => void;
+  onApply: (updates: Array<{ productId: string; imageUrl: string }>) => void;
+}> = ({ products, onClose, onApply }) => {
+  const [step, setStep] = useState<BatchImageStep>(1);
+  const [namingRule, setNamingRule] = useState<BatchImageNamingRule>('productId');
+  const [mode, setMode] = useState<BatchImageMode>('replace');
+  const [imageTypes, setImageTypes] = useState<BatchImageType[]>(['main', 'detail', 'cover']);
+  const [images, setImages] = useState<SelectedBatchImage[]>([]);
+  const [imported, setImported] = useState(false);
+
+  const previewImages = useMemo(() => images.filter(image => imageTypes.includes(getImageTypeFromFileName(image.fileName))), [images, imageTypes]);
+  const matchRows = useMemo(() => buildMatchRows(products, previewImages, namingRule), [products, previewImages, namingRule]);
+  const matchedRows = matchRows.filter(row => row.status === 'matched');
+  const duplicateRows = matchRows.filter(row => row.status === 'duplicate');
+  const unmatchedRows = matchRows.filter(row => row.status === 'unmatched');
+
+  const handleMockUpload = () => {
+    setImages(buildDemoBatchImages(products));
+    setImported(false);
+  };
+
+  const handleToggleImageType = (type: BatchImageType) => {
+    setImageTypes(prev => (prev.includes(type) ? prev.filter(item => item !== type) : [...prev, type]));
+  };
+
+  const handleApply = () => {
+    onApply(matchedRows.map(row => ({ productId: row.product!.id, imageUrl: row.image.imageUrl })));
+    setImported(true);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#111827]/55">
+      <div className="flex h-[82vh] w-[1040px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#E8E8E8] px-6">
+          <div>
+            <div className="text-lg font-bold text-[#333]">批量增/换图片</div>
+            <div className="mt-1 text-xs text-[#98A2B3]">支持商品主图、商品详情图、商品封面图，导入前先完成匹配校验</div>
+          </div>
+          <button onClick={onClose} className="rounded-md p-2 text-[#98A2B3] hover:bg-[#F5F6FA] hover:text-[#333]">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex h-[70px] shrink-0 items-center border-b border-[#F0F1F3] px-6">
+          <BatchImageStepItem index={1} label="上传图片" active={step === 1} done={step > 1} />
+          <div className="mx-4 h-px flex-1 bg-[#E5E7EB]" />
+          <BatchImageStepItem index={2} label="匹配预览与导入" active={step === 2} done={imported} />
+        </div>
+
+        {step === 1 ? (
+          <div className="grid min-h-0 flex-1 grid-cols-[1fr_320px]">
+            <div className="min-h-0 overflow-y-auto p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={handleMockUpload}
+                  className="flex min-h-[150px] flex-col items-center justify-center rounded-lg border border-dashed border-[#00C06B] bg-[#F7FFFA] text-[#00A35B] transition-colors hover:bg-[#EFFBF4]"
+                >
+                  <Upload size={24} />
+                  <div className="mt-3 text-sm font-bold">本地批量上传图片</div>
+                  <div className="mt-2 text-xs text-[#8A96A8]">支持文件夹多选；上传到素材库后自动选中本次图片</div>
+                </button>
+                <button
+                  onClick={handleMockUpload}
+                  className="flex min-h-[150px] flex-col items-center justify-center rounded-lg border border-[#E8E8E8] bg-white text-[#4B5563] transition-colors hover:border-[#00C06B] hover:text-[#00A35B]"
+                >
+                  <ImageIcon size={24} />
+                  <div className="mt-3 text-sm font-bold">从素材库选择图片</div>
+                  <div className="mt-2 text-xs text-[#8A96A8]">素材库已支持批量上传后自动选中</div>
+                </button>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-[#E8E8E8] bg-[#FAFAFA] p-4">
+                <div className="mb-3 text-sm font-bold text-[#333]">导入设置</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="mb-2 text-xs font-bold text-[#667085]">图片处理方式</div>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'replace' as const, label: '替换已有图片' },
+                        { id: 'append' as const, label: '增加到已有图片后' },
+                      ].map(option => (
+                        <button
+                          key={option.id}
+                          onClick={() => setMode(option.id)}
+                          className={`rounded-md border px-3 py-2 text-xs font-bold ${
+                            mode === option.id ? 'border-[#00C06B] bg-[#EAF9F1] text-[#00A35B]' : 'border-[#E8E8E8] bg-white text-[#667085]'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs font-bold text-[#667085]">本次处理图片类型</div>
+                    <div className="flex flex-wrap gap-2">
+                      {BATCH_IMAGE_TYPES.map(type => (
+                        <button
+                          key={type.id}
+                          onClick={() => handleToggleImageType(type.id)}
+                          className={`rounded-md border px-3 py-2 text-xs font-bold ${
+                            imageTypes.includes(type.id) ? 'border-[#00C06B] bg-[#EAF9F1] text-[#00A35B]' : 'border-[#E8E8E8] bg-white text-[#667085]'
+                          }`}
+                        >
+                          {type.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-[#E8E8E8] p-4">
+                <div className="mb-3 text-sm font-bold text-[#333]">图片命名规则</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {BATCH_IMAGE_NAMING_RULES.map(rule => (
+                    <button
+                      key={rule.id}
+                      onClick={() => {
+                        setNamingRule(rule.id);
+                        setImported(false);
+                      }}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        namingRule === rule.id ? 'border-[#00C06B] bg-[#F4FCF7]' : 'border-[#E8E8E8] bg-white hover:border-[#00C06B]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`h-3.5 w-3.5 rounded-full border ${namingRule === rule.id ? 'border-[#00C06B] bg-[#00C06B]' : 'border-[#D0D5DD]'}`} />
+                        <span className="text-sm font-bold text-[#333]">{rule.label}</span>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-[#8A96A8]">{rule.tip}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-md bg-[#FFF8E8] px-3 py-2 text-xs leading-5 text-[#8A6400]">
+                  商品名称匹配仅自动导入唯一命中的商品；名称重复或未匹配的图片会进入待处理，不会直接覆盖。
+                </div>
+              </div>
+            </div>
+
+            <BatchImageSelectedPanel images={images} onRemove={id => setImages(prev => prev.filter(item => item.id !== id))} />
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col p-6">
+            <div className="grid grid-cols-4 gap-3">
+              <BatchImageStatCard label="已选图片" value={String(images.length)} tone="neutral" />
+              <BatchImageStatCard label="成功匹配" value={String(matchedRows.length)} tone="success" />
+              <BatchImageStatCard label="名称重复" value={String(duplicateRows.length)} tone="warning" />
+              <BatchImageStatCard label="未匹配" value={String(unmatchedRows.length)} tone="danger" />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-[#E8E8E8] bg-[#FAFAFA] px-4 py-3">
+              <div className="text-sm text-[#4B5563]">
+                当前规则：<span className="font-bold text-[#333]">{BATCH_IMAGE_NAMING_RULES.find(rule => rule.id === namingRule)?.label}</span>
+                <span className="mx-2 text-[#D0D5DD]">|</span>
+                处理方式：<span className="font-bold text-[#333]">{mode === 'replace' ? '替换已有图片' : '增加到已有图片后'}</span>
+              </div>
+              <button onClick={() => setStep(1)} className="text-sm font-bold text-[#00A35B] hover:underline">返回调整</button>
+            </div>
+
+            <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-lg border border-[#E8E8E8]">
+              <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                <thead className="sticky top-0 bg-[#F7F8FA] text-xs font-bold text-[#667085]">
+                  <tr>
+                    <th className="border-b border-[#E8E8E8] px-4 py-3">图片文件</th>
+                    <th className="border-b border-[#E8E8E8] px-4 py-3">图片类型</th>
+                    <th className="border-b border-[#E8E8E8] px-4 py-3">匹配商品</th>
+                    <th className="border-b border-[#E8E8E8] px-4 py-3">状态</th>
+                    <th className="border-b border-[#E8E8E8] px-4 py-3">处理说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchRows.map(row => (
+                    <tr key={row.image.id} className="border-b border-[#F3F4F6]">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <img src={row.image.imageUrl} className="h-10 w-10 rounded-md border border-[#E8E8E8] object-cover" />
+                          <div>
+                            <div className="font-bold text-[#333]">{row.image.fileName}</div>
+                            <div className="text-xs text-[#98A2B3]">{row.image.source === 'upload' ? '本次上传' : '素材库选择'}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-[#4B5563]">{row.imageTypeLabel}</td>
+                      <td className="px-4 py-3">
+                        {row.product ? (
+                          <div>
+                            <div className="font-bold text-[#333]">{row.product.name}</div>
+                            <div className="text-xs text-[#98A2B3]">ID：{row.product.id} / 条码：{row.product.skuCode}</div>
+                          </div>
+                        ) : (
+                          <span className="text-[#98A2B3]">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <BatchImageStatusBadge status={row.status} />
+                      </td>
+                      <td className="px-4 py-3 text-[#667085]">{row.reason || (mode === 'replace' ? '确认后将覆盖对应类型图片' : '确认后将追加到对应类型图片')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {imported && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#CDEFD9] bg-[#F4FCF7] px-4 py-3 text-sm font-bold text-[#00A35B]">
+                <CheckCircle2 size={18} />
+                已模拟导入 {matchedRows.length} 张图片；名称重复和未匹配图片未导入，可调整命名规则后重新预览。
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex h-[64px] shrink-0 items-center justify-between border-t border-[#E8E8E8] px-6">
+          <div className="text-xs text-[#98A2B3]">
+            {step === 1 ? '建议优先使用商品ID；商品名称适合快速处理，但需关注同名商品。' : '仅成功匹配的数据会进入导入修改。'}
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="rounded-lg border border-[#E8E8E8] px-5 py-2 text-sm font-bold text-[#667085] hover:bg-[#F7F8FA]">取消</button>
+            {step === 1 ? (
+              <button
+                disabled={images.length === 0 || imageTypes.length === 0}
+                onClick={() => setStep(2)}
+                className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white hover:bg-[#00A35B] disabled:cursor-not-allowed disabled:bg-[#B7E8CC]"
+              >
+                生成匹配预览
+              </button>
+            ) : (
+              <button
+                disabled={matchedRows.length === 0 || imported}
+                onClick={handleApply}
+                className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white hover:bg-[#00A35B] disabled:cursor-not-allowed disabled:bg-[#B7E8CC]"
+              >
+                {imported ? '已导入' : `确认导入 ${matchedRows.length} 张`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BatchImageStepItem: React.FC<{ index: number; label: string; active: boolean; done: boolean }> = ({ index, label, active, done }) => (
+  <div className={`flex items-center gap-2 ${active || done ? 'text-[#00A35B]' : 'text-[#667085]'}`}>
+    <span className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-bold ${done ? 'border-[#00C06B] bg-[#00C06B] text-white' : active ? 'border-[#00C06B] bg-[#F4FCF7]' : 'border-[#D0D5DD] bg-white'}`}>
+      {done ? <CheckCircle2 size={18} /> : index}
+    </span>
+    <span className="text-sm font-bold">{label}</span>
+  </div>
+);
+
+const BatchImageSelectedPanel: React.FC<{ images: SelectedBatchImage[]; onRemove: (id: string) => void }> = ({ images, onRemove }) => (
+  <aside className="flex min-h-0 flex-col border-l border-[#E8E8E8] bg-[#FCFCFD]">
+    <div className="border-b border-[#E8E8E8] px-4 py-4">
+      <div className="text-sm font-bold text-[#333]">已选图片</div>
+      <div className="mt-1 text-xs text-[#98A2B3]">上传到素材库后自动选中本次图片</div>
+    </div>
+    <div className="flex-1 overflow-y-auto p-4">
+      {images.length === 0 ? (
+        <div className="flex h-full flex-col items-center justify-center text-center text-[#98A2B3]">
+          <FileText size={36} className="mb-3 text-[#D0D5DD]" />
+          <div className="text-sm font-bold">还未选择图片</div>
+          <div className="mt-2 text-xs leading-5">点击左侧上传或从素材库选择后，本次图片会自动进入这里</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {images.map(image => (
+            <div key={image.id} className="flex items-center gap-3 rounded-lg border border-[#E8E8E8] bg-white p-2">
+              <img src={image.imageUrl} className="h-12 w-12 rounded-md object-cover" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-bold text-[#333]">{image.fileName}</div>
+                <div className="mt-1 text-[11px] text-[#98A2B3]">{image.source === 'upload' ? '本次上传自动选中' : '素材库选择'}</div>
+              </div>
+              <button onClick={() => onRemove(image.id)} className="rounded-md p-1 text-[#98A2B3] hover:bg-[#F5F6FA] hover:text-[#333]">
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+    {images.length > 0 && (
+      <div className="border-t border-[#E8E8E8] px-4 py-3 text-xs text-[#667085]">
+        已选 <span className="font-bold text-[#00A35B]">{images.length}</span> 张图片
+      </div>
+    )}
+  </aside>
+);
+
+const BatchImageStatCard: React.FC<{ label: string; value: string; tone: 'neutral' | 'success' | 'warning' | 'danger' }> = ({ label, value, tone }) => {
+  const className = {
+    neutral: 'border-[#E8E8E8] bg-white text-[#333]',
+    success: 'border-[#CDEFD9] bg-[#F4FCF7] text-[#00A35B]',
+    warning: 'border-[#FFE4B3] bg-[#FFF8E8] text-[#B7791F]',
+    danger: 'border-[#FFD6D6] bg-[#FFF5F5] text-[#D92D20]',
+  }[tone];
+
+  return (
+    <div className={`rounded-lg border p-4 ${className}`}>
+      <div className="text-xs font-bold opacity-75">{label}</div>
+      <div className="mt-2 text-2xl font-bold">{value}</div>
+    </div>
+  );
+};
+
+const BatchImageStatusBadge: React.FC<{ status: MatchStatus }> = ({ status }) => {
+  if (status === 'matched') {
+    return <span className="inline-flex items-center rounded-full bg-[#EAF9F1] px-2.5 py-1 text-xs font-bold text-[#00A35B]"><CheckCircle2 size={13} className="mr-1" />已匹配</span>;
+  }
+  if (status === 'duplicate') {
+    return <span className="inline-flex items-center rounded-full bg-[#FFF8E8] px-2.5 py-1 text-xs font-bold text-[#B7791F]"><AlertTriangle size={13} className="mr-1" />待确认</span>;
+  }
+  return <span className="inline-flex items-center rounded-full bg-[#FFF5F5] px-2.5 py-1 text-xs font-bold text-[#D92D20]"><RefreshCw size={13} className="mr-1" />未匹配</span>;
 };

@@ -211,8 +211,24 @@ const DEFAULT_COMBO_FIELDS: CategoryFieldConfig[] = [
   { id: 'o_ingredients', isRequired: false },
 ];
 
+const BUFFET_TICKET_UNSUPPORTED_FIELD_IDS = new Set([
+  'p_weight_flag',
+  'p_tare_weight',
+]);
+
+const BUFFET_TICKET_DEFAULT_HIDDEN_FIELD_IDS = new Set([
+  'p_unit',
+  'p_display_type',
+  'm_methods',
+  'a_addons',
+]);
+
 const BUFFET_TICKET_STANDARD_FIELDS: CategoryFieldConfig[] = DEFAULT_STANDARD_FIELDS
-  .filter(field => !['p_weight_flag', 'p_tare_weight'].includes(field.id))
+  .filter(field => !BUFFET_TICKET_UNSUPPORTED_FIELD_IDS.has(field.id))
+  .map(field => BUFFET_TICKET_DEFAULT_HIDDEN_FIELD_IDS.has(field.id)
+    ? { ...field, displayMode: 'hidden' as const }
+    : field
+  )
   .flatMap(field => field.id === 'p_cat'
     ? [
         field,

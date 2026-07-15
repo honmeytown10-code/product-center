@@ -1172,7 +1172,7 @@ export const WebCategorySelectModal = ({
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className={`bg-white rounded-[24px] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 w-[900px] h-[600px]`}>
+            <div className="flex h-[min(700px,calc(100vh-32px))] w-[900px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
                     <div>
@@ -1194,7 +1194,7 @@ export const WebCategorySelectModal = ({
                         <span className="text-sm text-[#00C06B] font-medium">点击一个类目后将直接进入商品创建表单，不同类目可管理不同的商品属性</span>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 gap-4 pb-1 lg:grid-cols-4">
                         {visibleCategories.map(cat => (
                                 <button
                                     key={cat.id}

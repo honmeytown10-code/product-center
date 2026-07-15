@@ -3383,22 +3383,19 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 <div className="relative">
                     <input
                         onFocus={setPreview}
-                        type="number"
-                        min={1}
-                        step={1}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         className="q-form-input pr-12"
                         placeholder="请输入适用人数"
-                        value={value || '1'}
+                        value={value ?? ''}
                         onChange={e => {
                             const rawValue = e.target.value;
-                            if (rawValue === '') {
-                                setValue('');
-                                return;
-                            }
-                            setValue(String(Math.max(1, Math.floor(Number(rawValue) || 1))));
+                            if (/^\d*$/.test(rawValue)) setValue(rawValue);
                         }}
                         onBlur={() => {
-                            if (!value || Number(value) < 1) setValue('1');
+                            if (value === '' || value === undefined || value === null) return;
+                            setValue(String(Math.max(1, Math.floor(Number(value) || 1))));
                         }}
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">人</span>

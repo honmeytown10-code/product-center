@@ -18,6 +18,7 @@ import {
   Scale,
   CakeSlice,
   Flame,
+  Ticket,
 } from 'lucide-react';
 import { Category } from '../../types';
 import { WebImportReviewModal } from './WebImportReviewModal';
@@ -1133,6 +1134,7 @@ export const WebCategorySelectModal = ({
         if (name.includes('烘焙') || name.includes('蛋糕')) return <CakeSlice size={28} strokeWidth={1.5} />;
         if (name.includes('零售')) return <ShoppingBag size={28} strokeWidth={1.5} />;
         if (name.includes('称重')) return <Scale size={28} strokeWidth={1.5} />;
+        if (name.includes('自助餐')) return <Ticket size={28} strokeWidth={1.5} />;
         return <Utensils size={28} strokeWidth={1.5} />;
     };
 
@@ -1142,6 +1144,7 @@ export const WebCategorySelectModal = ({
         if (name.includes('称重') && type === 'standard') return '海鲜、麻辣烫';
         if ((name.includes('烘焙') || name.includes('蛋糕')) && type === 'standard') return '面包、甜点、整糕';
         if (name.includes('零售') && type === 'standard') return '预包装零食、饮料';
+        if (name.includes('自助餐') && type === 'standard') return '按份售卖、按人数核验';
         
         if (name.includes('通用') && type === 'combo') return '超值午餐、多人餐';
         if (name.includes('饮品') && type === 'combo') return '双杯优惠、下午茶';

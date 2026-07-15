@@ -181,6 +181,8 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   { id: 'p_front_cat', label: '前台分类', module: 'base', type: 'selector', applyToBrands: ['b_1', 'b_2'], sortOrder: 40, isRequired: true, description: '用于前台展示，如小程序、美团、淘宝闪购等渠道的分类展示', presetValues: ['热销推荐', '奶茶系列', '咖啡系列', '果茶系列'] },
   { id: 'p_back_cat', label: '后台分类', module: 'base', type: 'selector', sortOrder: 45, description: '用于店铺内部经营管理和数据统计等，不在前台展示', presetValues: ['常规商品', '新品商品', '活动商品', '原料商品'] },
   { id: 'p_cat', label: '商品类目', module: 'base', type: 'selector', isBase: true, isSystem: true, sortOrder: 50, isRequired: false },
+  { id: 'p_applicable_people', label: '适用人数', module: 'base', type: 'number', isSystem: true, sortOrder: 51, isRequired: true, description: '每售出 1 份自助餐门票所覆盖的用餐人数' },
+  { id: 'p_deposit_required', label: '是否收取押金', module: 'base', type: 'switch', isSystem: true, sortOrder: 52, description: '开启后，POS 收银时将按押金业务流程处理' },
   { id: 'p_weight_flag', label: '是否称重商品', module: 'base', type: 'switch', sortOrder: 52, description: '用于企迈 POS 端称重商品业务，开启后商品不支持多规格' },
   { id: 'p_unit', label: '计量单位', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 53, isRequired: false },
   { id: 'p_display_type', label: '商品展示类型', module: 'base', type: 'checkbox_group', sortOrder: 55, description: '为商品配置特殊标识用于个性化业务场景' },
@@ -304,6 +306,7 @@ export interface Category {
   children?: Category[];
   source?: 'system' | 'brand'; 
   classification?: 'standard' | 'combo';
+  businessType?: 'buffet_ticket';
 }
 
 export interface TimeRule {
@@ -338,6 +341,9 @@ export interface Product {
   timeSales?: TimeSalesConfig | null;
   linkedStallIds?: string[];
   comboItemIds?: string[];
+  businessType?: 'buffet_ticket';
+  applicablePeople?: number;
+  depositRequired?: boolean;
 }
 
 const mockFields = (ids: string[]) => ids.map(id => ({ id, isRequired: false }));

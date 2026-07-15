@@ -757,6 +757,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         p_stat_tags: '',
         p_badge: '',
         p_weight_flag: false,
+        p_business_type: category.businessType || '',
+        p_applicable_people: initialProduct.applicablePeople || '1',
+        p_deposit_required: !!initialProduct.depositRequired,
         p_unit: '',
     } : {
         p_front_cat: [],
@@ -767,6 +770,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         p_stat_tags: '',
         p_badge: '',
         p_weight_flag: false,
+        p_business_type: category.businessType || '',
+        p_applicable_people: '1',
+        p_deposit_required: false,
         p_unit: '',
     });
     const formContentRef = useRef<HTMLDivElement | null>(null);
@@ -776,6 +782,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [activeFormSection, setActiveFormSection] = useState<SectionId>('basic');
     const [pageView, setPageView] = useState<PageView>('form');
     const [currentCategory, setCurrentCategory] = useState(category);
+    const isBuffetTicketCategory = currentCategory.businessType === 'buffet_ticket';
     const [prepEnabled, setPrepEnabled] = useState(true);
     const [prepScope, setPrepScope] = useState<PrepScope>('spu');
     const [splitByStockState, setSplitByStockState] = useState(false);
@@ -1459,6 +1466,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     );
     const firstVisibleSection = visibleSectionOrder[0] || 'basic';
     const isWeightProduct = !!dynamicFormData.p_weight_flag;
+    const isSingleSpecOnly = isWeightProduct || isBuffetTicketCategory;
 
     useEffect(() => {
         if (visibleSectionOrder.length === 0) return;
@@ -1488,10 +1496,26 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     }, [badgeOptions, onBadgeOptionsChange]);
 
     useEffect(() => {
-        if (isWeightProduct && specDisplayMode !== 'single') {
+        if (isSingleSpecOnly && specDisplayMode !== 'single') {
             setSpecDisplayMode('single');
         }
-    }, [isWeightProduct, specDisplayMode]);
+        if (isBuffetTicketCategory) {
+            setSpecConfigRows(prev => prev.length > 0 ? prev.slice(0, 1) : [createEmptySpecConfigRow('spec-1')]);
+            setDynamicFormData(prev => ({
+                ...prev,
+                p_business_type: 'buffet_ticket',
+                p_applicable_people: String(Math.max(1, Math.floor(Number(prev.p_applicable_people) || 1))),
+                p_deposit_required: !!prev.p_deposit_required,
+            }));
+        } else {
+            setDynamicFormData(prev => {
+                if (!prev.p_business_type) return prev;
+                const next = { ...prev };
+                delete next.p_business_type;
+                return next;
+            });
+        }
+    }, [isBuffetTicketCategory, isSingleSpecOnly, specDisplayMode]);
 
     useEffect(() => {
         if (specDisplayMode === 'single') {
@@ -1766,7 +1790,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const handleContinueCreate = () => {
-        setDynamicFormData({ p_weight_flag: false, p_unit: '' });
+        setDynamicFormData({
+            p_weight_flag: false,
+            p_business_type: category.businessType || '',
+            p_applicable_people: '1',
+            p_deposit_required: false,
+            p_unit: '',
+        });
         setCommittedStarterName('');
         setDraftSaved(false);
         setSaveAttempted(false);
@@ -3345,6 +3375,34 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <option value="no">否</option>
                     <option value="yes">是</option>
                 </select>
+            );
+        }
+
+        if (field.id === 'p_applicable_people') {
+            return (
+                <div className="relative">
+                    <input
+                        onFocus={setPreview}
+                        type="number"
+                        min={1}
+                        step={1}
+                        className="q-form-input pr-12"
+                        placeholder="请输入适用人数"
+                        value={value || '1'}
+                        onChange={e => {
+                            const rawValue = e.target.value;
+                            if (rawValue === '') {
+                                setValue('');
+                                return;
+                            }
+                            setValue(String(Math.max(1, Math.floor(Number(rawValue) || 1))));
+                        }}
+                        onBlur={() => {
+                            if (!value || Number(value) < 1) setValue('1');
+                        }}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">人</span>
+                </div>
             );
         }
 
@@ -4980,12 +5038,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             ].map(option => (
                                 <label
                                     key={option.key}
-                                    className={`flex items-center gap-2 text-sm ${isWeightProduct && option.key === 'multi' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                    className={`flex items-center gap-2 text-sm ${isSingleSpecOnly && option.key === 'multi' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                                 >
                                     <input
                                         type="radio"
                                         checked={specDisplayMode === option.key}
-                                        disabled={isWeightProduct && option.key === 'multi'}
+                                        disabled={isSingleSpecOnly && option.key === 'multi'}
                                         onChange={() => {
                                             if (option.key === 'single' && specConfigRows.length === 0) {
                                                 setSpecConfigRows([createEmptySpecConfigRow('spec-1')]);
@@ -5019,8 +5077,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 调整规格
                             </button>
                         )}
-                        {isWeightProduct && (
-                            <div className="text-xs font-bold text-amber-600">称重商品不支持多规格，已自动切换为统一规格</div>
+                        {isSingleSpecOnly && (
+                            <div className="text-xs font-bold text-amber-600">
+                                {isBuffetTicketCategory ? '自助餐门票仅支持统一规格' : '称重商品不支持多规格，已自动切换为统一规格'}
+                            </div>
                         )}
                     </div>
                 </div>

@@ -211,6 +211,17 @@ const DEFAULT_COMBO_FIELDS: CategoryFieldConfig[] = [
   { id: 'o_ingredients', isRequired: false },
 ];
 
+const BUFFET_TICKET_STANDARD_FIELDS: CategoryFieldConfig[] = DEFAULT_STANDARD_FIELDS
+  .filter(field => !['p_weight_flag', 'p_tare_weight'].includes(field.id))
+  .flatMap(field => field.id === 'p_cat'
+    ? [
+        field,
+        { id: 'p_applicable_people', isRequired: true },
+        { id: 'p_deposit_required', isRequired: false },
+      ]
+    : [field]
+  );
+
 const INITIAL_WEB_CATEGORIES: WebCategory[] = [
   // Standard Categories
   { id: 'w_cat_s1', name: '通用菜品', productCount: 120, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
@@ -218,6 +229,7 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
   { id: 'w_cat_s3', name: '称重商品', productCount: 15, standardFields: DEFAULT_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard' },
   { id: 'w_cat_s4', name: '蛋糕/烘焙', productCount: 30, standardFields: DEFAULT_STANDARD_FIELDS.filter(field => field.id !== 's_pack_fee').concat([{ id: 'p_badge', isRequired: false }]), comboFields: [], source: 'system', classification: 'standard' },
   { id: 'w_cat_s5', name: '零售商品', productCount: 80, standardFields: DEFAULT_STANDARD_FIELDS.filter(field => field.id !== 'st_member').concat([{ id: 'o_invoice', isRequired: false }, { id: 'o_origin', isRequired: false }]), comboFields: [], source: 'system', classification: 'standard' },
+  { id: 'w_cat_s6', name: '自助餐门票', productCount: 0, standardFields: BUFFET_TICKET_STANDARD_FIELDS, comboFields: [], source: 'system', classification: 'standard', businessType: 'buffet_ticket' },
   // Combo Categories
   { id: 'w_cat_c1', name: '通用套餐', productCount: 20, standardFields: [], comboFields: DEFAULT_COMBO_FIELDS, source: 'system', classification: 'combo' },
   { id: 'w_cat_c2', name: '现制饮品套餐', productCount: 10, standardFields: [], comboFields: DEFAULT_COMBO_FIELDS, source: 'system', classification: 'combo' },

@@ -26,6 +26,7 @@ import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
 import { WebNutritionManager } from './web/WebNutritionManager';
 import { WebAddonGroupManager } from './web/WebAddonGroupManager'; // Import new component
 import { WebProductSync } from './web/WebProductSync'; // Import new component
+import { WebTakeoutMenuSync } from './web/WebTakeoutMenuSync';
 import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
@@ -258,8 +259,8 @@ export const WebAdmin: React.FC = () => {
   const { products } = useProducts();
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
-  const [activeTopNav, setActiveTopNav] = useState<TopNavView>('brand');
-  const [activeMenu, setActiveMenu] = useState('product_logs');
+  const [activeTopNav, setActiveTopNav] = useState<TopNavView>('store');
+  const [activeMenu, setActiveMenu] = useState('takeout_menu_sync');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([
@@ -705,6 +706,10 @@ export const WebAdmin: React.FC = () => {
           return <WebProductSync />;
       }
 
+      if (activeMenu === 'takeout_menu_sync') {
+          return <WebTakeoutMenuSync />;
+      }
+
       if (activeMenu === 'product_template') {
           return <WebProductTemplateManager />;
       }
@@ -1027,7 +1032,7 @@ export const WebAdmin: React.FC = () => {
               {expandedMenus.includes('platform_products') && (
                  <div className="mt-1 space-y-0.5">
                     <SidebarItem label="菜单管理" />
-                    <SidebarItem label="菜单同步" />
+                     <SidebarItem label="菜单同步" active={activeMenu === 'takeout_menu_sync'} onClick={() => { setActiveMenu('takeout_menu_sync'); setCreationContext(null); }} />
                     <SidebarItem label="美团团单" />
                     <SidebarItem label="在线点餐" />
                     <SidebarItem label="商品映射" />

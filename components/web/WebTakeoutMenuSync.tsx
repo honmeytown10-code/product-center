@@ -219,17 +219,20 @@ export const WebTakeoutMenuSync: React.FC = () => {
 
   const selectedMenu = MENUS.find(menu => menu.id === menuId) || MENUS[0];
   const selectedStores = STORES.filter(store => selectedStoreIds.includes(store.id));
+  const isMultiChannel = selectedChannels.length > 1;
+  const singleChannelId = selectedChannels.length === 1 ? selectedChannels[0] : null;
+  const singleChannel = singleChannelId ? channelById(singleChannelId) : null;
   const isStoreEligible = (store: StoreRecord, channels = selectedChannels) => (
     channels.length > 0 && channels.every(channelId => store.authorizedChannels.includes(channelId))
   );
 
   const eligibleStores = useMemo(
-    () => STORES.filter(store => isStoreEligible(store)),
+    () => isMultiChannel ? STORES : STORES.filter(store => isStoreEligible(store)),
     [selectedChannels],
   );
 
   const partialStores = useMemo(
-    () => selectedChannels.length > 0 ? STORES.filter(store => !isStoreEligible(store)) : [],
+    () => !isMultiChannel && selectedChannels.length > 0 ? STORES.filter(store => !isStoreEligible(store)) : [],
     [selectedChannels],
   );
 
@@ -247,9 +250,11 @@ export const WebTakeoutMenuSync: React.FC = () => {
       : [...selectedChannels, channelId];
 
     setSelectedChannels(nextChannels);
+    setStoreTab('eligible');
     const retainedStores = selectedStoreIds.filter(storeId => {
       const store = STORES.find(item => item.id === storeId);
-      return !!store && nextChannels.length > 0 && nextChannels.every(id => store.authorizedChannels.includes(id));
+      if (!store || nextChannels.length === 0) return false;
+      return nextChannels.length > 1 || store.authorizedChannels.includes(nextChannels[0]);
     });
     setSelectedStoreIds(retainedStores);
   };
@@ -556,7 +561,10 @@ export const WebTakeoutMenuSync: React.FC = () => {
           <section className="border-b border-gray-100 py-7">
             <div className="mb-5 flex items-center gap-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#00C06B] text-sm font-bold text-white">3</span>
-              <div><h3 className="font-bold text-gray-800">同步门店</h3><p className="text-xs text-gray-400">仅支持选择已授权所选渠道的门店</p></div>
+              <div>
+                <h3 className="font-bold text-gray-800">同步门店</h3>
+                <p className="text-xs text-gray-400">{isMultiChannel ? '已选择多个渠道，可选择全部门店' : '仅支持选择已授权所选渠道的门店'}</p>
+              </div>
             </div>
             <div className="ml-10">
               <div className="mb-3 flex items-center justify-between">
@@ -574,17 +582,29 @@ export const WebTakeoutMenuSync: React.FC = () => {
               <div className="overflow-hidden border border-gray-200">
                 <table className="w-full table-fixed text-left text-sm">
                   <thead className="bg-[#F5F6F8] text-gray-600">
-                    <tr><th className="px-4 py-3 font-medium">门店名称</th><th className="w-[260px] px-4 py-3 font-medium">已授权渠道</th><th className="w-[100px] px-4 py-3 font-medium">操作</th></tr>
+                    <tr>
+                      <th className="px-4 py-3 font-medium">门店名称</th>
+                      {singleChannel && <>
+                        <th className="w-[160px] px-4 py-3 font-medium">绑定渠道</th>
+                        <th className="w-[210px] px-4 py-3 font-medium">{singleChannel.shortName}门店ID</th>
+                        <th className="w-[260px] px-4 py-3 font-medium">{singleChannel.shortName}门店名称</th>
+                      </>}
+                      <th className="w-[100px] px-4 py-3 font-medium">操作</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {selectedStores.length > 0 ? selectedStores.map(store => (
                       <tr key={store.id} className="border-t border-gray-100 text-gray-600">
                         <td className="px-4 py-3"><div className="font-medium text-gray-800">{store.name}</div><div className="mt-0.5 text-xs text-gray-400">{store.area}</div></td>
-                        <td className="px-4 py-3"><div className="flex gap-2">{store.authorizedChannels.map(id => <ChannelBadge key={id} channelId={id} compact />)}</div></td>
+                        {singleChannelId && <>
+                          <td className="px-4 py-3"><ChannelBadge channelId={singleChannelId} compact /></td>
+                          <td className="px-4 py-3 text-gray-700">{store.channelStoreIds[singleChannelId] || '-'}</td>
+                          <td className="truncate px-4 py-3 text-gray-700" title={store.name}>{store.name}</td>
+                        </>}
                         <td className="px-4 py-3"><button onClick={() => setSelectedStoreIds(prev => prev.filter(id => id !== store.id))} className="text-red-500">移除</button></td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={3} className="h-24 text-center text-sm text-gray-400">尚未选择门店</td></tr>
+                      <tr><td colSpan={singleChannel ? 5 : 2} className="h-24 text-center text-sm text-gray-400">尚未选择门店</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -623,7 +643,7 @@ export const WebTakeoutMenuSync: React.FC = () => {
 
     return (
       <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6">
-        <div className="flex h-[680px] w-[1080px] max-w-[calc(100vw-48px)] flex-col bg-white shadow-2xl">
+        <div className="flex h-[calc(100vh-48px)] max-h-[680px] w-[1080px] max-w-[calc(100vw-48px)] flex-col bg-white shadow-2xl">
           <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-gray-100 px-6">
             <h3 className="font-bold text-gray-800">选择同步门店</h3>
             <button onClick={() => setStoreModalOpen(false)} title="关闭"><X size={20} className="text-gray-400" /></button>
@@ -631,11 +651,11 @@ export const WebTakeoutMenuSync: React.FC = () => {
 
           <div className="grid grid-cols-[1fr_330px] overflow-hidden flex-1">
             <div className="flex min-w-0 flex-col border-r border-gray-100">
-              <div className="flex items-end justify-between border-b border-gray-100 px-5 pt-4">
-                <div className="flex gap-6">
+              <div className={`flex items-end border-b border-gray-100 px-5 pt-4 ${isMultiChannel ? 'justify-end' : 'justify-between'}`}>
+                {!isMultiChannel && <div className="flex gap-6">
                   <button onClick={() => setStoreTab('eligible')} className={`border-b-2 pb-3 text-sm ${storeTab === 'eligible' ? 'border-[#00C06B] font-bold text-[#00A85A]' : 'border-transparent text-gray-500'}`}>可选择门店 {eligibleStores.length}</button>
                   <button onClick={() => setStoreTab('partial')} className={`border-b-2 pb-3 text-sm ${storeTab === 'partial' ? 'border-orange-400 font-bold text-orange-600' : 'border-transparent text-gray-500'}`}>授权不完整 {partialStores.length}</button>
-                </div>
+                </div>}
                 <div className="relative mb-2.5">
                   <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
                   <input value={storeKeyword} onChange={event => setStoreKeyword(event.target.value)} placeholder="搜索门店名称或区域" className="h-9 w-[240px] border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" />
@@ -650,7 +670,7 @@ export const WebTakeoutMenuSync: React.FC = () => {
                         {storeTab === 'eligible' && <input type="checkbox" checked={allEligibleSelected} onChange={() => setSelectedStoreIds(allEligibleSelected ? selectedStoreIds.filter(id => !filteredModalStores.some(store => store.id === id)) : Array.from(new Set([...selectedStoreIds, ...filteredModalStores.map(store => store.id)])))} className="h-4 w-4 accent-[#00C06B]" />}
                       </th>
                       <th className="px-3 py-3 font-medium">门店名称</th>
-                      <th className="w-[250px] px-3 py-3 font-medium">渠道授权状态</th>
+                      {!isMultiChannel && <th className="w-[250px] px-3 py-3 font-medium">渠道授权状态</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -658,7 +678,7 @@ export const WebTakeoutMenuSync: React.FC = () => {
                       <tr key={store.id} className={`border-t border-gray-100 ${storeTab === 'partial' ? 'bg-gray-50/50' : 'hover:bg-gray-50'}`}>
                         <td className="px-4 py-4"><input type="checkbox" disabled={storeTab === 'partial'} checked={selectedStoreIds.includes(store.id)} onChange={() => setSelectedStoreIds(prev => prev.includes(store.id) ? prev.filter(id => id !== store.id) : [...prev, store.id])} className="h-4 w-4 accent-[#00C06B] disabled:cursor-not-allowed" /></td>
                         <td className="px-3 py-4"><div className={`font-medium ${storeTab === 'partial' ? 'text-gray-500' : 'text-gray-800'}`}>{store.name}</div><div className="mt-1 text-xs text-gray-400">{store.area}</div></td>
-                        <td className="px-3 py-4">
+                        {!isMultiChannel && <td className="px-3 py-4">
                           <div className="space-y-2">
                             {selectedChannels.map(channelId => {
                               const authorized = store.authorizedChannels.includes(channelId);
@@ -670,7 +690,7 @@ export const WebTakeoutMenuSync: React.FC = () => {
                               );
                             })}
                           </div>
-                        </td>
+                        </td>}
                       </tr>
                     ))}
                   </tbody>
@@ -683,7 +703,10 @@ export const WebTakeoutMenuSync: React.FC = () => {
               <div className="flex-1 space-y-2 overflow-y-auto p-4">
                 {selectedStores.map(store => (
                   <div key={store.id} className="flex items-center justify-between border border-gray-200 bg-white px-3 py-3">
-                    <div className="min-w-0"><div className="truncate text-sm font-medium text-gray-700">{store.name}</div><div className="mt-1 flex gap-1">{selectedChannels.map(id => <ChannelBadge key={id} channelId={id} compact />)}</div></div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-gray-700">{store.name}</div>
+                      {!isMultiChannel && <div className="mt-1 flex gap-1">{selectedChannels.map(id => <ChannelBadge key={id} channelId={id} compact />)}</div>}
+                    </div>
                     <button onClick={() => setSelectedStoreIds(prev => prev.filter(id => id !== store.id))} title="移除门店"><X size={16} className="text-gray-400 hover:text-red-500" /></button>
                   </div>
                 ))}

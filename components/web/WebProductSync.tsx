@@ -3,6 +3,7 @@ import {
     Search, ChevronRight, CheckCircle2, ChevronDown,
     Layers, RefreshCw, FileUp, FileEdit, X, PackagePlus, Tickets, Tags, Copy, Trash2, SquarePen
 } from 'lucide-react';
+import { WebBatchAddonAssociation } from './WebBatchAddonAssociation';
 
 type ProductCategoryConfig = {
     id: string;
@@ -183,6 +184,7 @@ const getChangedFields = (product: EditableProduct) => {
 
 export const WebProductSync: React.FC = () => {
     const [step, setStep] = useState(0);
+    const [activeBatchTool, setActiveBatchTool] = useState<'addon-association' | null>(null);
     const [products, setProducts] = useState<EditableProduct[]>(() => cloneInitialProducts());
     const [selectedCategoryName, setSelectedCategoryName] = useState<string>('all');
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -352,6 +354,7 @@ export const WebProductSync: React.FC = () => {
                 desc: '修改部分商品库、模板、门店商品关联的加料',
                 icon: <Tags size={24} className="text-rose-500" />,
                 iconWrapClass: 'bg-rose-50',
+                onClick: () => setActiveBatchTool('addon-association'),
             },
             {
                 title: '批量修改商品关联做法',
@@ -999,6 +1002,10 @@ export const WebProductSync: React.FC = () => {
             </div>
         </div>
     );
+
+    if (activeBatchTool === 'addon-association') {
+        return <WebBatchAddonAssociation onBack={() => setActiveBatchTool(null)} />;
+    }
 
     return (
         <div className="flex flex-col h-full bg-[#F5F6FA] font-sans overflow-hidden">

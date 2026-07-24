@@ -126,6 +126,7 @@ type QuickCreateOptionModalState = {
 };
 type InventoryMode = 'unlimited' | 'custom';
 type SpecConfigModuleKey = 'price' | 'identity' | 'inventory' | 'info' | 'packaging';
+type SpecHeaderHelpKey = 'basePrice' | 'estimatedCost' | 'marketPrice' | 'specLargeImage';
 type SpecBulkEditorKey =
     | 's_spec_price'
     | 's_spec_cost'
@@ -589,7 +590,7 @@ const SPEC_CONFIG_MODULES: Array<{
     label: string;
     desc: string;
 }> = [
-    { key: 'price', label: '价格设置', desc: '设置销售价、市场价和预估成本价。' },
+    { key: 'price', label: '价格设置', desc: '设置基础价格、市场价和预估成本。' },
     { key: 'identity', label: '标识设置', desc: '配置商品标识、规格码和条码信息。' },
     { key: 'inventory', label: '库存设置', desc: '管理不限库存、自定义库存和计划库存。' },
     { key: 'info', label: '规格信息', desc: '补充规格图片、规格大图、别名和商品份量。' },
@@ -789,6 +790,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [specDisplayMode, setSpecDisplayMode] = useState<'single' | 'multi'>(mode === 'create' ? 'single' : 'multi');
     const [activeSpecConfigModule, setActiveSpecConfigModule] = useState<SpecConfigModuleKey>('price');
     const [activeSpecBulkField, setActiveSpecBulkField] = useState<SpecBulkEditorKey | null>(null);
+    const [activeSpecHeaderHelp, setActiveSpecHeaderHelp] = useState<SpecHeaderHelpKey | null>(null);
     const [specBulkDraft, setSpecBulkDraft] = useState<Record<string, string | boolean>>({});
     const [activePreviewField, setActivePreviewField] = useState<PreviewField>('default');
     const [previewPreference, setPreviewPreference] = useState<PreviewDisplayPreference | null>(() => getStoredPreviewPreference(previewPreferenceKey));
@@ -4761,7 +4763,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             packaging: `${packagingFilledCount}/${Math.max(specCount, 1)} 已设置`,
         };
         const bulkFieldMeta: Record<SpecBulkEditorKey, { title: string }> = {
-            s_spec_price: { title: '批量修改销售价' },
+            s_spec_price: { title: '批量修改基础价格' },
             s_spec_cost: { title: '批量修改预估成本' },
             s_spec_market: { title: '批量修改市场价' },
             s_spec_barcode: { title: '批量修改商品条码' },
@@ -4847,18 +4849,53 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const renderColumnHeader = (
             label: string,
             bulkKey?: SpecBulkEditorKey,
-            options: { required?: boolean; helperTooltip?: string } = {}
+            options: {
+                required?: boolean;
+                helperKey?: SpecHeaderHelpKey;
+                helperTooltip?: string;
+            } = {}
         ) => (
             <div className="flex items-center gap-1.5">
                 <div className="flex items-center gap-1.5">
                     {options.required ? <span className="text-red-500">*</span> : null}
                     <span>{label}</span>
-                    {options.helperTooltip ? (
-                        <span className="group relative inline-flex">
-                            <CircleHelp size={13} className="text-gray-300 transition-colors group-hover:text-gray-500" />
-                            <span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-40 hidden w-[220px] -translate-x-1/2 rounded-xl bg-[#1F2129] px-3 py-2 text-[11px] font-medium leading-4 text-white shadow-lg group-hover:block">
-                                {options.helperTooltip}
-                            </span>
+                    {options.helperKey && options.helperTooltip ? (
+                        <span className="relative inline-flex">
+                            <button
+                                type="button"
+                                aria-label={`查看${label}说明`}
+                                aria-expanded={activeSpecHeaderHelp === options.helperKey}
+                                onClick={() => setActiveSpecHeaderHelp(current => current === options.helperKey ? null : options.helperKey!)}
+                                className={`inline-flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
+                                    activeSpecHeaderHelp === options.helperKey
+                                        ? 'bg-[#E8F8F0] text-[#00A35B]'
+                                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                                }`}
+                            >
+                                <CircleHelp size={14} />
+                            </button>
+                            {activeSpecHeaderHelp === options.helperKey ? (
+                                <span
+                                    role="dialog"
+                                    aria-label={`${label}说明`}
+                                    className="absolute left-0 top-[calc(100%+8px)] z-50 w-[260px] rounded-lg border border-gray-200 bg-white p-3 text-left shadow-[0_10px_28px_rgba(15,23,42,0.16)]"
+                                >
+                                    <span className="flex items-start justify-between gap-3">
+                                        <span className="text-xs font-bold text-[#1F2129]">{label}说明</span>
+                                        <button
+                                            type="button"
+                                            aria-label={`关闭${label}说明`}
+                                            onClick={() => setActiveSpecHeaderHelp(null)}
+                                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                        >
+                                            <X size={13} />
+                                        </button>
+                                    </span>
+                                    <span className="mt-1.5 block text-xs font-normal leading-5 text-gray-600">
+                                        {options.helperTooltip}
+                                    </span>
+                                </span>
+                            ) : null}
                         </span>
                     ) : null}
                     {bulkKey && specDisplayMode === 'multi' && batchEditableFields.has(bulkKey) ? (
@@ -5169,9 +5206,19 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </th>}
                                     </tr>
                                     <tr className="text-left text-xs font-bold text-gray-500">
-                                        {showSpecPrice && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('销售价', 's_spec_price', { required: true })}</th>}
-                                        {showSpecMarket && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('市场价', 's_spec_market')}</th>}
-                                        {showSpecCost && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('预估成本价', 's_spec_cost')}</th>}
+                                        {showSpecPrice && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('基础价格', 's_spec_price', {
+                                            required: true,
+                                            helperKey: 'basePrice',
+                                            helperTooltip: '商品实际销售时使用的价格，即顾客购买该规格需要支付的价格。',
+                                        })}</th>}
+                                        {showSpecMarket && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('市场价', 's_spec_market', {
+                                            helperKey: 'marketPrice',
+                                            helperTooltip: '商品在市场上的参考价格，类似零售价。填写后，小程序端会将该价格展示为划线价，与基础价格进行对比。',
+                                        })}</th>}
+                                        {showSpecCost && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('预估成本', 's_spec_cost', {
+                                            helperKey: 'estimatedCost',
+                                            helperTooltip: '用于记录该规格的预计成本，便于核算毛利等经营数据。',
+                                        })}</th>}
                                         {showSpecBarcode && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品条码', 's_spec_barcode')}</th>}
                                         {showSpecMark && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品标识', 's_spec_mark')}</th>}
                                         {showSpecSkuCode && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品规格码', 's_spec_sku_code')}</th>}
@@ -5181,7 +5228,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         {showSpecPlanStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('是否管理计划库存')}</th>}
                                         {showSpecPlanStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('每日计划库存', 'daily_plan_stock')}</th>}
                                         {showSpecImg && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('规格图片')}</th>}
-                                        {showSpecLargeImg && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('规格大图', undefined, { helperTooltip: '优先使用规格大图，建议尺寸 800*450' })}</th>}
+                                        {showSpecLargeImg && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('规格大图', undefined, {
+                                            helperKey: 'specLargeImage',
+                                            helperTooltip: '优先使用规格大图，建议尺寸 800*450。',
+                                        })}</th>}
                                         {showSpecAlias && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('规格别名', 's_spec_alias')}</th>}
                                         {showSpecAmount && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品分量', 'amount')}</th>}
                                         {showSpecStorePackFee && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('到店外带包装费', 's_spec_store_pack_fee')}</th>}

@@ -5837,7 +5837,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                             </div>
                                                             {addonScope === 'type' && (
                                                                 <div className="inline-flex rounded-lg border border-gray-200 bg-[#FAFAFA] p-1">
-                                                                    <button type="button" onClick={() => updateAddonGroupRule(groupName, { mode: 'customer' })} className={`rounded-md px-3 py-1.5 text-xs ${!isFixedGroup ? 'bg-white font-bold text-[#1F2129] shadow-sm' : 'text-gray-500'}`}>顾客选择</button>
+                                                                    <button type="button" onClick={() => updateAddonGroupRule(groupName, { mode: 'customer' })} className={`rounded-md px-3 py-1.5 text-xs ${!isFixedGroup ? 'bg-white font-bold text-[#1F2129] shadow-sm' : 'text-gray-500'}`}>自由选择</button>
                                                                     <button type="button" onClick={() => updateAddonGroupRule(groupName, { mode: 'fixed' })} className={`rounded-md px-3 py-1.5 text-xs ${isFixedGroup ? 'bg-white font-bold text-[#1F2129] shadow-sm' : 'text-gray-500'}`}>固定加料</button>
                                                                 </div>
                                                             )}
@@ -5902,9 +5902,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                         <div className="rounded-xl bg-[#FAFAFA] px-4 py-3 text-xs leading-6 text-gray-400">
                                             <div>说明：</div>
-                                            <div>1、顾客选择模式下，默认选中在下方“商品属性排序”中统一配置，顾客自行选择购买数量，此处设置购买限制。</div>
+                                            <div>1、自由选择模式下，默认选中在下方“商品属性排序”中统一配置，顾客自行选择购买数量，此处设置购买限制。</div>
                                             <div>2、固定加料模式下，关联的加料会随商品固定带入，只需设置每项固定数量。</div>
-                                            <div>3、固定加料和顾客选择属于不同的加料类型；同一类型内不建议混合配置。</div>
+                                            <div>3、固定加料和自由选择属于不同的加料类型；同一类型内不建议混合配置。</div>
                                         </div>
                                     </div>
                                     )}

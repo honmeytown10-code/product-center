@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Pencil, Settings, Printer, 
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
-  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical, X, CircleHelp
+  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search
 } from 'lucide-react';
 import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, resolveChildRequiredConfigs } from '../../types';
 import { Switch, SectionHeader, FormRow } from './WebCommon';
@@ -219,11 +219,35 @@ type TemplateTaskRecord = {
     result: string;
     createdAt: string;
 };
+type ComboOptionalItem = {
+    id: string;
+    name: string;
+    spec: string;
+    quantity: number;
+    surcharge: number;
+    isDefault: boolean;
+};
 type ComboGroupCard = {
     id: string;
     type: 'fixed' | 'fixed_multi' | 'optional' | 'free';
     title: string;
     desc: string;
+    items?: ComboOptionalItem[];
+    requiredOptionCount?: number;
+    minTotalQuantity?: number;
+    maxTotalQuantity?: number;
+    isRequired?: boolean;
+    configMode?: 'pick' | 'flexible';
+    relativePrice?: boolean;
+    saveAsFreeMatch?: boolean;
+    remark?: string;
+    affectedStoreCount?: number;
+};
+type ComboOptionalGroupModalState = {
+    mode: 'create' | 'edit';
+    sourceCardId?: string;
+    originalTitle?: string;
+    draft: ComboGroupCard;
 };
 type SpecSelectionMap = Record<string, string[]>;
 type PreviewDisplayPreference = 'expanded' | 'collapsed';
@@ -241,6 +265,16 @@ const DEFAULT_TEMPLATE_OPTIONS: TemplateOption[] = [
     { id: 'template-3', name: '套餐季节活动模板', desc: '适用于套餐商品季度更新后统一下发', channels: '小程序堂食 / POS / 外卖', saleType: '堂食,外卖', group: '活动模板', type: '套餐模板' },
     { id: 'template-4', name: '新品上架模板 0518-01', desc: '适用于新品标准化上架流程', channels: '小程序 / POS', saleType: '堂食', group: '新品模板', type: '普通模板' },
     { id: 'template-5', name: '外卖爆品模板', desc: '适用于外卖菜单快速复用', channels: '外卖 / POS', saleType: '外卖', group: '外卖专区', type: '普通模板' },
+];
+const COMBO_OPTIONAL_PRODUCT_LIBRARY: ComboOptionalItem[] = [
+    { id: 'combo-item-1', name: '香辣鸡腿堡', spec: '标准规格', quantity: 1, surcharge: 0, isDefault: true },
+    { id: 'combo-item-2', name: '新奥尔良鸡腿堡', spec: '标准规格', quantity: 1, surcharge: 2, isDefault: false },
+    { id: 'combo-item-3', name: '经典牛肉堡', spec: '标准规格', quantity: 1, surcharge: 4, isDefault: false },
+    { id: 'combo-item-4', name: '脆皮鸡翅', spec: '2只', quantity: 1, surcharge: 3, isDefault: false },
+    { id: 'combo-item-5', name: '藤椒鸡腿堡', spec: '标准规格', quantity: 1, surcharge: 2, isDefault: false },
+    { id: 'combo-item-6', name: '薯条', spec: '中份', quantity: 1, surcharge: 0, isDefault: false },
+    { id: 'combo-item-7', name: '香辣鸡米花', spec: '小份', quantity: 1, surcharge: 1, isDefault: false },
+    { id: 'combo-item-8', name: '冰柠可乐', spec: '中杯', quantity: 1, surcharge: 0, isDefault: false },
 ];
 
 const formatDateTime = (date: Date) => {
@@ -872,9 +906,29 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             ? []
             : [
                 { id: 'combo-fixed-1', type: 'fixed', title: '固定搭配', desc: '已添加 2 个固定商品' },
-                { id: 'combo-optional-1', type: 'optional', title: '可选分组', desc: '已添加 1 个可选分组' },
+                {
+                    id: 'combo-optional-1',
+                    type: 'optional',
+                    title: '主食任选',
+                    desc: '按种类选择 · 3 选 1',
+                    items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 3),
+                    requiredOptionCount: 1,
+                    minTotalQuantity: 1,
+                    maxTotalQuantity: 2,
+                    isRequired: true,
+                    configMode: 'pick',
+                    relativePrice: false,
+                    saveAsFreeMatch: false,
+                    remark: '套餐主食选择',
+                    affectedStoreCount: 18,
+                },
             ]
     ));
+    const [comboOptionalGroupModal, setComboOptionalGroupModal] = useState<ComboOptionalGroupModalState | null>(null);
+    const [confirmingComboOptionalSave, setConfirmingComboOptionalSave] = useState(false);
+    const [comboOptionalProductPickerOpen, setComboOptionalProductPickerOpen] = useState(false);
+    const [comboOptionalProductPickerDraftIds, setComboOptionalProductPickerDraftIds] = useState<string[]>([]);
+    const [comboOptionalProductKeyword, setComboOptionalProductKeyword] = useState('');
     const [attrGroupSortEnabled, setAttrGroupSortEnabled] = useState(false);
     const [attrPanelOrder, setAttrPanelOrder] = useState<string[]>(() => (
         mode === 'create'
@@ -4883,7 +4937,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         ));
 
         const renderSpecNameCell = (row: SpecConfigRow) => (
-            <td className="sticky left-0 z-20 border-b border-gray-100 bg-white bg-clip-padding px-4 py-4 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]">
+            <td className="sticky left-0 z-[1] border-b border-gray-100 bg-white bg-clip-padding px-4 py-4 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]">
                 <div
                     onClick={() => setActivePreviewField('s_specs')}
                     className="cursor-pointer rounded-xl border border-gray-200 bg-[#F8FAFB] px-3 py-2.5"
@@ -5222,7 +5276,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     <table className="min-w-[3560px] w-full border-collapse">
                                 <thead>
                                     <tr className="text-left text-xs font-bold text-gray-500">
-                                        <th className="sticky left-0 z-30 min-w-[180px] border-b border-r border-gray-200 bg-[#F7F8FA] bg-clip-padding px-4 py-3 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]" rowSpan={2}>
+                                        <th className="sticky left-0 z-[2] min-w-[180px] border-b border-r border-gray-200 bg-[#F7F8FA] bg-clip-padding px-4 py-3 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]" rowSpan={2}>
                                             规格名称
                                         </th>
                                         {priceColSpan > 0 && <th
@@ -5460,7 +5514,166 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             { key: 'free' as const, label: '添加随心配', desc: '引用已有随心配模板' },
         ];
 
+        const createOptionalGroupDraft = (): ComboGroupCard => ({
+            id: `combo-optional-${Date.now()}`,
+            type: 'optional',
+            title: '',
+            desc: '',
+            items: [],
+            requiredOptionCount: 1,
+            minTotalQuantity: 1,
+            maxTotalQuantity: 2,
+            isRequired: true,
+            configMode: 'pick',
+            relativePrice: false,
+            saveAsFreeMatch: false,
+            remark: '',
+            affectedStoreCount: 0,
+        });
+
+        const openOptionalGroupEditor = (card?: ComboGroupCard) => {
+            setConfirmingComboOptionalSave(false);
+            setComboOptionalGroupModal(card
+                ? {
+                    mode: 'edit',
+                    sourceCardId: card.id,
+                    originalTitle: card.title,
+                    draft: {
+                        ...card,
+                        items: (card.items || []).map(item => ({ ...item })),
+                    },
+                }
+                : {
+                    mode: 'create',
+                    draft: createOptionalGroupDraft(),
+                });
+        };
+
+        const updateOptionalGroupDraft = (patch: Partial<ComboGroupCard>) => {
+            setComboOptionalGroupModal(current => current
+                ? { ...current, draft: { ...current.draft, ...patch } }
+                : current);
+        };
+
+        const updateOptionalGroupItems = (
+            updater: (items: ComboOptionalItem[]) => ComboOptionalItem[]
+        ) => {
+            setComboOptionalGroupModal(current => current
+                ? {
+                    ...current,
+                    draft: {
+                        ...current.draft,
+                        items: updater(current.draft.items || []),
+                    },
+                }
+                : current);
+        };
+
+        const openOptionalProductPicker = () => {
+            setComboOptionalProductPickerDraftIds(
+                comboOptionalGroupModal?.draft.items?.map(item => item.id) || []
+            );
+            setComboOptionalProductKeyword('');
+            setComboOptionalProductPickerOpen(true);
+        };
+
+        const confirmOptionalProductPicker = () => {
+            if (!comboOptionalGroupModal) return;
+
+            const currentItems = comboOptionalGroupModal.draft.items || [];
+            const nextItems = comboOptionalProductPickerDraftIds
+                .map(productId => {
+                    const currentItem = currentItems.find(item => item.id === productId);
+                    const libraryItem = COMBO_OPTIONAL_PRODUCT_LIBRARY.find(item => item.id === productId);
+                    return currentItem || (libraryItem ? { ...libraryItem, isDefault: false } : null);
+                })
+                .filter((item): item is ComboOptionalItem => !!item);
+
+            if (nextItems.length > 0 && !nextItems.some(item => item.isDefault)) {
+                nextItems[0] = { ...nextItems[0], isDefault: true };
+            }
+
+            updateOptionalGroupDraft({ items: nextItems });
+            setComboOptionalProductPickerOpen(false);
+        };
+
+        const removeOptionalProduct = (productId: string) => {
+            updateOptionalGroupItems(items => {
+                const removedItem = items.find(item => item.id === productId);
+                const nextItems = items.filter(item => item.id !== productId);
+                if (removedItem?.isDefault && nextItems.length > 0) {
+                    nextItems[0] = { ...nextItems[0], isDefault: true };
+                }
+                return nextItems;
+            });
+        };
+
+        const closeOptionalGroupEditor = () => {
+            setComboOptionalGroupModal(null);
+            setConfirmingComboOptionalSave(false);
+            setComboOptionalProductPickerOpen(false);
+            setComboOptionalProductPickerDraftIds([]);
+            setComboOptionalProductKeyword('');
+        };
+
+        const buildOptionalGroupCard = (
+            draft: ComboGroupCard,
+            options: { saveAsNew?: boolean } = {}
+        ): ComboGroupCard => {
+            const itemCount = draft.items?.length || 0;
+            const requiredCount = Math.min(
+                Math.max(1, draft.requiredOptionCount || 1),
+                Math.max(1, itemCount)
+            );
+            const minTotal = Math.max(0, draft.minTotalQuantity ?? 0);
+            const maxTotal = Math.max(minTotal || 1, draft.maxTotalQuantity || 1);
+            const configMode = draft.configMode || 'pick';
+            const fallbackTitle = options.saveAsNew
+                ? `${comboOptionalGroupModal?.originalTitle || '可选分组'}（副本）`
+                : '未命名可选分组';
+            const normalizedTitle = draft.title.trim();
+            const resolvedTitle = options.saveAsNew
+                && normalizedTitle === comboOptionalGroupModal?.originalTitle
+                ? `${normalizedTitle}（副本）`
+                : normalizedTitle || fallbackTitle;
+
+            return {
+                ...draft,
+                id: options.saveAsNew ? `combo-optional-${Date.now()}` : draft.id,
+                title: resolvedTitle,
+                desc: configMode === 'pick'
+                    ? `按种类选择 · ${itemCount} 选 ${requiredCount}`
+                    : `按数量选择 · ${draft.isRequired === false ? '非必选' : '必选'} · ${minTotal}～${maxTotal} 份`,
+                requiredOptionCount: requiredCount,
+                minTotalQuantity: minTotal,
+                maxTotalQuantity: maxTotal,
+                configMode,
+                affectedStoreCount: options.saveAsNew ? 0 : draft.affectedStoreCount,
+            };
+        };
+
+        const saveOptionalGroup = (saveAsNew = false) => {
+            if (!comboOptionalGroupModal) return;
+
+            const nextCard = buildOptionalGroupCard(comboOptionalGroupModal.draft, { saveAsNew });
+            setComboGroupCards(current => {
+                if (comboOptionalGroupModal.mode === 'create') {
+                    return [...current, nextCard];
+                }
+
+                return current.map(card => (
+                    card.id === comboOptionalGroupModal.sourceCardId ? nextCard : card
+                ));
+            });
+            closeOptionalGroupEditor();
+        };
+
         const addComboCard = (cardType: ComboGroupCard['type']) => {
+            if (cardType === 'optional') {
+                openOptionalGroupEditor();
+                return;
+            }
+
             const titleMap: Record<ComboGroupCard['type'], string> = {
                 fixed: '固定搭配',
                 fixed_multi: '固定搭配(多拼商品)',
@@ -5482,6 +5695,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 }]
             ));
         };
+
+        const optionalGroupDraft = comboOptionalGroupModal?.draft;
+        const canSaveOptionalGroup = !!optionalGroupDraft?.title.trim()
+            && (optionalGroupDraft.items?.length || 0) > 0;
+        const isEditingLinkedOptionalGroup = comboOptionalGroupModal?.mode === 'edit'
+            && (optionalGroupDraft?.affectedStoreCount || 0) > 0;
+        const optionalProductPickerResults = COMBO_OPTIONAL_PRODUCT_LIBRARY.filter(product => {
+            const keyword = comboOptionalProductKeyword.trim().toLowerCase();
+            return !keyword
+                || product.name.toLowerCase().includes(keyword)
+                || product.spec.toLowerCase().includes(keyword);
+        });
 
         return (
             <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
@@ -5534,20 +5759,69 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             {comboGroupCards.length > 0 ? (
                                 <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                                     {comboGroupCards.map(card => (
-                                        <div key={card.id} className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div>
-                                                    <div className="text-sm font-bold text-[#1F2129]">{card.title}</div>
-                                                    <div className="mt-1 text-xs text-gray-400">{card.desc}</div>
+                                        <div
+                                            key={card.id}
+                                            className={`rounded-xl border border-gray-200 bg-white ${
+                                                card.type === 'optional' ? 'xl:col-span-2' : ''
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <div className="text-sm font-bold text-[#1F2129]">{card.title}</div>
+                                                        <span className="rounded bg-[#F0FDF4] px-2 py-0.5 text-[11px] font-bold text-[#15803D]">
+                                                            {card.type === 'optional' ? '可选分组' : card.type === 'free' ? '随心配' : '固定搭配'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1.5 text-xs text-gray-500">{card.desc}</div>
+                                                    {card.type === 'optional' ? (
+                                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                                                            <span>{card.configMode === 'flexible' ? '按数量选择' : '按种类选择'}</span>
+                                                            {card.configMode === 'flexible' ? (
+                                                                <span>{card.isRequired === false ? '非必选' : '必选'}</span>
+                                                            ) : null}
+                                                            <span>{card.relativePrice ? '启用相对价' : '未启用相对价'}</span>
+                                                            {card.saveAsFreeMatch ? <span className="font-bold text-[#00A35B]">已保存为随心配</span> : null}
+                                                            <span>备注：{card.remark || '--'}</span>
+                                                        </div>
+                                                    ) : null}
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
-                                                    className="text-xs font-bold text-gray-400 hover:text-[#00A35B]"
-                                                >
-                                                    删除
-                                                </button>
+                                                <div className="flex shrink-0 items-center gap-1">
+                                                    {card.type === 'optional' ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openOptionalGroupEditor(card)}
+                                                            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
+                                                        >
+                                                            <Pencil size={13} />
+                                                            编辑
+                                                        </button>
+                                                    ) : null}
+                                                    <button
+                                                        type="button"
+                                                        title="删除分组"
+                                                        aria-label={`删除${card.title}`}
+                                                        onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
+                                            {card.type === 'optional' && (card.items?.length || 0) > 0 ? (
+                                                <div className="flex flex-wrap gap-2 border-t border-gray-100 bg-[#FCFCFD] px-4 py-3">
+                                                    {card.items?.map(item => (
+                                                        <span
+                                                            key={item.id}
+                                                            className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600"
+                                                        >
+                                                            {item.name}
+                                                            {item.surcharge > 0 ? ` +¥${item.surcharge}` : ''}
+                                                            {item.isDefault ? <span className="ml-1.5 text-[#00A35B]">默认</span> : null}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ))}
                                 </div>
@@ -5667,6 +5941,533 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         { showCollapse: comboAdvancedExpandedAll || expandedComboAdvancedFields.length > 0 }
                     )}
                 </div>
+
+                {comboOptionalGroupModal && optionalGroupDraft ? (
+                    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-6">
+                        <div className="flex max-h-[88vh] w-full max-w-[920px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                            <div className="flex shrink-0 items-start justify-between border-b border-gray-100 px-6 py-4">
+                                <div>
+                                    <div className="text-lg font-bold text-[#1F2129]">
+                                        {comboOptionalGroupModal.mode === 'create' ? '添加可选分组' : '编辑可选分组'}
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-400">
+                                        配置分组商品和选择规则，保存后当前套餐将立即引用该分组。
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    aria-label="关闭可选分组编辑"
+                                    onClick={closeOptionalGroupEditor}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto px-6 py-5">
+                                {isEditingLinkedOptionalGroup ? (
+                                    <div className="mb-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                        <CircleAlert size={17} className="mt-0.5 shrink-0" />
+                                        <div>
+                                            <div className="font-bold">该分组已被 {optionalGroupDraft.affectedStoreCount} 家门店商品使用</div>
+                                            <div className="mt-1 text-xs leading-5">
+                                                直接保存会实时同步修改到这些门店；如只想调整当前套餐，请选择“另存为新分组”。
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                    <label className="block">
+                                        <span className="mb-2 block text-sm font-bold text-[#1F2129]">
+                                            <span className="mr-1 text-red-500">*</span>分组名称
+                                        </span>
+                                        <input
+                                            value={optionalGroupDraft.title}
+                                            maxLength={30}
+                                            onChange={event => updateOptionalGroupDraft({ title: event.target.value })}
+                                            className="q-form-input h-10"
+                                            placeholder="如：主食任选"
+                                        />
+                                        <span className="mt-1 block text-right text-xs text-gray-400">
+                                            {optionalGroupDraft.title.length}/30
+                                        </span>
+                                    </label>
+                                    <label className="block">
+                                        <span className="mb-2 block text-sm font-bold text-[#1F2129]">备注</span>
+                                        <input
+                                            value={optionalGroupDraft.remark || ''}
+                                            maxLength={100}
+                                            onChange={event => updateOptionalGroupDraft({ remark: event.target.value })}
+                                            className="q-form-input h-10"
+                                            placeholder="记录该分组的用途，非必填"
+                                        />
+                                        <span className="mt-1 block text-right text-xs text-gray-400">
+                                            {(optionalGroupDraft.remark || '').length}/100
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div className="mt-2">
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm font-bold text-[#1F2129]">
+                                                <span className="mr-1 text-red-500">*</span>分组商品
+                                            </div>
+                                            <div className="mt-1 text-xs text-gray-400">
+                                                已选 {optionalGroupDraft.items?.length || 0} 个，可设置数量、加价和默认商品。
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={openOptionalProductPicker}
+                                            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#00C06B] px-3 text-sm font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
+                                        >
+                                            <Plus size={16} />
+                                            添加商品
+                                        </button>
+                                    </div>
+                                    <div className="overflow-hidden rounded-lg border border-gray-200">
+                                        <div className="grid grid-cols-[minmax(180px,1fr)_100px_120px_88px_72px] items-center bg-[#F7F8FA] px-3 py-2.5 text-xs font-bold text-gray-500">
+                                            <span>商品</span>
+                                            <span className="text-center">数量</span>
+                                            <span className="text-center">加价</span>
+                                            <span className="text-center">默认</span>
+                                            <span className="text-center">操作</span>
+                                        </div>
+                                        {(optionalGroupDraft.items || []).length > 0 ? (
+                                            (optionalGroupDraft.items || []).map(selectedItem => (
+                                                <div
+                                                    key={selectedItem.id}
+                                                    className="grid min-h-[62px] grid-cols-[minmax(180px,1fr)_100px_120px_88px_72px] items-center border-t border-gray-100 px-3 py-2 text-sm"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-bold text-[#1F2129]">{selectedItem.name}</div>
+                                                        <div className="mt-0.5 text-xs text-gray-400">{selectedItem.spec}</div>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        value={selectedItem.quantity}
+                                                        onChange={event => updateOptionalGroupItems(items => items.map(item => (
+                                                            item.id === selectedItem.id
+                                                                ? { ...item, quantity: Math.max(1, Number(event.target.value) || 1) }
+                                                                : item
+                                                        )))}
+                                                        className="q-form-input mx-auto h-8 w-16 text-center"
+                                                    />
+                                                    <div className="relative mx-auto w-24">
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={selectedItem.surcharge}
+                                                            onChange={event => updateOptionalGroupItems(items => items.map(item => (
+                                                                item.id === selectedItem.id
+                                                                    ? { ...item, surcharge: Math.max(0, Number(event.target.value) || 0) }
+                                                                    : item
+                                                            )))}
+                                                            className="q-form-input h-8 pr-7 text-center"
+                                                        />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">元</span>
+                                                    </div>
+                                                    <label className="flex justify-center">
+                                                        <input
+                                                            type="radio"
+                                                            name="combo-optional-default"
+                                                            checked={selectedItem.isDefault}
+                                                            onChange={() => updateOptionalGroupItems(items => items.map(item => ({
+                                                                ...item,
+                                                                isDefault: item.id === selectedItem.id,
+                                                            })))}
+                                                            className="h-4 w-4 border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeOptionalProduct(selectedItem.id)}
+                                                        className="mx-auto inline-flex h-8 items-center gap-1 rounded px-2 text-xs font-medium text-red-500 hover:bg-red-50"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                        移除
+                                                    </button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="flex min-h-[126px] flex-col items-center justify-center border-t border-gray-100 text-sm text-gray-400">
+                                                <div>暂未添加商品</div>
+                                                <button
+                                                    type="button"
+                                                    onClick={openOptionalProductPicker}
+                                                    className="mt-3 inline-flex h-8 items-center gap-1 text-sm font-bold text-[#00A35B] hover:underline"
+                                                >
+                                                    <Plus size={15} />
+                                                    添加商品
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 border-t border-gray-100 pt-5">
+                                    <div className="mb-3 text-sm font-bold text-[#1F2129]">分组设置</div>
+                                    <div className="space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-[#F8FAFB] px-4 py-3">
+                                            <div>
+                                                <div className="text-sm font-medium text-[#1F2129]">配置方式</div>
+                                                <div className="mt-1 text-xs leading-5 text-gray-400">
+                                                    按种类选择用于“几选几”；按数量选择用于设置是否必选及购买总数。
+                                                </div>
+                                            </div>
+                                            <div className="flex rounded-lg border border-gray-200 bg-white p-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateOptionalGroupDraft({ configMode: 'pick' })}
+                                                    className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+                                                        optionalGroupDraft.configMode !== 'flexible'
+                                                            ? 'bg-[#00C06B] text-white'
+                                                            : 'text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    按种类选择
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateOptionalGroupDraft({
+                                                        configMode: 'flexible',
+                                                        minTotalQuantity: optionalGroupDraft.isRequired === false
+                                                            ? optionalGroupDraft.minTotalQuantity ?? 0
+                                                            : Math.max(1, optionalGroupDraft.minTotalQuantity || 1),
+                                                    })}
+                                                    className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+                                                        optionalGroupDraft.configMode === 'flexible'
+                                                            ? 'bg-[#00C06B] text-white'
+                                                            : 'text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    按数量选择
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {optionalGroupDraft.configMode !== 'flexible' ? (
+                                            <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-[#F8FAFB] px-4 py-3">
+                                                <div>
+                                                    <div className="text-sm font-medium text-[#1F2129]">分组内必选商品种类数</div>
+                                                    <div className="mt-1 text-xs text-gray-400">
+                                                        当前规则：{optionalGroupDraft.items?.length || 0} 选 {Math.min(
+                                                            optionalGroupDraft.requiredOptionCount || 1,
+                                                            Math.max(1, optionalGroupDraft.items?.length || 1)
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={Math.max(1, optionalGroupDraft.items?.length || 1)}
+                                                    value={optionalGroupDraft.requiredOptionCount || 1}
+                                                    onChange={event => updateOptionalGroupDraft({
+                                                        requiredOptionCount: Math.min(
+                                                            Math.max(1, Number(event.target.value) || 1),
+                                                            Math.max(1, optionalGroupDraft.items?.length || 1)
+                                                        ),
+                                                    })}
+                                                    className="q-form-input h-10 w-24 text-center"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-[#F8FAFB] px-4 py-3">
+                                                    <div>
+                                                        <div className="text-sm font-medium text-[#1F2129]">是否必选</div>
+                                                        <div className="mt-1 text-xs text-gray-400">必选时，起购数量不能小于 1。</div>
+                                                    </div>
+                                                    <div className="flex rounded-lg border border-gray-200 bg-white p-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateOptionalGroupDraft({
+                                                                isRequired: true,
+                                                                minTotalQuantity: Math.max(1, optionalGroupDraft.minTotalQuantity || 1),
+                                                            })}
+                                                            className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+                                                                optionalGroupDraft.isRequired !== false
+                                                                    ? 'bg-[#00C06B] text-white'
+                                                                    : 'text-gray-600 hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            必选
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateOptionalGroupDraft({ isRequired: false })}
+                                                            className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+                                                                optionalGroupDraft.isRequired === false
+                                                                    ? 'bg-[#00C06B] text-white'
+                                                                    : 'text-gray-600 hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            非必选
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="rounded-lg bg-[#F8FAFB] px-4 py-3">
+                                                    <div className="text-sm font-medium text-[#1F2129]">商品购买数量限制</div>
+                                                    <div className="mt-1 text-xs text-gray-400">设置用户在本组内最少和最多可购买的商品总数。</div>
+                                                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                                                        <span className="text-sm text-gray-600">起购数量</span>
+                                                        <input
+                                                            type="number"
+                                                            min={optionalGroupDraft.isRequired === false ? 0 : 1}
+                                                            max={100}
+                                                            value={optionalGroupDraft.minTotalQuantity ?? 0}
+                                                            onChange={event => {
+                                                                const minValue = optionalGroupDraft.isRequired === false ? 0 : 1;
+                                                                const nextMin = Math.min(100, Math.max(minValue, Number(event.target.value) || 0));
+                                                                updateOptionalGroupDraft({
+                                                                    minTotalQuantity: nextMin,
+                                                                    maxTotalQuantity: Math.max(nextMin, optionalGroupDraft.maxTotalQuantity || 100),
+                                                                });
+                                                            }}
+                                                            className="q-form-input h-10 w-24 text-center"
+                                                        />
+                                                        <span className="text-gray-300">～</span>
+                                                        <span className="text-sm text-gray-600">限购数量</span>
+                                                        <input
+                                                            type="number"
+                                                            min={Math.max(1, optionalGroupDraft.minTotalQuantity || 0)}
+                                                            max={100}
+                                                            value={optionalGroupDraft.maxTotalQuantity || 100}
+                                                            onChange={event => updateOptionalGroupDraft({
+                                                                maxTotalQuantity: Math.min(
+                                                                    100,
+                                                                    Math.max(
+                                                                        Math.max(1, optionalGroupDraft.minTotalQuantity || 0),
+                                                                        Number(event.target.value) || 100
+                                                                    )
+                                                                ),
+                                                            })}
+                                                            className="q-form-input h-10 w-24 text-center"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="mt-4 flex flex-wrap items-center gap-6 border-t border-gray-100 pt-4">
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!optionalGroupDraft.relativePrice}
+                                                onChange={event => updateOptionalGroupDraft({ relativePrice: event.target.checked })}
+                                                className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                            />
+                                            启用相对价
+                                        </label>
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!optionalGroupDraft.saveAsFreeMatch}
+                                                onChange={event => updateOptionalGroupDraft({ saveAsFreeMatch: event.target.checked })}
+                                                className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                            />
+                                            <span>
+                                                保存为随心配
+                                                <span className="ml-2 text-xs text-gray-400">保存后可在其他套餐中直接复用</span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="shrink-0 border-t border-gray-100 bg-white px-6 py-4">
+                                {confirmingComboOptionalSave && isEditingLinkedOptionalGroup ? (
+                                    <div className="mb-3 flex items-center justify-between gap-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                                        <span>
+                                            确认后将实时更新 {optionalGroupDraft.affectedStoreCount} 家门店正在使用的该分组，是否继续？
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmingComboOptionalSave(false)}
+                                            className="shrink-0 font-bold hover:underline"
+                                        >
+                                            返回检查
+                                        </button>
+                                    </div>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="text-xs text-gray-400">
+                                        {!canSaveOptionalGroup
+                                            ? '请填写分组名称并至少选择 1 个商品'
+                                            : comboOptionalGroupModal.mode === 'edit'
+                                                ? '另存为新分组不会影响原分组和已关联门店'
+                                                : '保存后将添加到当前套餐'}
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={closeOptionalGroupEditor}
+                                            className="h-10 rounded-lg border border-gray-200 px-5 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                                        >
+                                            取消
+                                        </button>
+                                        {comboOptionalGroupModal.mode === 'edit' && !confirmingComboOptionalSave ? (
+                                            <button
+                                                type="button"
+                                                disabled={!canSaveOptionalGroup}
+                                                onClick={() => saveOptionalGroup(true)}
+                                                className="h-10 rounded-lg border border-[#00C06B] px-5 text-sm font-bold text-[#00A35B] hover:bg-[#F0FDF4] disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-300"
+                                            >
+                                                另存为新分组
+                                            </button>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            disabled={!canSaveOptionalGroup}
+                                            onClick={() => {
+                                                if (isEditingLinkedOptionalGroup && !confirmingComboOptionalSave) {
+                                                    setConfirmingComboOptionalSave(true);
+                                                    return;
+                                                }
+                                                saveOptionalGroup(false);
+                                            }}
+                                            className={`h-10 rounded-lg px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300 ${
+                                                confirmingComboOptionalSave ? 'bg-red-500 hover:bg-red-600' : 'bg-[#00C06B] hover:bg-[#00A35B]'
+                                            }`}
+                                        >
+                                            {comboOptionalGroupModal.mode === 'create'
+                                                ? '保存'
+                                                : confirmingComboOptionalSave
+                                                    ? '确认保存并同步'
+                                                    : isEditingLinkedOptionalGroup
+                                                        ? '保存并同步门店'
+                                                        : '保存'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+
+                {comboOptionalProductPickerOpen && optionalGroupDraft ? (
+                    <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/45 p-6">
+                        <div className="flex max-h-[78vh] w-full max-w-[860px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                            <div className="flex shrink-0 items-start justify-between border-b border-gray-100 px-6 py-4">
+                                <div>
+                                    <div className="text-lg font-bold text-[#1F2129]">选择分组商品</div>
+                                    <div className="mt-1 text-xs text-gray-400">
+                                        勾选需要加入“{optionalGroupDraft.title || '未命名分组'}”的商品，确认后可继续设置数量、加价和默认商品。
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    aria-label="关闭商品选择"
+                                    onClick={() => setComboOptionalProductPickerOpen(false)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+                                <div className="relative w-full max-w-[360px]">
+                                    <Search
+                                        size={17}
+                                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                                    />
+                                    <input
+                                        value={comboOptionalProductKeyword}
+                                        onChange={event => setComboOptionalProductKeyword(event.target.value)}
+                                        className="q-form-input h-10 pl-9"
+                                        placeholder="搜索商品名称或规格"
+                                    />
+                                </div>
+                                <div className="shrink-0 text-sm text-gray-500">
+                                    已选 <span className="font-bold text-[#00A35B]">{comboOptionalProductPickerDraftIds.length}</span> 个商品
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto px-6 py-4">
+                                <div className="overflow-hidden rounded-lg border border-gray-200">
+                                    <div className="grid grid-cols-[46px_minmax(240px,1fr)_180px] items-center bg-[#F7F8FA] px-4 py-3 text-xs font-bold text-gray-500">
+                                        <input
+                                            type="checkbox"
+                                            aria-label="全选当前搜索结果"
+                                            checked={optionalProductPickerResults.length > 0 && optionalProductPickerResults.every(product => (
+                                                comboOptionalProductPickerDraftIds.includes(product.id)
+                                            ))}
+                                            onChange={event => {
+                                                const resultIds = optionalProductPickerResults.map(product => product.id);
+                                                setComboOptionalProductPickerDraftIds(current => (
+                                                    event.target.checked
+                                                        ? Array.from(new Set([...current, ...resultIds]))
+                                                        : current.filter(id => !resultIds.includes(id))
+                                                ));
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                        />
+                                        <span>商品</span>
+                                        <span>商品规格</span>
+                                    </div>
+                                    {optionalProductPickerResults.length > 0 ? (
+                                        optionalProductPickerResults.map(product => {
+                                            const selected = comboOptionalProductPickerDraftIds.includes(product.id);
+                                            return (
+                                                <label
+                                                    key={product.id}
+                                                    className={`grid min-h-[64px] cursor-pointer grid-cols-[46px_minmax(240px,1fr)_180px] items-center border-t border-gray-100 px-4 py-2.5 text-sm ${
+                                                        selected ? 'bg-[#F3FBF7]' : 'bg-white hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selected}
+                                                        onChange={event => setComboOptionalProductPickerDraftIds(current => (
+                                                            event.target.checked
+                                                                ? [...current, product.id]
+                                                                : current.filter(id => id !== product.id)
+                                                        ))}
+                                                        className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-bold text-[#1F2129]">{product.name}</div>
+                                                        <div className="mt-1 text-xs text-gray-400">商品 ID：{product.id}</div>
+                                                    </div>
+                                                    <span className="text-gray-600">{product.spec}</span>
+                                                </label>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="flex min-h-[180px] items-center justify-center text-sm text-gray-400">
+                                            未找到匹配的商品
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center justify-between border-t border-gray-100 bg-white px-6 py-4">
+                                <span className="text-xs text-gray-400">
+                                    取消不会改变当前分组内已添加的商品
+                                </span>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setComboOptionalProductPickerOpen(false)}
+                                        className="h-10 rounded-lg border border-gray-200 px-5 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                                    >
+                                        取消
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={confirmOptionalProductPicker}
+                                        className="h-10 rounded-lg bg-[#00C06B] px-5 text-sm font-bold text-white hover:bg-[#00A35B]"
+                                    >
+                                        确定（{comboOptionalProductPickerDraftIds.length}）
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
             </div>
         );
     };
@@ -7073,7 +7874,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#F0FDF4] text-[#00A35B]">
                         <CheckCircle2 size={52} />
                     </div>
-                    <div className="mt-6 text-[32px] font-black text-[#1F2129]">
+          <div className="mt-6 text-[22px] font-semibold text-[#1F2129]">
                         {task === 'sync'
                             ? '同步成功，商品已下发门店'
                             : successMode === 'edit'
@@ -7437,12 +8238,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     );
 
     return (
-        <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-[#FAFAFA] animate-in slide-in-from-right duration-300">
+        <div className="pc-page flex h-full w-full min-w-0 flex-col overflow-hidden bg-[#FAFAFA] animate-in slide-in-from-right duration-300">
             {/* Header */}
-            <div className="h-16 px-6 lg:px-8 bg-white border-b border-[#E8E8E8] flex min-w-0 justify-between items-center shrink-0 shadow-sm z-20">
+            <div className="pc-page-header z-20 flex h-[56px] min-w-0 shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-5">
                 <div className="flex min-w-0 items-center">
                     {(pageView === 'form' || pageView === 'templateHistory') && (
                         <button
+                            type="button"
+                            aria-label="返回上一页"
                             onClick={pageView === 'form' ? onClose : () => setPageView('template')}
                             className="mr-4 p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors"
                         >
@@ -7451,7 +8254,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     )}
                     <div className="min-w-0">
                         <div className="flex items-center gap-3">
-                            <h3 className="truncate text-lg font-black text-[#1F2129]">
+                            <h3 className="truncate text-[18px] font-semibold text-[#1F2129]">
                                 {pageView === 'form' && (hasSavedProduct ? `编辑${isComboProduct ? '套餐商品' : '商品'}资料` : `填写${isComboProduct ? '套餐商品' : '商品'}资料`)}
                                 {pageView === 'success' && (successMode === 'edit' ? `${isComboProduct ? '套餐商品' : '商品'}编辑成功` : `${isComboProduct ? '套餐商品' : '商品'}创建成功`)}
                                 {pageView === 'sync' && '创建同步任务'}
@@ -7531,7 +8334,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             <CheckCircle2 size={16} className="mr-2" />
                                             {successMode === 'edit' ? '编辑成功' : '创建成功'}
                                         </div>
-                                        <div className="mt-4 text-[28px] leading-none font-black text-[#1F2129]">{successMode === 'edit' ? '商品已更新完成' : '商品已创建完成'}</div>
+          <div className="mt-4 text-[20px] font-semibold leading-none text-[#1F2129]">{successMode === 'edit' ? '商品已更新完成' : '商品已创建完成'}</div>
                                         <div className="mt-3 text-sm text-gray-500">
                                             {successMode === 'edit'
                                                 ? '商品修改已保存成功，你可以直接下发门店，也可以先更新模板商品，统一维护模板下的门店商品差异。'

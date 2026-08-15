@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { 
-  Plus, Trash2, X, HelpCircle, CheckCircle2, Search, Coffee
+import {
+  X, HelpCircle, CheckCircle2, Search, Coffee, ArrowUp, ArrowDown, AlertTriangle
 } from 'lucide-react';
 
 // --- MOCK DATA ---
@@ -30,12 +30,17 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
   // Modal States
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [isFallback, setIsFallback] = useState(false);
+  const [addonKeyword, setAddonKeyword] = useState('');
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [notice, setNotice] = useState('');
 
   const openManageModal = (group: any) => {
     setEditingGroup(group);
     // Mock initializing selected addons
     setSelectedAddons(MOCK_ALL_ADDONS.slice(0, group.count).map(a => a.id));
     setIsFallback(group.isFallback);
+    setAddonKeyword('');
   };
 
   const closeManageModal = () => {
@@ -55,7 +60,19 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
     });
 
     setGroups(updatedGroups);
+    setNotice(`已保存“${editingGroup.name}”的加料映射`);
     closeManageModal();
+  };
+
+  const moveGroup = (groupId: string, direction: -1 | 1) => {
+    setGroups(current => {
+      const ordered = [...current].sort((a, b) => a.level - b.level);
+      const index = ordered.findIndex(item => item.id === groupId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= ordered.length) return current;
+      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+      return ordered.map((item, itemIndex) => ({ ...item, level: itemIndex + 1 }));
+    });
   };
 
   const toggleAddon = (id: string) => {
@@ -68,23 +85,19 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
 
   return (
     <div className="flex flex-col h-full w-full bg-[#F5F6FA] overflow-hidden">
-      {/* Header */}
-      <div className="p-5 bg-white border-b border-[#E8E8E8] flex justify-between items-start shrink-0">
-         <div className="flex items-center">
+      {notice && <div className="fixed right-6 top-[76px] z-[120] rounded-md bg-[#1D2129] px-4 py-2.5 text-[13px] text-white shadow-lg">{notice}</div>}
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-5">
+         <div className="flex items-center gap-3">
             {onBack && (
                <button onClick={onBack} className="mr-4 text-[#666] hover:text-[#333]">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                </button>
             )}
-            <div>
-               <h2 className="text-xl font-bold text-[#333] mb-2">加料分组管理</h2>
-               <p className="text-sm text-[#666] flex items-center">
-                  此处仅维护加料的所属分组，配方及甜度匹配计算逻辑在商品配方中配置 <span className="text-[#999] ml-1">【同一加料只可属于一个分组】</span>
-               </p>
-            </div>
+            <strong className="text-[15px] text-[#1D2129]">加料分组</strong>
+            <span className="text-[12px] text-[#86909C]">{groups.length} 个分组 · 同一加料只可属于一个分组</span>
          </div>
          <div className="flex space-x-3">
-            <button className="px-4 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-sm hover:bg-gray-50 flex items-center">
+            <button type="button" onClick={() => setPriorityOpen(true)} className="px-4 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-sm hover:bg-gray-50 flex items-center">
                <HelpCircle size={14} className="mr-1.5 text-[#999]"/> 优先级管理
             </button>
          </div>
@@ -107,7 +120,7 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
                         </h3>
                         <div className="text-[12px] text-[#999] font-mono">ID: {group.id}</div>
                      </div>
-                     <button className="text-red-500 text-sm hover:underline">删除</button>
+                     <button type="button" onClick={() => group.count > 0 ? setNotice(`“${group.name}”仍关联 ${group.count} 个加料，请先移除关联`) : setDeleteTarget(group)} className="text-red-500 text-sm hover:underline">删除</button>
                   </div>
 
                   <div className="flex space-x-4 mb-6">
@@ -178,25 +191,25 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
                      <h4 className="font-bold text-sm text-[#333]">选择实体加料</h4>
                      <div className="relative">
                         <Search size={14} className="absolute left-2.5 top-2 text-[#999]"/>
-                        <input className="pl-8 pr-3 py-1.5 border border-[#E8E8E8] rounded text-xs w-48 focus:border-[#00C06B] focus:outline-none" placeholder="搜索加料名称"/>
+                        <input value={addonKeyword} onChange={event => setAddonKeyword(event.target.value)} className="pl-8 pr-3 py-1.5 border border-[#E8E8E8] rounded text-xs w-48 focus:border-[#00C06B] focus:outline-none" placeholder="搜索加料名称"/>
                      </div>
                   </div>
                   
                   <div className="grid grid-cols-3 gap-3">
-                     {MOCK_ALL_ADDONS.map(addon => {
+                     {MOCK_ALL_ADDONS.filter(addon => addon.name.includes(addonKeyword.trim())).map(addon => {
                         const isSelected = selectedAddons.includes(addon.id);
                         return (
-                           <div 
+                           <button type="button"
                               key={addon.id}
                               onClick={() => toggleAddon(addon.id)}
                               className={`
-                                 border rounded p-2 text-sm cursor-pointer flex justify-between items-center transition-colors
+                                 border rounded p-2 text-sm cursor-pointer flex justify-between items-center text-left transition-colors
                                  ${isSelected ? 'border-[#00C06B] bg-[#00C06B]/5 text-[#00C06B] font-medium' : 'border-[#E8E8E8] text-[#666] hover:border-[#00C06B]'}
                               `}
                            >
                               <span>{addon.name}</span>
                               {isSelected && <CheckCircle2 size={14}/>}
-                           </div>
+                           </button>
                         )
                      })}
                   </div>
@@ -208,6 +221,33 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
               <button onClick={closeManageModal} className="px-5 py-1.5 border border-[#E8E8E8] rounded text-sm text-[#666] hover:bg-gray-50 bg-white">取消</button>
               <button onClick={handleSaveAddons} className="px-5 py-1.5 bg-[#00C06B] text-white rounded text-sm font-medium hover:bg-[#00A35B]">保存</button>
             </div>
+          </div>
+        </div>
+      )}
+      {priorityOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label="加料分组优先级管理">
+          <div className="w-[520px] overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex h-14 items-center justify-between border-b border-[#E8E8E8] px-5">
+              <div><strong>优先级管理</strong><span className="ml-3 text-[12px] text-[#86909C]">数字越小优先级越高</span></div>
+              <button type="button" onClick={() => setPriorityOpen(false)} aria-label="关闭优先级管理"><X size={20} /></button>
+            </div>
+            <div className="max-h-[440px] overflow-y-auto p-5 no-scrollbar">
+              {[...groups].sort((a, b) => a.level - b.level).map((group, index, ordered) => (
+                <div key={group.id} className="mb-2 flex h-12 items-center rounded-md border border-[#E5E7EB] px-3">
+                  <b className="mr-3 w-7 text-[#008F4C]">{index + 1}</b><span className="font-medium">{group.name}</span><span className="ml-2 text-[12px] text-[#98A2B3]">{group.count} 个加料</span>
+                  <div className="ml-auto flex gap-1"><button type="button" disabled={index === 0} onClick={() => moveGroup(group.id, -1)} aria-label={`上移${group.name}`} className="rounded border p-1.5 disabled:opacity-30"><ArrowUp size={14} /></button><button type="button" disabled={index === ordered.length - 1} onClick={() => moveGroup(group.id, 1)} aria-label={`下移${group.name}`} className="rounded border p-1.5 disabled:opacity-30"><ArrowDown size={14} /></button></div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end border-t border-[#E8E8E8] px-5 py-3"><button type="button" onClick={() => { setPriorityOpen(false); setNotice('加料分组优先级已更新'); }} className="h-9 rounded-md bg-[#00C06B] px-4 text-[13px] font-medium text-white">完成</button></div>
+          </div>
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" role="alertdialog" aria-modal="true">
+          <div className="w-[440px] rounded-lg bg-white p-5 shadow-2xl">
+            <div className="flex gap-3"><AlertTriangle size={22} className="shrink-0 text-[#D92D20]" /><div><strong>删除加料分组</strong><p className="mt-2 text-[13px] leading-6 text-[#667085]">确认删除“{deleteTarget.name}”？该分组未关联加料，删除后无法恢复。</p></div></div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDeleteTarget(null)} className="h-9 rounded-md border px-4 text-[13px]">取消</button><button type="button" onClick={() => { setGroups(current => current.filter(item => item.id !== deleteTarget.id)); setNotice(`已删除“${deleteTarget.name}”`); setDeleteTarget(null); }} className="h-9 rounded-md bg-[#D92D20] px-4 text-[13px] font-medium text-white">确认删除</button></div>
           </div>
         </div>
       )}

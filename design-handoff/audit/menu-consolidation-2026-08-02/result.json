@@ -1,0 +1,25 @@
+{
+  "targetUrl": "http://127.0.0.1:5183/",
+  "sidebar": {
+    "salesRulesVisible": true,
+    "standaloneTemplateVisible": false,
+    "differenceInspectionVisible": false
+  },
+  "workbench": {
+    "summaryOpened": true,
+    "summaryDrawerVisible": true,
+    "duplicateTaskTableVisible": false
+  },
+  "salesRuleOpened": true,
+  "tabOrder": [
+    "门店售卖规则",
+    "商品模板",
+    "价格策略",
+    "属性互斥",
+    "必选商品"
+  ],
+  "templateOpened": true,
+  "templatePageVisible": true,
+  "horizontalOverflow": false,
+  "consoleErrors": []
+}

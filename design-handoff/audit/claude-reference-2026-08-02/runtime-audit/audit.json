@@ -1,0 +1,336 @@
+{
+  "targetUrl": "http://127.0.0.1:5183/design-handoff/audit/claude-reference-2026-08-02/reference.dc.html",
+  "createdAt": "2026-08-02T12:54:29.838Z",
+  "results": [
+    {
+      "label": "商品工作台-初始",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ]
+    },
+    {
+      "label": "商品工作台-详情抽屉",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ]
+    },
+    {
+      "label": "商品主档",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "分类与属性",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "配方与营养",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "渠道商品",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "渠道分类与属性",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "商品模板",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "销售规则",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "商品推荐",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "发布中心",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "映射治理",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "差异巡检",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "门店商品",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "商品设置",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    }
+  ],
+  "workbench": {
+    "openedDrawer": false,
+    "initialDrawerCount": 0,
+    "initialCheckedCount": 0,
+    "contentWidthBefore": 0,
+    "contentWidthWithDrawer": 0,
+    "stickyAction": {
+      "found": false
+    }
+  },
+  "templateContext": [],
+  "salesContext": [],
+  "flowResults": [
+    {
+      "label": "新建商品主档",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "opened": false
+    },
+    {
+      "label": "创建商品模板",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "opened": false
+    },
+    {
+      "label": "售卖范围",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "价格策略",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "属性互斥",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "必选商品",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": false
+    },
+    {
+      "label": "全渠道商品管理策略",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "opened": false
+    },
+    {
+      "label": "统一维护-影响确认",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "unifiedSelected": false,
+      "impactOpened": false
+    },
+    {
+      "label": "统一维护-商品管理",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "unifiedSaved": false,
+      "unifiedMenu": []
+    }
+  ],
+  "consoleErrors": [
+    "[dc] failed to load React or boot: Error: failed to load ./react.production.min.js\n    at s.onerror (http://127.0.0.1:5183/design-handoff/audit/claude-reference-2026-08-02/support.js:1834:32)",
+    "Uncaught (in promise)"
+  ]
+}

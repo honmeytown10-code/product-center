@@ -50,7 +50,7 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         label: '展示设置',
         desc: '对应创建表单里的展示设置区域，按列表页与详情页拆分。',
         groups: [
-            { id: 'display_list', label: '列表页展示', desc: '列表卡片中直接展示的图片、文案与标签。', fieldIds: ['p_img', 'p_list_desc', 'p_desc_tags', 'p_order_tags', 'p_badge'], showHeader: true },
+            { id: 'display_list', label: '列表页展示', desc: '列表卡片中直接展示的图片、文案与标签。', fieldIds: ['p_img', 'p_list_desc', 'p_desc_tags', 'p_badge'], showHeader: true },
             { id: 'display_detail', label: '详情页展示', desc: '详情页内容和富文本展示信息。', fieldIds: ['p_video', 'p_rich_desc'], showHeader: true },
         ],
     },
@@ -74,6 +74,20 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
 
 const getConfigKey = (type: 'standard' | 'combo', categoryId: string) => `${type}:${categoryId}`;
 const SALES_FIELDS_HIDDEN_WHEN_SPECS = new Set(['s_price', 's_cost', 's_market_price', 's_pack_fee', 's_stock']);
+const MASTER_FIELD_IDS = new Set([
+    'p_name', 'p_code', 'p_front_cat', 'p_back_cat', 'p_cat', 'p_weight_flag', 'p_unit', 'p_remark',
+    'p_stat_tags', 'p_tare_weight', 'p_img', 's_specs', 'm_methods', 'a_addons',
+    'c_groups', 'o_origin', 'o_ingredients',
+]);
+const CHANNEL_HIDDEN_FIELD_IDS = new Set([
+    'p_code', 'p_back_cat', 'p_cat', 'p_stat_tags', 'p_tare_weight', 'o_origin', 'o_ingredients',
+]);
+const MASTER_SPEC_CHILD_IDS = new Set([
+    's_spec_name', 's_spec_price', 's_spec_barcode', 's_spec_mark', 's_spec_sku_code', 's_spec_code', 's_spec_amount',
+]);
+const MASTER_METHOD_CHILD_IDS = new Set(['m_method_name', 'm_method_code', 'm_method_remark']);
+const MASTER_ADDON_CHILD_IDS = new Set(['a_addon_name', 'a_addon_code']);
+const CHANNEL_SPEC_HIDDEN_CHILD_IDS = new Set(['s_spec_barcode', 's_spec_mark', 's_spec_sku_code', 's_spec_code']);
 const normalizeChildDisplayMode = (
     value: boolean | 'visible' | 'collapsed' | 'hidden' | undefined,
     isDefaultSelected: boolean
@@ -118,6 +132,8 @@ interface Props {
     configs: CommonFieldConfigs;
     initialType?: 'standard' | 'combo';
     initialCategoryId?: string | null;
+    fieldScope?: 'master' | 'channel' | 'store';
+    scopeLabel?: string;
     onBack: () => void;
     onSave: (type: 'standard' | 'combo', categoryId: string, fieldConfigs: CategoryFieldConfig[]) => void;
     onReset: (type: 'standard' | 'combo', categoryId: string) => void;
@@ -128,6 +144,8 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
     configs,
     initialType = 'standard',
     initialCategoryId = null,
+    fieldScope = 'store',
+    scopeLabel = '品牌级按类目生效',
     onBack,
     onSave,
     onReset,
@@ -171,12 +189,17 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
 
     const availableCategoryFields = useMemo(() => (
         categoryFieldConfigs
+            .filter(config => {
+                if (fieldScope === 'master') return MASTER_FIELD_IDS.has(config.id);
+                if (fieldScope === 'channel') return !CHANNEL_HIDDEN_FIELD_IDS.has(config.id);
+                return true;
+            })
             .map(config => {
                 const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === config.id);
                 return field ? { config, field } : null;
             })
             .filter((item): item is { config: CategoryFieldConfig; field: typeof AVAILABLE_DYNAMIC_FIELDS[number] } => !!item)
-    ), [categoryFieldConfigs]);
+    ), [categoryFieldConfigs, fieldScope]);
 
     useEffect(() => {
         if (!selectedCategory) {
@@ -197,7 +220,9 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
 
     const normalizedDraftConfigs = useMemo(() => {
         const availableIds = new Set(availableCategoryFields.map(item => item.field.id));
-        const fieldMap = new Map(availableCategoryFields.map(item => [item.field.id, item]));
+        const fieldMap = new Map<string, { config: CategoryFieldConfig; field: DynamicFieldConfig }>(
+            availableCategoryFields.map(item => [item.field.id, item] as const)
+        );
         const nextMap = new Map<string, CategoryFieldConfig>();
 
         draftFieldConfigs
@@ -219,7 +244,12 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
     const draftIdSet = useMemo(() => new Set(normalizedDraftConfigs.map(item => item.id)), [normalizedDraftConfigs]);
     const normalizedDraftConfigMap = useMemo(() => new Map(normalizedDraftConfigs.map(item => [item.id, item])), [normalizedDraftConfigs]);
 
-    const fieldLookup = useMemo(() => new Map(availableCategoryFields.map(item => [item.field.id, item])), [availableCategoryFields]);
+    const fieldLookup = useMemo(
+        () => new Map<string, { config: CategoryFieldConfig; field: DynamicFieldConfig }>(
+            availableCategoryFields.map(item => [item.field.id, item] as const)
+        ),
+        [availableCategoryFields]
+    );
     const getChildLockedState = (parentId: string, childId: string, child: { isSystem?: boolean }) => {
         const parentConfig = normalizedDraftConfigMap.get(parentId) || fieldLookup.get(parentId)?.config;
         return {
@@ -324,23 +354,27 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
 
     return (
         <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-[#F5F6FA]">
-            <div className="h-16 shrink-0 border-b border-[#E8E8E8] bg-white px-8 flex items-center justify-between">
+            <div className="h-16 shrink-0 border-b border-[#E8E8E8] bg-white px-5 flex items-center justify-between">
                 <div className="flex items-center gap-4 min-w-0">
                     <button
                         type="button"
                         onClick={onBack}
-                        className="rounded-xl p-2 text-gray-500 hover:bg-gray-100 hover:text-[#1F2129]"
+                        className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-[#1F2129]"
                     >
                         <ArrowLeft size={20} />
                     </button>
                     <div className="min-w-0">
                         <div className="flex items-center gap-3">
-                            <h2 className="text-[20px] font-black text-[#1F2129]">常用字段设置</h2>
-                            <span className="rounded-full bg-[#EAF9F1] px-3 py-1 text-xs font-bold text-[#00A35B]">
-                                品牌级按类目生效
+                            <h2 className="text-[18px] font-bold text-[#1F2129]">常用字段设置</h2>
+                            <span className="rounded-md bg-[#EAF9F1] px-2.5 py-1 text-xs font-bold text-[#00A35B]">
+                                {scopeLabel}
                             </span>
                         </div>
-                        <div className="mt-1 text-sm text-gray-400">为不同商品类目配置默认字段的展示方式，支持直接显示、折叠显示和隐藏。</div>
+                        <div className="mt-1 text-sm text-gray-400">
+                            {fieldScope === 'channel'
+                                ? '由渠道运营团队按商品类目配置渠道商品表单的字段展示方式。'
+                                : '为不同商品类目配置默认字段的展示方式，支持直接显示、折叠显示和隐藏。'}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -348,7 +382,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                         type="button"
                         onClick={handleReset}
                         disabled={!selectedCategory}
-                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] disabled:cursor-not-allowed disabled:opacity-50 hover:border-[#00C06B] hover:bg-[#F8FFFB]"
+                        className="inline-flex items-center rounded-md border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] disabled:cursor-not-allowed disabled:opacity-50 hover:border-[#00C06B] hover:bg-[#F8FFFB]"
                     >
                         <RotateCcw size={15} className="mr-2" />
                         恢复系统默认
@@ -357,7 +391,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                         type="button"
                         onClick={handleSave}
                         disabled={!selectedCategory || !hasChanges}
-                        className="inline-flex items-center rounded-xl bg-[#1F2129] px-5 py-2.5 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-300"
+                        className="inline-flex items-center rounded-md bg-[#1F2129] px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                         <Save size={15} className="mr-2" />
                         保存配置
@@ -367,30 +401,32 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
 
             <div className="flex flex-1 min-h-0 overflow-hidden">
                 <aside className="w-[300px] shrink-0 border-r border-[#E8E8E8] bg-white flex flex-col">
-                    <div className="border-b border-[#E8E8E8] p-6">
-                        <div className="flex rounded-2xl bg-[#F5F6FA] p-1">
+                    <div className="border-b border-[#E8E8E8] p-4">
+                        <div className="flex rounded-md bg-[#F5F6FA] p-1">
                             <button
                                 type="button"
                                 onClick={() => setActiveType('standard')}
-                                className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold transition-colors ${activeType === 'standard' ? 'bg-white text-[#00A35B] shadow-sm' : 'text-gray-500'}`}
+                                className={`flex-1 rounded px-3 py-2 text-sm font-bold transition-colors ${activeType === 'standard' ? 'bg-white text-[#00A35B]' : 'text-gray-500'}`}
                             >
                                 标准商品
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setActiveType('combo')}
-                                className={`flex-1 rounded-xl px-3 py-2 text-sm font-bold transition-colors ${activeType === 'combo' ? 'bg-white text-[#00A35B] shadow-sm' : 'text-gray-500'}`}
+                                className={`flex-1 rounded px-3 py-2 text-sm font-bold transition-colors ${activeType === 'combo' ? 'bg-white text-[#00A35B]' : 'text-gray-500'}`}
                             >
                                 套餐商品
                             </button>
                         </div>
-                        <div className="mt-5 rounded-2xl border border-[#E8F7EF] bg-[#F7FFF9] p-4">
+                        <div className="mt-4 rounded-md border border-[#E8F7EF] bg-[#F7FFF9] p-3">
                             <div className="flex items-center gap-2 text-sm font-black text-[#1F2129]">
                                 <Sparkles size={16} className="text-[#00A35B]" />
                                 配置规则
                             </div>
                             <div className="mt-2 text-xs leading-6 text-gray-500">
-                                系统必填字段默认直接显示且不可取消，保存后当前品牌该类目的创建表单会按你的显示/折叠规则渲染。
+                                {fieldScope === 'channel'
+                                    ? '这里只控制字段显示、折叠和隐藏；渠道可覆盖权限由主档管理团队统一设置。'
+                                    : '系统必填字段默认直接显示且不可取消，保存后当前品牌该类目的创建表单会按你的显示/折叠规则渲染。'}
                             </div>
                         </div>
                     </div>
@@ -404,7 +440,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                     key={item.id}
                                     type="button"
                                     onClick={() => setSelectedCategoryId(item.id)}
-                                    className={`w-full rounded-2xl border px-4 py-4 text-left transition-all ${active ? 'border-[#BBF7D0] bg-[#F0FDF4]' : 'border-transparent bg-[#FAFAFA] hover:border-gray-200 hover:bg-white'}`}
+                                    className={`w-full rounded-md border px-3 py-3 text-left transition-all ${active ? 'border-[#BBF7D0] bg-[#F0FDF4]' : 'border-transparent bg-[#FAFAFA] hover:border-gray-200 hover:bg-white'}`}
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
@@ -419,19 +455,19 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                     </div>
                 </aside>
 
-                <main className="flex-1 min-w-0 overflow-y-auto no-scrollbar p-8">
+                <main className="flex-1 min-w-0 overflow-y-auto no-scrollbar p-4">
                     {!selectedCategory ? (
-                        <div className="flex h-full items-center justify-center rounded-[28px] border border-dashed border-gray-200 bg-white text-gray-400">
+                        <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white text-gray-400">
                             请选择左侧类目后开始配置
                         </div>
                     ) : availableCategoryFields.length === 0 ? (
-                        <div className="flex h-full items-center justify-center rounded-[28px] border border-dashed border-gray-200 bg-white text-gray-400">
+                        <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white text-gray-400">
                             当前类目暂无可配置字段
                         </div>
                     ) : (
                         <div className="mx-auto max-w-[1180px] space-y-6">
                             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                                <div className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+                                <div className="rounded-lg border border-gray-200 bg-white p-5">
                                     <div className="flex flex-wrap items-center gap-3">
                                         <div className="text-[22px] font-black text-[#1F2129]">{selectedCategory.name}</div>
                                         <span className="rounded-full bg-[#F5F6FA] px-3 py-1 text-xs font-bold text-gray-500">
@@ -442,31 +478,31 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                         可按类目配置字段的默认展示方式：高频字段直接显示，低频但仍会用到的字段默认折叠，其余字段隐藏。
                                     </div>
                                 </div>
-                                <div className="rounded-[24px] border border-[#E8F7EF] bg-[#F7FFF9] p-6 shadow-sm">
+                                <div className="rounded-lg border border-[#E8F7EF] bg-[#F7FFF9] p-5">
                                     <div className="flex items-center gap-2 text-sm font-black text-[#1F2129]">
                                         <ShieldCheck size={16} className="text-[#00A35B]" />
                                         配置摘要
                                     </div>
                                     <div className="mt-4 grid grid-cols-2 gap-3">
-                                        <div className="rounded-2xl bg-white px-4 py-3">
+                                                            <div className="rounded-md bg-white px-4 py-3">
                                             <div className="text-xs text-gray-400">直接显示</div>
                                             <div className="mt-1 text-2xl font-black text-[#1F2129]">{visibleFieldCount}</div>
                                         </div>
-                                        <div className="rounded-2xl bg-white px-4 py-3">
+                                                            <div className="rounded-md bg-white px-4 py-3">
                                             <div className="text-xs text-gray-400">折叠字段</div>
                                             <div className="mt-1 text-2xl font-black text-[#1F2129]">{collapsedFieldCount}</div>
                                         </div>
-                                        <div className="rounded-2xl bg-white px-4 py-3">
+                                                            <div className="rounded-md bg-white px-4 py-3">
                                             <div className="text-xs text-gray-400">已配置字段</div>
                                             <div className="mt-1 text-2xl font-black text-[#1F2129]">{normalizedDraftConfigs.length}</div>
                                         </div>
-                                        <div className="rounded-2xl bg-white px-4 py-3">
+                                                            <div className="rounded-md bg-white px-4 py-3">
                                             <div className="text-xs text-gray-400">类目总字段</div>
                                             <div className="mt-1 text-2xl font-black text-[#1F2129]">{availableCategoryFields.length}</div>
                                         </div>
                                     </div>
                                     {savedMessage && (
-                                        <div className="mt-4 rounded-2xl border border-[#BBF7D0] bg-white px-4 py-3 text-sm font-medium text-[#166534]">
+                                                    <div className="mt-4 rounded-md border border-[#BBF7D0] bg-white px-4 py-3 text-sm font-medium text-[#166534]">
                                             {savedMessage}
                                         </div>
                                     )}
@@ -474,7 +510,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                             </div>
 
                             {groupedFields.map(module => (
-                                <section key={module.id} className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+                                <section key={module.id} className="rounded-lg border border-gray-200 bg-white p-5">
                                     <div className="flex items-start justify-between gap-4">
                                         <div>
                                             <div className="text-lg font-black text-[#1F2129]">{module.label}</div>
@@ -486,7 +522,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                     </div>
                                     <div className="mt-5 space-y-4">
                                         {module.groups.map(group => (
-                                            <div key={group.id} className={group.showHeader ? 'rounded-[20px] border border-[#EEF0F4] bg-[#FAFBFC] p-5' : ''}>
+                                            <div key={group.id} className={group.showHeader ? 'rounded-md border border-[#EEF0F4] bg-[#FAFBFC] p-4' : ''}>
                                                 {group.showHeader && (
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div>
@@ -505,7 +541,17 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                     {group.items.map(({ field, config }) => {
                                                         const disabled = requiredFieldIds.includes(field.id);
                                                         const currentDraftConfig = normalizedDraftConfigMap.get(field.id);
-                                                        const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[field.id] || [];
+                                                        const childTemplates = (COMMON_FIELD_CHILD_CONFIG_LIBRARY[field.id] || []).filter(child => {
+                                                            if (fieldScope === 'master') {
+                                                                if (field.id === 's_specs') return MASTER_SPEC_CHILD_IDS.has(child.id);
+                                                                if (field.id === 'm_methods') return MASTER_METHOD_CHILD_IDS.has(child.id);
+                                                                if (field.id === 'a_addons') return MASTER_ADDON_CHILD_IDS.has(child.id);
+                                                            }
+                                                            if (fieldScope === 'channel' && field.id === 's_specs') {
+                                                                return !CHANNEL_SPEC_HIDDEN_CHILD_IDS.has(child.id);
+                                                            }
+                                                            return true;
+                                                        });
                                                         const hasChildControls = childTemplates.length > 0;
                                                         const effectiveConfig = currentDraftConfig || (childTemplates.length > 0 ? buildDraftFieldConfig(config, categoryFieldConfigMap) : undefined);
                                                         const childModeMap = childTemplates.reduce<Record<string, 'visible' | 'hidden'>>((acc, child) => {
@@ -529,7 +575,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                         return (
                                                             <div
                                                                 key={field.id}
-                                                                className={`${useFullWidthLayout ? 'lg:col-span-2' : ''} rounded-[22px] border px-5 py-5 transition-colors ${
+                                                                    className={`${useFullWidthLayout ? 'lg:col-span-2' : ''} rounded-lg border px-4 py-4 transition-colors ${
                                                                     isVisible
                                                                         ? 'border-[#BBF7D0] bg-[#F6FFF9] shadow-sm'
                                                                         : isCollapsed
@@ -616,7 +662,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                                     </div>
                                                                 </div>
                                                                 {childTemplates.length > 0 && (
-                                                                    <div className="mt-5 rounded-[22px] border border-[#DDEEE4] bg-white px-5 py-5 shadow-[0_4px_14px_rgba(16,185,129,0.06)]">
+                                                                        <div className="mt-5 rounded-lg border border-[#DDEEE4] bg-white px-4 py-4">
                                                                         <div className="mb-4 flex items-center justify-between gap-3">
                                                                             <div className="flex items-center gap-2">
                                                                                 <div className="h-2 w-2 rounded-full bg-[#00A35B]" />
@@ -635,7 +681,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                                                 return (
                                                                                     <div
                                                                                         key={child.id}
-                                                                                        className={`min-h-[88px] rounded-[20px] border px-4 py-4 transition-colors ${
+                                                                                        className={`min-h-[88px] rounded-md border px-4 py-4 transition-colors ${
                                                                                             childMode === 'visible'
                                                                                                 ? 'border-[#BBF7D0] bg-[#F0FDF4]'
                                                                                                 : 'border-gray-200 bg-[#FAFAFA]'
@@ -704,7 +750,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                                     </div>
                                                                 )}
                                                                 {currentDraftConfig && field.children && field.children.length > 0 && childTemplates.length === 0 && (
-                                                                    <div className="mt-3 rounded-2xl bg-white/90 px-3 py-3">
+                                                                                            <div className="mt-3 rounded-md bg-white/90 px-3 py-3">
                                                                         <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">对应子字段</div>
                                                                         <div className="mt-2 flex flex-wrap gap-2">
                                                                             {field.children.map(child => (

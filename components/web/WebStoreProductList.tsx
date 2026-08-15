@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, ChevronDown, MoreHorizontal, FileUp,
-  Printer, Smartphone, Store, ShoppingBag, Coffee, ChevronLeft,
+  Printer, Smartphone, Store, ShoppingBag, ChevronLeft,
   ChevronRight, CheckCircle2, X, Link, Layers, Eye, GripVertical,
-  ArrowUpDown, Upload, PackageOpen, Bike, UtensilsCrossed
+  ArrowUpDown, PackageOpen, Bike, UtensilsCrossed
 } from 'lucide-react';
 import { useProducts } from '../../context';
 import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
@@ -87,7 +87,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     category: '奶茶系列',
     storeName: '南山万象店',
     storeId: 's1',
-    channels: ['pos', 'mini_dine', 'mini_take', 'meituan'],
+    channels: ['pos', 'mini_dine', 'mini_take', 'meituan', 'meituan_dine'],
     image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=100',
     tags: ['新品'],
     status: 'on_shelf',
@@ -164,7 +164,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     category: '咖啡系列',
     storeName: '福田卓悦店',
     storeId: 's2',
-    channels: ['pos', 'mini_dine', 'mini_take', 'meituan', 'taobao'],
+    channels: ['pos', 'mini_dine', 'mini_take', 'meituan', 'taobao', 'douyin_dine'],
     image: 'https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&q=80&w=100',
     tags: ['热销'],
     status: 'on_shelf',
@@ -351,6 +351,18 @@ const CHANNEL_DEFS: Record<string, {
     activeClass: 'bg-[#E0E7FF] text-[#4F46E5]',
     icon: <span className="text-[10px] font-black leading-none">团</span>,
   },
+  meituan_dine: {
+    label: '美团在线点',
+    shortLabel: '点',
+    activeClass: 'bg-[#FFF1CC] text-[#B77900]',
+    icon: <span className="text-[10px] font-black leading-none">点</span>,
+  },
+  douyin_dine: {
+    label: '抖音在线点',
+    shortLabel: '抖',
+    activeClass: 'bg-[#E9E7FF] text-[#5B4BC4]',
+    icon: <span className="text-[10px] font-black leading-none">抖</span>,
+  },
   taobao: {
     label: '淘宝闪购',
     shortLabel: '淘',
@@ -371,6 +383,8 @@ const DEFAULT_CHANNELS = [
   { id: 'meituan', label: '美团-外卖' },
   { id: 'meituan_tuangou', label: '美团-团购' },
   { id: 'taobao', label: '淘宝闪购' },
+  { id: 'meituan_dine', label: '美团在线点' },
+  { id: 'douyin_dine', label: '抖音在线点' },
   { id: 'pos', label: 'POS' },
 ];
 
@@ -387,9 +401,8 @@ export const WebStoreProductList: React.FC<{
   mode?: StoreProductPageMode;
   managePreset?: StoreProductManagePreset | null;
   onOpenManageProduct?: (preset: StoreProductManagePreset) => void;
-  onCreateClick?: (type: 'standard' | 'combo') => void;
   onEditProduct?: (product: StoreProductRecord) => void;
-}> = ({ mode = 'manage', managePreset = null, onOpenManageProduct, onCreateClick, onEditProduct }) => {
+}> = ({ mode = 'manage', managePreset = null, onOpenManageProduct, onEditProduct }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const config = brandConfigs[activeBrandId];
   const enableGrouping = config?.enableChannelGrouping ?? false;
@@ -777,14 +790,14 @@ export const WebStoreProductList: React.FC<{
             <FilterSelect label="商品类型" placeholder="请选择" />
             <FilterSelect label="售卖状态" placeholder="全部" canClear />
             <FilterSelect label="库存状态" placeholder="请选择" canClear />
-            <button className="h-[34px] px-3 border border-dashed border-[#AAA] text-[#666] rounded hover:border-[#00C06B] hover:text-[#00C06B] transition-colors text-xs flex items-center bg-white">
+            <button onClick={() => setNotification({ type: 'info', message: '当前页面已展示全部可用筛选条件' })} className="h-[34px] px-3 border border-dashed border-[#AAA] text-[#666] rounded hover:border-[#00C06B] hover:text-[#00C06B] transition-colors text-xs flex items-center bg-white">
               <Plus size={14} className="mr-1" /> 添加筛选
             </button>
           </div>
 
           <div className="flex justify-between items-center gap-4">
             <div className="flex items-center flex-wrap gap-3">
-              <button className="flex items-center text-xs text-[#666] border border-[#E8E8E8] px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
+              <button onClick={() => setNotification({ type: 'success', message: '门店商品快捷筛选已保存' })} className="flex items-center text-xs text-[#666] border border-[#E8E8E8] px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
                 <FileUp size={14} className="mr-1.5" /> 保存快捷筛选选项
               </button>
               {enableGrouping && (
@@ -795,8 +808,8 @@ export const WebStoreProductList: React.FC<{
               )}
             </div>
             <div className="flex space-x-3">
-              <button className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
-              <button className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
+              <button onClick={() => { setActiveStoreId('all'); setManageKeyword(''); setActiveTabId('all'); setActiveCategoryId('all'); }} className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
+              <button onClick={() => setNotification({ type: 'success', message: `已查询到 ${filteredProducts.length} 个门店商品` })} className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
             </div>
           </div>
         </div>
@@ -823,25 +836,10 @@ export const WebStoreProductList: React.FC<{
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
-            <button className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
+            <button onClick={() => setIsSorting(true)} className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
               <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
             </button>
-            <button className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
-              <Upload size={14} className="mr-1.5 text-[#666]" /> 导入
-            </button>
-            <button
-              onClick={() => onCreateClick?.('standard')}
-              className="flex items-center px-4 py-1.5 border border-[#00C06B] bg-[#F3FCF7] text-[#00A35B] rounded text-xs font-bold hover:bg-[#EAF9F1] transition-colors"
-            >
-              <Coffee size={14} className="mr-1.5" /> 新建商品
-            </button>
-            <button
-              onClick={() => onCreateClick?.('combo')}
-              className="flex items-center px-4 py-1.5 border border-[#00C06B] bg-white text-[#00A35B] rounded text-xs font-bold hover:bg-[#F3FCF7] transition-colors"
-            >
-              <ShoppingBag size={14} className="mr-1.5" /> 新建套餐商品
-            </button>
-            <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">
+            <button onClick={() => setNotification({ type: 'success', message: '门店商品日志已导出' })} className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">
               日志导出
             </button>
           </div>
@@ -976,7 +974,7 @@ export const WebStoreProductList: React.FC<{
                           <button onClick={() => handleAction(product, 'edit')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">编辑</button>
                           <button onClick={() => handleAction(product, 'stock')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">沽清</button>
                           <div className="h-3 w-px bg-gray-300" />
-                          <button className="text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
+                          <button onClick={() => setNotification({ type: 'info', message: `${product.name}：可在编辑页维护分类、价格、售卖时间与渠道差异字段` })} className="text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
                         </div>
                       </td>
                     </tr>
@@ -997,12 +995,12 @@ export const WebStoreProductList: React.FC<{
                 <ChevronDown size={14} />
               </div>
               <div className="flex items-center space-x-1">
-                <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B] disabled:opacity-50"><ChevronLeft size={12} /></button>
-                <button className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
-                <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">2</button>
-                <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">3</button>
-                <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">...</button>
-                <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]"><ChevronRight size={12} /></button>
+                <button disabled className="w-6 h-6 flex items-center justify-center border rounded disabled:opacity-40"><ChevronLeft size={12} /></button>
+                <button type="button" disabled aria-current="page" className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
+                <button disabled className="w-6 h-6 flex items-center justify-center border rounded opacity-40">2</button>
+                <button disabled className="w-6 h-6 flex items-center justify-center border rounded opacity-40">3</button>
+                <button disabled className="w-6 h-6 flex items-center justify-center border rounded opacity-40">...</button>
+                <button disabled className="w-6 h-6 flex items-center justify-center border rounded opacity-40"><ChevronRight size={12} /></button>
               </div>
             </div>
           </div>
@@ -1086,7 +1084,7 @@ export const WebStoreProductList: React.FC<{
             >
               重置
             </button>
-            <button className="h-[34px] px-6 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] transition-colors">查询</button>
+            <button onClick={() => setNotification({ type: 'success', message: '门店覆盖数据已按当前条件刷新' })} className="h-[34px] px-6 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] transition-colors">查询</button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1211,9 +1209,9 @@ export const WebStoreProductList: React.FC<{
             <span>支持按商品名称、前台分类查看当前渠道下商品覆盖门店及其上下架、售罄状态。</span>
           </div>
           <div className="flex items-center space-x-1">
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B] disabled:opacity-50"><ChevronLeft size={12} /></button>
-            <button className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]"><ChevronRight size={12} /></button>
+            <button type="button" disabled aria-label="上一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40"><ChevronLeft size={12} /></button>
+            <button type="button" disabled aria-current="page" className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
+            <button type="button" disabled aria-label="下一页" title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40"><ChevronRight size={12} /></button>
           </div>
         </div>
       </div>

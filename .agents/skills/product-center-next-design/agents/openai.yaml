@@ -1,0 +1,4 @@
+interface:
+  display_name: "商品中心 Next 架构设计"
+  short_description: "重构商品中心 Web 的产品结构、菜单、任务流与页面边界"
+  default_prompt: "使用 $product-center-next-design 重构商品中心 Web 的信息架构、菜单与页面职责。"

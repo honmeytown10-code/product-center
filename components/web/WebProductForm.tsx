@@ -5,9 +5,11 @@ import {
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
   CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search
 } from 'lucide-react';
-import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, resolveChildRequiredConfigs } from '../../types';
+import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, OmnichannelChannelId, ThirdPartyChannelId, resolveChildRequiredConfigs } from '../../types';
+import { channelGroupIncludesMiniProgram } from '../../omnichannel';
 import { Switch, SectionHeader, FormRow } from './WebCommon';
 import { WebCategorySelectModal } from './WebModals';
+import { WebThirdPartyChannelFields } from './WebThirdPartyChannelFields';
 
 interface WebProductFormProps {
     type: 'standard' | 'combo';
@@ -19,11 +21,32 @@ interface WebProductFormProps {
     existingProductCount?: number;
     previewPreferenceKey?: string;
     commonFieldConfigs?: Record<string, CategoryFieldConfig[]>;
+    channelEditableFieldIds?: string[];
     onOpenCommonFieldSettings?: (type: 'standard' | 'combo', categoryId: string) => void;
     groupedTagOptions?: Record<GroupedTagFieldId, GroupedTagGroup[]>;
     badgeOptions?: BadgeOptionConfig[];
     onGroupedTagOptionsChange?: (value: Record<GroupedTagFieldId, GroupedTagGroup[]>) => void;
     onBadgeOptionsChange?: (value: BadgeOptionConfig[]) => void;
+    thirdPartyChannelAttributeIds?: ThirdPartyChannelId[];
+    formScope?: 'master' | 'channel' | 'unified' | 'store';
+    channelContext?: {
+        catalogName: string;
+        channelIds: OmnichannelChannelId[];
+        channelNames: string[];
+        masterName: string;
+        skuId: string;
+    };
+    onProductSaved?: (product: {
+        id?: string;
+        name: string;
+        price: number;
+        category: string;
+        image: string;
+        skuCode: string;
+        type: 'standard' | 'combo';
+        formData?: Record<string, any>;
+    }, action: 'create' | 'edit') => void;
+    onOpenChannelCatalog?: () => void;
 }
 
 const DEFAULT_RESET_FIELD_IDS = new Set(['p_weight_flag', 'st_member']);
@@ -48,7 +71,7 @@ type SpecPrepRuleSet = {
 };
 
 type ChannelKey = 'pos' | 'mini_dine' | 'mini_take' | 'meituan';
-type SectionId = 'basic' | 'display' | 'spec' | 'method' | 'settings';
+type SectionId = 'basic' | 'third_party' | 'display' | 'spec' | 'method' | 'settings';
 type ValidationItem = {
     key: string;
     label: string;
@@ -149,6 +172,7 @@ type SpecConfigRow = {
     id: string;
     s_spec_name: string;
     s_spec_price: string;
+    s_spec_channel_price?: string;
     s_spec_cost: string;
     s_spec_market: string;
     s_spec_barcode: string;
@@ -250,6 +274,11 @@ type ComboOptionalGroupModalState = {
     draft: ComboGroupCard;
 };
 type SpecSelectionMap = Record<string, string[]>;
+type PendingChannelSpecValueToggle = {
+    value: string;
+    nextDisabled: boolean;
+    affectedSkuCount: number;
+};
 type PreviewDisplayPreference = 'expanded' | 'collapsed';
 type DisplayTypeOption = { key: string; label: string; desc: string };
 
@@ -341,12 +370,71 @@ const hexToHsv = (hex: string) => {
 const PREP_UNIT_OPTIONS: PrepUnit[] = ['分钟', '小时', '天'];
 const SECTION_LABELS: Record<SectionId, string> = {
     basic: '基础信息',
+    third_party: '三方渠道属性',
     display: '展示设置',
     spec: '销售属性',
     method: '商品属性',
     settings: '其他属性',
 };
-const SECTION_ORDER: SectionId[] = ['basic', 'method', 'display', 'spec', 'settings'];
+const SECTION_ORDER: SectionId[] = ['basic', 'method', 'display', 'spec', 'settings', 'third_party'];
+const MASTER_FIELD_IDS = new Set([
+    'p_name',
+    'p_code',
+    'p_front_cat',
+    'p_back_cat',
+    'p_cat',
+    'p_weight_flag',
+    'p_unit',
+    'p_remark',
+    'p_stat_tags',
+    'p_img',
+    's_specs',
+    'm_methods',
+    'a_addons',
+    'c_groups',
+    'o_invoice',
+    'o_tax_category',
+]);
+const UNIFIED_CHANNEL_BASIC_FIELD_IDS = new Set([
+    'p_alias',
+    'p_display_type',
+    'p_tare_weight',
+]);
+const CHANNEL_HIDDEN_FIELD_IDS = new Set([
+    'p_merchant_code',
+    'p_remark',
+    'p_stat_tags',
+    's_cost',
+    'o_invoice',
+    'o_tax_category',
+    'o_recipe_ref',
+    'o_nutrition_ref',
+]);
+const CHANNEL_READONLY_FIELD_IDS = new Set([
+    'p_code',
+    'p_back_cat',
+    'p_cat',
+    'p_weight_flag',
+    'p_unit',
+]);
+const CHANNEL_POS_ONLY_FIELD_IDS = new Set(['p_tare_weight']);
+const MASTER_SPEC_CHILD_IDS = new Set([
+    's_spec_name',
+    's_spec_price',
+    's_spec_barcode',
+    's_spec_mark',
+    's_spec_sku_code',
+    's_spec_code',
+    's_spec_amount',
+]);
+const CHANNEL_SPEC_HIDDEN_CHILD_IDS = new Set([
+    's_spec_barcode',
+    's_spec_mark',
+    's_spec_sku_code',
+    's_spec_code',
+]);
+const MASTER_METHOD_CHILD_IDS = new Set(['m_method_name', 'm_method_code', 'm_method_remark']);
+const MASTER_ADDON_CHILD_IDS = new Set(['a_addon_name', 'a_addon_code']);
 const CHANNEL_OPTIONS: Array<{ key: ChannelKey; label: string; icon: React.ReactNode }> = [
     { key: 'pos', label: 'POS收银', icon: <Printer size={16} /> },
     { key: 'mini_dine', label: '小程序堂食', icon: <CupSoda size={16} /> },
@@ -450,7 +538,7 @@ const COMBO_FALLBACK_FIELDS: CategoryFieldConfig[] = [
     { id: 's_sale_settings', isRequired: false },
     { id: 's_takeout_rule', isRequired: false },
     { id: 's_tax_rate', isRequired: false },
-    { id: 'p_img', isRequired: true },
+    { id: 'p_img', isRequired: false },
     { id: 'p_desc_tags', isRequired: false },
     { id: 'p_list_desc', isRequired: false },
     { id: 'p_badge', isRequired: false },
@@ -710,6 +798,34 @@ const createEmptySpecConfigRow = (id: string, name = ''): SpecConfigRow => ({
     s_spec_code: '',
 });
 
+const createChannelDemoSpecRow = (
+    id: string,
+    name: string,
+    price: string,
+    marketPrice: string,
+    mark: string,
+    skuCode: string,
+    productCode: string,
+    barcode: string
+): SpecConfigRow => ({
+    ...createEmptySpecConfigRow(id, name),
+    s_spec_price: price,
+    s_spec_channel_price: price,
+    s_spec_market: marketPrice,
+    s_spec_barcode: barcode,
+    s_spec_mark: mark,
+    s_spec_sku_code: skuCode,
+    s_spec_code: productCode,
+    s_spec_inventory_mode: 'custom',
+    s_spec_initial_stock: '100',
+    s_spec_max_stock: '9999',
+    s_spec_warning_stock: '10',
+    s_spec_store_pack_fee: '1',
+    s_spec_store_pack_mark: '蛋糕盒',
+    s_spec_take_pack_fee: '2',
+    s_spec_take_pack_mark: '配送包装',
+});
+
 const deriveSpecSelectionMap = (specNames: string[]): SpecSelectionMap => {
     const nextMap: SpecSelectionMap = {};
     specNames.forEach(specName => {
@@ -790,14 +906,32 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     existingProductCount = 0,
     previewPreferenceKey = 'default-account',
     commonFieldConfigs = {},
+    channelEditableFieldIds = ['p_name'],
     onOpenCommonFieldSettings,
     groupedTagOptions: groupedTagOptionsProp,
     badgeOptions: badgeOptionsProp,
     onGroupedTagOptionsChange,
     onBadgeOptionsChange,
+    thirdPartyChannelAttributeIds = [],
+    formScope = 'store',
+    channelContext,
+    onProductSaved,
+    onOpenChannelCatalog,
 }) => {
     const defaultPreviewPreference: PreviewDisplayPreference = existingProductCount > 10 ? 'collapsed' : 'expanded';
     const isComboProduct = type === 'combo';
+    const isMasterForm = formScope === 'master';
+    const isChannelForm = formScope === 'channel';
+    const isUnifiedForm = formScope === 'unified';
+    const isPosChannelProduct = (isChannelForm || isUnifiedForm) && !!channelContext?.channelNames.some(name => (
+        name.toUpperCase().includes('POS')
+    ));
+    const channelRequiresMainImage = (isChannelForm || isUnifiedForm) && (
+        channelGroupIncludesMiniProgram(channelContext?.channelIds || [])
+        || !!channelContext?.channelNames.some(name => name.includes('小程序'))
+    );
+    const initialMasterProductName = String(initialProduct?.masterName || channelContext?.masterName || initialProduct?.name || '');
+    const [masterProductName, setMasterProductName] = useState(initialMasterProductName);
     const [dynamicFormData, setDynamicFormData] = useState<Record<string, any>>(() => initialProduct ? {
         p_name: initialProduct.name || '',
         p_front_cat: initialProduct.category ? [initialProduct.category] : [],
@@ -815,6 +949,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         p_applicable_people: initialProduct.applicablePeople || '1',
         p_deposit_required: !!initialProduct.depositRequired,
         p_unit: '',
+        s_price: isChannelForm || isUnifiedForm ? initialProduct.price || '' : '',
+        ...(initialProduct.formData || {}),
     } : {
         p_front_cat: [],
         p_back_cat: '',
@@ -883,6 +1019,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [showMethodPickerModal, setShowMethodPickerModal] = useState(false);
     const [showAddonPickerModal, setShowAddonPickerModal] = useState(false);
     const [showSpecPickerModal, setShowSpecPickerModal] = useState(false);
+    const [disabledChannelSpecValues, setDisabledChannelSpecValues] = useState<string[]>(['12寸']);
+    const [draftDisabledChannelSpecValues, setDraftDisabledChannelSpecValues] = useState<string[]>([]);
+    const [showChannelSpecValueModal, setShowChannelSpecValueModal] = useState(false);
+    const [pendingChannelSpecValueToggle, setPendingChannelSpecValueToggle] = useState<PendingChannelSpecValueToggle | null>(null);
     const [activeSpecGroupId, setActiveSpecGroupId] = useState<string>(SPEC_LIBRARY[0].id);
     const [selectedSpecValuesByGroup, setSelectedSpecValuesByGroup] = useState<SpecSelectionMap>(() => (
         mode === 'create' ? {} : deriveSpecSelectionMap(['8寸', '10寸', '12寸'])
@@ -971,6 +1111,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [specConfigRows, setSpecConfigRows] = useState<SpecConfigRow[]>(() => (
         mode === 'create'
             ? [createEmptySpecConfigRow('spec-1')]
+            : formScope === 'channel'
+                ? [
+                    createChannelDemoSpecRow('spec-1', '8寸 / 原味', '128', '148', '经典款', 'SKU-08-O', 'CAKE-08-O', '690000000801'),
+                    createChannelDemoSpecRow('spec-2', '8寸 / 巧克力', '138', '158', '巧克力款', 'SKU-08-C', 'CAKE-08-C', '690000000802'),
+                    createChannelDemoSpecRow('spec-3', '10寸 / 原味', '168', '188', '热销', 'SKU-10-O', 'CAKE-10-O', '690000000803'),
+                    createChannelDemoSpecRow('spec-4', '10寸 / 巧克力', '178', '198', '聚会款', 'SKU-10-C', 'CAKE-10-C', '690000000804'),
+                    createChannelDemoSpecRow('spec-5', '12寸 / 原味', '228', '258', '大份', 'SKU-12-O', 'CAKE-12-O', '690000000805'),
+                    createChannelDemoSpecRow('spec-6', '12寸 / 巧克力', '238', '268', '大份巧克力', 'SKU-12-C', 'CAKE-12-C', '690000000806'),
+                ]
             : [
                 { id: 'spec-1', s_spec_name: '8寸', s_spec_price: '128', s_spec_cost: '76', s_spec_market: '148', s_spec_barcode: '690000000801', s_spec_mark: '经典款', s_spec_sku_code: 'SKU-08', s_spec_alias: '经典八寸', s_spec_amount: '1.00', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '200', s_spec_max_stock: '9999', s_spec_auto_restock: true, s_spec_manage_plan_stock: true, s_spec_daily_plan_stock: '80', s_spec_warning_stock: '20', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'mini_take', 'pos'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '蛋糕盒', s_spec_take_pack_fee: '2', s_spec_take_pack_mark: '保温袋', s_spec_img: '已上传', s_spec_large_img: '已上传', s_spec_code: 'CAKE-08' },
                 { id: 'spec-2', s_spec_name: '10寸', s_spec_price: '168', s_spec_cost: '98', s_spec_market: '188', s_spec_barcode: '690000000802', s_spec_mark: '热销', s_spec_sku_code: 'SKU-10', s_spec_alias: '热销十寸', s_spec_amount: '1.50', s_spec_amount_unit: '克', s_spec_inventory_mode: 'custom', s_spec_initial_stock: '120', s_spec_max_stock: '9999', s_spec_auto_restock: false, s_spec_manage_plan_stock: false, s_spec_daily_plan_stock: '', s_spec_warning_stock: '15', s_spec_sale_status: 'on', s_spec_channels: ['mini_dine', 'meituan'], s_spec_store_pack_fee: '1', s_spec_store_pack_mark: '礼盒装', s_spec_take_pack_fee: '3', s_spec_take_pack_mark: '配送包装', s_spec_img: '', s_spec_large_img: '', s_spec_code: 'CAKE-10' },
@@ -1033,27 +1182,42 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const currentFieldConfigs = useMemo(() => {
         const rawConfigs = isComboProduct ? currentCategory.comboFields : currentCategory.standardFields;
-        if (!isComboProduct) return rawConfigs;
-
-        const sourceConfigs = rawConfigs.length > 0 ? rawConfigs : COMBO_FALLBACK_FIELDS;
+        const sourceConfigs = isComboProduct && rawConfigs.length === 0 ? COMBO_FALLBACK_FIELDS : rawConfigs;
         const configMap = new Map<string, CategoryFieldConfig>();
         sourceConfigs.forEach(config => {
-            if (config.id === 'a_addons') return;
+            if (isComboProduct && config.id === 'a_addons') return;
             configMap.set(config.id, config);
         });
-        COMBO_FALLBACK_FIELDS.forEach(config => {
-            if (!configMap.has(config.id)) {
-                configMap.set(config.id, config);
+        if (isComboProduct) {
+            COMBO_FALLBACK_FIELDS.forEach(config => {
+                if (!configMap.has(config.id)) {
+                    configMap.set(config.id, config);
+                }
+            });
+        }
+        const scopeFieldIds = isMasterForm
+            ? Array.from(MASTER_FIELD_IDS)
+            : isChannelForm
+            ? Array.from(CHANNEL_READONLY_FIELD_IDS)
+            : [];
+        scopeFieldIds.forEach(fieldId => {
+            if (!configMap.has(fieldId) && AVAILABLE_DYNAMIC_FIELDS.some(field => field.id === fieldId)) {
+                configMap.set(fieldId, { id: fieldId, isRequired: false, displayMode: 'visible' });
             }
         });
         return Array.from(configMap.values());
-    }, [currentCategory, isComboProduct]);
+    }, [currentCategory, isChannelForm, isComboProduct, isMasterForm]);
     const currentCategoryFieldIds = useMemo(() => currentFieldConfigs.map(field => field.id), [currentFieldConfigs]);
     const currentCategoryFieldIdSet = useMemo(() => new Set(currentCategoryFieldIds), [currentCategoryFieldIds]);
     const currentFieldConfigMap = useMemo(() => new Map(currentFieldConfigs.map(field => [field.id, field])), [currentFieldConfigs]);
     const commonFieldConfigKey = getCommonFieldConfigKey(type, currentCategory.id);
     const commonFieldConfigList = useMemo(() => (commonFieldConfigs[commonFieldConfigKey] || []).filter(item => currentCategoryFieldIdSet.has(item.id)), [commonFieldConfigKey, commonFieldConfigs, currentCategoryFieldIdSet]);
     const resolvedCommonFieldConfigList = useMemo(() => {
+        const scopeVisibleIds = isMasterForm
+            ? Array.from(MASTER_FIELD_IDS).filter(id => currentCategoryFieldIdSet.has(id))
+            : isChannelForm
+            ? Array.from(CHANNEL_READONLY_FIELD_IDS).filter(id => currentCategoryFieldIdSet.has(id))
+            : [];
         const requiredIds = currentFieldConfigs
             .filter(field => field.isRequired || AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === field.id)?.isRequired)
             .map(field => field.id);
@@ -1074,7 +1238,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     ...requiredIds.map(id => ({
                         ...(currentFieldConfigMap.get(id) || { id, isRequired: true }),
                         displayMode: 'visible' as const,
-                    }))
+                    })),
+                    ...scopeVisibleIds.map(id => ({
+                        ...(currentFieldConfigMap.get(id) || { id, isRequired: false }),
+                        displayMode: 'visible' as const,
+                    })),
                 ]
                     .map(item => [
                         item.id,
@@ -1089,6 +1257,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const fallbackVisibleIds = Array.from(new Set([
             ...currentCategoryFieldIds.slice(0, Math.min(8, currentCategoryFieldIds.length)),
             ...requiredIds,
+            ...scopeVisibleIds,
         ]));
         const fallbackVisibleIdSet = new Set(fallbackVisibleIds);
         const fallbackCollapsedIds = DEFAULT_COLLAPSED_FIELD_IDS.filter(id => (
@@ -1105,7 +1274,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 displayMode: 'collapsed' as const,
             })),
         ];
-    }, [commonFieldConfigList, currentCategoryFieldIdSet, currentCategoryFieldIds, currentFieldConfigMap, currentFieldConfigs]);
+    }, [commonFieldConfigList, currentCategoryFieldIdSet, currentCategoryFieldIds, currentFieldConfigMap, currentFieldConfigs, isChannelForm, isMasterForm]);
     const resolvedCommonFieldConfigMap = useMemo(() => new Map(resolvedCommonFieldConfigList.map(item => [item.id, item])), [resolvedCommonFieldConfigList]);
     const configuredCommonFieldIds = useMemo(
         () => resolvedCommonFieldConfigList.filter(item => (item.displayMode ?? 'visible') !== 'hidden').map(item => item.id),
@@ -1119,7 +1288,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         () => new Set(resolvedCommonFieldConfigList.filter(item => item.displayMode === 'collapsed').map(item => item.id)),
         [resolvedCommonFieldConfigList]
     );
-    const visibleFieldIds = useMemo(() => new Set(configuredCommonFieldIds), [configuredCommonFieldIds]);
+    const visibleFieldIds = useMemo(() => {
+        const fieldIds = new Set(configuredCommonFieldIds.filter(fieldId => {
+            if (isMasterForm) return MASTER_FIELD_IDS.has(fieldId);
+            if (isChannelForm) {
+                if (CHANNEL_HIDDEN_FIELD_IDS.has(fieldId)) return false;
+                if (CHANNEL_POS_ONLY_FIELD_IDS.has(fieldId) && !isPosChannelProduct) return false;
+            }
+            return true;
+        }));
+        if (channelRequiresMainImage) fieldIds.add('p_img');
+        return fieldIds;
+    }, [channelRequiresMainImage, configuredCommonFieldIds, isChannelForm, isMasterForm, isPosChannelProduct]);
     const moreFieldMappings = useMemo(() => ([
         ...COLLAPSIBLE_BASIC_FIELD_IDS.map(id => {
             const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === id);
@@ -1160,10 +1340,28 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         () => COLLAPSIBLE_BASIC_FIELD_IDS
             .map(id => {
                 const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === id);
-                return field && collapsedCommonFieldIdSet.has(id) ? { id, label: field.label } : null;
+                return field
+                    && collapsedCommonFieldIdSet.has(id)
+                    && (!isUnifiedForm || MASTER_FIELD_IDS.has(id))
+                    ? { id, label: field.label }
+                    : null;
             })
             .filter((item): item is { id: string; label: string } => !!item),
-        [collapsedCommonFieldIdSet]
+        [collapsedCommonFieldIdSet, isUnifiedForm]
+    );
+    const unifiedChannelBasicCollapsedFieldMappings = useMemo(
+        () => COLLAPSIBLE_BASIC_FIELD_IDS
+            .map(id => {
+                const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === id);
+                return field
+                    && isUnifiedForm
+                    && UNIFIED_CHANNEL_BASIC_FIELD_IDS.has(id)
+                    && collapsedCommonFieldIdSet.has(id)
+                    ? { id, label: field.label }
+                    : null;
+            })
+            .filter((item): item is { id: string; label: string } => !!item),
+        [collapsedCommonFieldIdSet, isUnifiedForm]
     );
     const displayCollapsedFieldMappings = useMemo(
         () => DISPLAY_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
@@ -1198,7 +1396,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const getFieldSection = (field: DynamicFieldConfig): SectionId => {
-        if (field.id === 'p_img') return 'display';
+        if (field.id === 'p_img') return isMasterForm || isUnifiedForm ? 'basic' : 'display';
+        if (isUnifiedForm && UNIFIED_CHANNEL_BASIC_FIELD_IDS.has(field.id)) return 'display';
         if (field.id === 'p_points_exchange_rule') return 'spec';
         if (field.module === 'base') return 'basic';
         if (field.module === 'display') return 'display';
@@ -1209,6 +1408,31 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const getFieldConfig = (fieldId: string) => currentFieldConfigMap.get(fieldId);
     const isFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId);
+    const isChannelFieldReadonly = (fieldId: string) => (
+        isChannelForm
+        && (
+            CHANNEL_READONLY_FIELD_IDS.has(fieldId)
+            || (
+                ['p_name', 'p_img'].includes(fieldId)
+                && !channelEditableFieldIds.includes(fieldId)
+            )
+        )
+    );
+    const isChannelSpecFieldReadonly = (fieldId: string) => (
+        isChannelForm
+        && fieldId === 's_spec_alias'
+    );
+    const isChildFieldAllowed = (fieldId: string, childId: string) => {
+        if (isMasterForm) {
+            if (fieldId === 's_specs') return MASTER_SPEC_CHILD_IDS.has(childId);
+            if (fieldId === 'm_methods') return MASTER_METHOD_CHILD_IDS.has(childId);
+            if (fieldId === 'a_addons') return MASTER_ADDON_CHILD_IDS.has(childId);
+        }
+        if (isChannelForm && fieldId === 's_specs') {
+            return !CHANNEL_SPEC_HIDDEN_CHILD_IDS.has(childId);
+        }
+        return true;
+    };
     const normalizeChildDisplayMode = (
         value: boolean | 'visible' | 'collapsed' | 'hidden' | undefined,
         isDefaultSelected: boolean
@@ -1234,6 +1458,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             resolvedCommonFieldConfigMap.get(fieldId)?.childRequiredConfigs || getFieldConfig(fieldId)?.childRequiredConfigs
         );
         return childTemplates.reduce<Record<string, 'visible' | 'hidden'>>((acc, child) => {
+            if (!isChildFieldAllowed(fieldId, child.id)) {
+                acc[child.id] = 'hidden';
+                return acc;
+            }
             const normalizedMode = normalizeChildDisplayMode(childConfigs?.[child.id], !!(child.isDefaultSelected || child.isSystem));
             acc[child.id] = child.isSystem || !!childRequiredConfigs?.[child.id] ? 'visible' : normalizedMode;
             return acc;
@@ -1262,7 +1490,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         's_spec_store_pack_mark',
         's_spec_take_pack_fee',
         's_spec_take_pack_mark',
-    ]), [currentFieldConfigMap, resolvedCommonFieldConfigMap]);
+    ]), [currentFieldConfigMap, isChannelForm, isMasterForm, resolvedCommonFieldConfigMap]);
     const methodChildDisplayModes = useMemo(() => getChildDisplayModes('m_methods', [
         'm_method_name',
         'm_method_sync',
@@ -1270,7 +1498,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         'm_method_code',
         'm_method_remark',
         'm_method_tip',
-    ]), [currentFieldConfigMap, resolvedCommonFieldConfigMap]);
+    ]), [currentFieldConfigMap, isChannelForm, isMasterForm, resolvedCommonFieldConfigMap]);
     const addonChildDisplayModes = useMemo(() => getChildDisplayModes('a_addons', [
         'a_rule_scope',
         'a_rule_unlimited',
@@ -1283,7 +1511,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         'a_addon_spec_price',
         'a_addon_status',
         'a_empty_tip',
-    ]), [currentFieldConfigMap, resolvedCommonFieldConfigMap]);
+    ]), [currentFieldConfigMap, isChannelForm, isMasterForm, resolvedCommonFieldConfigMap]);
     const specVisibleChildIds = useMemo(
         () => Object.entries(specChildDisplayModes).filter(([, mode]) => mode === 'visible').map(([id]) => id),
         [specChildDisplayModes]
@@ -1380,6 +1608,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             if (field.id === 'p_cat') return;
             if (['s_price', 's_pack_fee', 's_stock', 's_specs'].includes(field.id)) return;
             const required = config.isRequired || !!field.isRequired;
+            if (isUnifiedForm && field.id === 'p_name') {
+                if (required) {
+                    items.push({
+                        key: 'master-name',
+                        label: '主档商品名称',
+                        section: 'basic',
+                        filled: masterProductName.trim() !== '',
+                        type: 'required',
+                    });
+                }
+                return;
+            }
             if (required) {
                 items.push({
                     key: field.id,
@@ -1434,8 +1674,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             });
         }
 
+        if (channelRequiresMainImage && !items.some(item => item.key === 'p_img')) {
+            items.push({
+                key: 'p_img',
+                label: '商品主图',
+                section: 'display',
+                filled: String(dynamicFormData.p_img || '').trim() !== '',
+                type: 'required',
+            });
+        }
+
         return items;
-    }, [currentCategory.id, currentFieldConfigs, dynamicFormData, enabledSpecChildIds, hasRenderableSpecFields, isSpecPackFilled, isSpecPackRequired, isSpecPriceFilled, isSpecPriceRequired, isSpecStockFilled, isSpecStockRequired, visibleFieldIds, visibleSpecRows.length]);
+    }, [channelRequiresMainImage, currentCategory.id, currentFieldConfigs, dynamicFormData, enabledSpecChildIds, hasRenderableSpecFields, isSpecPackFilled, isSpecPackRequired, isSpecPriceFilled, isSpecPriceRequired, isSpecStockFilled, isSpecStockRequired, isUnifiedForm, masterProductName, visibleFieldIds, visibleSpecRows.length]);
 
     const requiredMissingItems = useMemo(
         () => validationItems.filter(item => item.type === 'required' && !item.filled),
@@ -1477,26 +1727,46 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         return { total, completed: requiredStatusItems.filter(item => item.filled).length };
     }, [requiredStatusItems]);
     const expandedBasicDynamicFields = useMemo(
-        () => AVAILABLE_DYNAMIC_FIELDS.filter(field => expandedBasicFields.includes(field.id)),
-        [expandedBasicFields]
+        () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
+            expandedBasicFields.includes(field.id)
+            && (!isUnifiedForm || MASTER_FIELD_IDS.has(field.id))
+        )),
+        [expandedBasicFields, isUnifiedForm]
     );
     const visibleBasicFields = useMemo(
         () => AVAILABLE_DYNAMIC_FIELDS.filter(field => (
             isCommonFieldEnabled(field.id)
             && field.module === 'base'
             && field.id !== 'p_img'
-            && field.id !== 'p_cat'
+            && (!isUnifiedForm || field.id !== 'p_name')
+            && (!isUnifiedForm || MASTER_FIELD_IDS.has(field.id))
+            && (field.id !== 'p_cat' || isChannelForm)
         )),
-        [isCommonFieldEnabled]
+        [isChannelForm, isCommonFieldEnabled, isUnifiedForm]
     );
+    const visibleUnifiedChannelBasicFields = useMemo(
+        () => isUnifiedForm
+            ? AVAILABLE_DYNAMIC_FIELDS.filter(field => (
+                field.module === 'base'
+                && UNIFIED_CHANNEL_BASIC_FIELD_IDS.has(field.id)
+                && visibleFieldIds.has(field.id)
+                && (
+                    commonFieldIdSet.has(field.id)
+                    || (collapsedCommonFieldIdSet.has(field.id) && expandedMoreFieldSet.has(field.id))
+                )
+            ))
+            : [],
+        [collapsedCommonFieldIdSet, commonFieldIdSet, expandedMoreFieldSet, isUnifiedForm, visibleFieldIds]
+    );
+    const showMasterMainImage = (isMasterForm || isUnifiedForm) && isFieldRendered('p_img');
     const hasMethodSection = useMemo(() => (
         isComboProduct
             ? hasSpecModuleEnabled || visibleFieldIds.has('c_groups') || hasMethodModuleEnabled
             : hasSpecModuleEnabled || hasMethodModuleEnabled || hasAddonModuleEnabled || collapsedAttrModuleMappings.length > 0
     ), [collapsedAttrModuleMappings.length, hasAddonModuleEnabled, hasMethodModuleEnabled, hasSpecModuleEnabled, isComboProduct, visibleFieldIds]);
     const hasDisplaySection = useMemo(() => (
-        [
-            'p_img',
+        visibleUnifiedChannelBasicFields.length > 0 || [
+            ...(isMasterForm ? [] : ['p_img']),
             'p_list_desc',
             'p_desc_tags',
             'p_order_tags',
@@ -1506,7 +1776,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             'p_detail_bottom_img',
             'p_video',
         ].some(fieldId => visibleFieldIds.has(fieldId))
-    ), [visibleFieldIds]);
+    ), [isMasterForm, visibleFieldIds, visibleUnifiedChannelBasicFields.length]);
     const hasSalesSection = useMemo(() => (
         [
             's_price',
@@ -1538,16 +1808,39 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         ))
     ), [visibleFieldIds]);
     const sectionVisibility = useMemo<Record<SectionId, boolean>>(() => ({
-        basic: visibleBasicFields.length > 0,
+        basic: visibleBasicFields.length > 0 || showMasterMainImage || isUnifiedForm,
+        third_party: thirdPartyChannelAttributeIds.length > 0,
         method: hasMethodSection,
         display: hasDisplaySection,
         spec: hasSalesSection,
         settings: hasOtherSection,
-    }), [hasDisplaySection, hasMethodSection, hasOtherSection, hasSalesSection, visibleBasicFields.length]);
+    }), [hasDisplaySection, hasMethodSection, hasOtherSection, hasSalesSection, isUnifiedForm, showMasterMainImage, thirdPartyChannelAttributeIds.length, visibleBasicFields.length]);
     const visibleSectionOrder = useMemo(
         () => SECTION_ORDER.filter(section => sectionVisibility[section]),
         [sectionVisibility]
     );
+    const getSectionLabel = (section: SectionId) => {
+        if (isMasterForm) {
+            if (section === 'basic') return '主档信息';
+            if (section === 'method') return '商品结构';
+            if (section === 'display') return '识别图片';
+            if (section === 'settings') return '补充资料';
+        }
+        if (isChannelForm) {
+            if (section === 'basic') return '渠道基础';
+            if (section === 'method') return '商品配置';
+            if (section === 'third_party') return '渠道专属属性';
+        }
+        if (isUnifiedForm) {
+            if (section === 'basic') return '主档基础资料';
+            if (section === 'method') return '主档商品结构';
+            if (section === 'display') return '渠道展示资料';
+            if (section === 'spec') return '渠道售卖资料';
+            if (section === 'settings') return '渠道补充资料';
+            if (section === 'third_party') return '渠道专属属性';
+        }
+        return SECTION_LABELS[section];
+    };
     const firstVisibleSection = visibleSectionOrder[0] || 'basic';
     const isWeightProduct = !!dynamicFormData.p_weight_flag;
     const isSingleSpecOnly = isWeightProduct || isBuffetTicketCategory;
@@ -1623,6 +1916,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     }, [comboGroupCards, isComboProduct]);
 
     const getFieldDescription = (field: DynamicFieldConfig) => {
+        if (field.id === 'p_name' && isChannelForm) {
+            return '仅修改当前渠道商品库的售卖名称，不会修改商品主档名称。';
+        }
+        if (field.id === 'p_front_cat' && isChannelForm) {
+            return '默认继承商品主档的前台分类；修改后仅对当前渠道商品库生效，不回写商品主档。';
+        }
         if (field.id === 'p_unit') {
             return isWeightProduct ? '称重商品的价格单位，单位设置建议与电子秤单位一致' : undefined;
         }
@@ -1630,6 +1929,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const getFieldDisplayLabel = (field: DynamicFieldConfig) => {
+        if (field.id === 'p_name' && isChannelForm) return isComboProduct ? '渠道套餐名称' : '渠道商品名称';
+        if (field.id === 'p_name' && isMasterForm) return isComboProduct ? '主档套餐名称' : '主档商品名称';
+        if (field.id === 'p_front_cat' && isChannelForm) return '前台分类';
         if (!isComboProduct) return field.label;
         if (field.id === 'p_name') return '套餐名称';
         if (field.id === 'p_alias') return '商品别名';
@@ -1693,20 +1995,31 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const renderDisplayMainImageField = ({ compact = false }: { compact?: boolean } = {}) => {
         const imageField = AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === 'p_img');
-        const imageRequired = currentFieldConfigMap.get('p_img')?.isRequired || imageField?.isRequired;
+        const imageRequired = channelRequiresMainImage || currentFieldConfigMap.get('p_img')?.isRequired || imageField?.isRequired;
+        const imageReadonly = channelRequiresMainImage ? false : isChannelFieldReadonly('p_img');
+        const channelImageRequirementHint = channelRequiresMainImage ? (
+            <div className={`text-xs font-medium ${saveAttempted && productImages.length === 0 ? 'text-[#E5484D]' : 'text-[#667085]'}`}>
+                {isUnifiedForm
+                    ? '当前商品适用范围包含小程序，商品主图为必填项；缺失时不可发布至小程序。'
+                    : '当前渠道商品库包含小程序渠道，商品主图为必填项；缺失时不可发布至小程序。'}
+            </div>
+        ) : null;
 
         const addProductImage = () => {
+            if (imageReadonly) return;
             if (productImages.length >= 10) return;
             syncProductImages([...productImages, buildMockProductImage(productImages.length)]);
             setActivePreviewField('p_img');
         };
 
         const removeProductImage = (index: number) => {
+            if (imageReadonly) return;
             const nextImages = productImages.filter((_, currentIndex) => currentIndex !== index);
             syncProductImages(nextImages);
         };
 
         const moveProductImage = (fromIndex: number, toIndex: number) => {
+            if (imageReadonly) return;
             if (fromIndex === toIndex) return;
             const nextImages = [...productImages];
             const [moved] = nextImages.splice(fromIndex, 1);
@@ -1719,7 +2032,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 {productImages.map((image, index) => (
                     <div
                         key={`${image}-${index}`}
-                        draggable
+                        draggable={!imageReadonly}
                         onDragStart={e => {
                             setDraggingProductImageIndex(index);
                             e.dataTransfer.effectAllowed = 'move';
@@ -1740,6 +2053,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     >
                         <button
                             type="button"
+                            disabled={imageReadonly}
                             onClick={() => {
                                 setActivePreviewField('p_img');
                                 syncProductImages(productImages.map((item, itemIndex) => itemIndex === index ? buildMockProductImage(index + 10) : item));
@@ -1753,6 +2067,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/45 px-2 py-2 opacity-0 transition-opacity group-hover:opacity-100">
                             <button
                                 type="button"
+                                disabled={imageReadonly}
                                 onClick={() => setActivePreviewField('p_img')}
                                 className="text-white/90 hover:text-white"
                             >
@@ -1760,6 +2075,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             </button>
                             <button
                                 type="button"
+                                disabled={imageReadonly}
                                 onClick={() => removeProductImage(index)}
                                 className="text-white/90 hover:text-white"
                             >
@@ -1768,7 +2084,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         </div>
                     </div>
                 ))}
-                {productImages.length < 10 && (
+                {productImages.length < 10 && !imageReadonly && (
                     <button
                         type="button"
                         onClick={addProductImage}
@@ -1787,8 +2103,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <span className="mr-1 text-[#FF4D4F]">{imageRequired ? '*' : ''}</span>
                         商品主图
                     </div>
-                    <div className="space-y-3">
+                    <div className={`space-y-3 ${imageReadonly ? 'opacity-65' : ''}`}>
                         {imageTiles}
+                        {channelImageRequirementHint}
+                        {imageReadonly && <div className="text-xs font-medium text-gray-400">由主档管理团队设为不可覆盖</div>}
                         <div className="text-xs leading-5 text-gray-400">
                             建议尺寸：1:1，单张大小不超过 300K，最多可上传 10 张；支持拖拽调整图片顺序。
                         </div>
@@ -1803,10 +2121,72 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <span className="text-[#FF4D4F]">{imageRequired ? '*' : ''}</span>
                     <span>商品主图</span>
                 </div>
-                {imageTiles}
+                <div className={imageReadonly ? 'opacity-65' : ''}>{imageTiles}</div>
+                {channelImageRequirementHint}
+                {imageReadonly && <div className="text-xs font-medium text-gray-400">由主档管理团队设为不可覆盖</div>}
                 <div className="text-xs leading-5 text-gray-400">
                     建议尺寸：1:1，单张大小不超过 300K，最多可上传 10 张；支持拖拽调整图片顺序。
                 </div>
+            </div>
+        );
+    };
+
+    const renderMasterMainImageField = () => {
+        const primaryImage = productImages[0];
+        const replacePrimaryImage = () => {
+            syncProductImages([buildMockProductImage(productImages.length + 20)]);
+            setActivePreviewField('p_img');
+        };
+
+        return (
+            <div id="field-p_img" className="col-span-1">
+                <FormRow
+                    label="商品主图"
+                    description="选填；作为渠道商品首次创建时的默认图片，渠道可按售卖需要调整。"
+                    descriptionPlacement="bottom"
+                >
+                    <div className="flex min-h-[82px] items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={replacePrimaryImage}
+                            className={`group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border transition-colors ${
+                                primaryImage
+                                    ? 'border-[#E5E7EB] bg-gradient-to-br from-[#F3F4F6] via-[#E5E7EB] to-[#D1D5DB]'
+                                    : 'border-dashed border-[#D9DDE7] bg-[#FAFAFA] text-[#667085] hover:border-[#00C06B] hover:text-[#00A35B]'
+                            }`}
+                        >
+                            {primaryImage ? (
+                                <>
+                                    <span className="text-xs font-bold text-[#667085]">商品主图</span>
+                                    <span className="absolute inset-x-0 bottom-0 bg-black/45 py-1 text-center text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+                                        更换
+                                    </span>
+                                </>
+                            ) : (
+                                <Plus size={22} />
+                            )}
+                        </button>
+                        <div className="min-w-0 space-y-1.5">
+                            <button
+                                type="button"
+                                onClick={replacePrimaryImage}
+                                className="text-sm font-semibold text-[#00A35B] hover:text-[#008F50]"
+                            >
+                                {primaryImage ? '更换图片' : '上传图片'}
+                            </button>
+                            {primaryImage && (
+                                <button
+                                    type="button"
+                                    onClick={() => syncProductImages([])}
+                                    className="ml-3 text-sm text-[#667085] hover:text-[#E5484D]"
+                                >
+                                    移除
+                                </button>
+                            )}
+                            <div className="text-xs leading-5 text-[#98A2B3]">建议 1:1，单张不超过 300K</div>
+                        </div>
+                    </div>
+                </FormRow>
             </div>
         );
     };
@@ -1819,6 +2199,45 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             return;
         }
         const nextSuccessMode = hasSavedProduct ? 'edit' : 'create';
+        const inheritedChannelFormData = isUnifiedForm
+            ? {
+                ...dynamicFormData,
+                p_name: masterProductName,
+                p_front_cat: Array.isArray(dynamicFormData.p_front_cat) && dynamicFormData.p_front_cat.length > 0
+                    ? dynamicFormData.p_front_cat
+                    : [currentCategory.name],
+                s_price: dynamicFormData.s_price || visibleSpecRows[0]?.s_spec_price || initialProduct?.price || '',
+                channel_inherit_mode: 'follow_master',
+                channel_inheritance: {
+                    name: 'follow_master',
+                    image: 'follow_master',
+                    structure: 'follow_master',
+                    price: 'follow_master',
+                },
+            }
+            : dynamicFormData;
+        onProductSaved?.({
+            id: initialProduct?.id,
+            name: String(
+                isUnifiedForm
+                    ? masterProductName
+                    : (dynamicFormData.p_name || initialProduct?.name || `${isComboProduct ? '套餐商品' : '商品'}${existingProductCount + 1}`)
+            ),
+            price: Number(
+                ((isMasterForm || isUnifiedForm) ? visibleSpecRows[0]?.s_spec_price : dynamicFormData.s_price)
+                || initialProduct?.price
+                || 0
+            ),
+            category: Array.isArray(dynamicFormData.p_front_cat) ? (dynamicFormData.p_front_cat[0] || category.name) : (dynamicFormData.p_front_cat || category.name),
+            image: String(
+                isChannelForm
+                    ? (dynamicFormData.p_img || '')
+                    : (dynamicFormData.p_img || initialProduct?.image || 'https://images.unsplash.com/photo-1547592180-85f173990554?w=200&h=200&fit=crop')
+            ),
+            skuCode: String(initialProduct?.skuCode || `${Date.now()}`.slice(-8)),
+            type,
+            formData: inheritedChannelFormData,
+        }, nextSuccessMode);
         setSuccessMode(nextSuccessMode);
         setHasSavedProduct(true);
         setPageView('success');
@@ -3315,6 +3734,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const activeParent = categoryTree.find(item => item.id === activeParentId) || categoryTree[0];
         const secondaryCreateLabel = `新增二级${fieldId === 'p_front_cat' ? '前台分类' : '后台分类'}`;
         const selectedValues = normalizeStringArrayValue(value);
+        const canCreateCategoryDefinition = !isChannelForm;
 
         return (
             <div className="relative" data-creatable-select-root="true">
@@ -3384,7 +3804,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         );
                                     })}
                                 </div>
-                                <div className="border-t border-gray-100 bg-[#FAFAFA] px-4 py-3">
+                                {canCreateCategoryDefinition && <div className="border-t border-gray-100 bg-[#FAFAFA] px-4 py-3">
                                     <button
                                         type="button"
                                         onClick={() => handleOpenCategoryCreate(fieldId, 1)}
@@ -3393,7 +3813,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <Plus size={14} className="mr-1.5" />
                                         新增一级{fieldId === 'p_front_cat' ? '前台分类' : '后台分类'}
                                     </button>
-                                </div>
+                                </div>}
                             </div>
                             <div className="flex min-h-[320px] flex-col">
                                 <div className="max-h-72 flex-1 overflow-y-auto p-2">
@@ -3419,11 +3839,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         );
                                     }) : (
                                         <div className="flex min-h-[180px] items-center justify-center px-6 text-center text-sm text-gray-400">
-                                            当前一级分类下暂无二级分类，可直接选择一级分类或新增二级分类。
+                                            {canCreateCategoryDefinition
+                                                ? '当前一级分类下暂无二级分类，可直接选择一级分类或新增二级分类。'
+                                                : '当前一级分类下暂无二级分类，可直接选择一级分类。分类定义请在商品主档维护。'}
                                         </div>
                                     )}
                                 </div>
-                                <div className="border-t border-gray-100 bg-[#FAFAFA] px-4 py-3">
+                                {canCreateCategoryDefinition && <div className="border-t border-gray-100 bg-[#FAFAFA] px-4 py-3">
                                     <button
                                         type="button"
                                         onClick={() => handleOpenCategoryCreate(fieldId, 2, activeParent)}
@@ -3432,10 +3854,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <Plus size={14} className="mr-1.5" />
                                         {secondaryCreateLabel}
                                     </button>
-                                </div>
+                                </div>}
                             </div>
                         </div>
-                        {renderQuickCreateOptionPopover({
+                        {canCreateCategoryDefinition && renderQuickCreateOptionPopover({
                             fieldId,
                             className: 'right-4 top-4',
                         })}
@@ -3882,6 +4304,52 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         setSpecConfigRows(prev => prev.map(item => item.id === rowId ? { ...item, [key]: value } : item));
     };
 
+    const channelSpecValues = useMemo(() => {
+        const valueMap = new Map<string, number>();
+        visibleSpecRows.forEach(row => {
+            row.s_spec_name.split(' / ').map(value => value.trim()).filter(Boolean).forEach(value => {
+                valueMap.set(value, (valueMap.get(value) || 0) + 1);
+            });
+        });
+        return Array.from(valueMap.entries()).map(([value, affectedSkuCount]) => ({ value, affectedSkuCount }));
+    }, [visibleSpecRows]);
+
+    const isChannelSkuEnabled = (row: SpecConfigRow) => (
+        row.s_spec_name.split(' / ').map(value => value.trim()).filter(Boolean)
+            .every(value => !disabledChannelSpecValues.includes(value))
+    );
+
+    const requestChannelSpecValueToggle = (value: string, affectedSkuCount: number) => {
+        setPendingChannelSpecValueToggle({
+            value,
+            affectedSkuCount,
+            nextDisabled: !draftDisabledChannelSpecValues.includes(value),
+        });
+    };
+
+    const confirmChannelSpecValueToggle = () => {
+        if (!pendingChannelSpecValueToggle) return;
+        setDraftDisabledChannelSpecValues(prev => pendingChannelSpecValueToggle.nextDisabled
+            ? Array.from(new Set([...prev, pendingChannelSpecValueToggle.value]))
+            : prev.filter(value => value !== pendingChannelSpecValueToggle.value));
+        setPendingChannelSpecValueToggle(null);
+    };
+
+    const openChannelSpecValueModal = () => {
+        setDraftDisabledChannelSpecValues(disabledChannelSpecValues);
+        setShowChannelSpecValueModal(true);
+    };
+
+    const closeChannelSpecValueModal = () => {
+        setPendingChannelSpecValueToggle(null);
+        setShowChannelSpecValueModal(false);
+    };
+
+    const saveChannelSpecValueSettings = () => {
+        setDisabledChannelSpecValues(draftDisabledChannelSpecValues);
+        setShowChannelSpecValueModal(false);
+    };
+
     const createSpecBulkDraft = (key: SpecBulkEditorKey): Record<string, string | boolean> => {
         switch (key) {
             case 'inventory_mode':
@@ -4098,7 +4566,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             </div>
         );
 
-        const showMainImage = isFieldRendered('p_img');
+        const showMainImage = !isUnifiedForm && isFieldRendered('p_img');
         const showListDesc = isFieldRendered('p_list_desc');
         const showDescTags = isFieldRendered('p_desc_tags');
         const showOrderTags = isFieldRendered('p_order_tags');
@@ -4605,11 +5073,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
                         {otherDynamicFields.map(field => {
                             const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                            const isInheritedReadonly = isChannelFieldReadonly(field.id);
                             return (
-                                <div key={field.id} id={`field-${field.id}`}>
+                                <div key={field.id} id={`field-${field.id}`} className="relative">
+                                    {isInheritedReadonly && (
+                                        <span className="absolute right-0 top-0 z-[1] text-[11px] font-medium text-gray-400">继承主档，不可修改</span>
+                                    )}
+                                    <fieldset disabled={isInheritedReadonly} className={isInheritedReadonly ? 'opacity-65' : ''}>
                                     <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
                                         {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
                                     </FormRow>
+                                    </fieldset>
                                 </div>
                             );
                         })}
@@ -4860,6 +5334,162 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const embedded = options.embedded ?? false;
         const panelTitle = options.title || '规格设置';
         const specCount = visibleSpecRows.length;
+        if (isChannelForm) {
+            return (
+                <div className={embedded ? 'space-y-4' : 'rounded-lg border border-gray-200 bg-white p-4 space-y-4'}>
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <div className="text-sm font-bold text-[#1F2129]">{panelTitle}</div>
+                            <div className="mt-1 text-xs leading-5 text-gray-400">
+                                规格结构和识别字段继承商品主档。渠道按规格值控制可售范围，并维护各 SKU 的销售价、市场价、库存和包装配置。
+                            </div>
+                        </div>
+                        <span className="shrink-0 rounded bg-[#F2F4F7] px-2 py-1 text-xs text-[#667085]">共 {channelSpecValues.length} 个规格值 · {specCount} 个 SKU</span>
+                    </div>
+
+                    <div>
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-bold text-[#1F2129]">SKU 销售配置</div>
+                                <div className="mt-1 text-xs text-gray-400">识别字段只读；销售、库存和包装字段可维护</div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-[#667085]">已禁用 {disabledChannelSpecValues.length} 个规格值</span>
+                                <button type="button" onClick={openChannelSpecValueModal} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-[#344054] hover:border-[#00B460] hover:text-[#008F4C]">配置规格值</button>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="min-w-[2200px] w-full border-collapse">
+                                <thead className="bg-[#F7F8FA]">
+                                    <tr className="text-left text-xs font-medium text-[#667085]">
+                                        <th className="sticky left-0 z-10 w-[190px] border-b border-r border-gray-200 bg-[#F7F8FA] px-3 py-3">规格组合</th>
+                                        <th className="w-[150px] border-b border-gray-200 px-3 py-3">渠道销售价</th>
+                                        <th className="w-[150px] border-b border-gray-200 px-3 py-3">市场价</th>
+                                        <th className="w-[150px] border-b border-gray-200 px-3 py-3">商品标识</th>
+                                        <th className="w-[170px] border-b border-gray-200 px-3 py-3">商品规格码</th>
+                                        <th className="w-[170px] border-b border-gray-200 px-3 py-3">商品编码</th>
+                                        <th className="w-[190px] border-b border-gray-200 px-3 py-3">商品条码</th>
+                                        <th className="w-[260px] border-b border-gray-200 px-3 py-3">库存管理</th>
+                                        <th className="w-[320px] border-b border-gray-200 px-3 py-3">包装费与包装标识</th>
+                                        <th className="w-[140px] border-b border-gray-200 px-3 py-3">可售结果</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleSpecRows.map(row => {
+                                        const enabled = isChannelSkuEnabled(row);
+                                        const disabledValues = row.s_spec_name.split(' / ').filter(value => disabledChannelSpecValues.includes(value));
+                                        return (
+                                            <tr key={row.id} className="text-[13px] text-[#1F2129]">
+                                                <td className="sticky left-0 z-[5] border-b border-r border-gray-100 bg-white px-3 py-3 font-medium shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]">{row.s_spec_name}</td>
+                                                <td className="border-b border-gray-100 px-3 py-3">
+                                                    <div className="relative w-[120px]">
+                                                        <input type="number" value={row.s_spec_channel_price ?? row.s_spec_price} onChange={event => updateSpecConfigRow(row.id, 's_spec_channel_price', event.target.value)} className="h-8 w-full rounded-md border border-gray-200 bg-white px-3 pr-7 outline-none focus:border-[#00C06B]" />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">元</span>
+                                                    </div>
+                                                </td>
+                                                <td className="border-b border-gray-100 px-3 py-3">
+                                                    <div className="relative w-[120px]">
+                                                        <input type="number" value={row.s_spec_market} onChange={event => updateSpecConfigRow(row.id, 's_spec_market', event.target.value)} className="h-8 w-full rounded-md border border-gray-200 bg-white px-3 pr-7 outline-none focus:border-[#00C06B]" />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">元</span>
+                                                    </div>
+                                                </td>
+                                                {[row.s_spec_mark, row.s_spec_sku_code, row.s_spec_code, row.s_spec_barcode].map((value, index) => (
+                                                    <td key={`${row.id}-identity-${index}`} className="border-b border-gray-100 px-3 py-3 text-[#667085]">
+                                                        <div className="max-w-[170px] truncate" title={value || '--'}>{value || '--'}</div>
+                                                        <div className="mt-1 text-[11px] text-gray-400">主档只读</div>
+                                                    </td>
+                                                ))}
+                                                <td className="border-b border-gray-100 px-3 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <select value={row.s_spec_inventory_mode} onChange={event => updateSpecConfigRow(row.id, 's_spec_inventory_mode', event.target.value as InventoryMode)} className="h-8 w-[104px] rounded-md border border-gray-200 bg-white px-2 outline-none focus:border-[#00C06B]">
+                                                            <option value="unlimited">不限库存</option>
+                                                            <option value="custom">管理库存</option>
+                                                        </select>
+                                                        {row.s_spec_inventory_mode === 'custom' && <input type="number" value={row.s_spec_initial_stock} onChange={event => updateSpecConfigRow(row.id, 's_spec_initial_stock', event.target.value)} className="h-8 w-[76px] rounded-md border border-gray-200 px-2 text-center outline-none focus:border-[#00C06B]" aria-label={`${row.s_spec_name}库存值`} />}
+                                                        {row.s_spec_inventory_mode === 'custom' && <span className="text-xs text-gray-400">件</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="border-b border-gray-100 px-3 py-3">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="flex items-center gap-1"><span className="w-10 text-xs text-gray-400">外带</span><input type="number" value={row.s_spec_store_pack_fee} onChange={event => updateSpecConfigRow(row.id, 's_spec_store_pack_fee', event.target.value)} className="h-8 w-16 rounded-md border border-gray-200 px-2 text-center outline-none focus:border-[#00C06B]" /><input value={row.s_spec_store_pack_mark} onChange={event => updateSpecConfigRow(row.id, 's_spec_store_pack_mark', event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 px-2 outline-none focus:border-[#00C06B]" placeholder="包装标识" /></div>
+                                                        <div className="flex items-center gap-1"><span className="w-10 text-xs text-gray-400">外卖</span><input type="number" value={row.s_spec_take_pack_fee} onChange={event => updateSpecConfigRow(row.id, 's_spec_take_pack_fee', event.target.value)} className="h-8 w-16 rounded-md border border-gray-200 px-2 text-center outline-none focus:border-[#00C06B]" /><input value={row.s_spec_take_pack_mark} onChange={event => updateSpecConfigRow(row.id, 's_spec_take_pack_mark', event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 px-2 outline-none focus:border-[#00C06B]" placeholder="包装标识" /></div>
+                                                    </div>
+                                                </td>
+                                                <td className="border-b border-gray-100 px-3 py-3">
+                                                    <span className={enabled ? 'text-[#008F4C]' : 'text-gray-400'}>{enabled ? '可售' : '不可售'}</span>
+                                                    {!enabled && <div className="mt-1 text-[11px] text-gray-400">因 {disabledValues.join('、')} 禁用</div>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div className="text-xs leading-5 text-gray-400">主档新增的规格值默认在当前商品库禁用；主档停用规格值时，渠道侧同步不可售且不可重新开启。</div>
+
+                    {showChannelSpecValueModal && (
+                        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6">
+                            <div className="flex max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                                <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                                    <div>
+                                        <div className="text-base font-bold text-[#1F2129]">配置规格值可售范围</div>
+                                        <div className="mt-1 text-xs leading-5 text-gray-400">关闭规格值后，所有包含该规格值的 SKU 均不可在当前商品库售卖。</div>
+                                    </div>
+                                    <button type="button" onClick={closeChannelSpecValueModal} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100" aria-label="关闭规格值配置">×</button>
+                                </div>
+                                <div className="overflow-y-auto px-6 py-5">
+                                    <div className="mb-3 flex items-center justify-between text-xs text-[#667085]">
+                                        <span>共 {channelSpecValues.length} 个规格值</span>
+                                        <span>本次已禁用 {draftDisabledChannelSpecValues.length} 个</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        {channelSpecValues.map(item => {
+                                            const disabled = draftDisabledChannelSpecValues.includes(item.value);
+                                            return (
+                                                <div key={item.value} className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-sm font-medium text-[#1F2129]">{item.value}</div>
+                                                        <div className="mt-1 text-xs text-gray-400">关联 {item.affectedSkuCount} 个 SKU</div>
+                                                    </div>
+                                                    <div className="flex shrink-0 items-center gap-2">
+                                                        <Switch active={!disabled} onClick={() => requestChannelSpecValueToggle(item.value, item.affectedSkuCount)} />
+                                                        <span className={disabled ? 'text-xs text-gray-400' : 'text-xs text-[#008F4C]'}>{disabled ? '已禁用' : '可售'}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                                    <button type="button" onClick={closeChannelSpecValueModal} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-[#475467]">取消</button>
+                                    <button type="button" onClick={saveChannelSpecValueSettings} className="rounded-lg bg-[#00B460] px-4 py-2 text-sm font-medium text-white">保存配置</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {pendingChannelSpecValueToggle && (
+                        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-6">
+                            <div className="w-full max-w-[480px] rounded-xl bg-white shadow-2xl">
+                                <div className="border-b border-gray-100 px-6 py-5 text-base font-bold text-[#1F2129]">
+                                    {pendingChannelSpecValueToggle.nextDisabled ? '确认禁用规格值' : '确认启用规格值'}
+                                </div>
+                                <div className="px-6 py-5 text-sm leading-6 text-[#475467]">
+                                    {pendingChannelSpecValueToggle.nextDisabled
+                                        ? `禁用“${pendingChannelSpecValueToggle.value}”后，当前商品库中包含该规格值的 ${pendingChannelSpecValueToggle.affectedSkuCount} 个 SKU 将全部不可售。`
+                                        : `启用“${pendingChannelSpecValueToggle.value}”后，包含该规格值且未被其他规格值禁用的 SKU 将恢复可售。`}
+                                </div>
+                                <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                                    <button type="button" onClick={() => setPendingChannelSpecValueToggle(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-[#475467]">取消</button>
+                                    <button type="button" onClick={confirmChannelSpecValueToggle} className={pendingChannelSpecValueToggle.nextDisabled ? 'rounded-lg bg-[#D92D20] px-4 py-2 text-sm font-medium text-white' : 'rounded-lg bg-[#00B460] px-4 py-2 text-sm font-medium text-white'}>{pendingChannelSpecValueToggle.nextDisabled ? '确认禁用' : '确认启用'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
         const priceFilledCount = visibleSpecRows.filter(row => String(row.s_spec_price || '').trim() !== '').length;
         const identityFilledCount = visibleSpecRows.filter(row => [row.s_spec_mark, row.s_spec_sku_code, row.s_spec_barcode].some(value => String(value || '').trim() !== '')).length;
         const customInventoryCount = visibleSpecRows.filter(row => row.s_spec_inventory_mode === 'custom').length;
@@ -5138,6 +5768,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     onFocus={() => setActivePreviewField('s_specs')}
                     type="number"
                     value={String(row[key] ?? '')}
+                    disabled={isChannelSpecFieldReadonly(String(key))}
                     onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
                     className="q-form-input h-10 pr-8 text-center font-bold text-[#1F2129]"
                     placeholder={placeholder}
@@ -5158,6 +5789,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         onFocus={() => setActivePreviewField('s_specs')}
                         value={value}
                         maxLength={options.maxLength}
+                        disabled={isChannelSpecFieldReadonly(String(key))}
                         onChange={e => updateSpecConfigRow(row.id, key, e.target.value)}
                         className={`q-form-input h-10 ${options.className || ''}`.trim()}
                         placeholder={options.placeholder || '请输入'}
@@ -5185,13 +5817,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             ].map(option => (
                                 <label
                                     key={option.key}
-                                    className={`flex items-center gap-2 text-sm ${isSingleSpecOnly && option.key === 'multi' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                    className={`flex items-center gap-2 text-sm ${(isChannelForm || (isSingleSpecOnly && option.key === 'multi')) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                                 >
                                     <input
                                         type="radio"
                                         checked={specDisplayMode === option.key}
-                                        disabled={isSingleSpecOnly && option.key === 'multi'}
+                                        disabled={isChannelForm || (isWeightProduct && option.key === 'multi')}
                                         onChange={() => {
+                                            if (isChannelForm) return;
                                             if (option.key === 'single' && specConfigRows.length === 0) {
                                                 setSpecConfigRows([createEmptySpecConfigRow('spec-1')]);
                                                 setAttrDefaultSelections(prev => ({ ...prev, spec: '标准规格' }));
@@ -5215,7 +5848,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        {specDisplayMode === 'multi' && specConfigRows.length > 0 && (
+                        {!isChannelForm && specDisplayMode === 'multi' && specConfigRows.length > 0 && (
                             <button
                                 type="button"
                                 onClick={openSpecPicker}
@@ -5224,10 +5857,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 调整规格
                             </button>
                         )}
-                        {isSingleSpecOnly && (
-                            <div className="text-xs font-bold text-amber-600">
-                                {isBuffetTicketCategory ? '自助餐门票仅支持统一规格' : '称重商品不支持多规格，已自动切换为统一规格'}
-                            </div>
+                        {isChannelForm ? (
+                            <div className="text-xs text-gray-400">规格身份与结构继承商品主档，不可在渠道商品库修改</div>
+                        ) : isSingleSpecOnly && (
+                            <div className="text-xs font-bold text-amber-600">{isBuffetTicketCategory ? '自助餐门票仅支持统一规格' : '称重商品不支持多规格，已自动切换为统一规格'}</div>
                         )}
                     </div>
                 </div>
@@ -5236,14 +5869,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="rounded-2xl border border-dashed border-gray-200 bg-[#FAFAFA] px-6 py-10 text-center">
                             <div className="text-base font-bold text-[#1F2129]">暂未选择多规格</div>
                             <div className="mt-2 text-sm text-gray-400">先选择需要添加的规格值，再按规格分别配置销售价、库存和包装费信息。</div>
-                            <button
+                            {!isChannelForm ? <button
                                 type="button"
                                 onClick={openSpecPicker}
                                 className="mt-5 inline-flex items-center rounded-xl bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
                             >
                                 <Plus size={16} className="mr-2" />
                                 选择规格
-                            </button>
+                            </button> : <div className="mt-3 text-sm text-gray-400">请先在商品主档中维护规格结构</div>}
                         </div>
                     </div>
                 ) : (
@@ -5273,10 +5906,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 className="overflow-x-auto"
                             >
                                 <div className="min-w-fit px-5">
-                                    <table className="min-w-[3560px] w-full border-collapse">
+                                    <table className={isMasterForm ? 'min-w-[1040px] w-full table-fixed border-collapse' : 'min-w-[3560px] w-full border-collapse'}>
                                 <thead>
                                     <tr className="text-left text-xs font-bold text-gray-500">
-                                        <th className="sticky left-0 z-[2] min-w-[180px] border-b border-r border-gray-200 bg-[#F7F8FA] bg-clip-padding px-4 py-3 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]" rowSpan={2}>
+                                        <th className={`${isMasterForm ? 'w-[176px]' : 'min-w-[180px]'} sticky left-0 z-30 border-b border-r border-gray-200 bg-[#F7F8FA] bg-clip-padding px-4 py-3 shadow-[8px_0_12px_-10px_rgba(15,23,42,0.18)]`} rowSpan={2}>
                                             规格名称
                                         </th>
                                         {priceColSpan > 0 && <th
@@ -5503,11 +6136,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const comboDisplayPrice = dynamicFormData.combo_display_price || '';
         const showComboSpecGroup = hasSpecModuleEnabled;
         const showComboInfoGroup = isFieldEnabled('c_groups');
-        const optionalComboFields = [
-            { id: 'combo_packaging', label: '包装费配置' },
-            { id: 'combo_display_price', label: '展示价格' },
-            { id: 'combo_price_style', label: '随心配价格样式' },
-        ];
+        const optionalComboFields = isChannelForm
+            ? [
+                { id: 'combo_packaging', label: '包装费配置' },
+                { id: 'combo_display_price', label: '展示价格' },
+                { id: 'combo_price_style', label: '随心配价格样式' },
+            ]
+            : [];
         const comboButtons = [
             { key: 'fixed' as const, label: '添加固定搭配', desc: '添加套餐固定商品明细' },
             { key: 'optional' as const, label: '添加可选分组', desc: '配置套餐可选商品分组' },
@@ -5712,28 +6347,32 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
                 {showComboSpecGroup && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
-                        <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐计价类型</div>
+                        <div className="pt-2 text-sm font-bold text-[#1F2129]">{isMasterForm ? '规格结构' : '套餐计价类型'}</div>
                         <div className="space-y-4">
-                            {[
-                                { key: 'markup', label: '销售加价', desc: '套餐基础价格作为基本费用，总价根据随心配商品加价波动', badge: '推荐' },
-                                { key: 'total', label: '合并计价', desc: '套餐内所有商品独立收费，总价根据用户选择商品合并计算' },
-                            ].map(option => (
-                                <label key={option.key} className="flex items-start gap-3 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        checked={comboPriceType === option.key}
-                                        onChange={() => setDynamicFormData(prev => ({ ...prev, combo_price_type: option.key }))}
-                                        className="mt-1 h-4 w-4 border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
-                                    />
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
-                                            <span>{option.label}</span>
-                                            {option.badge ? <span className="rounded-full bg-[#FEE2E2] px-1.5 py-0.5 text-[10px] text-[#DC2626]">{option.badge}</span> : null}
-                                        </div>
-                                        <div className="mt-1 text-xs text-gray-400">{option.desc}</div>
-                                    </div>
-                                </label>
-                            ))}
+                            {!isMasterForm && (
+                                <div className="space-y-4">
+                                    {[
+                                        { key: 'markup', label: '销售加价', desc: '套餐基础价格作为基本费用，总价根据随心配商品加价波动', badge: '推荐' },
+                                        { key: 'total', label: '合并计价', desc: '套餐内所有商品独立收费，总价根据用户选择商品合并计算' },
+                                    ].map(option => (
+                                        <label key={option.key} className="flex items-start gap-3 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                checked={comboPriceType === option.key}
+                                                onChange={() => setDynamicFormData(prev => ({ ...prev, combo_price_type: option.key }))}
+                                                className="mt-1 h-4 w-4 border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                            />
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
+                                                    <span>{option.label}</span>
+                                                    {option.badge ? <span className="rounded-full bg-[#FEE2E2] px-1.5 py-0.5 text-[10px] text-[#DC2626]">{option.badge}</span> : null}
+                                                </div>
+                                                <div className="mt-1 text-xs text-gray-400">{option.desc}</div>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                             {renderSpecConfigTable({ embedded: true, title: '规格设置' })}
                         </div>
                     </div>
@@ -5843,14 +6482,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     </div>
                 )}
 
-                {(specDisplayMode === 'multi' || methodConfigRows.length > 0) && (
+                {!isMasterForm && (specDisplayMode === 'multi' || methodConfigRows.length > 0) && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">属性排序</div>
                         <div>{renderAttributeSortPanel()}</div>
                     </div>
                 )}
 
-                {expandedComboAdvancedFields.includes('combo_packaging') && (
+                {isChannelForm && expandedComboAdvancedFields.includes('combo_packaging') && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">包装费配置</div>
                         <div className="space-y-4">
@@ -5879,7 +6518,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     </div>
                 )}
 
-                {expandedComboAdvancedFields.includes('combo_display_price') && (
+                {isChannelForm && expandedComboAdvancedFields.includes('combo_display_price') && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">展示价格</div>
                         <div className="max-w-[220px]">
@@ -5897,7 +6536,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     </div>
                 )}
 
-                {expandedComboAdvancedFields.includes('combo_price_style') && (
+                {isChannelForm && expandedComboAdvancedFields.includes('combo_price_style') && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">随心配价格样式</div>
                         <div className="flex flex-wrap gap-x-8 gap-y-3">
@@ -6611,14 +7250,21 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">做法</div>
                         <div className="space-y-4">
-                            <button
-                                type="button"
-                                onClick={openMethodPicker}
-                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                            >
-                                <Plus size={16} className="mr-2" />
-                                选择做法
-                            </button>
+                            {isChannelForm && (
+                                <div className="text-xs leading-5 text-gray-400">
+                                    做法及做法值继承商品主档，渠道不可新增、删除或修改，仅可控制是否在当前渠道启用。
+                                </div>
+                            )}
+                            {!isChannelForm && (
+                                <button
+                                    type="button"
+                                    onClick={openMethodPicker}
+                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                >
+                                    <Plus size={16} className="mr-2" />
+                                    选择做法
+                                </button>
+                            )}
                             {selectedMethodCount > 0 && (
                                 <div className="rounded-2xl border border-gray-200 overflow-hidden">
                                     <table className="w-full border-collapse table-fixed">
@@ -6626,12 +7272,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             <tr className="text-left text-xs font-bold text-gray-500">
                                                 <th className="w-[100px] px-3 py-3 border-b border-gray-200">做法</th>
                                                 {showMethodName && <th className="w-[90px] px-3 py-3 border-b border-gray-200">做法值</th>}
-                                                {showMethodSync && <th className="w-[76px] px-3 py-3 border-b border-gray-200">同步</th>}
-                                                {showMethodMarkup && <th className="w-[96px] px-3 py-3 border-b border-gray-200">价格</th>}
-                                                {showMethodCode && <th className="w-[100px] px-3 py-3 border-b border-gray-200">标识码</th>}
-                                                {showMethodRemark && <th className="w-[100px] px-3 py-3 border-b border-gray-200">备注</th>}
-                                                {showMethodTip && <th className="w-[110px] px-3 py-3 border-b border-gray-200">温馨提示</th>}
-                                                <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
+                                                {showMethodSync && <th className="w-[118px] px-3 py-3 border-b border-gray-200">{isChannelForm ? '渠道状态' : '同步'}</th>}
+                                                {!isChannelForm && showMethodMarkup && <th className="w-[96px] px-3 py-3 border-b border-gray-200">价格</th>}
+                                                {!isChannelForm && showMethodCode && <th className="w-[100px] px-3 py-3 border-b border-gray-200">标识码</th>}
+                                                {!isChannelForm && showMethodRemark && <th className="w-[100px] px-3 py-3 border-b border-gray-200">备注</th>}
+                                                {!isChannelForm && showMethodTip && <th className="w-[110px] px-3 py-3 border-b border-gray-200">温馨提示</th>}
+                                                {!isChannelForm && <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -6646,9 +7292,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                         )}
                                                         {showMethodName && <td className="px-3 py-3 border-b border-gray-100">{row.m_method_name}</td>}
                                                         {showMethodSync && <td className="px-3 py-3 border-b border-gray-100">
-                                                            <Switch active={row.m_method_sync} onClick={() => updateMethodRow(row.id, 'm_method_sync', !row.m_method_sync)} />
+                                                            <div className="flex items-center gap-2">
+                                                                <Switch active={row.m_method_sync} onClick={() => updateMethodRow(row.id, 'm_method_sync', !row.m_method_sync)} />
+                                                                {isChannelForm && (
+                                                                    <span className={row.m_method_sync ? 'text-[#008F4C]' : 'text-gray-400'}>
+                                                                        {row.m_method_sync ? '已启用' : '已禁用'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </td>}
-                                                        {showMethodMarkup && <td className="px-3 py-3 border-b border-gray-100">
+                                                        {!isChannelForm && showMethodMarkup && <td className="px-3 py-3 border-b border-gray-100">
                                                             <div className="relative">
                                                                 <input
                                                                     value={row.m_method_markup}
@@ -6658,32 +7311,42 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">元</span>
                                                             </div>
                                                         </td>}
-                                                        {showMethodCode && <td className="px-3 py-3 border-b border-gray-100">
+                                                        {!isChannelForm && showMethodCode && <td className="px-3 py-3 border-b border-gray-100">
                                                             <input
                                                                 value={row.m_method_code}
+                                                                disabled={isChannelForm}
                                                                 onChange={e => updateMethodRow(row.id, 'm_method_code', e.target.value)}
-                                                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                                                                className={`w-full rounded-lg border px-2.5 py-2 text-[13px] outline-none ${
+                                                                    isChannelForm
+                                                                        ? 'cursor-not-allowed border-gray-200 bg-[#F5F6F7] text-gray-400'
+                                                                        : 'border-gray-200 text-[#1F2129] focus:border-[#00C06B]'
+                                                                }`}
                                                             />
                                                         </td>}
-                                                        {showMethodRemark && <td className="px-3 py-3 border-b border-gray-100">
+                                                        {!isChannelForm && showMethodRemark && <td className="px-3 py-3 border-b border-gray-100">
                                                             <input
                                                                 value={row.m_method_remark}
+                                                                disabled={isChannelForm}
                                                                 onChange={e => updateMethodRow(row.id, 'm_method_remark', e.target.value)}
-                                                                className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                                                                className={`w-full rounded-lg border px-2.5 py-2 text-[13px] outline-none ${
+                                                                    isChannelForm
+                                                                        ? 'cursor-not-allowed border-gray-200 bg-[#F5F6F7] text-gray-400'
+                                                                        : 'border-gray-200 text-[#1F2129] focus:border-[#00C06B]'
+                                                                }`}
                                                             />
                                                         </td>}
-                                                        {showMethodTip && <td className="px-3 py-3 border-b border-gray-100">
+                                                        {!isChannelForm && showMethodTip && <td className="px-3 py-3 border-b border-gray-100">
                                                             <input
                                                                 value={row.m_method_tip}
                                                                 onChange={e => updateMethodRow(row.id, 'm_method_tip', e.target.value)}
                                                                 className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] text-[#1F2129] outline-none focus:border-[#00C06B]"
                                                             />
                                                         </td>}
-                                                        <td className="px-3 py-3 border-b border-gray-100">
+                                                        {!isChannelForm && <td className="px-3 py-3 border-b border-gray-100">
                                                             <button type="button" onClick={() => removeMethodRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">
                                                                 删除
                                                             </button>
-                                                        </td>
+                                                        </td>}
                                                     </tr>
                                                 ));
                                             })}
@@ -6699,17 +7362,24 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">加料</div>
                         <div className="space-y-4">
-                            <button
-                                type="button"
-                                onClick={openAddonPicker}
-                                className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                            >
-                                <Plus size={16} className="mr-2" />
-                                选择加料
-                            </button>
+                            {isChannelForm && (
+                                <div className="text-xs leading-5 text-gray-400">
+                                    加料分组与加料商品继承商品主档，渠道不可新增、删除或修改，仅可控制是否在当前渠道启用。
+                                </div>
+                            )}
+                            {!isChannelForm && (
+                                <button
+                                    type="button"
+                                    onClick={openAddonPicker}
+                                    className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
+                                >
+                                    <Plus size={16} className="mr-2" />
+                                    选择加料
+                                </button>
+                            )}
                             {selectedAddonCount > 0 && (
                                 <>
-                                    {(showAddonRuleScope || showAddonRuleUnlimited || showAddonRuleLimit || showAddonRuleRequired) && (
+                                    {!isChannelForm && (showAddonRuleScope || showAddonRuleUnlimited || showAddonRuleLimit || showAddonRuleRequired) && (
                                         <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
                                             {showAddonRuleScope && (
                                                 <div className="flex flex-wrap items-center gap-4">
@@ -6802,7 +7472,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             );
                                         })}
                                     </div>
-                                    {showAddonEmptyTip && (
+                                    {!isChannelForm && showAddonEmptyTip && (
                                     <div className="space-y-3">
                                         <div className="flex items-center gap-3">
                                             <span className="text-sm text-[#1F2129]">加料未点提示:</span>
@@ -6825,7 +7495,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                                 {renderSectionCollapsedEntry(collapsedAttrModuleMappings)}
 
-                {showAttrSort && (specDisplayMode === 'multi' || selectedMethodCount > 0 || (!isComboProduct && selectedAddonCount > 0)) && (
+                {!isChannelForm && showAttrSort && (specDisplayMode === 'multi' || selectedMethodCount > 0 || (!isComboProduct && selectedAddonCount > 0)) && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">属性排序</div>
                         <div>{renderAttributeSortPanel()}</div>
@@ -6860,7 +7530,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="border-r border-gray-100 p-4 overflow-y-auto">
                             <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
                                 <span>规格</span>
-                                <button type="button" className="text-[#00A35B]">新增规格</button>
+                                <button type="button" disabled title="请先在“分类与属性”中维护规格" className="cursor-not-allowed text-gray-400">新增规格</button>
                             </div>
                             <div className="space-y-1.5">
                                 {SPEC_LIBRARY.map(group => (
@@ -6880,7 +7550,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="border-r border-gray-100 p-4 overflow-y-auto">
                             <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
                                 <span>规格值</span>
-                                <button type="button" className="text-[#00A35B]">新增规格值</button>
+                                <button type="button" disabled title="请先在“分类与属性”中维护规格值" className="cursor-not-allowed text-gray-400">新增规格值</button>
                             </div>
                             {isComboProduct && (
                                 <div className="mb-3 rounded-xl bg-[#FFF7ED] px-3 py-2 text-xs leading-5 text-[#C2410C]">
@@ -6991,7 +7661,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
                 <div className="w-full max-w-[1020px] h-[660px] rounded-[24px] bg-white shadow-2xl overflow-hidden flex flex-col">
                     <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
-                        <div className="text-xl font-black text-[#1F2129]">选择做法</div>
+                        <div>
+                            <div className="text-xl font-black text-[#1F2129]">{isChannelForm ? '从商品主档选择做法' : '选择做法'}</div>
+                            {isChannelForm && <div className="mt-1 text-xs text-gray-400">仅展示当前商品主档已关联的做法；渠道只能管理启用子集和售卖配置。</div>}
+                        </div>
                         <button type="button" onClick={() => setShowMethodPickerModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200">
                             <ChevronDown size={18} className="rotate-45" />
                         </button>
@@ -7000,7 +7673,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="border-r border-gray-100 p-4 overflow-y-auto">
                             <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
                                 <span>做法</span>
-                                <button type="button" className="text-[#00A35B]">新增做法</button>
+                                {!isChannelForm && <button type="button" disabled title="请先在“分类与属性”中维护做法" className="cursor-not-allowed text-gray-400">新增做法</button>}
                             </div>
                             <div className="space-y-1.5">
                                 {METHOD_LIBRARY.map(group => (
@@ -7020,7 +7693,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="border-r border-gray-100 p-4 overflow-y-auto">
                             <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
                                 <span>做法值</span>
-                                <button type="button" className="text-[#00A35B]">新增做法值</button>
+                                {!isChannelForm && <button type="button" disabled title="请先在“分类与属性”中维护做法值" className="cursor-not-allowed text-gray-400">新增做法值</button>}
                             </div>
                             <div className="space-y-3">
                                 <label className="flex items-center gap-3 text-sm font-medium text-[#1F2129]">
@@ -7093,7 +7766,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
                 <div className="w-full max-w-[1020px] h-[660px] rounded-[24px] bg-white shadow-2xl overflow-hidden flex flex-col">
                     <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
-                        <div className="text-xl font-black text-[#1F2129]">添加加料商品</div>
+                        <div>
+                            <div className="text-xl font-black text-[#1F2129]">{isChannelForm ? '从商品主档选择加料' : '添加加料商品'}</div>
+                            {isChannelForm && <div className="mt-1 text-xs text-gray-400">仅展示当前商品主档已关联的加料；渠道只能管理启用子集和售卖配置。</div>}
+                        </div>
                         <button type="button" onClick={() => setShowAddonPickerModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200">
                             <ChevronDown size={18} className="rotate-45" />
                         </button>
@@ -7102,7 +7778,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="border-r border-gray-100 p-4 overflow-y-auto">
                             <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
                                 <span>加料组</span>
-                                <button type="button" className="text-[#00A35B]">新增加料组</button>
+                                {!isChannelForm && <button type="button" disabled title="请先在“配方与营养”中维护加料组" className="cursor-not-allowed text-gray-400">新增加料组</button>}
                             </div>
                             <div className="space-y-1.5">
                                 {ADDON_LIBRARY.map(group => (
@@ -7122,7 +7798,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="border-r border-gray-100 p-4 overflow-y-auto">
                             <div className="mb-3 flex items-center justify-between text-sm font-bold text-gray-500">
                                 <span>加料商品</span>
-                                <button type="button" className="text-[#00A35B]">新增加料商品</button>
+                                {!isChannelForm && <button type="button" disabled title="请先在“分类与属性”中维护加料商品" className="cursor-not-allowed text-gray-400">新增加料商品</button>}
                             </div>
                             <div className="space-y-3">
                                 <label className="flex items-center gap-3 text-sm font-medium text-[#1F2129]">
@@ -7331,7 +8007,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     </div>
                     <div className="flex justify-end gap-3">
                         <button type="button" onClick={() => setPageView('success')} className="px-5 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-bold">返回</button>
-                        <button type="button" className="px-5 py-2 rounded-xl bg-[#00C06B] text-white text-sm font-bold">继续处理</button>
+                        <button type="button" onClick={() => setPageView('success')} className="px-5 py-2 rounded-xl bg-[#00C06B] text-white text-sm font-bold">继续处理</button>
                     </div>
                 </div>
             );
@@ -7789,7 +8465,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     ))}
                                 </select>
                                 <div className="flex gap-3">
-                                    <button type="button" className="rounded-xl bg-[#00C06B] px-5 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">查询</button>
+                                    <span className="inline-flex items-center px-3 text-xs text-gray-400">筛选条件实时生效</span>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -7916,7 +8592,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             <div className="text-base font-black text-[#1F2129]">选择商品</div>
                                             <div className="mt-1 text-xs text-gray-400">选择本次需要同步到门店的商品，当前商品默认已加入。</div>
                                         </div>
-                                        <button type="button" className="inline-flex items-center rounded-xl border border-[#00C06B] bg-white px-4 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F8FFFB] transition-colors">
+                                        <button type="button" disabled title="批量商品选择器尚未接入当前原型" className="inline-flex cursor-not-allowed items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-400">
                                             <Plus size={16} className="mr-2" />
                                             添加商品
                                         </button>
@@ -8066,7 +8742,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         </select>
                     </div>
                     <div className="flex items-end gap-3">
-                        <button type="button" className="rounded-xl bg-[#00C06B] px-5 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">筛选</button>
+                        <span className="inline-flex items-center pb-2 text-xs text-gray-400">筛选条件实时生效</span>
                         <button
                             type="button"
                             onClick={() => {
@@ -8114,8 +8790,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     <td className="px-5 py-4 border-b border-gray-100 text-sm text-gray-500">{record.createdAt}</td>
                                     <td className="px-5 py-4 border-b border-gray-100 text-sm">
                                         <div className="flex gap-4 font-bold text-[#00A35B]">
-                                            <button type="button">查看详情</button>
-                                            <button type="button">执行结果</button>
+                                            <button type="button" disabled title="任务详情接口尚未接入当前原型" className="cursor-not-allowed text-gray-400">查看详情</button>
+                                            <button type="button" disabled title="任务结果接口尚未接入当前原型" className="cursor-not-allowed text-gray-400">执行结果</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -8247,26 +8923,34 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             type="button"
                             aria-label="返回上一页"
                             onClick={pageView === 'form' ? onClose : () => setPageView('template')}
-                            className="mr-4 p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors"
+                            className="mr-3 -ml-2 rounded-md p-2 hover:bg-gray-100 transition-colors"
                         >
                             <ArrowLeft size={20} className="text-gray-600"/>
                         </button>
                     )}
                     <div className="min-w-0">
                         <div className="flex items-center gap-3">
-                            <h3 className="truncate text-[18px] font-semibold text-[#1F2129]">
-                                {pageView === 'form' && (hasSavedProduct ? `编辑${isComboProduct ? '套餐商品' : '商品'}资料` : `填写${isComboProduct ? '套餐商品' : '商品'}资料`)}
+                            <h3 className="truncate text-[18px] font-bold text-[#1F2129]">
+                                {pageView === 'form' && (
+                                    isChannelForm
+                                        ? `编辑渠道${isComboProduct ? '套餐商品' : '商品'}`
+                                        : isUnifiedForm
+                                            ? `${hasSavedProduct ? '编辑' : '新建'}${isComboProduct ? '套餐商品' : '商品'}（主档 + 渠道商品）`
+                                        : isMasterForm
+                                            ? `${hasSavedProduct ? '编辑' : '新建'}商品主档`
+                                            : (hasSavedProduct ? `编辑${isComboProduct ? '套餐商品' : '商品'}资料` : `填写${isComboProduct ? '套餐商品' : '商品'}资料`)
+                                )}
                                 {pageView === 'success' && (successMode === 'edit' ? `${isComboProduct ? '套餐商品' : '商品'}编辑成功` : `${isComboProduct ? '套餐商品' : '商品'}创建成功`)}
                                 {pageView === 'sync' && '创建同步任务'}
                                 {pageView === 'template' && (successMode === 'edit' ? '更新模板商品' : '加入模板')}
                                 {pageView === 'detail' && '商品详情'}
                                 {pageView === 'templateHistory' && '模板批量操作历史'}
                             </h3>
-                            {pageView === 'form' && (
+                            {pageView === 'form' && !isChannelForm && (
                                 <button
                                     type="button"
                                     onClick={() => setShowCategoryPickerModal(true)}
-                                    className="inline-flex items-center rounded-full border border-[#B7E7CB] bg-[#EAF9F1] px-3 py-1 font-medium text-[#00A35B]"
+                                    className="inline-flex items-center rounded-md border border-[#B7E7CB] bg-[#EAF9F1] px-3 py-1 font-medium text-[#00A35B]"
                                 >
                                     商品类目：{currentCategory.name}
                                 </button>
@@ -8285,9 +8969,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             <button onClick={onClose} className="px-5 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm">
                                 取消
                             </button>
-                            <button onClick={handleSaveDraft} className="px-5 py-2 border border-gray-200 bg-white text-gray-600 font-bold rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                                保存为草稿
-                            </button>
+                            {!isChannelForm && (
+                                <button onClick={handleSaveDraft} className="px-5 py-2 border border-gray-200 bg-white text-gray-600 font-bold rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                                    保存为草稿
+                                </button>
+                            )}
                             <button onClick={handleSave} className="px-5 py-2 bg-[#1F2129] text-white font-bold rounded-lg shadow-lg hover:bg-black transition-all active:scale-95 text-sm flex items-center">
                                 <Check size={16} className="mr-2"/> {hasSavedProduct ? '保存修改' : '保存'}
                             </button>
@@ -8297,13 +8983,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             </div>
 
             <div className="relative flex-1 flex overflow-hidden min-w-0">
-                {pageView === 'form' && isPreviewPanelOpen && (
+                {pageView === 'form' && !isMasterForm && isPreviewPanelOpen && (
                     <div className="w-[300px] bg-white border-r border-[#E8E8E8] shrink-0 flex flex-col">
                         {renderPreviewPanel()}
                     </div>
                 )}
 
-                {pageView === 'form' && (
+                {pageView === 'form' && !isMasterForm && (
                     <button
                         type="button"
                         onClick={togglePreviewPanel}
@@ -8328,45 +9014,65 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className={`w-full min-w-0 mx-auto pt-3 pb-12 ${compactFormMode ? 'max-w-[1480px] space-y-1.5' : 'max-w-[1240px] space-y-2'}`}>
                         {pageView === 'success' ? (
                             <div className="space-y-5">
-                                <div className="rounded-[28px] border border-[#D7F0E1] bg-white p-8 shadow-sm">
+                                <div className="rounded-lg border border-[#D7F0E1] bg-white p-6">
                                     <div className="w-full">
-                                        <div className="inline-flex items-center rounded-full border border-[#C9EFD8] bg-[#F2FCF6] px-3 py-1.5 text-sm font-bold text-[#00A35B]">
+                                        <div className="inline-flex items-center rounded-md border border-[#C9EFD8] bg-[#F2FCF6] px-3 py-1.5 text-sm font-bold text-[#00A35B]">
                                             <CheckCircle2 size={16} className="mr-2" />
                                             {successMode === 'edit' ? '编辑成功' : '创建成功'}
                                         </div>
-          <div className="mt-4 text-[20px] font-semibold leading-none text-[#1F2129]">{successMode === 'edit' ? '商品已更新完成' : '商品已创建完成'}</div>
-                                        <div className="mt-3 text-sm text-gray-500">
-                                            {successMode === 'edit'
-                                                ? '商品修改已保存成功，你可以直接下发门店，也可以先更新模板商品，统一维护模板下的门店商品差异。'
-                                                : '商品创建完成后，你可以直接下发门店，也可以先加入商品模板，统一维护同一商品在不同门店的属性差异。'}
+                                        <div className="mt-4 text-[20px] font-bold text-[#1F2129]">
+                                            {isChannelForm
+                                                ? '渠道商品资料已保存'
+                                                : isUnifiedForm
+                                                    ? (successMode === 'edit' ? '商品已更新' : '商品已创建')
+                                                    : successMode === 'edit'
+                                                        ? '商品主档已更新'
+                                                        : '商品主档已创建'}
                                         </div>
-                                        <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSuccessAction('sync')}
-                                                className="rounded-[24px] border border-[#BBF7D0] bg-[#F7FFF9] p-5 text-left hover:border-[#00C06B] hover:bg-[#F0FDF4] transition-colors"
-                                            >
+                                         <div className="mt-3 text-sm text-gray-500">
+                                             {isChannelForm
+                                                 ? `已保存至${channelContext?.catalogName || '渠道商品库'}，可继续加入模板或发布至门店渠道。`
+                                                 : isUnifiedForm
+                                                 ? `主档资料与渠道商品资料已一次保存，并已加入${channelContext?.catalogName || '当前渠道商品库'}；当前尚未发布。`
+                                                 : successMode === 'edit'
+                                                 ? '商品主档修改已保存。渠道商品仍保留自己的销售属性，可进入渠道商品库确认继承变化后再发布。'
+                                                 : '商品主档已创建，系统已自动在品牌默认商品库生成对应渠道商品。渠道商品当前未发布，可继续维护销售属性和适用渠道。'}
+                                         </div>
+                                         {successMode === 'create' && isMasterForm && (
+                                             <div className="mt-5 flex items-start border border-[#C9EFD8] bg-[#F2FCF6] px-4 py-3">
+                                                 <CheckCircle2 size={17} className="mr-2 mt-0.5 shrink-0 text-[#00A35B]" />
+                                                 <div><div className="text-sm font-black text-[#087443]">已自动加入品牌默认商品库</div><div className="mt-1 text-xs leading-5 text-[#4D7C62]">自动加入不等于发布或上架；名称、图片、售价、适用渠道及平台专属属性需在渠道商品库确认。</div></div>
+                                             </div>
+                                         )}
+                                         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                             <button
+                                                 type="button"
+                                                onClick={() => (isUnifiedForm || successMode === 'edit')
+                                                    ? handleSuccessAction('sync')
+                                                    : onOpenChannelCatalog?.()}
+                                                 className="rounded-lg border border-[#BBF7D0] bg-[#F7FFF9] p-5 text-left hover:border-[#00C06B] hover:bg-[#F0FDF4] transition-colors"
+                                             >
                                                 <div className="flex items-center justify-between gap-4">
                                                     <div className="inline-flex items-center rounded-full bg-[#00C06B] px-3 py-1 text-xs font-black text-white">推荐</div>
                                                     <Send size={18} className="text-[#00A35B]" />
                                                 </div>
-                                                <div className="mt-4 text-lg font-black text-[#1F2129]">{successMode === 'edit' ? '下发更新到门店' : '直接下发到门店'}</div>
-                                                <div className="mt-1.5 text-sm text-gray-500">{successMode === 'edit' ? '适合已修改完成，需要尽快同步门店售卖信息的场景。' : '适合商品信息已确认，需要尽快在门店生效。'}</div>
-                                                <div className="mt-4 inline-flex items-center rounded-xl bg-[#00C06B] px-4 py-2 text-sm font-bold text-white">
-                                                    {successMode === 'edit' ? '立即下发更新' : '立即下发到门店'}
+                                                 <div className="mt-4 text-base font-bold text-[#1F2129]">{isChannelForm || isUnifiedForm || successMode === 'edit' ? '下发更新到门店' : '维护渠道销售属性'}</div>
+                                                 <div className="mt-1.5 text-sm text-gray-500">{isChannelForm || isUnifiedForm || successMode === 'edit' ? '确认本次商品改动后，创建发布任务并同步至适用门店渠道。' : '进入品牌默认商品库，确认渠道名称、售价、图片、适用渠道和平台属性。'}</div>
+                                                 <div className="mt-4 inline-flex items-center rounded-md bg-[#00C06B] px-4 py-2 text-sm font-bold text-white">
+                                                     {isUnifiedForm || successMode === 'edit' ? '立即下发更新' : '进入渠道商品库'}
                                                     <ArrowRight size={16} className="ml-2" />
                                                 </div>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => handleSuccessAction('template')}
-                                                className="rounded-[24px] border border-gray-200 bg-[#FAFAFA] p-5 text-left hover:border-[#00C06B] hover:bg-white transition-colors"
+                                                className="rounded-lg border border-gray-200 bg-[#FAFAFA] p-5 text-left hover:border-[#00C06B] hover:bg-white transition-colors"
                                             >
                                                 <div className="flex items-center justify-between gap-4">
                                                     <div className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-black text-gray-500 border border-gray-200">备选方式</div>
                                                     <ClipboardList size={18} className="text-[#00A35B]" />
                                                 </div>
-                                                <div className="mt-4 text-lg font-black text-[#1F2129]">{successMode === 'edit' ? '更新模板商品' : '加入商品模板'}</div>
+                                                <div className="mt-4 text-base font-bold text-[#1F2129]">{successMode === 'edit' ? '更新模板商品' : '加入商品模板'}</div>
                                                 <div className="mt-1.5 text-sm text-gray-500">{successMode === 'edit' ? '适合通过模板管理门店商品，且此次改动需要更新模板商品。' : '适合同一商品在不同门店做差异化配置，可基于模板统一维护门店属性。'}</div>
                                                 <div className="mt-4 inline-flex items-center text-sm font-bold text-[#00A35B]">
                                                     {successMode === 'edit' ? '选择模板并更新' : '选择模板并加入'}
@@ -8383,13 +9089,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             继续创建
                                         </button>
                                     )}
-                                    <button type="button" onClick={() => setPageView('form')} className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:bg-[#F8FFFB] transition-colors">
+                                    <button type="button" onClick={() => setPageView('form')} className="flex items-center justify-center rounded-md border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:bg-[#F8FFFB] transition-colors">
                                         <ClipboardList size={16} className="mr-2 text-[#00A35B]" />
                                         继续编辑
                                     </button>
-                                    <button type="button" onClick={onClose} className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:bg-[#F8FFFB] transition-colors">
+                                    <button type="button" onClick={onClose} className="flex items-center justify-center rounded-md border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:bg-[#F8FFFB] transition-colors">
                                         <ArrowLeft size={16} className="mr-2 text-[#00A35B]" />
-                                        返回商品列表
+                                        {isChannelForm || isUnifiedForm ? '返回渠道商品库' : '返回商品主档'}
                                     </button>
                                 </div>
                             </div>
@@ -8399,8 +9105,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             renderTemplateHistoryPage()
                         ) : (
                         <>
-                        <div ref={stickyToolbarRef} className="sticky top-0 z-10 -mx-1 px-1 pb-2 bg-[#FAFAFA]">
-                            <div className="rounded-[24px] border border-gray-200 bg-white shadow-sm overflow-hidden">
+                        {!isMasterForm && (
+                        <div ref={stickyToolbarRef} className="sticky top-0 z-10 pb-2 bg-[#F5F6FA]">
+                            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
                                 <div className="px-4 pt-2.5 pb-1.5 border-b border-gray-100">
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
@@ -8415,7 +9122,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                             : 'border-transparent text-gray-400 hover:text-[#1F2129]'
                                                     }`}
                                                 >
-                                                    <span>{SECTION_LABELS[section]}</span>
+                                                    <span>{getSectionLabel(section)}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -8423,7 +9130,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             <button
                                                 type="button"
                                                 onClick={() => onOpenCommonFieldSettings?.(type, currentCategory.id)}
-                                                className="inline-flex items-center rounded-xl border border-[#B7E7CB] bg-[#F7FFF9] px-3.5 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
+                                                 className="inline-flex items-center rounded-lg border border-[#B7E7CB] bg-[#F7FFF9] px-3.5 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
                                             >
                                                 <Settings size={14} className="mr-2" />
                                                 常用字段设置
@@ -8431,6 +9138,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                     </div>
                                 </div>
+                                {!isChannelForm && (
                                 <div className="px-4 py-2 bg-[#FCFCFD]">
                                     <div className="flex flex-wrap items-center gap-2 min-w-0">
                                         <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
@@ -8487,16 +9195,39 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                     </div>
                                 </div>
+                                )}
                             </div>
                         </div>
+                        )}
                         {/* Basic Section */}
                         {sectionVisibility.basic && (
-                            <div id="basic" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-1.5' : 'p-4 xl:p-5 space-y-2'}`}>
-                                <SectionHeader title="基础信息" icon={<FileText size={20}/>} meta={renderSectionMeta('basic')} />
+                            <div id="basic" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-1.5' : 'p-4 xl:p-5 space-y-2'}`}>
+                                <SectionHeader title={getSectionLabel('basic')} icon={<FileText size={20}/>} meta={formScope === 'store' ? renderSectionMeta('basic') : undefined} />
+                                {isUnifiedForm && (
+                                    <div id="field-master-name" className="col-span-full mb-2 max-w-[760px]">
+                                            <label className="mb-2 block text-sm font-bold text-[#1D2129]"><span className="mr-1 text-[#E5484D]">*</span>{isComboProduct ? '套餐名称' : '商品名称'}</label>
+                                            <div className="relative">
+                                                <input
+                                                    id="required-field-master-name"
+                                                    className="q-form-input pr-14"
+                                                    value={masterProductName}
+                                                    maxLength={70}
+                                                    placeholder={`请输入${isComboProduct ? '套餐' : '商品'}名称`}
+                                                    onChange={event => {
+                                                        const nextName = event.target.value;
+                                                        setMasterProductName(nextName);
+                                                        setDynamicFormData(prev => ({ ...prev, p_name: nextName }));
+                                                    }}
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{masterProductName.length}/70</span>
+                                            </div>
+                                    </div>
+                                )}
                                 <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
                                     {visibleBasicFields.map(field => {
                                         const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
                                         const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
+                                        const isInheritedReadonly = isChannelFieldReadonly(field.id);
                                         return (
                                             <div
                                                 id={`field-${field.id}`}
@@ -8506,31 +9237,43 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                         ? 'col-span-full'
                                                         : 'col-span-1'
                                                 }
-                                            >
-                                                <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                    >
+                                                <div className="relative" onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                    {isInheritedReadonly && (
+                                                        <span className="absolute right-0 top-0 z-[1] text-[11px] font-medium text-gray-400">继承主档，不可修改</span>
+                                                    )}
+                                                    <fieldset disabled={isInheritedReadonly} className={isInheritedReadonly ? 'opacity-65' : ''}>
                                                     <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
                                                         {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
                                                     </FormRow>
+                                                    </fieldset>
                                                 </div>
                                             </div>
                                         );
                                     })}
+                                    {showMasterMainImage && renderMasterMainImageField()}
                                 </div>
                                 {expandedBasicDynamicFields.length > 0 && (
                                     <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
                                         {expandedBasicDynamicFields.map(field => {
                                             const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
                                             const isFullWidth = ['p_display_type', 'p_remark'].includes(field.id) || field.type === 'rich_text';
+                                            const isInheritedReadonly = isChannelFieldReadonly(field.id);
                                             return (
                                                 <div
                                                     id={`field-${field.id}`}
                                                     key={field.id}
                                                     className={isFullWidth ? 'col-span-full' : 'col-span-1'}
                                                 >
-                                                    <div onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                    <div className="relative" onClick={() => setActivePreviewField((field.id === 'p_name' ? 'p_name' : 'default') as PreviewField)}>
+                                                        {isInheritedReadonly && (
+                                                            <span className="absolute right-0 top-0 z-[1] text-[11px] font-medium text-gray-400">继承主档，不可修改</span>
+                                                        )}
+                                                        <fieldset disabled={isInheritedReadonly} className={isInheritedReadonly ? 'opacity-65' : ''}>
                                                         <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
                                                             {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
                                                         </FormRow>
+                                                        </fieldset>
                                                     </div>
                                                 </div>
                                             );
@@ -8544,8 +9287,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <>
                         {/* Product Attr Section */}
                         {sectionVisibility.method && (
-                            <div id="method" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title="商品属性" icon={<ChefHat size={20}/>} meta={renderSectionMeta('method')} />
+                            <div id="method" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title={getSectionLabel('method')} icon={<ChefHat size={20}/>} meta={formScope === 'store' ? renderSectionMeta('method') : undefined} />
                                 {isComboProduct ? (
                                     <div id="field-s_specs">
                                         {renderComboProductPanel()}
@@ -8558,17 +9301,41 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                         {/* Display Section */}
                         {sectionVisibility.display && (
-                            <div id="display" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title="展示设置" icon={<Tags size={20}/>} meta={renderSectionMeta('display')} />
+                            <div id="display" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title={getSectionLabel('display')} icon={<Tags size={20}/>} meta={formScope === 'store' ? renderSectionMeta('display') : undefined} />
+                                {isUnifiedForm && visibleUnifiedChannelBasicFields.length > 0 && (
+                                    <div className="rounded-lg border border-[#DDE5EC] bg-[#FAFCFD] p-4">
+                                        <div className="mb-3">
+                                            <div className="text-sm font-bold text-[#1F2129]">渠道基础属性</div>
+                                            <div className="mt-1 text-xs leading-5 text-[#667085]">这些信息只影响当前渠道商品库，可在创建时直接设置。</div>
+                                        </div>
+                                        <div className={`grid ${compactFormMode ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-1' : 'grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-1.5'}`}>
+                                            {visibleUnifiedChannelBasicFields.map(field => {
+                                                const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
+                                                const isFullWidth = field.id === 'p_display_type';
+                                                return (
+                                                    <div id={`field-${field.id}`} key={`unified-channel-${field.id}`} className={isFullWidth ? 'col-span-full' : 'col-span-1'}>
+                                                        <FormRow label={getFieldDisplayLabel(field)} required={isRequired} description={getFieldDescription(field)} descriptionPlacement="bottom">
+                                                            {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
+                                                        </FormRow>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 {renderDisplaySettingsSection()}
-                                {renderSectionCollapsedEntry(displayCollapsedFieldMappings)}
+                                {renderSectionCollapsedEntry([
+                                    ...unifiedChannelBasicCollapsedFieldMappings,
+                                    ...displayCollapsedFieldMappings,
+                                ])}
                             </div>
                         )}
 
                         {/* Sales Section */}
                         {sectionVisibility.spec && (
-                            <div id="spec" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title="销售属性" icon={<Scale size={20}/>} meta={renderSectionMeta('spec')} />
+                            <div id="spec" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title={getSectionLabel('spec')} icon={<Scale size={20}/>} meta={formScope === 'store' ? renderSectionMeta('spec') : undefined} />
                                 {renderSalesAttributePanel()}
                                 <div className={`grid ${compactFormMode ? 'grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-2' : 'grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5'}`}>
                                     {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
@@ -8610,10 +9377,20 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                         {/* Others Section */}
                         {sectionVisibility.settings && (
-                            <div id="settings" className={`scroll-mt-[190px] bg-white rounded-2xl border border-gray-200 shadow-sm min-w-0 overflow-hidden ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title="其他属性" icon={<Settings size={20}/>} meta={renderSectionMeta('settings')} />
+                            <div id="settings" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 min-w-0 overflow-hidden ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
+                                <SectionHeader title={getSectionLabel('settings')} icon={<Settings size={20}/>} meta={formScope === 'store' ? renderSectionMeta('settings') : undefined} />
                                 {renderOthersAttributePanel()}
                                 {renderSectionCollapsedEntry(otherCollapsedFieldMappings)}
+                            </div>
+                        )}
+
+                        {thirdPartyChannelAttributeIds.length > 0 && (
+                            <div id="third_party" className="scroll-mt-[190px] bg-white rounded-lg border border-gray-200 p-4 xl:p-5">
+                                <WebThirdPartyChannelFields
+                                    channelIds={thirdPartyChannelAttributeIds}
+                                    location={isChannelForm || isUnifiedForm ? 'channel' : 'master'}
+                                    title={isChannelForm || isUnifiedForm ? '渠道专属属性' : '三方渠道发布属性'}
+                                />
                             </div>
                         )}
                         </>
@@ -8634,7 +9411,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             {renderSpecPickerModal()}
             {renderMethodPickerModal()}
             {renderAddonPickerModal()}
-            <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }`}</style>
+            <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; } .q-form-input:disabled, .q-form-select:disabled, fieldset:disabled .q-form-input, fieldset:disabled .q-form-select { cursor: not-allowed; border-color: #E5E7EB; color: #6B7280; background-color: #F5F6F7; }`}</style>
         </div>
     );
 }

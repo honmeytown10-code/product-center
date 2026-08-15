@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, Plus, Search, ChevronRight, CheckSquare, Square, CircleDot } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Plus, Search, ChevronRight, CheckSquare, Square, CircleDot, Upload, X } from 'lucide-react';
 import type { RequiredPolicyRecord } from './WebRequiredProductPolicyList';
 
 type StoreNode = {
@@ -29,6 +29,8 @@ const STORE_NODES: StoreNode[] = [
   { id: 'store-5', name: '一级06', code: '101587' },
 ];
 
+const REQUIRED_PRODUCTS = ['方案商品111', '招牌珍珠奶茶', '手打柠檬茶', '杨枝甘露', '精品拿铁', '超值双人套餐'];
+
 export const WebRequiredProductPolicyEditor: React.FC<{
   mode: 'create' | 'edit';
   policy?: RequiredPolicyRecord | null;
@@ -36,6 +38,11 @@ export const WebRequiredProductPolicyEditor: React.FC<{
 }> = ({ mode, policy, onBack }) => {
   const [policyName, setPolicyName] = useState(policy?.name || '');
   const [storeKeyword, setStoreKeyword] = useState('');
+  const [storeType, setStoreType] = useState('all');
+  const [productSelectorOpen, setProductSelectorOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [removeRowId, setRemoveRowId] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
   const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(new Set(
     (policy?.stores || ['范先生的门店']).map((storeName, index) => {
       const matched = STORE_NODES.find(item => item.name === storeName);
@@ -48,11 +55,12 @@ export const WebRequiredProductPolicyEditor: React.FC<{
 
   const visibleStores = useMemo(() => {
     const normalizedKeyword = storeKeyword.trim().toLowerCase();
-    if (!normalizedKeyword) return STORE_NODES;
-    return STORE_NODES.filter(item =>
+    const typedStores = storeType === 'all' ? STORE_NODES : STORE_NODES.filter((_, index) => storeType === '直营店' ? index % 2 === 0 : index % 2 === 1);
+    if (!normalizedKeyword) return typedStores;
+    return typedStores.filter(item =>
       [item.name, item.code].join(' ').toLowerCase().includes(normalizedKeyword)
     );
-  }, [storeKeyword]);
+  }, [storeKeyword, storeType]);
 
   const selectedStores = STORE_NODES.filter(item => selectedStoreIds.has(item.id));
 
@@ -69,18 +77,30 @@ export const WebRequiredProductPolicyEditor: React.FC<{
     setRequiredRows(prev => prev.map(row => (row.id === rowId ? updater(row) : row)));
   };
 
-  const addRequiredItem = () => {
+  const addRequiredItem = (name: string) => {
+    if (requiredRows.some(item => item.name === name)) return setMessage(`“${name}”已在必选设置中`);
     setRequiredRows(prev => [
       ...prev,
       {
         id: `item-${prev.length + 1}`,
-        name: `方案商品${prev.length + 111}`,
+        name,
         dineInEnabled: true,
         takeawayEnabled: false,
         dineInCount: 1,
         takeawayCount: 1,
       },
     ]);
+    setProductSelectorOpen(false);
+    setMessage('');
+  };
+
+  const savePolicy = () => {
+    if (!policyName.trim()) return setMessage('请输入方案名称');
+    if (!requiredRows.length) return setMessage('请至少选择一个必选商品');
+    if (requiredRows.some(row => !row.dineInEnabled && !row.takeawayEnabled)) return setMessage('每个必选商品至少选择堂食或外卖一种必选类型');
+    if (!selectedStores.length) return setMessage('请至少选择一家适用门店');
+    setMessage(mode === 'create' ? '必选商品方案已创建' : '必选商品方案已保存');
+    window.setTimeout(onBack, 900);
   };
 
   return (
@@ -92,7 +112,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
         </div>
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="px-5 py-2 rounded-lg border border-[#E8E8E8] text-sm text-[#666] hover:bg-gray-50">取消</button>
-          <button className="px-5 py-2 rounded-lg bg-[#00C06B] text-sm font-bold text-white hover:bg-[#00A35B]">保存</button>
+          <button onClick={savePolicy} className="px-5 py-2 rounded-lg bg-[#00C06B] text-sm font-bold text-white hover:bg-[#00A35B]">保存</button>
         </div>
       </div>
 
@@ -120,7 +140,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
 
               <EditorRow label="必选设置" required alignTop>
                 <div className="space-y-4">
-                  <button onClick={addRequiredItem} className="inline-flex items-center rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">
+                  <button onClick={() => setProductSelectorOpen(true)} className="inline-flex items-center rounded-lg border border-[#00B460] bg-white px-4 py-2.5 text-sm font-bold text-[#008F4C] hover:bg-[#F3FCF7]">
                     <Plus size={14} className="mr-1.5" />
                     选择商品
                   </button>
@@ -172,7 +192,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                               </div>
                             </td>
                             <td className="px-4 py-4 text-right">
-                              <button onClick={() => setRequiredRows(prev => prev.filter(item => item.id !== row.id))} className="font-medium text-[#00C06B] hover:text-[#00A35B]">删除</button>
+                              <button onClick={() => setRemoveRowId(row.id)} className="font-medium text-[#D92D20] hover:text-[#B42318]">删除</button>
                             </td>
                           </tr>
                         ))}
@@ -194,14 +214,13 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                 placeholder="请输入门店名称/编码/ID"
                 className="h-[38px] w-[260px] rounded-lg border border-[#E8E8E8] px-3 text-sm outline-none focus:border-[#00C06B]"
               />
-              <select className="h-[38px] w-[180px] rounded-lg border border-[#E8E8E8] px-3 text-sm text-[#666] outline-none focus:border-[#00C06B]">
-                <option>请选择</option>
-                <option>直营店</option>
-                <option>商场店</option>
+              <select value={storeType} onChange={e => setStoreType(e.target.value)} className="h-[38px] w-[180px] rounded-lg border border-[#E8E8E8] px-3 text-sm text-[#666] outline-none focus:border-[#00C06B]">
+                <option value="all">门店类型：全部</option>
+                <option value="直营店">直营店</option>
+                <option value="商场店">商场店</option>
               </select>
-              <button className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">搜索</button>
-              <button className="text-sm font-bold text-[#00C06B] hover:text-[#00A35B]">清空搜索条件</button>
-              <button className="ml-auto rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">导入门店</button>
+              <button onClick={() => { setStoreKeyword(''); setStoreType('all'); }} className="text-sm font-bold text-[#00C06B] hover:text-[#00A35B]">清空搜索条件</button>
+              <button onClick={() => setImportOpen(true)} className="ml-auto inline-flex items-center rounded-lg border border-[#E8E8E8] bg-white px-4 py-2.5 text-sm font-bold text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]"><Upload size={14} className="mr-1.5" />导入门店</button>
             </div>
 
             <div className="grid grid-cols-[240px_1fr_280px] rounded-xl border border-[#E8E8E8] overflow-hidden min-h-[320px]">
@@ -256,8 +275,12 @@ export const WebRequiredProductPolicyEditor: React.FC<{
               </div>
             </div>
           </section>
+          {message && <div className={`flex items-center rounded-lg border px-4 py-3 text-sm ${message.includes('已') ? 'border-[#D9F2E4] bg-[#F3FCF7] text-[#008F4C]' : 'border-[#FECACA] bg-[#FFF7F6] text-[#D92D20]'}`}><AlertCircle size={16} className="mr-2" />{message}</div>}
         </div>
       </div>
+      {productSelectorOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[520px] rounded-lg bg-white shadow-2xl"><div className="flex h-14 items-center justify-between border-b border-[#E5E7EB] px-5"><div><h3 className="font-semibold">选择必选商品</h3><p className="text-xs text-[#667085]">已添加商品会保留在当前方案中</p></div><button onClick={() => setProductSelectorOpen(false)}><X size={20} className="text-[#667085]" /></button></div><div className="grid grid-cols-2 gap-2 p-5">{REQUIRED_PRODUCTS.map(product => <button key={product} disabled={requiredRows.some(item => item.name === product)} onClick={() => addRequiredItem(product)} className="flex items-center justify-between rounded-md border border-[#DDE2E8] px-3 py-3 text-left text-sm hover:border-[#00B460] disabled:cursor-not-allowed disabled:bg-[#F7F8FA] disabled:text-[#98A2B3]"><span>{product}</span>{requiredRows.some(item => item.name === product) && <span className="text-xs">已添加</span>}</button>)}</div></div></div>}
+      {importOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[520px] rounded-lg bg-white shadow-2xl"><div className="flex h-14 items-center justify-between border-b border-[#E5E7EB] px-5"><h3 className="font-semibold">导入门店</h3><button onClick={() => setImportOpen(false)}><X size={20} className="text-[#667085]" /></button></div><div className="p-5"><div className="rounded-lg border border-dashed border-[#C7CDD4] px-6 py-10 text-center text-sm text-[#667085]"><Upload size={28} className="mx-auto mb-3 text-[#98A2B3]" />上传包含门店编码的 Excel 文件<div className="mt-2 text-xs text-[#98A2B3]">系统将校验不存在、重复和无权限门店</div></div></div><div className="flex justify-end gap-2 border-t border-[#E5E7EB] px-5 py-3"><button onClick={() => setImportOpen(false)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-sm">取消</button><button onClick={() => { setSelectedStoreIds(new Set(STORE_NODES.map(item => item.id))); setImportOpen(false); setMessage('门店文件校验通过，已导入 5 家门店'); }} className="h-9 rounded-md bg-[#00B460] px-4 text-sm font-medium text-white">模拟校验并导入</button></div></div></div>}
+      {removeRowId && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[420px] rounded-lg bg-white p-5 shadow-2xl"><h3 className="font-semibold">移除必选商品</h3><p className="mt-2 text-sm leading-6 text-[#667085]">移除后，该商品不再参与本方案的堂食/外卖必选数量校验；保存方案后生效。</p><div className="mt-5 flex justify-end gap-2"><button onClick={() => setRemoveRowId(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-sm">取消</button><button onClick={() => { setRequiredRows(current => current.filter(item => item.id !== removeRowId)); setRemoveRowId(null); }} className="h-9 rounded-md bg-[#D92D20] px-4 text-sm font-medium text-white">确认移除</button></div></div></div>}
     </div>
   );
 };

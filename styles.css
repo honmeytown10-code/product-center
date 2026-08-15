@@ -1,0 +1,260 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --console-color-primary: #00b460;
+  --console-color-primary-hover: #009f55;
+  --console-color-primary-soft: #edf9f3;
+  --console-color-text: rgba(0, 0, 0, 0.88);
+  --console-color-text-secondary: rgba(0, 0, 0, 0.65);
+  --console-color-text-tertiary: rgba(0, 0, 0, 0.45);
+  --console-color-border: #e8e8e8;
+  --console-color-border-secondary: #f0f0f0;
+  --console-color-layout: #f5f5f5;
+  --console-color-container: #fff;
+  --console-radius: 8px;
+  --console-shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 1180px;
+  overflow: hidden;
+  color: var(--console-color-text);
+  background: var(--console-color-layout);
+  font-family:
+    Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  letter-spacing: 0;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(0, 180, 96, 0.28);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  color: var(--console-color-text);
+  background: rgba(0, 180, 96, 0.16);
+}
+
+/* Console 2.0 prototype baseline */
+.console-shell {
+  color: var(--console-color-text);
+  background: var(--console-color-layout);
+}
+
+.console-shell .rounded-2xl,
+.console-shell .rounded-xl {
+  border-radius: var(--console-radius) !important;
+}
+
+.console-shell .rounded-lg {
+  border-radius: var(--console-radius) !important;
+}
+
+.console-shell .shadow-xl,
+.console-shell .shadow-2xl {
+  box-shadow: var(--console-shadow-modal) !important;
+}
+
+.console-shell .font-black {
+  font-weight: 700 !important;
+}
+
+.console-shell table {
+  font-variant-numeric: tabular-nums;
+}
+
+.console-shell thead th {
+  height: 44px;
+  color: var(--console-color-text-secondary);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.console-shell tbody td {
+  color: var(--console-color-text-secondary);
+}
+
+.console-shell tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.console-shell input::placeholder,
+.console-shell textarea::placeholder {
+  color: rgba(0, 0, 0, 0.28);
+}
+
+.console-shell input,
+.console-shell select,
+.console-shell textarea {
+  border-color: var(--console-color-border);
+}
+
+.console-shell input:focus,
+.console-shell select:focus,
+.console-shell textarea:focus {
+  border-color: var(--console-color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 180, 96, 0.08);
+}
+
+.console-shell .console-page-title {
+  color: var(--console-color-text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.console-shell .console-page-description {
+  margin-top: 4px;
+  color: var(--console-color-text-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.console-shell .console-primary-button,
+.console-shell .console-secondary-button,
+.console-shell .console-text-button {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 34px;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.console-shell .console-primary-button {
+  border: 1px solid var(--console-color-primary);
+  color: #fff;
+  background: var(--console-color-primary);
+}
+
+.console-shell .console-primary-button:hover {
+  border-color: var(--console-color-primary-hover);
+  background: var(--console-color-primary-hover);
+}
+
+.console-shell .console-secondary-button {
+  border: 1px solid var(--console-color-border);
+  color: var(--console-color-text-secondary);
+  background: #fff;
+}
+
+.console-shell .console-secondary-button:hover {
+  border-color: rgba(0, 180, 96, 0.48);
+  color: var(--console-color-primary-hover);
+}
+
+.console-shell .console-text-button {
+  height: 32px;
+  padding: 0 4px;
+  color: var(--console-color-primary-hover);
+  background: transparent;
+}
+
+.console-shell .console-panel {
+  overflow: hidden;
+  border: 1px solid var(--console-color-border);
+  border-radius: var(--console-radius);
+  background: var(--console-color-container);
+}
+
+.console-shell .console-toolbar {
+  min-height: 56px;
+  border-bottom: 1px solid var(--console-color-border-secondary);
+  background: var(--console-color-container);
+}
+
+.console-shell .console-empty-state {
+  padding: 64px 24px;
+  color: var(--console-color-text-tertiary);
+  text-align: center;
+}
+
+.console-shell .console-empty-state strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--console-color-text-secondary);
+  font-size: 14px;
+}
+
+.console-shell * {
+  scrollbar-width: thin;
+  scrollbar-color: #cfd4dc transparent;
+}
+
+.console-shell *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.console-shell *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: #cfd4dc;
+  background-clip: padding-box;
+}
+
+.console-shell *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.console-shell .no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.console-shell .no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (max-width: 1280px) {
+  .console-shell .console-hide-compact {
+    display: none;
+  }
+}

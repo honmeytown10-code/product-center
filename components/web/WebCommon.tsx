@@ -2,17 +2,24 @@
 import React from 'react';
 import { Plus, ChevronDown, Check } from 'lucide-react';
 
-export const Switch: React.FC<{ active: boolean; onClick: () => void }> = ({ active, onClick }) => (
-  <div onClick={onClick} className={`w-11 h-6 rounded-full relative cursor-pointer transition-all ${active ? 'bg-[#00C06B]' : 'bg-gray-300'}`}>
-    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${active ? 'left-6' : 'left-1'}`}></div>
-  </div>
+export const Switch: React.FC<{ active: boolean; onClick: () => void; label?: string }> = ({ active, onClick, label = '切换状态' }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-label={label}
+    aria-checked={active}
+    onClick={onClick}
+    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${active ? 'bg-[#00B460]' : 'bg-gray-300'}`}
+  >
+    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${active ? 'left-6' : 'left-1'}`} />
+  </button>
 );
 
 export const SectionHeader: React.FC<{ title: string; icon?: React.ReactNode; meta?: React.ReactNode }> = ({ title, icon, meta }) => (
-  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 gap-3">
+  <div className="mb-4 flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
     <div className="flex items-center min-w-0">
       {icon && <div className="mr-2.5 text-[#00C06B] opacity-80">{icon}</div>}
-      <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+      <h3 className="text-base font-bold text-gray-800">{title}</h3>
     </div>
     {meta && <div className="shrink-0">{meta}</div>}
   </div>
@@ -50,41 +57,54 @@ export const FormRow: React.FC<{ label: string; required?: boolean; description?
   );
 };
 
-export const SidebarItem: React.FC<{ label: string; active?: boolean; onClick?: () => void }> = ({ label, active, onClick }) => (
-  <div 
+export const SidebarItem: React.FC<{
+  label: string;
+  active?: boolean;
+  nested?: boolean;
+  icon?: React.ReactNode;
+  onClick?: () => void;
+}> = ({ label, active, nested = false, icon, onClick }) => (
+  <button
+    type="button"
     onClick={onClick}
     className={`
-      px-6 py-2.5 text-[13px] font-medium cursor-pointer transition-all border-r-[3px]
-      ${active ? 'text-[#00C06B] bg-[#00C06B]/5 border-[#00C06B]' : 'text-[#666] hover:bg-gray-50 hover:text-[#333] border-transparent'}
+        flex min-h-[36px] w-full items-center border-l-[3px] py-2 pr-6 text-left text-[13px] transition-colors
+        ${nested ? 'pl-10 font-normal' : 'pl-5 font-medium'}
+      ${active ? 'border-[#00B460] bg-[#EDF9F3] text-[#008F4C]' : 'border-transparent text-[#3F4652] hover:bg-[#F5F7F9] hover:text-[#1D2129]'}
     `}
   >
-    {label}
-  </div>
+    {icon && <span className="mr-3 flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>}
+    <span className="truncate">{label}</span>
+  </button>
 );
 
 export const TabItem: React.FC<{ label: string; count?: number; active: boolean; onClick: () => void }> = ({ label, count, active, onClick }) => (
-  <div 
-    onClick={onClick}
-    className={`
-      h-full flex items-center px-2 cursor-pointer border-b-[3px] transition-all relative
-      ${active ? 'border-[#00C06B] text-[#00C06B] font-bold' : 'border-transparent text-[#666] hover:text-[#333]'}
-    `}
-  >
-    <span className="text-[13px] mr-1.5">{label}</span>
-    {count !== undefined && <span className={`text-[10px] px-1.5 rounded-full ${active ? 'bg-[#00C06B] text-white' : 'bg-gray-100 text-gray-400'}`}>{count}</span>}
-  </div>
-);
-
-export const FormAnchor: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
-   <div 
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={`
-         px-6 py-3 text-[13px] font-medium cursor-pointer transition-all border-r-2
-         ${active ? 'text-[#00C06B] border-[#00C06B] bg-[#00C06B]/5' : 'text-gray-500 border-transparent hover:bg-gray-50'}
+        flex h-8 items-center rounded-md px-3 transition-colors
+        ${active ? 'bg-white font-semibold text-[#008F4C] shadow-sm' : 'font-medium text-[#667085] hover:bg-white/70 hover:text-[#333]'}
+      `}
+    >
+      <span className="mr-1.5 text-[13px]">{label}</span>
+      {count !== undefined && <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-[#E7F8EF] text-[#008F4C]' : 'bg-[#E5E7EB] text-[#98A2B3]'}`}>{count}</span>}
+    </button>
+  );
+
+export const FormAnchor: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
+   <button
+      type="button"
+      onClick={onClick}
+      className={`
+         w-full border-r-2 px-6 py-3 text-left text-[13px] font-medium transition-colors
+         ${active ? 'border-[#00B460] bg-[#EDF9F3] text-[#008F4C]' : 'border-transparent text-gray-500 hover:bg-gray-50'}
       `}
    >
       {label}
-   </div>
+   </button>
 );
 
 export const ChannelSwitch: React.FC<{ label: string; icon: React.ReactNode; active: boolean; onChange: () => void }> = ({ label, icon, active, onChange }) => (

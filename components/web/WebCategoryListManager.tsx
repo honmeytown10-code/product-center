@@ -527,8 +527,15 @@ const normalizeBackendLinkedProductCounts = (items: BackendCategory[]) => {
   return applyCounts(items);
 };
 
-export const WebCategoryListManager: React.FC = () => {
+type CategoryManagerScope = 'all' | 'backend' | 'frontend';
+
+interface WebCategoryListManagerProps {
+  scope?: CategoryManagerScope;
+}
+
+export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ scope = 'all' }) => {
   const [activeTab, setActiveTab] = useState<'backend' | 'frontend'>('frontend');
+  const resolvedTab = scope === 'all' ? activeTab : scope;
   const [categories, setCategories] = useState<DisplayCategory[]>(MOCK_DATA);
   const [backendCategories, setBackendCategories] = useState<BackendCategory[]>(MOCK_BACKEND_DATA);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['1']));
@@ -1234,15 +1241,13 @@ export const WebCategoryListManager: React.FC = () => {
             <button onClick={() => handleEditCategory(cat)} className="shrink-0 whitespace-nowrap text-sm font-bold text-[#00C06B] hover:text-[#00A35B]">编辑</button>
             <button onClick={() => handleDeleteCategory(cat)} className="shrink-0 whitespace-nowrap text-sm font-bold text-[#FF4D4F] hover:text-[#D9363E]">删除</button>
             {isLeafCategory && (
-              <div className="group/more relative ml-auto shrink-0">
-                <button className="whitespace-nowrap rounded-md px-1 text-sm font-bold text-[#00C06B] transition-colors hover:text-[#00A35B] group-hover/more:bg-[#F5FBF7]">
-                  更多
-                </button>
-                <div className="invisible absolute right-0 top-full z-[80] mt-2 w-[112px] overflow-hidden rounded-xl border border-[#E8EDF3] bg-white py-2 opacity-0 shadow-[0_12px_32px_rgba(15,23,42,0.14)] transition-all group-hover/more:visible group-hover/more:opacity-100">
+              <details className="group/more relative ml-auto shrink-0">
+                <summary className="cursor-pointer list-none whitespace-nowrap rounded-md px-1 text-sm font-bold text-[#00C06B] transition-colors hover:bg-[#F5FBF7] hover:text-[#00A35B]">更多</summary>
+                <div className="absolute right-0 top-full z-[80] mt-2 w-[112px] overflow-hidden rounded-xl border border-[#E8EDF3] bg-white py-2 shadow-[0_12px_32px_rgba(15,23,42,0.14)]">
                   <button onClick={() => handleOpenLinkDialog(cat)} className="block w-full whitespace-nowrap px-4 py-2 text-left text-sm text-[#333] hover:bg-[#F5FBF7] hover:text-[#00A35B]">关联商品</button>
                   <button onClick={() => handleOpenUnlinkDialog(cat)} className="block w-full whitespace-nowrap px-4 py-2 text-left text-sm text-[#333] hover:bg-[#F5FBF7] hover:text-[#00A35B]">解除关联</button>
                 </div>
-              </div>
+              </details>
             )}
           </div>
         </div>
@@ -1650,12 +1655,14 @@ export const WebCategoryListManager: React.FC = () => {
 
   return (
     <div className="m-4 flex flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
-      <div className="flex space-x-8 border-b border-gray-100 px-6 py-4">
-        <button onClick={() => setActiveTab('frontend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'frontend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>前台分类</button>
-        <button onClick={() => setActiveTab('backend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'backend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>后台分类</button>
-      </div>
+      {scope === 'all' && (
+        <div className="flex space-x-8 border-b border-gray-100 px-6 py-4">
+          <button onClick={() => setActiveTab('frontend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'frontend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>前台分类</button>
+          <button onClick={() => setActiveTab('backend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'backend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>后台分类</button>
+        </div>
+      )}
 
-      {activeTab === 'backend' ? (
+      {resolvedTab === 'backend' ? (
         <>
           <div className="bg-orange-50/50 px-6 py-4 text-xs text-orange-600">
             <div className="flex items-center">
@@ -1693,7 +1700,7 @@ export const WebCategoryListManager: React.FC = () => {
               <button onClick={handleResetBackendCategories} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475] transition-colors hover:bg-gray-50">重置</button>
             </div>
             <div className="flex items-center gap-3">
-              <button className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50">
+              <button type="button" disabled title="列显示已按当前分类类型固定" className="cursor-not-allowed rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-400">
                 <ListFilter size={16} />
               </button>
               <button onClick={handleCreateBackendRoot} className="rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#00A35B]">添加分类</button>
@@ -2170,7 +2177,7 @@ const LinkedProductsModal = ({
                   className="h-10 w-full rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm outline-none focus:border-[#00C06B]"
                 />
               </div>
-              <button className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
+              <button type="button" onClick={() => onChangeKeyword(keyword.trim())} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
               <button onClick={() => onChangeKeyword('')} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475]">重置</button>
             </div>
           </div>
@@ -2249,7 +2256,7 @@ const LinkProductsModal = ({
                   className="h-10 w-full rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm outline-none focus:border-[#00C06B]"
                 />
               </div>
-              <button className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
+              <button type="button" onClick={() => setKeyword(current => current.trim())} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
               <button onClick={() => setKeyword('')} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475]">重置</button>
             </div>
           </div>
@@ -2348,7 +2355,7 @@ const UnlinkProductsModal = ({
                   className="h-10 w-full rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm outline-none focus:border-[#00C06B]"
                 />
               </div>
-              <button className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
+              <button type="button" onClick={() => onChangeKeyword(keyword.trim())} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
               <button onClick={() => onChangeKeyword('')} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475]">重置</button>
             </div>
           </div>

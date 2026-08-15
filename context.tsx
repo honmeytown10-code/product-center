@@ -4,6 +4,7 @@ import {
   Product, Category, ManagementPolicy, BrandConfig, 
   INITIAL_CATEGORIES, INITIAL_PRODUCTS, MOCK_BRANDS 
 } from './types';
+import { DEFAULT_OMNICHANNEL_CONFIG } from './omnichannel';
 
 // Mock Policies
 const INITIAL_POLICIES: ManagementPolicy[] = [
@@ -70,10 +71,11 @@ const INITIAL_BRAND_CONFIGS: Record<string, BrandConfig> = {
     enableChannelGrouping: false,
     channelGroups: [
         { id: 'cg_self', name: '自营渠道', channels: ['pos', 'mini_dine', 'mini_take', 'mini_pickup'] },
-        { id: 'cg_third', name: '三方外卖', channels: ['meituan', 'taobao', 'jingdong'] }
+        { id: 'cg_third', name: '三方外卖', channels: ['meituan', 'taobao'] }
     ],
     posStockoutMode: 'spu',
-    posStockoutWarningThreshold: 30
+    posStockoutWarningThreshold: 30,
+    omnichannel: DEFAULT_OMNICHANNEL_CONFIG
   }
 };
 

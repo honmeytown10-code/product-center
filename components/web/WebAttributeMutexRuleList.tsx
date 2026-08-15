@@ -1,13 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { ListFilter, Plus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Plus, Search, X } from 'lucide-react';
 
-export type AttributeMutexRuleRecord = {
-  id: string;
-  name: string;
-  baseItems: string;
-  mutexItems: string;
-  enabled: boolean;
-};
+export type AttributeMutexRuleRecord = { id: string; name: string; baseItems: string; mutexItems: string; enabled: boolean };
 
 export const MOCK_ATTRIBUTE_MUTEX_RULES: AttributeMutexRuleRecord[] = [
   { id: 'mutex-1', name: '冷热温度互斥', baseItems: '- / 中杯,2 / -', mutexItems: '- / 中杯,七分糖 / -', enabled: true },
@@ -20,104 +14,43 @@ export const MOCK_ATTRIBUTE_MUTEX_RULES: AttributeMutexRuleRecord[] = [
   { id: 'mutex-8', name: '温度容量互斥', baseItems: '多 / 不多 / - / -', mutexItems: '- / 全糖,热 / -', enabled: false },
 ];
 
-export const WebAttributeMutexRuleList: React.FC<{
-  onCreateRule?: () => void;
-  onEditRule?: (rule: AttributeMutexRuleRecord) => void;
-}> = ({ onCreateRule, onEditRule }) => {
-  const [keyword, setKeyword] = useState('');
+type PendingAction = { kind: 'toggle' | 'delete'; rule: AttributeMutexRuleRecord };
+
+export const WebAttributeMutexRuleList: React.FC<{ onCreateRule?: () => void; onEditRule?: (rule: AttributeMutexRuleRecord) => void }> = ({ onCreateRule, onEditRule }) => {
   const [rules, setRules] = useState(MOCK_ATTRIBUTE_MUTEX_RULES);
+  const [keyword, setKeyword] = useState('');
+  const [status, setStatus] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [detail, setDetail] = useState<AttributeMutexRuleRecord | null>(null);
+  const [toast, setToast] = useState('');
 
-  const filteredRules = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    if (!normalizedKeyword) return rules;
-    return rules.filter(item =>
-      [item.name, item.baseItems, item.mutexItems].join(' ').toLowerCase().includes(normalizedKeyword)
-    );
-  }, [keyword, rules]);
-
-  const toggleRule = (id: string) => {
-    setRules(prev => prev.map(item => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
+  const filteredRules = useMemo(() => rules.filter(item => {
+    const matchesKeyword = !keyword.trim() || [item.name, item.baseItems, item.mutexItems].join(' ').toLowerCase().includes(keyword.trim().toLowerCase());
+    return matchesKeyword && (status === 'all' || (status === 'enabled' ? item.enabled : !item.enabled));
+  }), [keyword, rules, status]);
+  const reset = () => { setKeyword(''); setStatus('all'); };
+  const feedback = (text: string) => { setToast(text); window.setTimeout(() => setToast(''), 2400); };
+  const execute = () => {
+    if (!pending) return;
+    if (pending.kind === 'delete') { setRules(current => current.filter(item => item.id !== pending.rule.id)); feedback(`规则“${pending.rule.name}”已删除`); }
+    else { setRules(current => current.map(item => item.id === pending.rule.id ? { ...item, enabled: !item.enabled } : item)); feedback(`规则“${pending.rule.name}”已${pending.rule.enabled ? '停用' : '启用'}`); }
+    setPending(null);
   };
 
-  return (
-    <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4">
-      <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden min-w-0">
-        <div className="px-6 py-4 border-b border-[#E8E8E8] bg-white flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <input
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              placeholder="搜索规则名称/互斥内容"
-              className="h-[38px] w-[240px] rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm text-[#333] outline-none focus:border-[#00C06B]"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button className="inline-flex items-center rounded-lg border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm font-medium text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]">
-              <ListFilter size={14} />
-            </button>
-            <button onClick={onCreateRule} className="inline-flex items-center rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">
-              <Plus size={14} className="mr-1.5" />
-              添加互斥规则
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto">
-          <table className="w-full min-w-[1080px] border-collapse text-left">
-            <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
-              <tr>
-                <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">规则名称</th>
-                <th className="border-b border-[#E8E8E8] px-4 py-4">基础规格/做法/加料</th>
-                <th className="border-b border-[#E8E8E8] px-4 py-4">互斥规格/做法/加料</th>
-                <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4 text-center">是否启用</th>
-                <th className="w-[150px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm text-[#333]">
-              {filteredRules.map(rule => (
-                <tr key={rule.id} className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
-                  <td className="px-4 py-4 font-medium">{rule.name}</td>
-                  <td className="px-4 py-4 text-[#666]">{rule.baseItems}</td>
-                  <td className="px-4 py-4 text-[#666]">{rule.mutexItems}</td>
-                  <td className="px-4 py-4">
-                    <div className="flex justify-center">
-                      <button
-                        type="button"
-                        onClick={() => toggleRule(rule.id)}
-                        role="switch"
-                        aria-checked={rule.enabled}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full border transition-colors ${
-                          rule.enabled ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                            rule.enabled ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center justify-end gap-4">
-                      <button onClick={() => onEditRule?.(rule)} className="font-medium text-[#00C06B] hover:text-[#00A35B]">编辑</button>
-                      <button className="font-medium text-[#00C06B] hover:text-[#00A35B]">删除</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredRules.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-14 text-center text-sm text-[#999]">
-                    暂无属性互斥规则
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+  return <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#F5F6FA] p-3">
+    {toast && <div className="absolute left-1/2 top-4 z-[100] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{toast}</div>}
+    <div className="console-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E9EDF2] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2"><label className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="规则名称、规格、做法或加料" className="h-9 w-[280px] rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" /></label><label className="relative"><select value={status} onChange={event => setStatus(event.target.value as typeof status)} className="h-9 w-40 appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none"><option value="all">状态：全部</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /></label><button onClick={reset} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969]">重置</button></div>
+        <button onClick={onCreateRule} className="inline-flex h-9 shrink-0 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F55]"><Plus size={15} className="mr-1.5" />添加互斥规则</button>
+      </div>
+      <div className="flex shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]"><span>共 <strong className="text-[#1D2129]">{filteredRules.length}</strong> 条 · 已启用 {rules.filter(item => item.enabled).length} 条</span><span>启用后在点单选择规格、做法和加料时实时校验</span></div>
+      <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[1040px] table-fixed border-collapse text-left text-[13px]"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]"><tr className="border-b border-[#E5E7EB]"><th className="w-[220px] px-4 py-3 font-medium">规则名称</th><th className="px-3 py-3 font-medium">基础规格 / 做法 / 加料</th><th className="px-3 py-3 font-medium">互斥规格 / 做法 / 加料</th><th className="w-[120px] px-3 py-3 font-medium">状态</th><th className="w-[170px] px-3 py-3 font-medium">操作</th></tr></thead>
+        <tbody>{filteredRules.map(rule => <tr key={rule.id} className="border-b border-[#EEF0F3] hover:bg-[#FAFCFB]"><td className="px-4 py-3"><button onClick={() => setDetail(rule)} className="font-medium text-[#1D2129] hover:text-[#008F4C]">{rule.name}</button><div className="mt-1 text-[12px] text-[#98A2B3]">ID：{rule.id}</div></td><td className="px-3 py-3 text-[#4E5969]">{rule.baseItems}</td><td className="px-3 py-3 text-[#4E5969]">{rule.mutexItems}</td><td className="px-3 py-3"><button onClick={() => setPending({ kind: 'toggle', rule })} className={rule.enabled ? 'text-[#008F4C]' : 'text-[#98A2B3]'}><span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${rule.enabled ? 'bg-[#00B460]' : 'bg-[#B8C0CC]'}`} />{rule.enabled ? '已启用' : '已停用'}</button></td><td className="px-3 py-3"><div className="flex gap-3"><button onClick={() => setDetail(rule)} className="text-[#008F4C]">查看</button><button onClick={() => onEditRule?.(rule)} className="text-[#008F4C]">编辑</button><button onClick={() => setPending({ kind: 'delete', rule })} className="text-[#D92D20]">删除</button></div></td></tr>)}</tbody></table>
+        {filteredRules.length === 0 && <div className="flex h-56 flex-col items-center justify-center text-[13px] text-[#98A2B3]"><Search size={28} className="mb-3" /><span>没有符合当前条件的互斥规则</span><button onClick={reset} className="mt-2 text-[#008F4C]">清空筛选</button></div>}
       </div>
     </div>
-  );
+    {detail && <div className="fixed inset-0 z-[80] flex justify-end bg-black/35"><div className="flex h-full w-[520px] flex-col bg-white shadow-2xl"><div className="flex h-14 items-center justify-between border-b border-[#E5E7EB] px-5"><h3 className="text-[17px] font-semibold">互斥规则详情</h3><button onClick={() => setDetail(null)}><X size={20} className="text-[#667085]" /></button></div><div className="flex-1 space-y-5 overflow-y-auto p-5 text-[13px]"><div><div className="text-[12px] text-[#98A2B3]">规则名称</div><div className="mt-1 font-medium">{detail.name}</div></div><div><div className="text-[12px] text-[#98A2B3]">条件组</div><div className="mt-2 rounded-md border border-[#E5E7EB] p-3">{detail.baseItems}</div></div><div><div className="text-[12px] text-[#98A2B3]">互斥组</div><div className="mt-2 rounded-md border border-[#E5E7EB] p-3">{detail.mutexItems}</div></div><div><div className="text-[12px] text-[#98A2B3]">规则状态</div><div className="mt-1">{detail.enabled ? '已启用' : '已停用'}</div></div></div><div className="flex justify-end gap-2 border-t border-[#E5E7EB] px-5 py-3"><button onClick={() => setDetail(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">关闭</button><button onClick={() => { setDetail(null); onEditRule?.(detail); }} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white">编辑规则</button></div></div></div>}
+    {pending && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[460px] rounded-lg bg-white p-5 shadow-2xl"><div className="flex gap-3"><AlertTriangle size={22} className="shrink-0 text-[#F79009]" /><div><h3 className="font-semibold">{pending.kind === 'delete' ? '删除互斥规则' : `${pending.rule.enabled ? '停用' : '启用'}互斥规则`}</h3><p className="mt-2 text-[13px] leading-6 text-[#667085]">规则“{pending.rule.name}”将影响其适用商品下的规格、做法与加料选择。</p><p className="text-[13px] leading-6 text-[#667085]">{pending.kind === 'delete' ? '删除后不可恢复；历史订单不受影响。' : pending.rule.enabled ? '停用后新订单不再校验该互斥关系，已生成订单不受影响。' : '启用后新订单立即按此关系限制组合选择，请先确认客户端版本兼容。'}</p></div></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setPending(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">取消</button><button onClick={execute} className={`h-9 rounded-md px-4 text-[13px] font-medium text-white ${pending.kind === 'delete' ? 'bg-[#D92D20]' : 'bg-[#00B460]'}`}>确认{pending.kind === 'delete' ? '删除' : pending.rule.enabled ? '停用' : '启用'}</button></div></div></div>}
+  </div>;
 };

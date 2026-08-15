@@ -1,112 +1,33 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Plus, Search } from 'lucide-react';
 import type { StoreRegionRecord } from './WebStoreRegionList';
+import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
-type RelatedProduct = {
-  id: string;
-  name: string;
-  type: string;
-  category: string;
-  price: number;
-};
+type RelatedProduct = { id: string; name: string; type: string; category: string; price: number; image: string; code: string };
+const STORE_NAME_MAP: Record<string, string> = { s1: '范先生的门店', s2: '南山万象店', s3: '福田卓悦店' };
+const REGION_PRODUCTS: RelatedProduct[] = [
+  { id: 'rp-1', name: '招牌珍珠奶茶', type: '标准商品', category: '现制饮品', price: 18, image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=120&h=120&fit=crop', code: 'SP00012876' },
+  { id: 'rp-2', name: '手打柠檬茶', type: '标准商品', category: '现制饮品', price: 22, image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=120&h=120&fit=crop', code: 'SP00012877' },
+  { id: 'rp-3', name: '超值双人套餐', type: '套餐商品', category: '套餐', price: 49, image: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=120&h=120&fit=crop', code: 'SP00012878' },
+  { id: 'rp-4', name: '精品拿铁', type: '标准商品', category: '咖啡', price: 26, image: 'https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=120&h=120&fit=crop', code: 'SP00012879' },
+];
 
-const STORE_NAME_MAP: Record<string, string> = {
-  s1: '范先生的门店',
-  s2: '南山万象店',
-  s3: '福田卓悦店',
-};
-
-export const WebStoreRegionEditor: React.FC<{
-  region: StoreRegionRecord;
-  onBack: () => void;
-}> = ({ region, onBack }) => {
-  const [products, setProducts] = useState<RelatedProduct[]>([]);
-
-  const handleAddProduct = () => {
-    setProducts(prev => [
-      ...prev,
-      {
-        id: `p-${prev.length + 1}`,
-        name: `区域商品${prev.length + 1}`,
-        type: '标准商品',
-        category: '通用菜品',
-        price: 18 + prev.length,
-      },
-    ]);
-  };
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F6FA]">
-      <div className="h-[60px] bg-white border-b border-[#E8E8E8] flex items-center justify-between px-6 shrink-0 shadow-sm">
-        <div className="flex items-center">
-          <button onClick={onBack} className="mr-4 text-[#666] hover:text-[#333]"><ChevronLeft size={20} /></button>
-          <h2 className="text-lg font-bold text-[#333]">编辑</h2>
-        </div>
-        <button className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">保存</button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="bg-white rounded-xl border border-[#E8E8E8] p-6">
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-[#666]">
-            <div>门店名称：<span className="text-[#333]">{STORE_NAME_MAP[region.storeId] || region.storeId}</span></div>
-            <div>区域名称：<span className="text-[#333]">{region.name}</span></div>
-          </div>
-
-          <div className="mt-6">
-            <div className="mb-3 text-sm font-medium text-[#666]">关联商品：</div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse text-left">
-                <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
-                  <tr>
-                    <th className="px-4 py-4">商品名称</th>
-                    <th className="px-4 py-4">商品类型</th>
-                    <th className="px-4 py-4">商品分类</th>
-                    <th className="px-4 py-4">销售价格（元）</th>
-                    <th className="px-4 py-4 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm text-[#333]">
-                  {products.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="border-t border-[#F3F4F6] px-4 py-10 text-center text-[#999]">
-                        暂无数据
-                      </td>
-                    </tr>
-                  ) : (
-                    products.map(product => (
-                      <tr key={product.id} className="border-t border-[#F3F4F6] hover:bg-[#FCFFFD]">
-                        <td className="px-4 py-4">{product.name}</td>
-                        <td className="px-4 py-4">{product.type}</td>
-                        <td className="px-4 py-4">{product.category}</td>
-                        <td className="px-4 py-4">{product.price}</td>
-                        <td className="px-4 py-4 text-right">
-                          <button onClick={() => setProducts(prev => prev.filter(item => item.id !== product.id))} className="font-medium text-[#00C06B] hover:text-[#00A35B]">
-                            移除
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-sm text-[#666]">已添加 <span className="text-[#00C06B] font-bold">{products.length}</span> 个商品</div>
-              <button onClick={handleAddProduct} className="inline-flex items-center rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">
-                <Plus size={14} className="mr-1.5" />
-                添加商品
-              </button>
-            </div>
-
-            <div className="mt-8 flex items-center gap-3">
-              <button onClick={onBack} className="rounded-lg border border-[#E8E8E8] px-5 py-2 text-sm text-[#666] hover:bg-gray-50">取消</button>
-              <button className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">保存</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export const WebStoreRegionEditor: React.FC<{ region: StoreRegionRecord; onBack: () => void }> = ({ region, onBack }) => {
+  const initial = region.relatedProductCount ? REGION_PRODUCTS.slice(0, Math.min(region.relatedProductCount, REGION_PRODUCTS.length)) : [];
+  const [products, setProducts] = useState(initial);
+  const [keyword, setKeyword] = useState('');
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const [draftIds, setDraftIds] = useState(products.map(item => item.id));
+  const [removeProduct, setRemoveProduct] = useState<RelatedProduct | null>(null);
+  const [message, setMessage] = useState('');
+  const selectorProducts: SelectableProduct[] = REGION_PRODUCTS.map(item => ({ id: item.id, name: item.name, image: item.image, productCode: item.code, category: item.category, type: item.type, price: item.price, status: '可售' }));
+  const visible = products.filter(item => !keyword.trim() || `${item.name} ${item.code} ${item.category}`.toLowerCase().includes(keyword.trim().toLowerCase()));
+  const save = () => { setMessage(`“${STORE_NAME_MAP[region.storeId]} / ${region.name}”已保存 ${products.length} 个关联商品`); window.setTimeout(onBack, 900); };
+  return <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
+    <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#E5E7EB] bg-white px-5"><div className="flex items-center"><button onClick={onBack} className="mr-3 text-[#667085]"><ChevronLeft size={20} /></button><div><h2 className="text-[17px] font-semibold">管理区域商品</h2><p className="text-[12px] text-[#667085]">{STORE_NAME_MAP[region.storeId] || region.storeId} / {region.name}</p></div></div><div className="flex gap-2"><button onClick={onBack} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">取消</button><button onClick={save} className="h-9 rounded-md bg-[#00B460] px-5 text-[13px] font-medium text-white">保存</button></div></div>
+    {message && <div className="mx-4 mt-3 rounded-md border border-[#B7E7CB] bg-[#F3FCF7] px-4 py-2.5 text-[13px] text-[#008F4C]">{message}</div>}
+    <div className="min-h-0 flex-1 p-3"><div className="console-panel flex h-full min-h-0 flex-col overflow-hidden"><div className="flex shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4 py-3"><label className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="商品名称、商品编码或分类" className="h-9 w-[300px] rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px]" /></label><button onClick={() => { setDraftIds(products.map(item => item.id)); setSelectorOpen(true); }} className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white"><Plus size={15} className="mr-1.5" />添加商品</button></div><div className="flex shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]"><span>已关联 <strong className="text-[#1D2129]">{products.length}</strong> 个商品</span><span>关联只影响该区域的堂食桌点单页展示，不改变门店商品售卖状态</span></div><div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[860px] table-fixed border-collapse text-left text-[13px]"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]"><tr className="border-b border-[#E5E7EB]"><th className="px-4 py-3 font-medium">商品名称 / 编码</th><th className="w-[150px] px-3 py-3 font-medium">商品类型</th><th className="w-[180px] px-3 py-3 font-medium">商品分类</th><th className="w-[160px] px-3 py-3 font-medium">销售价格（元）</th><th className="w-[100px] px-3 py-3 font-medium">操作</th></tr></thead><tbody>{visible.map(product => <tr key={product.id} className="border-b border-[#EEF0F3] hover:bg-[#FAFCFB]"><td className="px-4 py-3"><div className="flex items-center"><img src={product.image} className="mr-3 h-10 w-10 rounded object-cover" /><div><div className="font-medium">{product.name}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{product.code}</div></div></div></td><td className="px-3 py-3">{product.type}</td><td className="px-3 py-3">{product.category}</td><td className="px-3 py-3">¥{product.price.toFixed(2)}</td><td className="px-3 py-3"><button onClick={() => setRemoveProduct(product)} className="text-[#D92D20]">移除</button></td></tr>)}</tbody></table>{visible.length === 0 && <div className="flex h-52 flex-col items-center justify-center text-[13px] text-[#98A2B3]"><Search size={28} className="mb-3" /><span>{products.length ? '没有符合当前条件的商品' : '当前区域尚未关联商品'}</span><button onClick={() => products.length ? setKeyword('') : setSelectorOpen(true)} className="mt-2 text-[#008F4C]">{products.length ? '清空搜索' : '添加商品'}</button></div>}</div></div></div>
+    <WebProductSelectorDialog open={selectorOpen} title="选择区域商品" description={`选择在“${region.name}”堂食桌点单页展示的门店商品。`} products={selectorProducts} selectedIds={draftIds} onSelectedIdsChange={setDraftIds} onCancel={() => setSelectorOpen(false)} onConfirm={() => { setProducts(REGION_PRODUCTS.filter(item => draftIds.includes(item.id))); setSelectorOpen(false); setMessage(`区域商品已更新，共 ${draftIds.length} 个，保存后生效`); }} confirmLabel="保存选择" />
+    {removeProduct && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[440px] rounded-lg bg-white p-5 shadow-2xl"><div className="flex gap-3"><AlertTriangle size={22} className="shrink-0 text-[#F79009]" /><div><h3 className="font-semibold">移除区域商品</h3><p className="mt-2 text-[13px] leading-6 text-[#667085]">“{removeProduct.name}”将不再出现在 {region.name} 的堂食桌点单页，但不会下架或删除该门店商品。</p></div></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setRemoveProduct(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">取消</button><button onClick={() => { setProducts(current => current.filter(item => item.id !== removeProduct.id)); setRemoveProduct(null); }} className="h-9 rounded-md bg-[#D92D20] px-4 text-[13px] font-medium text-white">确认移除</button></div></div></div>}
+  </div>;
 };

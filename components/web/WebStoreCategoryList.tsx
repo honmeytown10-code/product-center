@@ -156,6 +156,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
   const [showStorePicker, setShowStorePicker] = useState(true);
   const [storePickerKeyword, setStorePickerKeyword] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState('g1');
+  const [limitTimeSlots, setLimitTimeSlots] = useState([{ id: 'slot-1', startDate: '', endDate: '', startTime: '00:00', endTime: '23:59' }]);
 
   const tabs = useMemo(() => [{ id: 'all', label: '全部渠道' }, ...DEFAULT_CHANNELS], []);
   const currentStore = STORE_OPTIONS.find(item => item.id === activeStoreId);
@@ -647,13 +648,13 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                               <label className="flex items-center gap-2"><input type="checkbox" defaultChecked className="accent-[#00C06B]" />周五</label>
                             </div>
                           </div>
-                          <div className="mt-3 grid grid-cols-[220px_24px_220px_auto] items-center gap-3">
-                            <div className="h-11 rounded-lg border border-[#E5E7EB] bg-white px-4 leading-[44px] text-[#B0B7C3]">00:00:00</div>
+                          {limitTimeSlots.map(slot => <div key={slot.id} className="mt-3 grid grid-cols-[220px_24px_220px_auto] items-center gap-3">
+                            <input type="time" value={slot.startTime} onChange={e => setLimitTimeSlots(current => current.map(item => item.id === slot.id ? { ...item, startTime: e.target.value } : item))} className="h-11 rounded-lg border border-[#E5E7EB] bg-white px-4" />
                             <div className="text-center">至</div>
-                            <div className="h-11 rounded-lg border border-[#E5E7EB] bg-white px-4 leading-[44px] text-[#B0B7C3]">23:59:59</div>
-                            <button className="justify-self-start text-[#00A35B] hover:underline">删除</button>
-                          </div>
-                          <button className="mt-4 text-[#00A35B] hover:underline">+ 添加时间段（最多添加3个）</button>
+                            <input type="time" value={slot.endTime} onChange={e => setLimitTimeSlots(current => current.map(item => item.id === slot.id ? { ...item, endTime: e.target.value } : item))} className="h-11 rounded-lg border border-[#E5E7EB] bg-white px-4" />
+                            <button onClick={() => setLimitTimeSlots(current => current.filter(item => item.id !== slot.id))} disabled={limitTimeSlots.length === 1} className="justify-self-start text-[#00A35B] hover:underline disabled:cursor-not-allowed disabled:text-[#B8C0CC]">删除</button>
+                          </div>)}
+                          <button disabled={limitTimeSlots.length >= 3} onClick={() => setLimitTimeSlots(current => [...current, { id: `slot-${Date.now()}`, startDate: '', endDate: '', startTime: '00:00', endTime: '23:59' }])} className="mt-4 text-[#00A35B] hover:underline disabled:cursor-not-allowed disabled:text-[#B8C0CC]">+ 添加时间段（最多添加3个）</button>
                         </div>
                       </div>
                     )}
@@ -750,8 +751,8 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
             </div>
             </div>
             <div className="flex items-center space-x-3 shrink-0">
-              <button className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
-              <button className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
+              <button onClick={() => { setCategoryName(''); setCategoryCode(''); }} className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
+              <button onClick={() => setNotification({ type: 'success', message: `已查询到 ${filteredCategories.length} 个门店分类` })} className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
             </div>
           </div>
         </div>
@@ -892,14 +893,14 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
             <ChevronDown size={14} />
           </div>
           <div className="flex items-center space-x-1">
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B] disabled:opacity-50">
+            <button type="button" disabled aria-label="上一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">
               <ChevronLeft size={12} />
             </button>
-            <button className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">2</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">3</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">...</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">
+            <button type="button" disabled aria-current="page" className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
+            <button type="button" disabled title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">2</button>
+            <button type="button" disabled title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">3</button>
+            <button type="button" disabled title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">...</button>
+            <button type="button" disabled aria-label="下一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">
               <ChevronRight size={12} />
             </button>
           </div>

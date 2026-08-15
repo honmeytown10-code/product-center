@@ -5,6 +5,7 @@ import type { Product } from '../../types';
 interface Props {
   product: Product;
   onClose: () => void;
+  onEdit?: () => void;
 }
 
 type DetailTabKey = 'stores' | 'templates' | 'combos' | 'combo_detail' | 'free_match' | 'optional_groups';
@@ -65,7 +66,7 @@ const createDetailTabs = (isCombo: boolean, counts: { stores: number; templates:
   ];
 };
 
-export const WebProductDetail: React.FC<Props> = ({ product, onClose }) => {
+export const WebProductDetail: React.FC<Props> = ({ product, onClose, onEdit }) => {
   const isCombo = product.type === 'combo';
   const [activeTab, setActiveTab] = useState<DetailTabKey>(isCombo ? 'stores' : 'stores');
   const [groups, setGroups] = useState(INITIAL_GROUPS);
@@ -430,7 +431,7 @@ export const WebProductDetail: React.FC<Props> = ({ product, onClose }) => {
 
       <div className="flex-1 overflow-auto p-4 no-scrollbar">
         <div className="relative mb-4 rounded-lg border border-[#E8E8E8] bg-white p-6 shadow-sm">
-          <button className="absolute right-6 top-6 rounded-md border border-[#E8E8E8] px-4 py-1.5 text-[13px] text-[#333] transition-colors hover:border-[#00C06B] hover:text-[#00C06B]">
+          <button type="button" onClick={onEdit} disabled={!onEdit} title={onEdit ? '编辑当前商品' : '当前账号无编辑权限'} className="absolute right-6 top-6 rounded-md border border-[#E8E8E8] px-4 py-1.5 text-[13px] text-[#333] transition-colors hover:border-[#00C06B] hover:text-[#00C06B] disabled:cursor-not-allowed disabled:opacity-40">
             编辑
           </button>
           <div className="flex items-start justify-between gap-6">

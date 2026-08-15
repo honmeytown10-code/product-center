@@ -1,8 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
-import { Search, Plus, ChevronDown, MoreHorizontal, Filter, ListFilter, X, Trash2, HelpCircle, Package, ChevronLeft, ChevronRight, Box, Utensils, CupSoda, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Search, Plus, ChevronDown, MoreHorizontal, Filter, X, Trash2, HelpCircle, Package, ChevronLeft, ChevronRight, Box, Utensils, CupSoda, PanelLeftClose, PanelLeftOpen, Library, CircleCheck, CirclePause, FilePenLine } from 'lucide-react';
 import { useProducts } from '../../context';
-import { TabItem } from './WebCommon';
 import type { Product } from '../../types';
 
 type ProductTab = 'all' | 'on_shelf' | 'off_shelf' | 'draft';
@@ -20,7 +19,7 @@ const getProductTypeLabel = (product: Product) => (product.type === 'combo' ? '�
 
 const getProductStatusLabel = (product: Product) => {
   if (product.status === 'draft') return '草稿';
-  return product.status === 'on_shelf' ? '可售' : '停售';
+  return product.status === 'on_shelf' ? '已启用' : '已停用';
 };
 
 const getFrontendCategoryName = (product: Product) => {
@@ -33,10 +32,11 @@ const getFrontendCategoryName = (product: Product) => {
   return '未分类';
 };
 
-const getBatchActions = (tab: ProductTab) => {
-  if (tab === 'all') return ['改价', '批量修改标准商品', '批量修改套餐商品', '加入到模板'];
-  if (tab === 'on_shelf') return ['改价', '批量修改标准商品', '批量修改套餐商品', '加入到模板', '批量停售'];
-  if (tab === 'off_shelf') return ['批量启售', '批量归档'];
+const getBatchActions = (tab: ProductTab, unifiedManagement: boolean) => {
+  const entityName = unifiedManagement ? '商品' : '主档';
+  if (tab === 'all') return [`批量修改${entityName}`, `批量导出${entityName}`];
+  if (tab === 'on_shelf') return [`批量修改${entityName}`, '批量停用'];
+  if (tab === 'off_shelf') return ['批量启用', '批量归档'];
   return [];
 };
 
@@ -58,22 +58,22 @@ export const WebProductList: React.FC<{
   onImportRecordsClick?: () => void;
   onViewDetail?: (product: any) => void;
   onEditProduct?: (product: any) => void;
-}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct }) => {
+  unifiedManagement?: boolean;
+}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, unifiedManagement = false }) => {
   const { products, categories, addProduct, toggleShelfStatus } = useProducts();
   const [activeTab, setActiveTab] = useState<ProductTab>('on_shelf');
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportDropdown, setShowImportDropdown] = useState(false);
   const [showToolbarMoreDropdown, setShowToolbarMoreDropdown] = useState(false);
   const [isCategoryPanelCollapsed, setIsCategoryPanelCollapsed] = useState(false);
-  const [quickCategoryView, setQuickCategoryView] = useState<QuickCategoryView>('frontend');
-  const [selectedQuickCategory, setSelectedQuickCategory] = useState<{ view: QuickCategoryView; name: string | null }>({
-    view: 'frontend',
-    name: null,
-  });
+  const [quickCategoryView, setQuickCategoryView] = useState<QuickCategoryView>('backend');
+  const [selectedQuickCategory, setSelectedQuickCategory] = useState<string | null>(null);
   const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [rowMoreMenu, setRowMoreMenu] = useState<{ productId: string; top: number; left: number } | null>(null);
+  const [actionNotice, setActionNotice] = useState('');
+  const showNotice = (message: string) => { setActionNotice(message); window.setTimeout(() => setActionNotice(''), 2400); };
 
   const tabCounts = useMemo(
     () => ({
@@ -85,58 +85,47 @@ export const WebProductList: React.FC<{
     [products]
   );
 
+  const categorySourceProducts = useMemo(() => products.filter(product => {
+    if (activeTab === 'on_shelf' && product.status !== 'on_shelf') return false;
+    if (activeTab === 'off_shelf' && product.status !== 'off_shelf') return false;
+    if (activeTab === 'draft' && product.status !== 'draft') return false;
+    if (activeTab !== 'draft' && product.status === 'draft') return false;
+    if (appliedFilters.productId && !product.id.includes(appliedFilters.productId)) return false;
+    if (appliedFilters.skuId && !product.skuCode.includes(appliedFilters.skuId)) return false;
+    if (appliedFilters.backendCategory !== 'all' && product.category !== appliedFilters.backendCategory) return false;
+    if (appliedFilters.frontendCategory !== 'all' && getFrontendCategoryName(product) !== appliedFilters.frontendCategory) return false;
+    if (appliedFilters.productType !== 'all' && (product.type === 'combo' ? 'combo' : 'standard') !== appliedFilters.productType) return false;
+    if (searchQuery && !product.name.toLowerCase().includes(searchQuery.toLowerCase()) && !product.skuCode.includes(searchQuery) && !product.id.includes(searchQuery)) return false;
+    return true;
+  }), [activeTab, appliedFilters, products, searchQuery]);
+
   const backendQuickCategories = useMemo(() => {
-    const names = Array.from(new Set([...categories.map(item => item.name), ...products.map(item => item.category).filter(Boolean)]));
+    const names = Array.from(new Set([...categories.map(item => item.name), ...categorySourceProducts.map(item => item.category).filter(Boolean)]));
     return names
       .map(name => ({
         name,
-        count: products.filter(product => product.category === name).length,
+        count: categorySourceProducts.filter(product => product.category === name).length,
       }))
+      .filter(item => item.count > 0)
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'));
-  }, [categories, products]);
+  }, [categories, categorySourceProducts]);
 
-  const frontendQuickCategories = useMemo(() => {
-    const countMap = new Map<string, number>();
-    products.forEach(product => {
-      const name = getFrontendCategoryName(product);
-      countMap.set(name, (countMap.get(name) || 0) + 1);
-    });
-    return Array.from(countMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'));
-  }, [products]);
+  const frontendQuickCategories = useMemo(() => Array.from(new Set(categorySourceProducts.map(getFrontendCategoryName)))
+    .map(name => ({ name, count: categorySourceProducts.filter(product => getFrontendCategoryName(product) === name).length }))
+    .filter(item => item.count > 0)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN')), [categorySourceProducts]);
 
-  const visibleQuickCategories = useMemo(
-    () => (quickCategoryView === 'backend' ? backendQuickCategories : frontendQuickCategories),
-    [backendQuickCategories, frontendQuickCategories, quickCategoryView]
-  );
+  const quickCategories = quickCategoryView === 'backend' ? backendQuickCategories : frontendQuickCategories;
+  const allFrontendCategories = useMemo(() => Array.from(new Set(products.map(getFrontendCategoryName))).sort((a, b) => a.localeCompare(b, 'zh-CN')), [products]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      if (activeTab === 'on_shelf' && product.status !== 'on_shelf') return false;
-      if (activeTab === 'off_shelf' && product.status !== 'off_shelf') return false;
-      if (activeTab === 'draft' && product.status !== 'draft') return false;
-      if (activeTab !== 'draft' && product.status === 'draft') return false;
-      if (appliedFilters.productId && !product.id.includes(appliedFilters.productId)) return false;
-      if (appliedFilters.skuId && !product.skuCode.includes(appliedFilters.skuId)) return false;
-      if (appliedFilters.backendCategory !== 'all' && product.category !== appliedFilters.backendCategory) return false;
-      if (appliedFilters.frontendCategory !== 'all' && getFrontendCategoryName(product) !== appliedFilters.frontendCategory) return false;
-      if (appliedFilters.productType !== 'all' && (product.type === 'combo' ? 'combo' : 'standard') !== appliedFilters.productType) return false;
-      if (selectedQuickCategory.name && selectedQuickCategory.view === 'backend' && product.category !== selectedQuickCategory.name) return false;
-      if (selectedQuickCategory.name && selectedQuickCategory.view === 'frontend' && getFrontendCategoryName(product) !== selectedQuickCategory.name) return false;
-      if (
-        searchQuery &&
-        !product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !product.skuCode.includes(searchQuery) &&
-        !product.id.includes(searchQuery)
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [products, activeTab, searchQuery, appliedFilters, selectedQuickCategory]);
+    if (!selectedQuickCategory) return categorySourceProducts;
+    return categorySourceProducts.filter(product => quickCategoryView === 'backend'
+      ? product.category === selectedQuickCategory
+      : getFrontendCategoryName(product) === selectedQuickCategory);
+  }, [categorySourceProducts, quickCategoryView, selectedQuickCategory]);
 
-  const batchActions = getBatchActions(activeTab);
+  const batchActions = getBatchActions(activeTab, unifiedManagement);
   const selectionEnabled = activeTab !== 'draft';
   const allVisibleSelected = filteredProducts.length > 0 && filteredProducts.every(item => selectedProductIds.includes(item.id));
 
@@ -147,14 +136,14 @@ export const WebProductList: React.FC<{
   const hasComboSelection = selectedProducts.some(product => product.type === 'combo');
 
   const toolbarMoreActions = [
-    { label: '批量同步门店', enabled: selectedProductIds.length > 0 },
-    { label: '批量门店销售设置', enabled: selectedProductIds.length > 0 },
-    { label: '批量打印设置', enabled: selectedProductIds.length > 0 && !hasComboSelection },
-    { label: '批量导出商品路径', enabled: selectedProductIds.length > 0 },
+    { label: unifiedManagement ? '批量修改商品' : '批量修改主档', enabled: selectedProductIds.length > 0 },
+    { label: unifiedManagement ? '批量导出商品' : '批量导出主档', enabled: selectedProductIds.length > 0 },
+    { label: '批量设置商品结构', enabled: selectedProductIds.length > 0 && !hasComboSelection },
   ];
 
   const handleTabChange = (tab: ProductTab) => {
     setActiveTab(tab);
+    setSelectedQuickCategory(null);
     setSelectedProductIds([]);
     setRowMoreMenu(null);
     setShowToolbarMoreDropdown(false);
@@ -167,7 +156,7 @@ export const WebProductList: React.FC<{
   const handleResetFilters = () => {
     setDraftFilters(DEFAULT_FILTERS);
     setAppliedFilters(DEFAULT_FILTERS);
-    setSelectedQuickCategory({ view: quickCategoryView, name: null });
+    setSelectedQuickCategory(null);
     setSearchQuery('');
   };
 
@@ -198,19 +187,13 @@ export const WebProductList: React.FC<{
   };
 
   const getRowMoreActions = (product: Product) => {
-    const actions = [
-      { key: 'shelf', label: product.status === 'on_shelf' ? '停售' : '启售', onClick: () => handleToggleShelf(product) },
-      { key: 'sync', label: '同步门店', onClick: () => setRowMoreMenu(null) },
-      { key: 'store-sale', label: '门店销售设置', onClick: () => setRowMoreMenu(null) },
-      { key: 'route', label: '商品路径', onClick: () => setRowMoreMenu(null) },
+    return [
+      { key: 'enable', label: product.status === 'on_shelf' ? (unifiedManagement ? '停用商品' : '停用主档') : (unifiedManagement ? '启用商品' : '启用主档'), onClick: () => handleToggleShelf(product) },
+      { key: 'channel-products', label: unifiedManagement ? '查看发布范围' : '查看渠道商品', onClick: () => setRowMoreMenu(null) },
+      { key: 'template-reference', label: '查看模板引用', onClick: () => setRowMoreMenu(null) },
       { key: 'copy', label: '复制', onClick: () => handleCopyProduct(product) },
+      { key: 'archive', label: '归档', onClick: () => setRowMoreMenu(null) },
     ];
-
-    if (product.type !== 'combo') {
-      actions.splice(3, 0, { key: 'print', label: '打印设置', onClick: () => setRowMoreMenu(null) });
-    }
-
-    return actions;
   };
 
   const handleOpenRowMoreMenu = (event: React.MouseEvent<HTMLButtonElement>, productId: string) => {
@@ -231,15 +214,45 @@ export const WebProductList: React.FC<{
   };
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-      <div className="flex h-[48px] shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-5">
-        <div className="flex h-full space-x-8">
-          <TabItem label="全部商品" count={tabCounts.all} active={activeTab === 'all'} onClick={() => handleTabChange('all')} />
-          <TabItem label="可售商品" count={tabCounts.on_shelf} active={activeTab === 'on_shelf'} onClick={() => handleTabChange('on_shelf')} />
-          <TabItem label="停售商品" count={tabCounts.off_shelf} active={activeTab === 'off_shelf'} onClick={() => handleTabChange('off_shelf')} />
-          <TabItem label="草稿" count={tabCounts.draft} active={activeTab === 'draft'} onClick={() => handleTabChange('draft')} />
+    <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
+      {actionNotice && <div className="absolute left-1/2 top-3 z-[80] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{actionNotice}</div>}
+      <div className="flex min-h-[64px] shrink-0 items-center justify-between gap-5 border-b border-[#E8E8E8] bg-white px-5 py-2">
+        <div className="grid min-w-[640px] max-w-[820px] flex-1 grid-cols-4 gap-2" role="tablist" aria-label={unifiedManagement ? '商品状态概览' : '主档状态概览'}>
+          {[
+            { id: 'all' as const, label: unifiedManagement ? '全部商品' : '全部主档', count: tabCounts.all, icon: Library },
+            { id: 'on_shelf' as const, label: '已启用', count: tabCounts.on_shelf, icon: CircleCheck },
+            { id: 'off_shelf' as const, label: '已停用', count: tabCounts.off_shelf, icon: CirclePause },
+            { id: 'draft' as const, label: '草稿', count: tabCounts.draft, icon: FilePenLine },
+          ].map(item => {
+            const active = activeTab === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => handleTabChange(item.id)}
+                className={`flex min-w-0 items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                  active
+                    ? 'border-[#B7E8CB] bg-[#F1FBF6]'
+                    : 'border-transparent bg-white hover:bg-[#F7F8FA]'
+                }`}
+              >
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                  active ? 'bg-[#DFF6EA] text-[#008F4C]' : 'bg-[#F2F4F7] text-[#86909C]'
+                }`}>
+                  <Icon size={16} />
+                </span>
+                <span className="flex min-w-0 items-baseline gap-2">
+                  <span className={`truncate text-[13px] font-medium ${active ? 'text-[#008F4C]' : 'text-[#667085]'}`}>{item.label}</span>
+                  <span className={`text-[18px] font-semibold leading-none ${active ? 'text-[#008F4C]' : 'text-[#1D2129]'}`}>{item.count}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <button className="flex items-center text-[13px] text-[#666] hover:text-[#333]">
+        <button onClick={() => showNotice('回收站暂无已归档商品')} className="flex items-center text-[13px] text-[#666] hover:text-[#333]">
           <Trash2 size={14} className="mr-1.5" /> 回收站
         </button>
       </div>
@@ -266,27 +279,11 @@ export const WebProductList: React.FC<{
           </div>
           <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
             <span className="mr-2 whitespace-nowrap text-xs text-gray-500">前台分类:</span>
-            <select
-              className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none"
-              value={draftFilters.frontendCategory}
-              onChange={e => setDraftFilters(prev => ({ ...prev, frontendCategory: e.target.value }))}
-            >
+            <select className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none" value={draftFilters.frontendCategory} onChange={e => setDraftFilters(prev => ({ ...prev, frontendCategory: e.target.value }))}>
               <option value="all">全部</option>
-              {frontendQuickCategories.map(item => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
+              {allFrontendCategories.map(name => <option key={name} value={name}>{name}</option>)}
             </select>
-            {draftFilters.frontendCategory !== 'all' ? (
-              <X
-                size={14}
-                className="ml-1 cursor-pointer text-gray-400 hover:text-red-500"
-                onClick={() => setDraftFilters(prev => ({ ...prev, frontendCategory: 'all' }))}
-              />
-            ) : (
-              <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />
-            )}
+            {draftFilters.frontendCategory !== 'all' ? <X size={14} className="ml-1 cursor-pointer text-gray-400 hover:text-red-500" onClick={() => setDraftFilters(prev => ({ ...prev, frontendCategory: 'all' }))} /> : <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />}
           </div>
           <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
             <span className="mr-2 whitespace-nowrap text-xs text-gray-500">后台分类:</span>
@@ -328,14 +325,14 @@ export const WebProductList: React.FC<{
             )}
           </div>
 
-          <button className="flex h-[36px] items-center rounded-md border border-[#E8E8E8] bg-white px-4 text-[13px] text-[#666] transition-all hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">
+          <button onClick={() => showNotice('当前页面已展示全部可用筛选条件')} className="flex h-[36px] items-center rounded-md border border-[#E8E8E8] bg-white px-4 text-[13px] text-[#666] transition-all hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">
             <Plus size={14} className="mr-1" /> 添加筛选
           </button>
         </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <button className="flex items-center rounded-md border border-[#E8E8E8] bg-white px-4 py-1.5 text-[13px] text-[#333] shadow-sm transition-all hover:bg-gray-50">
+            <button onClick={() => showNotice('快捷筛选已保存')} className="flex items-center rounded-md border border-[#E8E8E8] bg-white px-4 py-1.5 text-[13px] text-[#333] transition-all hover:bg-gray-50">
               <Box size={14} className="mr-2 text-gray-400" /> 保存快捷筛选项
             </button>
           </div>
@@ -343,7 +340,7 @@ export const WebProductList: React.FC<{
             <button onClick={handleResetFilters} className="h-[36px] rounded-md border border-[#E8E8E8] bg-white px-5 text-[13px] text-[#333] transition-colors hover:bg-gray-50 hover:text-[#00C06B]">
               重置
             </button>
-            <button onClick={handleApplyFilters} className="h-[36px] rounded-md bg-[#00C06B] px-6 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-[#00A35B] active:scale-95">
+            <button onClick={handleApplyFilters} className="h-[36px] rounded-md bg-[#00C06B] px-6 text-[13px] font-bold text-white transition-all hover:bg-[#00A35B] active:scale-95">
               查询
             </button>
           </div>
@@ -354,46 +351,30 @@ export const WebProductList: React.FC<{
         <div className="relative flex min-h-0 flex-1">
           {!isCategoryPanelCollapsed && (
             <aside className="flex min-h-0 w-[240px] shrink-0 flex-col rounded-lg border border-[#E8E8E8] bg-white">
-              <div className="flex items-center justify-between border-b border-[#E8E8E8] px-3 py-3">
-                <div className="flex items-center space-x-4 text-[13px] font-bold">
-                  <button
-                    onClick={() => {
-                      setQuickCategoryView('frontend');
-                      setSelectedQuickCategory(prev => ({ view: 'frontend', name: prev.view === 'frontend' ? prev.name : null }));
-                    }}
-                    className={quickCategoryView === 'frontend' ? 'text-[#00C06B]' : 'text-[#666] hover:text-[#00C06B]'}
-                  >
-                    前台分类({frontendQuickCategories.length})
-                  </button>
-                  <button
-                    onClick={() => {
-                      setQuickCategoryView('backend');
-                      setSelectedQuickCategory(prev => ({ view: 'backend', name: prev.view === 'backend' ? prev.name : null }));
-                    }}
-                    className={quickCategoryView === 'backend' ? 'text-[#00C06B]' : 'text-[#666] hover:text-[#00C06B]'}
-                  >
-                    后台分类({backendQuickCategories.length})
-                  </button>
+              <div className="flex h-11 items-center justify-between border-b border-[#E8E8E8] px-3">
+                <div className="flex items-center gap-4 text-[13px]">
+                  <button type="button" onClick={() => { setQuickCategoryView('backend'); setSelectedQuickCategory(null); }} className={quickCategoryView === 'backend' ? 'font-bold text-[#00A35B]' : 'text-[#667085] hover:text-[#333]'}>后台分类</button>
+                  <button type="button" onClick={() => { setQuickCategoryView('frontend'); setSelectedQuickCategory(null); }} className={quickCategoryView === 'frontend' ? 'font-bold text-[#00A35B]' : 'text-[#667085] hover:text-[#333]'}>前台分类</button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 no-scrollbar">
+              <div className="no-scrollbar flex-1 overflow-y-auto p-2">
                 <button
-                  onClick={() => setSelectedQuickCategory({ view: quickCategoryView, name: null })}
+                  onClick={() => setSelectedQuickCategory(null)}
                   className={`mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-[13px] ${
-                    selectedQuickCategory.view === quickCategoryView && !selectedQuickCategory.name
+                    !selectedQuickCategory
                       ? 'bg-[#EAF9F1] font-bold text-[#00C06B]'
                       : 'text-[#333] hover:bg-[#F7F8FA]'
                   }`}
                 >
                   <span>全部</span>
-                  <span className="text-[12px] text-[#98A2B3]">{products.length}</span>
+                  <span className="text-[12px] text-[#98A2B3]">{categorySourceProducts.length}</span>
                 </button>
-                {visibleQuickCategories.map(item => (
+                {quickCategories.map(item => (
                   <button
-                    key={`${quickCategoryView}-${item.name}`}
-                    onClick={() => setSelectedQuickCategory({ view: quickCategoryView, name: item.name })}
+                    key={item.name}
+                    onClick={() => setSelectedQuickCategory(item.name)}
                     className={`mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13px] ${
-                      selectedQuickCategory.view === quickCategoryView && selectedQuickCategory.name === item.name
+                      selectedQuickCategory === item.name
                         ? 'bg-[#EAF9F1] font-bold text-[#00C06B]'
                         : 'text-[#333] hover:bg-[#F7F8FA]'
                     }`}
@@ -429,10 +410,6 @@ export const WebProductList: React.FC<{
                 </div>
               </div>
               <div className="flex items-center space-x-3">
-                <button className="flex h-[36px] items-center rounded-md border border-[#E8E8E8] px-3 text-[13px] text-[#666] transition-all hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">
-                  <ListFilter size={14} className="mr-1.5" /> 排序管理
-                </button>
-
                 <div className="relative">
                   <button
                     className="flex h-[36px] items-center rounded-md border border-[#E8E8E8] px-3 text-[13px] text-[#666] transition-all hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]"
@@ -465,7 +442,7 @@ export const WebProductList: React.FC<{
                         授权导入记录
                       </button>
                       <div className="my-1 h-px bg-gray-100" />
-                      <button className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]">
+                      <button onClick={() => { showNotice(`已导出 ${selectedProductIds.length || filteredProducts.length} 个商品`); setShowImportDropdown(false); }} className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-gray-50 hover:text-[#00C06B]">
                         导出选中商品
                       </button>
                     </div>
@@ -492,38 +469,40 @@ export const WebProductList: React.FC<{
                           className={`w-full px-4 py-2.5 text-left text-[13px] ${
                             action.enabled ? 'text-[#333] hover:bg-[#F7F8FA] hover:text-[#00C06B]' : 'cursor-not-allowed text-[#C0C4CC]'
                           }`}
-                          onClick={() => setShowToolbarMoreDropdown(false)}
+                          onClick={() => { setShowToolbarMoreDropdown(false); showNotice(`${action.label}已进入批量处理流程`); }}
                         >
                           {action.label}
                         </button>
                       ))}
-                      {hasComboSelection && (
-                        <div className="border-t border-[#F2F3F5] px-4 py-2 text-[12px] text-[#98A2B3]">已选套餐商品不支持打印设置</div>
-                      )}
                     </div>
                   )}
                 </div>
 
-                <button onClick={() => onCreateClick('standard')} className="flex h-[36px] items-center rounded-md bg-[#00C06B] px-4 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-[#00A35B] active:scale-95">
-                  <CupSoda size={16} className="mr-1.5" /> 新建商品
+                <button onClick={() => onCreateClick('standard')} className="flex h-[36px] items-center rounded-md bg-[#00C06B] px-4 text-[13px] font-bold text-white transition-all hover:bg-[#00A35B] active:scale-95">
+                  <CupSoda size={16} className="mr-1.5" /> {unifiedManagement ? '新建商品' : '新建商品主档'}
                 </button>
-                <button onClick={() => onCreateClick('combo')} className="flex h-[36px] items-center rounded-md border border-[#00C06B] bg-white px-4 text-[13px] font-bold text-[#00C06B] shadow-sm transition-all hover:bg-[#E6F8F0] active:scale-95">
-                  <Utensils size={16} className="mr-1.5" /> 新建套餐商品
+                <button onClick={() => onCreateClick('combo')} className="flex h-[36px] items-center rounded-md border border-[#00C06B] bg-white px-4 text-[13px] font-bold text-[#00C06B] transition-all hover:bg-[#E6F8F0] active:scale-95">
+                  <Utensils size={16} className="mr-1.5" /> {unifiedManagement ? '新建套餐商品' : '新建套餐主档'}
                 </button>
               </div>
             </div>
 
             {selectedProductIds.length > 0 && batchActions.length > 0 && (
-              <div className="mb-4 flex items-center justify-between rounded-lg border border-[#D8F0E3] bg-[#F4FCF7] px-4 py-3">
+              <div className="absolute bottom-4 left-1/2 z-30 flex min-h-[60px] w-[min(900px,calc(100%-80px))] -translate-x-1/2 items-center justify-between rounded-lg border border-[#D8F0E3] bg-white px-4 py-3 shadow-[0_10px_28px_rgba(17,24,39,.14)]">
                 <div className="text-[13px] text-[#333]">
                   已选择 <span className="font-bold text-[#00C06B]">{selectedProductIds.length}</span> 个商品
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {batchActions.map(action => {
-                    const isDanger = action === '批量停售' || action === '批量归档';
+                    const isDanger = action === '批量停用' || action === '批量归档';
                     return (
                       <button
                         key={action}
+                        onClick={() => {
+                          if (action === '批量启用' || action === '批量停用') selectedProducts.forEach(product => { if ((action === '批量启用' && product.status !== 'on_shelf') || (action === '批量停用' && product.status === 'on_shelf')) toggleShelfStatus(product.id); });
+                          showNotice(`${action}已处理 ${selectedProductIds.length} 个商品`);
+                          setSelectedProductIds([]);
+                        }}
                         className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
                           isDanger
                             ? 'border border-[#FFD6D6] bg-white text-[#FF4D4F] hover:bg-[#FFF5F5]'
@@ -540,22 +519,22 @@ export const WebProductList: React.FC<{
 
             <div className="mb-3 flex items-center justify-between text-[12px] text-[#98A2B3]">
               <div className="flex items-center gap-2">
-                {selectedQuickCategory.name && (
+                {selectedQuickCategory && (
                   <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">
-                    {selectedQuickCategory.view === 'backend' ? '后台分类' : '前台分类'}：{selectedQuickCategory.name}
+                    {quickCategoryView === 'backend' ? '后台分类' : '前台分类'}：{selectedQuickCategory}
                   </span>
                 )}
                 {appliedFilters.frontendCategory !== 'all' && (
                   <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">前台分类筛选：{appliedFilters.frontendCategory}</span>
                 )}
                 {appliedFilters.backendCategory !== 'all' && (
-                  <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">后台分类筛选：{appliedFilters.backendCategory}</span>
+                  <span className="rounded-full bg-[#F5F7FA] px-3 py-1 text-[#5B6475]">商品类目筛选：{appliedFilters.backendCategory}</span>
                 )}
               </div>
             </div>
 
             <div className="relative flex-1 overflow-auto rounded-lg border border-[#E8E8E8] no-scrollbar">
-              <table className="min-w-[1280px] w-max border-collapse text-left">
+              <table className="min-w-[1080px] w-full border-collapse text-left">
                 <thead className="sticky top-0 z-10 bg-[#F7F8FA]">
                   <tr className="h-[48px] border-b border-[#E8E8E8] text-[12px] font-bold text-[#666]">
                     <th className="w-[50px] pl-4">
@@ -569,11 +548,10 @@ export const WebProductList: React.FC<{
                     <th className="w-[110px] whitespace-nowrap px-4">
                       商品类型 <Filter size={12} className="ml-1 inline text-[#00C06B]" />
                     </th>
-                    <th className="w-[120px] whitespace-nowrap px-4">前台分类</th>
-                    <th className="w-[120px] whitespace-nowrap px-4">后台分类</th>
-                    <th className="w-[100px] whitespace-nowrap px-4">基础价格</th>
-                    <th className="w-[100px] whitespace-nowrap px-4">售卖状态</th>
-                    <th className="w-[100px] whitespace-nowrap px-4">数据来源</th>
+                    <th className="w-[140px] whitespace-nowrap px-4">商品类目</th>
+                    <th className="w-[120px] whitespace-nowrap px-4">基础售价</th>
+                    <th className="w-[100px] whitespace-nowrap px-4">{unifiedManagement ? '商品状态' : '主档状态'}</th>
+                    <th className="w-[100px] whitespace-nowrap px-4">{unifiedManagement ? '维护方式' : '数据来源'}</th>
                     <th className="w-[160px] whitespace-nowrap px-4">创建时间</th>
                     <th className="w-[100px] whitespace-nowrap px-4">备注</th>
                     <th className="sticky right-0 z-20 w-[140px] whitespace-nowrap bg-[#F7F8FA] px-4 text-center shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.05)]">
@@ -602,26 +580,19 @@ export const WebProductList: React.FC<{
                             <img src={product.image} className="mr-3 h-10 w-10 rounded-md border border-[#EEE] object-cover transition-colors group-hover:border-[#00C06B]" />
                             <div className="min-w-0">
                               <div className="mb-0.5 cursor-pointer truncate font-bold transition-colors group-hover:text-[#00C06B]">{product.name}</div>
-                              <div className="font-mono text-[11px] text-[#999]">{product.id}</div>
+                              <div className="text-[11px] text-[#999]">商品ID：{product.id}</div>
                             </div>
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#666]">{getProductTypeLabel(product)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#666]">{getFrontendCategoryName(product)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#666]">{product.category || '未分类'}</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-mono font-medium">
-                          {product.price} <span className="text-[10px] text-gray-400">元</span>
-                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-[#333]">¥{product.price.toFixed(2)}</td>
                         <td className="whitespace-nowrap px-4 py-3">
-                          {product.status === 'on_shelf' ? (
-                            <span className="text-[#333]">{getProductStatusLabel(product)}</span>
-                          ) : (
-                            <span className="text-[#999]">{getProductStatusLabel(product)}</span>
-                          )}
+                          <span className={product.status === 'on_shelf' ? 'text-[#00A35B]' : 'text-[#999]'}>{getProductStatusLabel(product)}</span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <div className="flex items-center text-[#666]">
-                            品牌 <HelpCircle size={12} className="ml-1 cursor-help text-[#00C06B]" />
+                            {unifiedManagement ? '统一管理' : '品牌主档'} <HelpCircle size={12} className="ml-1 cursor-help text-[#00C06B]" />
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 font-mono text-[12px] text-[#666]">{product.createdTime}</td>
@@ -652,7 +623,7 @@ export const WebProductList: React.FC<{
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={11} className="bg-gray-50/30 py-20 text-center text-[#999]">
+                      <td colSpan={10} className="bg-gray-50/30 py-20 text-center text-[#999]">
                         <div className="flex flex-col items-center">
                           <Package size={40} className="mb-4 text-[#EEE]" />
                           <span>暂无相关商品数据</span>
@@ -667,14 +638,14 @@ export const WebProductList: React.FC<{
             <div className="flex h-[48px] shrink-0 items-center justify-end border-t border-[#E8E8E8] bg-white px-4 text-[12px] text-[#666]">
               <span>共 {filteredProducts.length} 条</span>
               <div className="ml-4 flex items-center space-x-2">
-                <button className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded border bg-gray-50 text-gray-400">
+                <button type="button" disabled aria-label="上一页" className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded border bg-gray-50 text-gray-400">
                   <ChevronLeft size={12} />
                 </button>
-                <button className="flex h-6 w-6 items-center justify-center rounded border border-[#00C06B] bg-white font-bold text-[#00C06B]">1</button>
-                <button className="flex h-6 w-6 items-center justify-center rounded border bg-white transition-colors hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">2</button>
-                <button className="flex h-6 w-6 items-center justify-center rounded border bg-white transition-colors hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">...</button>
-                <button className="flex h-6 w-6 items-center justify-center rounded border bg-white transition-colors hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">10</button>
-                <button className="flex h-6 w-6 items-center justify-center rounded border bg-white transition-colors hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">
+                <button type="button" disabled aria-current="page" className="flex h-6 w-6 items-center justify-center rounded border border-[#00C06B] bg-white font-bold text-[#00C06B]">1</button>
+                <button type="button" disabled title="当前演示数据仅一页" className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded border bg-white text-gray-300">2</button>
+                <button type="button" disabled title="当前演示数据仅一页" className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded border bg-white text-gray-300">...</button>
+                <button type="button" disabled title="当前演示数据仅一页" className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded border bg-white text-gray-300">10</button>
+                <button type="button" disabled aria-label="下一页" className="flex h-6 w-6 cursor-not-allowed items-center justify-center rounded border bg-white text-gray-300">
                   <ChevronRight size={12} />
                 </button>
               </div>

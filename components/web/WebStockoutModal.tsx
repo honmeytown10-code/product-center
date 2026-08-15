@@ -88,6 +88,11 @@ export const WebStockoutModal: React.FC<{
     setSpecRows(prev => prev.map(spec => (spec.id === specId ? { ...spec, ...updates } : spec)));
   };
 
+  const adjustNumber = (value: string, delta: number, onChange: (next: string) => void) => {
+    const current = Number(value);
+    onChange(String(Math.max(0, (Number.isFinite(current) ? current : 0) + delta)));
+  };
+
   const handleConfirm = () => {
     onConfirm({
       type: stockoutType,
@@ -162,10 +167,10 @@ export const WebStockoutModal: React.FC<{
                     className="h-[48px] w-[140px] rounded-l-md border border-[#D9D9D9] px-4 text-center text-[18px] text-[#666] outline-none focus:border-[#00C06B]"
                   />
                   <div className="flex w-[50px] flex-col rounded-r-md border border-l-0 border-[#D9D9D9]">
-                    <button className="flex flex-1 items-center justify-center border-b border-[#E8E8E8] text-[#999]">
+                    <button type="button" onClick={() => adjustNumber(remainStock, 1, setRemainStock)} aria-label="剩余库存加一" className="flex flex-1 items-center justify-center border-b border-[#E8E8E8] text-[#999]">
                       <ChevronDown size={16} className="rotate-180" />
                     </button>
-                    <button className="flex flex-1 items-center justify-center text-[#999]">
+                    <button type="button" onClick={() => adjustNumber(remainStock, -1, setRemainStock)} aria-label="剩余库存减一" className="flex flex-1 items-center justify-center text-[#999]">
                       <ChevronDown size={16} />
                     </button>
                   </div>
@@ -186,10 +191,10 @@ export const WebStockoutModal: React.FC<{
                       className="h-[48px] w-[140px] rounded-l-md border border-[#D9D9D9] px-4 text-center text-[18px] text-[#666] outline-none focus:border-[#00C06B]"
                     />
                     <div className="flex w-[50px] flex-col rounded-r-md border border-l-0 border-[#D9D9D9]">
-                      <button className="flex flex-1 items-center justify-center border-b border-[#E8E8E8] text-[#999]">
+                      <button type="button" onClick={() => adjustNumber(nextDayStock, 1, setNextDayStock)} aria-label="次日库存加一" className="flex flex-1 items-center justify-center border-b border-[#E8E8E8] text-[#999]">
                         <ChevronDown size={16} className="rotate-180" />
                       </button>
-                      <button className="flex flex-1 items-center justify-center text-[#999]">
+                      <button type="button" onClick={() => adjustNumber(nextDayStock, -1, setNextDayStock)} aria-label="次日库存减一" className="flex flex-1 items-center justify-center text-[#999]">
                         <ChevronDown size={16} />
                       </button>
                     </div>

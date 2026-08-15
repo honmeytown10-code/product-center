@@ -184,10 +184,10 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
   },
 ];
 
-const FilterInput = ({ label, placeholder }: { label: string; placeholder: string }) => (
+const FilterInput = ({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (value: string) => void }) => (
   <div className="flex items-center">
     <span className="text-xs text-[#666] mr-2 shrink-0">{label}</span>
-    <input className="w-[170px] h-[34px] px-3 border border-[#E8E8E8] rounded text-sm focus:border-[#00C06B] focus:outline-none transition-colors" placeholder={placeholder} />
+    <input value={value} onChange={event => onChange(event.target.value)} className="w-[170px] h-[34px] px-3 border border-[#E8E8E8] rounded text-sm focus:border-[#00C06B] focus:outline-none transition-colors" placeholder={placeholder} />
   </div>
 );
 
@@ -219,14 +219,14 @@ const FilterNativeSelect = ({
   </div>
 );
 
-const FilterSelect = ({ label, placeholder }: { label: string; placeholder: string }) => (
+const FilterSelect = ({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }> }) => (
   <div className="flex items-center">
     <span className="text-xs text-[#666] mr-2 shrink-0">{label}</span>
     <div className="relative">
-      <button className="flex items-center justify-between w-[150px] h-[34px] px-3 border border-[#E8E8E8] rounded text-sm text-[#333] bg-white hover:border-[#00C06B] transition-colors">
-        <span className="truncate">{placeholder}</span>
-        <ChevronDown size={14} className="text-[#999] ml-2 shrink-0" />
-      </button>
+      <select value={value} onChange={event => onChange(event.target.value)} className="h-[34px] w-[150px] appearance-none rounded border border-[#E8E8E8] bg-white px-3 pr-8 text-sm text-[#333] outline-none hover:border-[#00C06B]">
+        {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+      <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#999]" />
     </div>
   </div>
 );
@@ -239,6 +239,11 @@ export const WebStoreAddonList: React.FC = () => {
   const [addons, setAddons] = useState<StoreAddonRecord[]>(MOCK_STORE_ADDONS);
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeStoreId, setActiveStoreId] = useState('all');
+  const [nameKeyword, setNameKeyword] = useState('');
+  const [idKeyword, setIdKeyword] = useState('');
+  const [saleStatus, setSaleStatus] = useState('all');
+  const [stockStatus, setStockStatus] = useState('all');
+  const [notice, setNotice] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [stockDialog, setStockDialog] = useState<StoreAddonRecord | null>(null);
   const [shelfDialog, setShelfDialog] = useState<StoreAddonRecord | null>(null);
@@ -287,8 +292,29 @@ export const WebStoreAddonList: React.FC = () => {
       filtered = filtered.filter(item => activeTabId in item.channelStatuses);
     }
 
+    if (nameKeyword.trim()) {
+      filtered = filtered.filter(item => item.name.toLowerCase().includes(nameKeyword.trim().toLowerCase()));
+    }
+    if (idKeyword.trim()) {
+      filtered = filtered.filter(item => item.id.includes(idKeyword.trim()));
+    }
+    if (saleStatus !== 'all') {
+      filtered = filtered.filter(item => {
+        const statuses = activeTabId === 'all' ? Object.values(item.channelStatuses) : [item.channelStatuses[activeTabId as ChannelId]];
+        return saleStatus === 'on_shelf' ? statuses.includes('on_shelf') : statuses.every(status => status !== 'on_shelf');
+      });
+    }
+    if (stockStatus !== 'all') {
+      filtered = filtered.filter(item => stockStatus === 'available' ? item.stockMode === 'unlimited' || item.stockCount > 0 : item.stockMode === 'custom' && item.stockCount <= 0);
+    }
+
     return filtered;
-  }, [activeStoreId, activeTabId, addons]);
+  }, [activeStoreId, activeTabId, addons, idKeyword, nameKeyword, saleStatus, stockStatus]);
+
+  const showNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(''), 2600);
+  };
 
   const handleAction = (
     addon: StoreAddonRecord,
@@ -555,23 +581,24 @@ export const WebStoreAddonList: React.FC = () => {
 
   return (
     <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4">
+      {notice && <div className="fixed right-6 top-[76px] z-[120] rounded-md bg-[#1D2129] px-4 py-2.5 text-[13px] text-white shadow-lg">{notice}</div>}
       <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden min-w-0">
         <div className="p-5 border-b border-[#E8E8E8] bg-white space-y-4 shrink-0 z-20">
           <div className="flex flex-wrap gap-3 items-center">
-            <FilterInput label="加料名称" placeholder="请输入" />
-            <FilterInput label="加料ID" placeholder="请输入" />
+            <FilterInput label="加料名称" placeholder="请输入" value={nameKeyword} onChange={setNameKeyword} />
+            <FilterInput label="加料ID" placeholder="请输入" value={idKeyword} onChange={setIdKeyword} />
             <FilterNativeSelect label="机构门店" options={STORE_OPTIONS} value={activeStoreId} onChange={setActiveStoreId} />
-            <FilterSelect label="售卖状态" placeholder="全部" />
-            <FilterSelect label="库存状态" placeholder="请选择" />
+            <FilterSelect label="售卖状态" value={saleStatus} onChange={setSaleStatus} options={[{ value: 'all', label: '全部' }, { value: 'on_shelf', label: '有渠道在售' }, { value: 'off_shelf', label: '全部停售' }]} />
+            <FilterSelect label="库存状态" value={stockStatus} onChange={setStockStatus} options={[{ value: 'all', label: '全部' }, { value: 'available', label: '有库存' }, { value: 'out', label: '已沽清' }]} />
           </div>
 
           <div className="flex justify-between items-center gap-4">
-            <button className="flex items-center text-xs text-[#666] border border-[#E8E8E8] px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
+            <button type="button" onClick={() => showNotice('门店加料快捷筛选已保存')} className="flex items-center text-xs text-[#666] border border-[#E8E8E8] px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
               <FileUp size={14} className="mr-1.5" /> 保存快捷筛选选项
             </button>
             <div className="flex space-x-3">
-              <button className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
-              <button className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
+              <button type="button" onClick={() => { setNameKeyword(''); setIdKeyword(''); setActiveStoreId('all'); setSaleStatus('all'); setStockStatus('all'); }} className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
+              <button type="button" onClick={() => showNotice(`已查询到 ${filteredAddons.length} 条门店加料`)} className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
             </div>
           </div>
         </div>
@@ -721,12 +748,12 @@ export const WebStoreAddonList: React.FC = () => {
             <ChevronDown size={14} />
           </div>
           <div className="flex items-center space-x-1">
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B] disabled:opacity-50"><ChevronLeft size={12} /></button>
-            <button className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">2</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">3</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]">...</button>
-            <button className="w-6 h-6 flex items-center justify-center border rounded hover:border-[#00C06B] hover:text-[#00C06B]"><ChevronRight size={12} /></button>
+            <button type="button" disabled aria-label="上一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40"><ChevronLeft size={12} /></button>
+            <button type="button" disabled aria-current="page" className="w-6 h-6 flex items-center justify-center bg-[#00C06B] text-white rounded font-bold">1</button>
+            <button type="button" disabled title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">2</button>
+            <button type="button" disabled title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">3</button>
+            <button type="button" disabled title="当前演示数据仅一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40">...</button>
+            <button type="button" disabled aria-label="下一页" className="w-6 h-6 flex items-center justify-center border rounded opacity-40"><ChevronRight size={12} /></button>
           </div>
         </div>
       </div>

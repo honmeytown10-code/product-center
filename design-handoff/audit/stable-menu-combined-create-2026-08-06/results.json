@@ -1,0 +1,19 @@
+{
+  "initialStableMenu": true,
+  "clickedSettings": true,
+  "clickedManageStrategy": true,
+  "clickedUnified": true,
+  "creationSettingVisible": true,
+  "clickedSave": true,
+  "clickedConfirmSave": true,
+  "unifiedStableMenu": true,
+  "clickedChannelProduct": true,
+  "singleDefaultCatalog": true,
+  "createButtonVisible": true,
+  "clickedCreate": true,
+  "clickedStandard": true,
+  "categoryModalVisible": true,
+  "combinedFormVisible": true,
+  "horizontalOverflow": false,
+  "consoleErrors": []
+}

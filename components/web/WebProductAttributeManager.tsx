@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart, Blend, ChevronRight, ChevronDown, Plus, X, Eye, EyeOff, Lock } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart, Blend, ChevronRight, ChevronDown, Plus, X, Eye, EyeOff, Lock, Braces, FolderTree } from 'lucide-react';
+import { WebCustomAttributeManager } from './WebCustomAttributeManager';
+import { WebCategoryListManager } from './WebCategoryListManager';
 
 type SpecValue = {
   id: string;
@@ -8,8 +11,8 @@ type SpecValue = {
   relatedProducts: LinkedSpecProduct[];
 };
 
-type AttributeTab = 'spec' | 'method' | 'label' | 'badge' | 'series' | 'custom_combo' | 'addon';
-type LabelTab = 'desc' | 'order' | 'stats';
+type AttributeTab = 'category' | 'spec' | 'method' | 'label' | 'badge' | 'series' | 'custom_attribute' | 'custom_combo' | 'addon';
+type LabelTab = 'desc' | 'stats';
 type SpecColumnKey = 'name' | 'value' | 'code' | 'relatedProducts';
 
 type LinkedSpecProduct = {
@@ -66,6 +69,20 @@ type SeriesRecord = {
   image: string;
   relatedCount: number;
   enabled: boolean;
+};
+
+type ChannelLibraryEditorState =
+  | { kind: 'label_group'; mode: 'create' | 'edit'; groupId?: string; groupName: string }
+  | { kind: 'label'; mode: 'create' | 'edit'; groupId: string; labelId?: string; name: string; bgColor: string; textColor: string }
+  | { kind: 'badge'; mode: 'create' | 'edit'; id?: string; name: string; bgColor: string; effectText: string; image: string; validPeriod: string }
+  | { kind: 'series'; mode: 'create' | 'edit'; id?: string; name: string; image: string; enabled: boolean; relatedCount: number };
+
+type ChannelLibraryDeleteState = {
+  kind: 'label_group' | 'label' | 'badge' | 'series';
+  id: string;
+  parentId?: string;
+  name: string;
+  blockedCount?: number;
 };
 
 type CustomComboConfigMode = 'pick' | 'flexible';
@@ -305,7 +322,6 @@ const METHOD_GROUPS: MethodGroup[] = [
 
 const LABEL_TABS: Array<{ id: LabelTab; label: string }> = [
   { id: 'desc', label: '描述标签' },
-  { id: 'order', label: '点单标签' },
   { id: 'stats', label: '统计标签' },
 ];
 
@@ -321,9 +337,6 @@ const LABEL_GROUPS: Record<LabelTab, LabelGroup[]> = {
     },
     { id: 'label-group-2', groupName: '口味描述', labels: [] },
     { id: 'label-group-3', groupName: '0416 描述标签', labels: [] },
-  ],
-  order: [
-    { id: 'order-group-1', groupName: '新品推荐', labels: [{ id: 'ol-1', name: '新品', bgColor: '#FEE2E2', textColor: '#EF4444', createdAt: '2025-04-16 09:59:21' }] },
   ],
   stats: [
     { id: 'stats-group-1', groupName: '热销统计', labels: [{ id: 'sl-1', name: '热卖', bgColor: '#ECFDF3', textColor: '#12B76A', createdAt: '2024-12-26 11:38:44' }] },
@@ -490,19 +503,74 @@ const ADDON_GROUPS: AddonGroup[] = [
 ];
 
 const tabs: Array<{ id: AttributeTab; label: string; icon: React.ReactNode }> = [
+  { id: 'category', label: '商品分类', icon: <FolderTree size={16} /> },
   { id: 'spec', label: '规格管理', icon: <Layers3 size={16} /> },
   { id: 'method', label: '做法管理', icon: <ChefHat size={16} /> },
   { id: 'label', label: '标签管理', icon: <Tags size={16} /> },
   { id: 'badge', label: '角标管理', icon: <Tag size={16} /> },
   { id: 'series', label: '系列商品', icon: <Grid2X2 size={16} /> },
+  { id: 'custom_attribute', label: '自定义属性', icon: <Braces size={16} /> },
   { id: 'custom_combo', label: '随心配管理', icon: <Heart size={16} /> },
   { id: 'addon', label: '加料', icon: <Blend size={16} /> },
 ];
 
-export const WebProductAttributeManager: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<AttributeTab>('spec');
-  const [activeLabelTab, setActiveLabelTab] = useState<LabelTab>('desc');
+type ProductAttributeScope = 'all' | 'master' | 'channel';
+
+interface WebProductAttributeManagerProps {
+  scope?: ProductAttributeScope;
+  initialTab?: AttributeTab;
+}
+
+const MASTER_ATTRIBUTE_TABS: AttributeTab[] = ['category', 'spec', 'method', 'label', 'custom_combo', 'addon'];
+const CHANNEL_ATTRIBUTE_TABS: AttributeTab[] = ['label', 'badge', 'series', 'custom_attribute'];
+
+export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProps> = ({
+  scope = 'all',
+  initialTab,
+}) => {
+  const visibleTabs = useMemo(
+    () => tabs
+      .filter(tab => (
+        scope === 'all'
+        || (scope === 'master' && MASTER_ATTRIBUTE_TABS.includes(tab.id))
+        || (scope === 'channel' && CHANNEL_ATTRIBUTE_TABS.includes(tab.id))
+      ))
+      .map(tab => {
+        if (tab.id === 'category') {
+          return {
+            ...tab,
+            label: scope === 'master' ? '商品分类' : scope === 'channel' ? '前台分类' : '商品分类',
+          };
+        }
+        if (tab.id === 'label') {
+          return {
+            ...tab,
+            label: scope === 'master' ? '统计标签' : scope === 'channel' ? '描述标签' : '标签管理',
+          };
+        }
+        return tab;
+      }),
+    [scope],
+  );
+  const visibleLabelTabs = useMemo(
+    () => LABEL_TABS.filter(tab => (
+      scope === 'all'
+      || (scope === 'master' && tab.id === 'stats')
+      || (scope === 'channel' && tab.id === 'desc')
+    )),
+    [scope],
+  );
+  const [activeTab, setActiveTab] = useState<AttributeTab>(
+    initialTab || 'category',
+  );
+  const [activeLabelTab, setActiveLabelTab] = useState<LabelTab>(scope === 'master' ? 'stats' : 'desc');
   const [keyword, setKeyword] = useState('');
+  const [showFieldOwnership, setShowFieldOwnership] = useState(false);
+  const [labelGroups, setLabelGroups] = useState<Record<LabelTab, LabelGroup[]>>(LABEL_GROUPS);
+  const [badges, setBadges] = useState<BadgeRecord[]>(BADGE_RECORDS);
+  const [seriesRecords, setSeriesRecords] = useState<SeriesRecord[]>(SERIES_RECORDS);
+  const [channelLibraryEditor, setChannelLibraryEditor] = useState<ChannelLibraryEditorState | null>(null);
+  const [channelLibraryDelete, setChannelLibraryDelete] = useState<ChannelLibraryDeleteState | null>(null);
   const [specGroups, setSpecGroups] = useState<SpecGroup[]>(SPEC_GROUPS);
   const [specNameInput, setSpecNameInput] = useState('');
   const [specNameFilter, setSpecNameFilter] = useState('');
@@ -527,6 +595,34 @@ export const WebProductAttributeManager: React.FC = () => {
   const [expandedAddonGroups, setExpandedAddonGroups] = useState<Set<string>>(
     () => new Set(ADDON_GROUPS.filter(group => (group.children?.length || 0) > 0).map(group => group.id))
   );
+  const [actionNotice, setActionNotice] = useState('');
+  const showActionNotice = (text: string) => { setActionNotice(text); window.setTimeout(() => setActionNotice(''), 2600); };
+
+  useEffect(() => {
+    if (!visibleTabs.some(tab => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || 'category');
+    }
+  }, [activeTab, visibleTabs]);
+
+  useEffect(() => {
+    if (initialTab && visibleTabs.some(tab => tab.id === initialTab)) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, visibleTabs]);
+
+  useEffect(() => {
+    if (!visibleLabelTabs.some(tab => tab.id === activeLabelTab)) {
+      setActiveLabelTab(visibleLabelTabs[0]?.id || 'desc');
+    }
+  }, [activeLabelTab, visibleLabelTabs]);
+
+  useEffect(() => {
+    setExpandedLabelGroups(new Set(
+      labelGroups[activeLabelTab]
+        .filter(group => group.labels.length > 0)
+        .map(group => group.id),
+    ));
+  }, [activeLabelTab, labelGroups]);
 
   const normalizedKeyword = keyword.trim().toLowerCase();
   const normalizedSpecName = specNameFilter.trim().toLowerCase();
@@ -542,20 +638,20 @@ export const WebProductAttributeManager: React.FC = () => {
   }, [normalizedKeyword]);
 
   const filteredLabelGroups = useMemo(() => {
-    const source = LABEL_GROUPS[activeLabelTab];
+    const source = labelGroups[activeLabelTab];
     if (!normalizedKeyword) return source;
     return source.filter(group => [group.groupName, ...group.labels.map(label => label.name)].join(' ').toLowerCase().includes(normalizedKeyword));
-  }, [activeLabelTab, normalizedKeyword]);
+  }, [activeLabelTab, labelGroups, normalizedKeyword]);
 
   const filteredBadges = useMemo(() => {
-    if (!normalizedKeyword) return BADGE_RECORDS;
-    return BADGE_RECORDS.filter(item => [item.name, item.effectText].join(' ').toLowerCase().includes(normalizedKeyword));
-  }, [normalizedKeyword]);
+    if (!normalizedKeyword) return badges;
+    return badges.filter(item => [item.name, item.effectText].join(' ').toLowerCase().includes(normalizedKeyword));
+  }, [badges, normalizedKeyword]);
 
   const filteredSeries = useMemo(() => {
-    if (!normalizedKeyword) return SERIES_RECORDS;
-    return SERIES_RECORDS.filter(item => item.name.toLowerCase().includes(normalizedKeyword));
-  }, [normalizedKeyword]);
+    if (!normalizedKeyword) return seriesRecords;
+    return seriesRecords.filter(item => item.name.toLowerCase().includes(normalizedKeyword));
+  }, [normalizedKeyword, seriesRecords]);
 
   const filteredCustomCombos = useMemo(() => {
     if (!normalizedKeyword) return customComboRecords;
@@ -589,24 +685,64 @@ export const WebProductAttributeManager: React.FC = () => {
   }, [normalizedKeyword]);
 
   const placeholderMap: Record<AttributeTab, string> = {
+    category: '搜索分类名称',
     spec: '搜索规格名称',
     method: '搜索做法名称',
     label: '搜索标签分组/标签',
     badge: '搜索角标名称',
     series: '搜索系列名称',
+    custom_attribute: '搜索自定义属性',
     custom_combo: '搜索分组名称/商品标识',
     addon: '请输入加料名称',
   };
 
   const buttonLabelMap: Record<AttributeTab, string> = {
+    category: scope === 'master' ? '新增商品分类' : scope === 'channel' ? '新增前台分类' : '新增商品分类',
     spec: '新增规格',
     method: '新增做法',
     label: activeLabelTab === 'desc' ? '新建标签分组' : '新增标签',
     badge: '新增角标',
     series: '创建系列',
+    custom_attribute: '新增属性',
     custom_combo: '创建分组',
     addon: '创建加料',
   };
+
+  const pageMeta = scope === 'channel'
+    ? {
+        title: '渠道属性',
+        description: '维护渠道商品的展示标签和渠道扩展属性；前台分类定义来自商品主档，渠道商品可在资料页调整当前商品库的分类归属。',
+        badge: '分渠道协作',
+        facts: [
+          ['资料责任', '渠道团队'],
+          ['继承来源', '商品主档'],
+          ['适用对象', '授权渠道商品库'],
+          ['结构变更', '跟随主档确认'],
+        ],
+      }
+    : scope === 'master'
+      ? {
+          title: '分类与属性',
+          description: '维护商品主档的前台分类定义与默认归属、后台分类、规格、做法、统计标签和候选关系；渠道商品可按商品库覆盖前台分类归属。',
+          badge: '分渠道协作',
+          facts: [
+            ['资料责任', '商品团队'],
+            ['管理对象', '商品主档'],
+            ['下游关系', '渠道商品继承'],
+            ['结构变更', '生成渠道确认'],
+          ],
+        }
+      : {
+          title: '分类与属性',
+          description: '在统一入口维护商品结构与默认售卖属性，保存后按目标渠道生成对应资料。',
+          badge: '统一维护',
+          facts: [
+            ['资料责任', '商品团队'],
+            ['管理对象', '商品与默认售卖资料'],
+            ['适用范围', '已启用渠道'],
+            ['保存结果', '生成待发布差异'],
+          ],
+        };
 
   const toggleExpanded = (
     setter: React.Dispatch<React.SetStateAction<Set<string>>>,
@@ -905,49 +1041,158 @@ export const WebProductAttributeManager: React.FC = () => {
     setCustomComboEditor(null);
   };
 
+  const openPrimaryChannelLibraryEditor = () => {
+    if (activeTab === 'label') {
+      setChannelLibraryEditor({ kind: 'label_group', mode: 'create', groupName: '' });
+    } else if (activeTab === 'badge') {
+      setChannelLibraryEditor({ kind: 'badge', mode: 'create', name: '', bgColor: '#2DB55D', effectText: '', image: '', validPeriod: '' });
+    } else if (activeTab === 'series') {
+      setChannelLibraryEditor({ kind: 'series', mode: 'create', name: '', image: '', enabled: true, relatedCount: 0 });
+    }
+  };
+
+  const saveChannelLibraryEditor = () => {
+    if (!channelLibraryEditor) return;
+
+    if (channelLibraryEditor.kind === 'label_group') {
+      const groupName = channelLibraryEditor.groupName.trim();
+      if (!groupName) return;
+      setLabelGroups(prev => {
+        const source = prev[activeLabelTab];
+        const next = channelLibraryEditor.mode === 'edit' && channelLibraryEditor.groupId
+          ? source.map(group => group.id === channelLibraryEditor.groupId ? { ...group, groupName } : group)
+          : [{ id: `label-group-${Date.now()}`, groupName, labels: [] }, ...source];
+        return { ...prev, [activeLabelTab]: next };
+      });
+    }
+
+    if (channelLibraryEditor.kind === 'label') {
+      const name = channelLibraryEditor.name.trim();
+      if (!name) return;
+      setLabelGroups(prev => ({
+        ...prev,
+        [activeLabelTab]: prev[activeLabelTab].map(group => {
+          if (group.id !== channelLibraryEditor.groupId) return group;
+          const nextLabel = {
+            id: channelLibraryEditor.labelId || `label-${Date.now()}`,
+            name,
+            bgColor: channelLibraryEditor.bgColor,
+            textColor: channelLibraryEditor.textColor,
+            createdAt: channelLibraryEditor.mode === 'edit'
+              ? group.labels.find(item => item.id === channelLibraryEditor.labelId)?.createdAt || new Date().toLocaleString('zh-CN', { hour12: false })
+              : new Date().toLocaleString('zh-CN', { hour12: false }),
+          };
+          return {
+            ...group,
+            labels: channelLibraryEditor.mode === 'edit'
+              ? group.labels.map(item => item.id === channelLibraryEditor.labelId ? nextLabel : item)
+              : [nextLabel, ...group.labels],
+          };
+        }),
+      }));
+      setExpandedLabelGroups(prev => new Set([...prev, channelLibraryEditor.groupId]));
+    }
+
+    if (channelLibraryEditor.kind === 'badge') {
+      const name = channelLibraryEditor.name.trim();
+      if (!name) return;
+      const nextRecord: BadgeRecord = {
+        id: channelLibraryEditor.id || `badge-${Date.now()}`,
+        name,
+        bgColor: channelLibraryEditor.bgColor,
+        effectText: channelLibraryEditor.effectText.trim() || name,
+        image: channelLibraryEditor.image.trim() || undefined,
+        validPeriod: channelLibraryEditor.validPeriod.trim() || '长期有效',
+        createdAt: channelLibraryEditor.mode === 'edit'
+          ? badges.find(item => item.id === channelLibraryEditor.id)?.createdAt || new Date().toLocaleString('zh-CN', { hour12: false })
+          : new Date().toLocaleString('zh-CN', { hour12: false }),
+      };
+      setBadges(prev => channelLibraryEditor.mode === 'edit'
+        ? prev.map(item => item.id === channelLibraryEditor.id ? nextRecord : item)
+        : [nextRecord, ...prev]);
+    }
+
+    if (channelLibraryEditor.kind === 'series') {
+      const name = channelLibraryEditor.name.trim();
+      if (!name) return;
+      const nextRecord: SeriesRecord = {
+        id: channelLibraryEditor.id || `series-${Date.now()}`,
+        name,
+        image: channelLibraryEditor.image.trim() || 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=120&q=80',
+        enabled: channelLibraryEditor.enabled,
+        relatedCount: channelLibraryEditor.relatedCount,
+      };
+      setSeriesRecords(prev => channelLibraryEditor.mode === 'edit'
+        ? prev.map(item => item.id === channelLibraryEditor.id ? nextRecord : item)
+        : [nextRecord, ...prev]);
+    }
+
+    setChannelLibraryEditor(null);
+  };
+
+  const confirmChannelLibraryDelete = () => {
+    if (!channelLibraryDelete || channelLibraryDelete.blockedCount) return;
+    if (channelLibraryDelete.kind === 'label_group') {
+      setLabelGroups(prev => ({ ...prev, [activeLabelTab]: prev[activeLabelTab].filter(group => group.id !== channelLibraryDelete.id) }));
+    } else if (channelLibraryDelete.kind === 'label' && channelLibraryDelete.parentId) {
+      setLabelGroups(prev => ({
+        ...prev,
+        [activeLabelTab]: prev[activeLabelTab].map(group => group.id === channelLibraryDelete.parentId
+          ? { ...group, labels: group.labels.filter(label => label.id !== channelLibraryDelete.id) }
+          : group),
+      }));
+    } else if (channelLibraryDelete.kind === 'badge') {
+      setBadges(prev => prev.filter(item => item.id !== channelLibraryDelete.id));
+    } else if (channelLibraryDelete.kind === 'series') {
+      setSeriesRecords(prev => prev.filter(item => item.id !== channelLibraryDelete.id));
+    }
+    setChannelLibraryDelete(null);
+  };
+
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
-      <div className="shrink-0 bg-white px-6 pt-5">
-        <div className="rounded-2xl border border-[#E8E8E8] bg-white p-2">
-          <div className="grid grid-cols-7 gap-2">
-            {tabs.map(tab => (
+    <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
+      {actionNotice && <div className="absolute left-1/2 top-3 z-[120] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{actionNotice}</div>}
+      <div className="flex h-[52px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-4">
+        <div className="no-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist" aria-label={pageMeta.title}>
+            {visibleTabs.map(tab => (
               <button
                 key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`rounded-xl border px-3 py-3 transition-all ${
+                className={`relative flex h-full min-w-[112px] shrink-0 items-center justify-center gap-2 border-b-2 px-3 transition-colors ${
                   activeTab === tab.id
-                    ? 'border-[#B7E8CB] bg-[#F3FCF7] text-[#00C06B]'
-                    : 'border-transparent bg-white text-[#666] hover:border-[#E8E8E8] hover:bg-[#FAFAFA] hover:text-[#333]'
+                    ? 'border-[#00B460] bg-[#F5FCF8] text-[#008F4C]'
+                    : 'border-transparent bg-white text-[#667085] hover:bg-[#F7F8FA] hover:text-[#333]'
                 }`}
               >
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${activeTab === tab.id ? 'bg-[#E6F8F0] text-[#00C06B]' : 'bg-[#F3F4F6] text-[#8C8C8C]'}`}>
+                  <div className={activeTab === tab.id ? 'text-[#008F4C]' : 'text-[#8C8C8C]'}>
                     {tab.icon}
                   </div>
-                  <div className="text-sm font-bold whitespace-nowrap">{tab.label}</div>
-                </div>
+                  <div className="whitespace-nowrap text-[13px] font-medium">{tab.label}</div>
               </button>
             ))}
-          </div>
         </div>
+        <button type="button" onClick={() => setShowFieldOwnership(true)} className="my-2 ml-3 shrink-0 rounded-md border border-[#D9DDE3] bg-white px-3 text-[12px] font-medium text-[#4E5969] hover:border-[#9AA2AE] hover:bg-[#F7F8FA]">字段归属</button>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
-        <div className="min-h-full rounded-lg bg-white shadow-sm">
-          <div className="px-6 pt-5 text-xs leading-6 text-[#666]">
-            {activeTab === 'spec' && <>商品规格库，用户可选择商品的规格，如：大杯、小杯等，规格影响商品价格 <span className="text-[#00C06B]">查看示例</span> <span className="ml-3 text-[#00C06B]">查看帮助文档</span></>}
-            {activeTab === 'method' && <>商品做法库，用户可选择商品的做法，如：去冰、少冰等，做法不影响商品价格 <span className="text-[#00C06B]">查看示例</span> <span className="ml-3 text-[#00C06B]">查看帮助文档</span></>}
-            {activeTab === 'label' && <>描述标签展示在小程序端的商品名称下方、分类名称上方，用于口味做饮、食材等商品信息或分类式说明 <span className="text-[#00C06B]">查看示例</span></>}
-            {activeTab === 'badge' && <>商品角标展示在小程序点单页商品列表的商品图片中，用于新品、套餐等特殊标记展示 <span className="text-[#00C06B]">查看示例</span> <span className="ml-3 text-[#00C06B]">查看帮助文档</span></>}
-            {activeTab === 'series' && <>如果商品存在商品系列，小程序点单页购买商品时，可快速切换相同系列的商品 <span className="text-[#00C06B]">查看示例</span></>}
-            {activeTab === 'custom_combo' && <>管理商品随心配分组，支持配置分组编码、商品标识、商品条码、按种类选择、是否必选和购买数量限制 <span className="text-[#00C06B]">查看示例</span></>}
-            {activeTab === 'addon' && <>管理商品加料类型与加料商品，可配置初始价格、启停状态及关联商品范围 <span className="text-[#00C06B]">查看示例</span></>}
+      {activeTab === 'category' && (
+        <div className="flex-1 min-h-0 overflow-hidden p-4">
+          <div className="flex h-full min-h-0 overflow-hidden rounded-lg bg-white shadow-sm">
+            <WebCategoryListManager
+              scope={scope === 'master' ? 'all' : scope === 'channel' ? 'frontend' : 'all'}
+            />
           </div>
+        </div>
+      )}
 
-          {activeTab === 'label' && (
-            <div className="mt-4 border-b border-[#E8E8E8] px-6">
+      <div className={activeTab === 'category' ? 'hidden' : 'flex-1 overflow-auto p-4'}>
+        <div className="min-h-full rounded-lg bg-white shadow-sm">
+          {activeTab === 'label' && visibleLabelTabs.length > 1 && (
+            <div className="border-b border-[#E8E8E8] px-6 pt-3">
               <div className="flex gap-8 text-sm">
-                {LABEL_TABS.map(tab => (
+                {visibleLabelTabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveLabelTab(tab.id)}
@@ -960,7 +1205,7 @@ export const WebProductAttributeManager: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'addon' ? (
+          {activeTab === 'custom_attribute' ? null : activeTab === 'addon' ? (
             <div className="border-b border-[#E8E8E8] px-6 py-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">
@@ -978,13 +1223,13 @@ export const WebProductAttributeManager: React.FC = () => {
                       <option>停用</option>
                     </select>
                   </div>
-                  <button className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">查询</button>
-                  <button className="rounded-lg border border-[#E8E8E8] px-5 py-2.5 text-sm text-[#666] hover:bg-[#FAFAFA]">重置</button>
+                  <button onClick={() => showActionNotice('加料列表已按当前条件刷新')} className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">查询</button>
+                  <button onClick={() => setKeyword('')} className="rounded-lg border border-[#E8E8E8] px-5 py-2.5 text-sm text-[#666] hover:bg-[#FAFAFA]">重置</button>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button className="rounded-lg border border-[#E8E8E8] px-4 py-2.5 text-sm text-[#666] hover:bg-[#FAFAFA]">排序管理</button>
-                  <button className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">创建加料</button>
-                  <button className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">发布加料类型</button>
+                  <button onClick={() => showActionNotice('加料类型排序管理已打开；拖动能力需接入真实排序接口')} className="rounded-lg border border-[#E8E8E8] px-4 py-2.5 text-sm text-[#666] hover:bg-[#FAFAFA]">排序管理</button>
+                  <button onClick={() => showActionNotice('创建加料沿用现有加料商品字段，正式编辑器需接入商品创建流程')} className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">创建加料</button>
+                  <button onClick={() => showActionNotice('发布加料类型将进入发布中心，不会在当前页直接下发')} className="rounded-lg border border-[#00C06B] bg-white px-4 py-2.5 text-sm font-bold text-[#008F4C] hover:bg-[#F3FCF7]">发布加料类型</button>
                 </div>
               </div>
             </div>
@@ -1035,20 +1280,24 @@ export const WebProductAttributeManager: React.FC = () => {
                   className="h-[38px] w-[180px] rounded-lg border border-[#E8E8E8] bg-white pl-9 pr-3 text-sm text-[#333] outline-none focus:border-[#00C06B]"
                 />
               </div>
-              <button className="inline-flex items-center rounded-lg border border-[#E8E8E8] px-4 py-2.5 text-sm font-bold text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]">
+              <button onClick={() => showActionNotice('当前页已显示该类型全部可用筛选项')} className="inline-flex items-center rounded-lg border border-[#E8E8E8] px-4 py-2.5 text-sm font-bold text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]">
                 <Filter size={14} className="mr-1.5 text-[#999]" />
                 筛选
               </button>
             </div>
 
             <div className="flex items-center gap-3">
-              <button className="inline-flex items-center rounded-lg border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm font-medium text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]">
+              <button onClick={() => showActionNotice('列表字段显示设置已按默认方案展示')} className="inline-flex items-center rounded-lg border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm font-medium text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]">
                 <ListFilter size={14} />
               </button>
-              {activeTab === 'label' && <button className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">排序管理</button>}
-              {activeTab === 'custom_combo' && <button className="rounded-lg border border-[#00C06B] bg-[#F3FCF7] px-4 py-2.5 text-sm font-bold text-[#00C06B] hover:bg-[#EAF9F1]">筛选(2)</button>}
+              {activeTab === 'label' && <button onClick={() => showActionNotice('标签排序修改将在保存后应用到商品选择器')} className="rounded-lg border border-[#E8E8E8] px-4 py-2.5 text-sm font-bold text-[#666] hover:bg-[#FAFAFA]">排序管理</button>}
+              {activeTab === 'custom_combo' && <button onClick={() => showActionNotice('已按当前 2 个条件筛选随心配方案')} className="rounded-lg border border-[#00C06B] bg-[#F3FCF7] px-4 py-2.5 text-sm font-bold text-[#00C06B] hover:bg-[#EAF9F1]">筛选(2)</button>}
               <button
-                onClick={activeTab === 'custom_combo' ? handleOpenCreateCustomCombo : undefined}
+                onClick={activeTab === 'custom_combo'
+                  ? handleOpenCreateCustomCombo
+                  : ['label', 'badge', 'series'].includes(activeTab)
+                    ? openPrimaryChannelLibraryEditor
+                    : () => showActionNotice(`${buttonLabelMap[activeTab]}编辑器需按现有字段接入；当前不创建伪业务数据`)}
                 className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]"
               >
                 {buttonLabelMap[activeTab]}
@@ -1076,6 +1325,7 @@ export const WebProductAttributeManager: React.FC = () => {
               groups={filteredMethodGroups}
               expandedGroupIds={expandedMethodGroups}
               onToggleGroup={(id) => toggleExpanded(setExpandedMethodGroups, id)}
+              onAction={(action, name) => showActionNotice(`${name}：${action}操作已记录；正式保存需接入属性权限与关联商品校验`)}
             />
           )}
           {activeTab === 'label' && (
@@ -1083,10 +1333,29 @@ export const WebProductAttributeManager: React.FC = () => {
               groups={filteredLabelGroups}
               expandedGroupIds={expandedLabelGroups}
               onToggleGroup={(id) => toggleExpanded(setExpandedLabelGroups, id)}
+              onCreateLabel={(group) => setChannelLibraryEditor({ kind: 'label', mode: 'create', groupId: group.id, name: '', bgColor: '#ECFDF3', textColor: '#12B76A' })}
+              onEditGroup={(group) => setChannelLibraryEditor({ kind: 'label_group', mode: 'edit', groupId: group.id, groupName: group.groupName })}
+              onDeleteGroup={(group) => setChannelLibraryDelete({ kind: 'label_group', id: group.id, name: group.groupName })}
+              onEditLabel={(group, label) => setChannelLibraryEditor({ kind: 'label', mode: 'edit', groupId: group.id, labelId: label.id, name: label.name, bgColor: label.bgColor, textColor: label.textColor })}
+              onDeleteLabel={(group, label) => setChannelLibraryDelete({ kind: 'label', id: label.id, parentId: group.id, name: label.name })}
             />
           )}
-          {activeTab === 'badge' && <BadgeTable records={filteredBadges} />}
-          {activeTab === 'series' && <SeriesTable records={filteredSeries} />}
+          {activeTab === 'badge' && (
+            <BadgeTable
+              records={filteredBadges}
+              onEdit={(record) => setChannelLibraryEditor({ kind: 'badge', mode: 'edit', id: record.id, name: record.name, bgColor: record.bgColor, effectText: record.effectText, image: record.image || '', validPeriod: record.validPeriod })}
+              onDelete={(record) => setChannelLibraryDelete({ kind: 'badge', id: record.id, name: record.name })}
+            />
+          )}
+          {activeTab === 'series' && (
+            <SeriesTable
+              records={filteredSeries}
+              onToggle={(record) => setSeriesRecords(prev => prev.map(item => item.id === record.id ? { ...item, enabled: !item.enabled } : item))}
+              onEdit={(record) => setChannelLibraryEditor({ kind: 'series', mode: 'edit', id: record.id, name: record.name, image: record.image, enabled: record.enabled, relatedCount: record.relatedCount })}
+              onDelete={(record) => setChannelLibraryDelete({ kind: 'series', id: record.id, name: record.name, blockedCount: record.relatedCount })}
+            />
+          )}
+          {activeTab === 'custom_attribute' && <WebCustomAttributeManager embedded />}
           {activeTab === 'custom_combo' && (
             <CustomComboTable
               records={filteredCustomCombos}
@@ -1101,6 +1370,7 @@ export const WebProductAttributeManager: React.FC = () => {
               groups={filteredAddonGroups}
               expandedGroupIds={expandedAddonGroups}
               onToggleGroup={(id) => toggleExpanded(setExpandedAddonGroups, id)}
+              onAction={(action, name) => showActionNotice(`${name}：${action}操作已记录；发布与删除需先校验关联商品`)}
             />
           )}
           {specEditor && (
@@ -1140,11 +1410,186 @@ export const WebProductAttributeManager: React.FC = () => {
               onConfirm={handleSaveCustomCombo}
             />
           )}
+          {channelLibraryEditor && (
+            <ChannelLibraryEditorModal
+              draft={channelLibraryEditor}
+              onChange={setChannelLibraryEditor}
+              onCancel={() => setChannelLibraryEditor(null)}
+              onConfirm={saveChannelLibraryEditor}
+            />
+          )}
+          {channelLibraryDelete && (
+            <ChannelLibraryDeleteModal
+              draft={channelLibraryDelete}
+              onCancel={() => setChannelLibraryDelete(null)}
+              onConfirm={confirmChannelLibraryDelete}
+            />
+          )}
+          {showFieldOwnership && createPortal((
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#111827]/35 p-6" role="dialog" aria-modal="true" aria-labelledby="field-ownership-title">
+              <div className="w-full max-w-[680px] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-2xl">
+                <div className="flex items-start justify-between border-b border-[#EEF0F3] px-6 py-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 id="field-ownership-title" className="text-[18px] font-semibold text-[#1D2129]">字段归属说明</h2>
+                      <span className="rounded-full bg-[#EAF8F1] px-2 py-0.5 text-[11px] font-semibold text-[#008F4C]">{pageMeta.badge}</span>
+                    </div>
+                    <p className="mt-1.5 text-[13px] text-[#667085]">用于判断字段应在哪里维护，以及变更如何影响上下游商品资料。</p>
+                  </div>
+                  <button type="button" aria-label="关闭" onClick={() => setShowFieldOwnership(false)} className="rounded-md p-1.5 text-[#7A8699] hover:bg-[#F2F4F7] hover:text-[#1D2129]"><X size={18} /></button>
+                </div>
+                <div className="grid gap-4 p-6 md:grid-cols-2">
+                  <div className="rounded-lg border border-[#E5E7EB] p-4">
+                    <div className="text-[13px] font-semibold text-[#1D2129]">本页面可维护</div>
+                    <div className="mt-3 space-y-2 text-[13px] leading-5 text-[#4E5969]">
+                      {(scope === 'channel'
+                        ? ['描述标签、角标与商品系列', '渠道自定义属性及可选值', '渠道平台扩展属性']
+                        : scope === 'master'
+                          ? ['前台分类与后台分类', '规格与规格值', '做法、统计标签、加料候选关系']
+                          : ['后台与前台分类', '规格、做法、标签与展示属性', '统一入口中的默认售卖属性']
+                      ).map(item => <div key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#00B460]" />{item}</div>)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[#E5E7EB] p-4">
+                    <div className="text-[13px] font-semibold text-[#1D2129]">不可在此覆盖</div>
+                    <div className="mt-3 space-y-2 text-[13px] leading-5 text-[#4E5969]">
+                      {(scope === 'channel'
+                        ? ['商品身份、SPU/SKU 编码', '主档规格结构与候选关系', '平台自维护商品的权威资料']
+                        : scope === 'master'
+                          ? ['渠道商品名称、图片与渠道售价', '渠道展示属性与平台专属字段', '门店即时库存与上下架状态']
+                          : ['门店即时库存与上下架状态', '平台商品 ID 与映射权威关系', '合同渠道范围与授权令牌']
+                      ).map(item => <div key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F79009]" />{item}</div>)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-[#EEF0F3] bg-[#FAFBFC] px-6 py-4">
+                  <span className="text-[12px] text-[#7A8699]">结构字段变更会按当前全渠道策略生成下游待确认或待发布差异。</span>
+                  <button type="button" onClick={() => setShowFieldOwnership(false)} className="rounded-md bg-[#00B460] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#009D54]">我知道了</button>
+                </div>
+              </div>
+            </div>
+          ), document.body)}
         </div>
       </div>
     </div>
   );
 };
+
+const ChannelLibraryEditorModal = ({
+  draft,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: ChannelLibraryEditorState;
+  onChange: (draft: ChannelLibraryEditorState) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const titleMap = {
+    label_group: draft.mode === 'create' ? '新建标签分组' : '编辑标签分组',
+    label: draft.mode === 'create' ? '新增标签' : '编辑标签',
+    badge: draft.mode === 'create' ? '新增角标' : '编辑角标',
+    series: draft.mode === 'create' ? '创建系列' : '编辑系列',
+  } as const;
+  const canSave = draft.kind === 'label_group' ? Boolean(draft.groupName.trim()) : Boolean(draft.name.trim());
+  const patchDraft = (patch: Record<string, unknown>) => onChange({ ...draft, ...patch } as ChannelLibraryEditorState);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[96] flex items-center justify-center bg-[#111827]/35 p-6" role="dialog" aria-modal="true">
+      <div className="w-full max-w-[640px] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-[#EEF0F3] px-6 py-5">
+          <div>
+            <h2 className="text-[18px] font-semibold text-[#1D2129]">{titleMap[draft.kind]}</h2>
+            <p className="mt-1 text-[12px] text-[#7A8699]">保存后用于渠道商品展示；不会改变商品主档身份与规格结构。</p>
+          </div>
+          <button type="button" aria-label="关闭" onClick={onCancel} className="rounded-md p-1.5 text-[#7A8699] hover:bg-[#F2F4F7]"><X size={18} /></button>
+        </div>
+        <div className="max-h-[62vh] space-y-5 overflow-y-auto px-6 py-5 no-scrollbar">
+          {draft.kind === 'label_group' ? (
+            <FieldRow label="分组名称" required>
+              <input value={draft.groupName} maxLength={20} onChange={event => patchDraft({ groupName: event.target.value })} placeholder="请输入标签分组名称" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" />
+              <div className="mt-1 text-right text-[11px] text-[#98A2B3]">{draft.groupName.length}/20</div>
+            </FieldRow>
+          ) : (
+            <FieldRow label={draft.kind === 'label' ? '标签名称' : draft.kind === 'badge' ? '角标名称' : '系列名称'} required>
+              <input value={draft.name} maxLength={30} onChange={event => patchDraft({ name: event.target.value })} placeholder="请输入名称" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" />
+            </FieldRow>
+          )}
+
+          {draft.kind === 'label' && (
+            <div className="grid grid-cols-2 gap-4">
+              <FieldRow label="背景颜色"><input type="color" value={draft.bgColor} onChange={event => patchDraft({ bgColor: event.target.value })} className="h-10 w-full rounded-md border border-[#D9DDE3] bg-white p-1" /></FieldRow>
+              <FieldRow label="字体颜色"><input type="color" value={draft.textColor} onChange={event => patchDraft({ textColor: event.target.value })} className="h-10 w-full rounded-md border border-[#D9DDE3] bg-white p-1" /></FieldRow>
+            </div>
+          )}
+
+          {draft.kind === 'badge' && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <FieldRow label="背景颜色"><input type="color" value={draft.bgColor} onChange={event => patchDraft({ bgColor: event.target.value })} className="h-10 w-full rounded-md border border-[#D9DDE3] bg-white p-1" /></FieldRow>
+                <FieldRow label="角标文案"><input value={draft.effectText} maxLength={8} onChange={event => patchDraft({ effectText: event.target.value })} placeholder="例如：新品" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" /></FieldRow>
+              </div>
+              <FieldRow label="角标图片"><input value={draft.image} onChange={event => patchDraft({ image: event.target.value })} placeholder="可选；填写图片地址后优先展示图片角标" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" /></FieldRow>
+              <FieldRow label="有效期"><input value={draft.validPeriod} onChange={event => patchDraft({ validPeriod: event.target.value })} placeholder="例如：2026-08-01 00:00:00 - 2026-12-31 23:59:59；留空为长期有效" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" /></FieldRow>
+            </>
+          )}
+
+          {draft.kind === 'series' && (
+            <>
+              <FieldRow label="系列图片"><input value={draft.image} onChange={event => patchDraft({ image: event.target.value })} placeholder="填写系列图片地址；留空使用默认占位图" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" /></FieldRow>
+              <FieldRow label="启用状态">
+                <label className="flex items-center gap-3 rounded-md border border-[#E5E7EB] px-3 py-3 text-[13px] text-[#4E5969]">
+                  <input type="checkbox" checked={draft.enabled} onChange={event => patchDraft({ enabled: event.target.checked })} className="h-4 w-4 rounded border-[#D9DDE3] text-[#00B460] focus:ring-[#00B460]" />
+                  启用后可在渠道商品中选择该系列
+                </label>
+              </FieldRow>
+              {draft.mode === 'edit' && <div className="rounded-md bg-[#F7F8FA] px-4 py-3 text-[12px] text-[#667085]">当前关联 {draft.relatedCount} 个商品。关联关系请从系列详情或商品编辑页维护。</div>}
+            </>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-[#EEF0F3] bg-[#FAFBFC] px-6 py-4">
+          <button type="button" onClick={onCancel} className="rounded-md border border-[#D9DDE3] bg-white px-4 py-2 text-[13px] font-medium text-[#4E5969] hover:bg-[#F7F8FA]">取消</button>
+          <button type="button" disabled={!canSave} onClick={onConfirm} className="rounded-md bg-[#00B460] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#009D54] disabled:cursor-not-allowed disabled:bg-[#BFC6CF]">保存</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+const ChannelLibraryDeleteModal = ({ draft, onCancel, onConfirm }: { draft: ChannelLibraryDeleteState; onCancel: () => void; onConfirm: () => void }) => {
+  const blocked = Boolean(draft.blockedCount);
+  return createPortal(
+    <div className="fixed inset-0 z-[97] flex items-center justify-center bg-[#111827]/35 p-6" role="dialog" aria-modal="true">
+      <div className="w-full max-w-[480px] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#EEF0F3] px-6 py-5">
+          <h2 className="text-[18px] font-semibold text-[#1D2129]">{blocked ? '暂时无法删除' : '确认删除'}</h2>
+          <button type="button" aria-label="关闭" onClick={onCancel} className="rounded-md p-1.5 text-[#7A8699] hover:bg-[#F2F4F7]"><X size={18} /></button>
+        </div>
+        <div className="px-6 py-6">
+          <div className={`rounded-lg border px-4 py-4 text-[13px] leading-6 ${blocked ? 'border-[#FEDF89] bg-[#FFFAEB] text-[#B54708]' : 'border-[#FEE4E2] bg-[#FEF3F2] text-[#B42318]'}`}>
+            {blocked
+              ? `“${draft.name}”已关联 ${draft.blockedCount} 个商品。请先查看并移除关联商品，再删除该对象。`
+              : `删除“${draft.name}”后将无法继续被渠道商品选择，此操作不可恢复。`}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-[#EEF0F3] bg-[#FAFBFC] px-6 py-4">
+          <button type="button" onClick={onCancel} className="rounded-md border border-[#D9DDE3] bg-white px-4 py-2 text-[13px] font-medium text-[#4E5969]">{blocked ? '我知道了' : '取消'}</button>
+          {!blocked && <button type="button" onClick={onConfirm} className="rounded-md bg-[#E5484D] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#C93C41]">删除</button>}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+const FieldRow = ({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
+  <label className="block">
+    <span className="mb-2 block text-[13px] font-medium text-[#344054]">{required && <span className="mr-1 text-[#E5484D]">*</span>}{label}</span>
+    {children}
+  </label>
+);
 
 const ActionButtons = ({ actions }: { actions: Array<string | { label: string; onClick?: () => void; danger?: boolean }> }) => (
   <div className="flex flex-wrap justify-end gap-x-4 gap-y-2 whitespace-nowrap">
@@ -1481,7 +1926,7 @@ const SpecEditorModal = ({
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{draft.description.length}/50</span>
             </div>
-            <button type="button" className="text-sm font-medium text-[#00C06B] hover:text-[#00A35B]">查看示例</button>
+            <button type="button" disabled title="示例：规格名称“大杯”，规格描述“适用于 700ml 饮品”" className="cursor-help text-sm font-medium text-[#00C06B]">查看示例</button>
           </div>
         </div>
         <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
@@ -1637,10 +2082,12 @@ const MethodTable = ({
   groups,
   expandedGroupIds,
   onToggleGroup,
+  onAction,
 }: {
   groups: MethodGroup[];
   expandedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  onAction: (action: string, name: string) => void;
 }) => (
   <div className="overflow-auto">
     <table className="w-full min-w-[1100px] border-collapse text-left">
@@ -1675,13 +2122,13 @@ const MethodTable = ({
               <td className="px-4 py-4 text-[#666]">{group.tip || '-'}</td>
               <td className="px-4 py-4 text-[#00C06B]">{group.relationCount || '-'}</td>
               <td className="px-4 py-4">
-                <button className={`relative inline-flex h-6 w-11 items-center rounded-full border ${group.multi ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
+                <button onClick={() => onAction(group.multi ? '关闭做法值多选' : '开启做法值多选', group.name)} className={`relative inline-flex h-6 w-11 items-center rounded-full border ${group.multi ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
                   <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm ${group.multi ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </td>
               <td className="px-4 py-4 text-[#666]">{group.optionType}</td>
               <td className="px-4 py-4 text-right">
-                <ActionButtons actions={['新增做法值', '编辑', '删除']} />
+                <ActionButtons actions={['新增做法值', '编辑', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => onAction(label, group.name) }))} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.values.map(value => (
@@ -1695,7 +2142,7 @@ const MethodTable = ({
                 <td className="px-4 py-4"></td>
                 <td className="px-4 py-4"></td>
                 <td className="px-4 py-4 text-right">
-                  <ActionButtons actions={['编辑', '关联商品', '解除关联']} />
+                  <ActionButtons actions={['编辑', '关联商品', '解除关联'].map(label => ({ label, danger: label === '解除关联', onClick: () => onAction(label, `${group.name}/${value.name}`) }))} />
                 </td>
               </tr>
             ))}
@@ -1710,10 +2157,20 @@ const LabelTable = ({
   groups,
   expandedGroupIds,
   onToggleGroup,
+  onCreateLabel,
+  onEditGroup,
+  onDeleteGroup,
+  onEditLabel,
+  onDeleteLabel,
 }: {
   groups: LabelGroup[];
   expandedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  onCreateLabel: (group: LabelGroup) => void;
+  onEditGroup: (group: LabelGroup) => void;
+  onDeleteGroup: (group: LabelGroup) => void;
+  onEditLabel: (group: LabelGroup, label: LabelGroup['labels'][number]) => void;
+  onDeleteLabel: (group: LabelGroup, label: LabelGroup['labels'][number]) => void;
 }) => (
   <div className="overflow-auto">
     <table className="w-full min-w-[1100px] border-collapse text-left">
@@ -1746,7 +2203,11 @@ const LabelTable = ({
               <td className="px-4 py-4 text-[#999]"></td>
               <td className="px-4 py-4 text-[#666]">{group.labels[0]?.createdAt || '2025-09-10 15:36:29'}</td>
               <td className="px-4 py-4 text-right">
-                <ActionButtons actions={['新增标签', '编辑', '删除']} />
+                <ActionButtons actions={[
+                  { label: '新增标签', onClick: () => onCreateLabel(group) },
+                  { label: '编辑', onClick: () => onEditGroup(group) },
+                  { label: '删除', onClick: () => onDeleteGroup(group), danger: true },
+                ]} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.labels.map(label => (
@@ -1758,7 +2219,12 @@ const LabelTable = ({
                 <td className="px-4 py-4"><span className="inline-flex rounded-sm px-3 py-1 text-xs font-bold" style={{ backgroundColor: label.bgColor, color: label.textColor }}>标签</span></td>
                 <td className="px-4 py-4 text-[#666]">{label.createdAt}</td>
                 <td className="px-4 py-4 text-right">
-                  <ActionButtons actions={['关联商品', '解除关联', '编辑', '删除']} />
+                  <ActionButtons actions={[
+                    '关联商品',
+                    '解除关联',
+                    { label: '编辑', onClick: () => onEditLabel(group, label) },
+                    { label: '删除', onClick: () => onDeleteLabel(group, label), danger: true },
+                  ]} />
                 </td>
               </tr>
             ))}
@@ -1769,7 +2235,7 @@ const LabelTable = ({
   </div>
 );
 
-const BadgeTable = ({ records }: { records: BadgeRecord[] }) => (
+const BadgeTable = ({ records, onEdit, onDelete }: { records: BadgeRecord[]; onEdit: (record: BadgeRecord) => void; onDelete: (record: BadgeRecord) => void }) => (
   <div className="overflow-auto">
     <table className="w-full min-w-[1080px] border-collapse text-left">
       <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
@@ -1797,8 +2263,8 @@ const BadgeTable = ({ records }: { records: BadgeRecord[] }) => (
             <td className="px-4 py-4 text-[#666]">{record.validPeriod}</td>
             <td className="px-4 py-4 text-[#666]">{record.createdAt}</td>
             <td className="px-4 py-4 text-right">
-              <span className="mr-4 text-[#00C06B]">编辑</span>
-              <span className="text-[#00C06B]">删除</span>
+              <button type="button" onClick={() => onEdit(record)} className="mr-4 text-[#00C06B] hover:text-[#00A35B]">编辑</button>
+              <button type="button" onClick={() => onDelete(record)} className="text-[#FF4D4F] hover:text-[#D9363E]">删除</button>
             </td>
           </tr>
         ))}
@@ -1807,7 +2273,7 @@ const BadgeTable = ({ records }: { records: BadgeRecord[] }) => (
   </div>
 );
 
-const SeriesTable = ({ records }: { records: SeriesRecord[] }) => (
+const SeriesTable = ({ records, onToggle, onEdit, onDelete }: { records: SeriesRecord[]; onToggle: (record: SeriesRecord) => void; onEdit: (record: SeriesRecord) => void; onDelete: (record: SeriesRecord) => void }) => (
   <div className="overflow-auto">
     <table className="w-full min-w-[960px] border-collapse text-left">
       <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
@@ -1826,13 +2292,13 @@ const SeriesTable = ({ records }: { records: SeriesRecord[] }) => (
             <td className="px-4 py-4"><img src={record.image} alt={record.name} className="h-10 w-10 rounded object-cover" /></td>
             <td className="px-4 py-4 text-[#00C06B]">{record.relatedCount}</td>
             <td className="px-4 py-4">
-              <button className={`relative inline-flex h-7 w-12 items-center rounded-full border ${record.enabled ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
+              <button type="button" onClick={() => onToggle(record)} aria-label={`${record.enabled ? '停用' : '启用'}${record.name}`} className={`relative inline-flex h-7 w-12 items-center rounded-full border ${record.enabled ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
                 <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm ${record.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </td>
             <td className="px-4 py-4 text-right">
-              <span className="mr-4 text-[#00C06B]">编辑</span>
-              <span className="text-[#00C06B]">删除</span>
+              <button type="button" onClick={() => onEdit(record)} className="mr-4 text-[#00C06B] hover:text-[#00A35B]">编辑</button>
+              <button type="button" onClick={() => onDelete(record)} className="text-[#FF4D4F] hover:text-[#D9363E]">删除</button>
             </td>
           </tr>
         ))}
@@ -2186,10 +2652,12 @@ const AddonTable = ({
   groups,
   expandedGroupIds,
   onToggleGroup,
+  onAction,
 }: {
   groups: AddonGroup[];
   expandedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  onAction: (action: string, name: string) => void;
 }) => (
   <div className="overflow-auto">
     <table className="w-full min-w-[1180px] border-collapse text-left">
@@ -2224,7 +2692,7 @@ const AddonTable = ({
               <td className="px-4 py-4 text-[#666]">{group.relatedCount || ''}</td>
               <td className="px-4 py-4 text-[#666]">{group.createdAt || ''}</td>
               <td className="px-4 py-4 text-right">
-                <ActionButtons actions={['编辑类型', '新增加料项', '删除']} />
+                <ActionButtons actions={['编辑类型', '新增加料项', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => onAction(label, group.typeName) }))} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.children?.map(item => (
@@ -2238,7 +2706,7 @@ const AddonTable = ({
                 <td className="px-4 py-4 text-[#666]">{item.relatedCount}</td>
                 <td className="px-4 py-4 text-[#666]">{item.createdAt}</td>
                 <td className="px-4 py-4 text-right">
-                  <ActionButtons actions={['编辑', '删除']} />
+                  <ActionButtons actions={['编辑', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => onAction(label, item.typeName) }))} />
                 </td>
               </tr>
             ))}

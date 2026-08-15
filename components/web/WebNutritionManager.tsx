@@ -1,15 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
   Search,
-  ChevronLeft,
-  ChevronRight,
   Plus,
-  Settings,
   Beaker,
   CheckCircle2,
   CircleAlert,
   Package2,
+  X,
 } from 'lucide-react';
+import { useProducts } from '../../context';
 
 type NutritionMethod = {
   id: string;
@@ -40,6 +39,18 @@ type NutritionProduct = {
   category: string;
   imageColor: string;
   specs: NutritionSpec[];
+};
+
+type NutritionEditor = {
+  productId: string;
+  specId: string;
+  methodId: string;
+  methodName: string;
+  energy: string;
+  protein: string;
+  fat: string;
+  carbohydrate: string;
+  sodium: string;
 };
 
 const MOCK_PRODUCTS: NutritionProduct[] = [
@@ -171,16 +182,23 @@ const NUTRIENT_META = [
   { key: 'sodium', label: '钠', unit: 'mg' },
 ] as const;
 
-export const WebNutritionManager: React.FC = () => {
+export const WebNutritionManager: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavigate }) => {
+  const { products: brandProducts } = useProducts();
+  const [nutritionProducts, setNutritionProducts] = useState<NutritionProduct[]>(MOCK_PRODUCTS);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'configured' | 'unconfigured'>('all');
   const [selectedProductId, setSelectedProductId] = useState(MOCK_PRODUCTS[0].id);
   const [selectedSpecId, setSelectedSpecId] = useState(MOCK_PRODUCTS[0].specs[0].id);
+  const [selectedMethodId, setSelectedMethodId] = useState(MOCK_PRODUCTS[0].specs[0].methods[0].id);
+  const [editor, setEditor] = useState<NutritionEditor | null>(null);
+  const [showProductSelector, setShowProductSelector] = useState(false);
+  const [pendingProductIds, setPendingProductIds] = useState<string[]>([]);
+  const [message, setMessage] = useState('');
 
   const filteredProducts = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
 
-    return MOCK_PRODUCTS.filter(product => {
+    return nutritionProducts.filter(product => {
       const matchedKeyword =
         !normalizedKeyword ||
         product.name.toLowerCase().includes(normalizedKeyword) ||
@@ -193,20 +211,75 @@ export const WebNutritionManager: React.FC = () => {
       const hasConfigured = product.specs.some(spec => spec.configured);
       return statusFilter === 'configured' ? hasConfigured : !hasConfigured;
     });
-  }, [keyword, statusFilter]);
+  }, [keyword, nutritionProducts, statusFilter]);
 
-  const selectedProduct = filteredProducts.find(product => product.id === selectedProductId) ?? filteredProducts[0] ?? MOCK_PRODUCTS[0];
+  const selectedProduct = filteredProducts.find(product => product.id === selectedProductId) ?? filteredProducts[0] ?? nutritionProducts[0];
 
   const selectedSpec =
     selectedProduct.specs.find(spec => spec.id === selectedSpecId) ??
     selectedProduct.specs[0];
 
   const configuredMethodCount = selectedSpec.methods.filter(method => method.configured).length;
-  const selectedMethod = selectedSpec.methods.find(method => method.configured) ?? selectedSpec.methods[0];
+  const selectedMethod = selectedSpec.methods.find(method => method.id === selectedMethodId) ?? selectedSpec.methods.find(method => method.configured) ?? selectedSpec.methods[0];
 
   const handleSelectProduct = (product: NutritionProduct) => {
     setSelectedProductId(product.id);
     setSelectedSpecId(product.specs[0]?.id ?? '');
+    setSelectedMethodId(product.specs[0]?.methods[0]?.id ?? '');
+  };
+
+  const openNutritionEditor = () => {
+    if (!selectedMethod) return;
+    const values = selectedMethod.nutrientValues;
+    setEditor({
+      productId: selectedProduct.id,
+      specId: selectedSpec.id,
+      methodId: selectedMethod.id,
+      methodName: selectedMethod.name,
+      energy: values?.energy.replace(/\s*kcal$/i, '') || '',
+      protein: values?.protein.replace(/\s*g$/i, '') || '',
+      fat: values?.fat.replace(/\s*g$/i, '') || '',
+      carbohydrate: values?.carbohydrate.replace(/\s*g$/i, '') || '',
+      sodium: values?.sodium.replace(/\s*mg$/i, '') || '',
+    });
+  };
+
+  const saveNutrition = () => {
+    if (!editor) return;
+    const hasAnyValue = [editor.energy, editor.protein, editor.fat, editor.carbohydrate, editor.sodium].some(value => value.trim() !== '');
+    setNutritionProducts(prev => prev.map(product => product.id !== editor.productId ? product : {
+      ...product,
+      specs: product.specs.map(spec => spec.id !== editor.specId ? spec : {
+        ...spec,
+        configured: hasAnyValue || spec.methods.some(method => method.id !== editor.methodId && method.configured),
+        methods: spec.methods.map(method => method.id !== editor.methodId ? method : {
+          ...method,
+          configured: hasAnyValue,
+          nutrientValues: hasAnyValue ? {
+            energy: editor.energy.trim() ? `${editor.energy.trim()} kcal` : '--',
+            protein: editor.protein.trim() ? `${editor.protein.trim()} g` : '--',
+            fat: editor.fat.trim() ? `${editor.fat.trim()} g` : '--',
+            carbohydrate: editor.carbohydrate.trim() ? `${editor.carbohydrate.trim()} g` : '--',
+            sodium: editor.sodium.trim() ? `${editor.sodium.trim()} mg` : '--',
+          } : undefined,
+        }),
+      }),
+    }));
+    setEditor(null);
+    setMessage(hasAnyValue ? '营养成分已保存' : '已清空当前做法的营养成分');
+  };
+
+  const addSelectedProducts = () => {
+    const additions = brandProducts.filter(product => pendingProductIds.includes(product.id) && !nutritionProducts.some(item => item.id === product.id)).map(product => ({
+      id: product.id,
+      name: product.name,
+      category: product.category || '未分类',
+      imageColor: 'from-[#E0EAFC] to-[#CFDEF3]',
+      specs: [{ id: `spec-${product.id}`, name: '默认规格', skuId: product.skuCode, mark: product.skuCode, configured: false, methods: [{ id: `method-${product.id}`, name: '常规', configured: false }] }],
+    } as NutritionProduct));
+    setNutritionProducts(prev => [...prev, ...additions]);
+    setShowProductSelector(false);
+    setMessage(`已添加 ${additions.length} 个商品`);
   };
 
   return (
@@ -237,19 +310,17 @@ export const WebNutritionManager: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={() => onNavigate?.('ingredient_library')}
               className="inline-flex items-center rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#666] transition-colors hover:bg-[#FAFAFA]"
             >
               原料库
             </button>
             <button
               type="button"
-              className="inline-flex items-center rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#666] transition-colors hover:bg-[#FAFAFA]"
-            >
-              <Settings size={16} className="mr-2 text-[#999]" />
-              基础配置
-            </button>
-            <button
-              type="button"
+              onClick={() => {
+                setPendingProductIds([]);
+                setShowProductSelector(true);
+              }}
               className="inline-flex items-center rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#00A35B]"
             >
               <Plus size={16} className="mr-2" />
@@ -258,6 +329,15 @@ export const WebNutritionManager: React.FC = () => {
           </div>
         </div>
 
+        {message && (
+          <div className="flex items-center justify-between border-b border-[#CBEFDC] bg-[#F1FFF7] px-6 py-2 text-sm text-[#087A49]">
+            <span>{message}</span>
+            <button type="button" onClick={() => setMessage('')} className="rounded p-1 hover:bg-white/70" aria-label="关闭提示">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_320px]">
           <div className="flex min-h-0 flex-col border-r border-[#EDEDED] bg-[#FCFCFD]">
             <div className="flex items-center justify-between border-b border-[#EDEDED] px-4 py-3">
@@ -265,15 +345,7 @@ export const WebNutritionManager: React.FC = () => {
                 <span>商品列表</span>
                 <span className="text-xs text-[#999]">{filteredProducts.length} 条</span>
               </div>
-              <div className="flex items-center gap-1 text-[#999]">
-                <button type="button" className="rounded p-1 hover:bg-white">
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="min-w-[38px] text-center text-xs">1 / 15</span>
-                <button type="button" className="rounded p-1 hover:bg-white">
-                  <ChevronRight size={16} />
-                </button>
-              </div>
+              <span className="text-xs text-[#999]">全部结果</span>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -315,10 +387,7 @@ export const WebNutritionManager: React.FC = () => {
 
           <div className="flex min-h-0 flex-col">
             <div className="flex items-center justify-between border-b border-[#EDEDED] px-5 py-3">
-              <div>
-                <div className="text-sm font-bold text-[#333]">"{selectedProduct.name}" 的商品规格</div>
-                <div className="mt-1 text-xs text-[#999]">支持按规格查看营养成分配置状态，点击右侧详情继续维护。</div>
-              </div>
+              <div className="text-sm font-bold text-[#333]">"{selectedProduct.name}" 的商品规格</div>
               <div className="text-xs text-[#999]">
                 共 {selectedProduct.specs.length} 个规格
               </div>
@@ -341,7 +410,10 @@ export const WebNutritionManager: React.FC = () => {
                     return (
                       <tr
                         key={spec.id}
-                        onClick={() => setSelectedSpecId(spec.id)}
+                        onClick={() => {
+                          setSelectedSpecId(spec.id);
+                          setSelectedMethodId(spec.methods[0]?.id ?? '');
+                        }}
                         className={`cursor-pointer transition-colors ${isActive ? 'bg-[#F7FFFB]' : 'hover:bg-[#FAFBFC]'}`}
                       >
                         <td className="border-b border-[#F1F1F1] px-5 py-4 font-medium">{spec.name}</td>
@@ -364,12 +436,9 @@ export const WebNutritionManager: React.FC = () => {
           </div>
 
           <div className="flex min-h-0 flex-col border-l border-[#EDEDED] bg-[#FCFCFD]">
-            <div className="flex items-center justify-between border-b border-[#EDEDED] px-5 py-4">
-              <div>
-                <div className="text-sm font-bold text-[#333]">营养成分（{selectedSpec.methods.length}）</div>
-                <div className="mt-1 text-xs text-[#999]">按规格维度维护做法营养值，便于前台展示和商品管理。</div>
-              </div>
-              <button type="button" className="text-sm font-medium text-[#666] hover:text-[#333]">
+            <div className="flex items-center justify-between border-b border-[#EDEDED] px-5 py-3">
+              <div className="text-sm font-bold text-[#333]">营养成分（{selectedSpec.methods.length}）</div>
+              <button type="button" onClick={openNutritionEditor} className="text-sm font-medium text-[#00A35B] hover:text-[#007D46]">
                 编辑
               </button>
             </div>
@@ -411,9 +480,15 @@ export const WebNutritionManager: React.FC = () => {
 
                   <div className="mt-3 space-y-2">
                     {selectedSpec.methods.map(method => (
-                      <div
+                      <button
                         key={method.id}
-                        className="flex items-center justify-between rounded-lg border border-[#F0F0F0] bg-[#FAFAFA] px-3 py-3"
+                        type="button"
+                        onClick={() => setSelectedMethodId(method.id)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition-colors ${
+                          selectedMethod?.id === method.id
+                            ? 'border-[#8BE1B2] bg-[#F0FFF7]'
+                            : 'border-[#F0F0F0] bg-[#FAFAFA] hover:border-[#DADADA]'
+                        }`}
                       >
                         <div>
                           <div className="text-sm font-medium text-[#333]">
@@ -427,7 +502,7 @@ export const WebNutritionManager: React.FC = () => {
                         <span className={`text-sm font-medium ${method.configured ? 'text-[#00A35B]' : 'text-[#999]'}`}>
                           {method.configured ? '已配置' : '未配置'}
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -457,21 +532,95 @@ export const WebNutritionManager: React.FC = () => {
                   )}
                 </div>
 
-                <div className="rounded-xl border border-[#E9E9E9] bg-[#FFFCF5] p-4 text-xs leading-6 text-[#8A6D3B]">
-                  <div className="font-medium text-[#7A5A21]">配置建议</div>
-                  <div className="mt-1">
-                    1. 建议优先覆盖高销量商品和 KA 客户重点商品。
-                    <br />
-                    2. 若商品存在多规格或多做法差异，请按规格和做法分别维护，避免前台展示偏差。
-                    <br />
-                    3. 配置完成后可结合商品详情页一起检查展示效果。
-                  </div>
-                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {showProductSelector && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-6">
+          <div className="flex max-h-[72vh] w-[620px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#EDEDED] px-6 py-4">
+              <div>
+                <div className="text-base font-bold text-[#222]">添加营养成分商品</div>
+                <div className="mt-1 text-xs text-[#999]">仅展示尚未加入营养成分管理的商品</div>
+              </div>
+              <button type="button" onClick={() => setShowProductSelector(false)} className="rounded p-1.5 text-[#777] hover:bg-[#F5F5F5]" aria-label="关闭">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="overflow-hidden rounded-lg border border-[#E8E8E8]">
+                {brandProducts.filter(product => !nutritionProducts.some(item => item.id === product.id)).map(product => (
+                  <label key={product.id} className="flex cursor-pointer items-center gap-3 border-b border-[#F0F0F0] px-4 py-3 last:border-b-0 hover:bg-[#FAFBFC]">
+                    <input
+                      type="checkbox"
+                      checked={pendingProductIds.includes(product.id)}
+                      onChange={event => setPendingProductIds(prev => event.target.checked ? [...prev, product.id] : prev.filter(id => id !== product.id))}
+                      className="h-4 w-4 accent-[#00C06B]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-[#333]">{product.name}</div>
+                      <div className="mt-1 text-xs text-[#999]">商品ID：{product.id} · {product.category || '未分类'}</div>
+                    </div>
+                  </label>
+                ))}
+                {brandProducts.every(product => nutritionProducts.some(item => item.id === product.id)) && (
+                  <div className="px-4 py-10 text-center text-sm text-[#999]">暂无可添加商品</div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-[#EDEDED] px-6 py-4">
+              <span className="text-sm text-[#999]">已选 {pendingProductIds.length} 个</span>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowProductSelector(false)} className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#666] hover:bg-[#FAFAFA]">取消</button>
+                <button type="button" disabled={pendingProductIds.length === 0} onClick={addSelectedProducts} className="rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-medium text-white hover:bg-[#00A35B] disabled:cursor-not-allowed disabled:opacity-40">确认添加</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editor && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 p-6">
+          <div className="w-[560px] overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#EDEDED] px-6 py-4">
+              <div>
+                <div className="text-base font-bold text-[#222]">编辑营养成分</div>
+                <div className="mt-1 text-xs text-[#999]">{selectedProduct.name} / {selectedSpec.name} / {editor.methodName}</div>
+              </div>
+              <button type="button" onClick={() => setEditor(null)} className="rounded p-1.5 text-[#777] hover:bg-[#F5F5F5]" aria-label="关闭">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4 px-6 py-5">
+              {NUTRIENT_META.map(item => (
+                <label key={item.key} className="text-sm text-[#555]">
+                  <span>{item.label}</span>
+                  <div className="mt-2 flex overflow-hidden rounded-lg border border-[#E5E7EB] focus-within:border-[#00C06B]">
+                    <input
+                      value={editor[item.key]}
+                      onChange={event => {
+                        const value = event.target.value;
+                        if (value === '' || /^\d*(\.\d{0,2})?$/.test(value)) setEditor(current => current ? { ...current, [item.key]: value } : current);
+                      }}
+                      inputMode="decimal"
+                      placeholder="请输入"
+                      className="min-w-0 flex-1 px-3 py-2 outline-none"
+                    />
+                    <span className="border-l border-[#EEEEEE] bg-[#FAFAFA] px-3 py-2 text-[#999]">{item.unit}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-[#EDEDED] px-6 py-4">
+              <button type="button" onClick={() => setEditor(null)} className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#666] hover:bg-[#FAFAFA]">取消</button>
+              <button type="button" onClick={saveNutrition} className="rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-medium text-white hover:bg-[#00A35B]">保存</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

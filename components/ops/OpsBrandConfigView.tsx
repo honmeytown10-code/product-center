@@ -1,10 +1,12 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronRight, Sliders, Save, Check, ChevronDown, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, ChevronRight, Sliders, Save, Check, ChevronDown, RotateCcw } from 'lucide-react';
 import { useProducts } from '../../context';
 import { MOCK_BRANDS, AVAILABLE_DYNAMIC_FIELDS, BrandConfig } from '../../types';
 import { PolicyEditor } from './OpsPolicyView';
 import { OpsChannelGroupingConfig } from './OpsChannelGroupingConfig';
+import { OpsOmnichannelConfigSection } from './OpsOmnichannelConfigSection';
+import { getOmnichannelConfig } from '../../omnichannel';
 
 const BRAND_FEATURE_LIST = [
     { key: 'stock_shared', label: '全渠道库存共享 (Goods.Stock.Shared)', required: true },
@@ -24,6 +26,7 @@ export const OpsBrandConfigView: React.FC = () => {
   const [view, setView] = useState<'list' | 'edit'>('list');
   const [currentBrandId, setCurrentBrandId] = useState<string | null>(null);
   const [showPolicyCustomizer, setShowPolicyCustomizer] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   
   // Local state for buffering changes before save
   const [tempConfig, setTempConfig] = useState<BrandConfig | null>(null);
@@ -32,7 +35,10 @@ export const OpsBrandConfigView: React.FC = () => {
      setCurrentBrandId(brandId);
      const originalConfig = brandConfigs[brandId] || brandConfigs['b_1'];
      // Deep copy to prevent reference mutation
-     setTempConfig(JSON.parse(JSON.stringify(originalConfig)));
+     setTempConfig(JSON.parse(JSON.stringify({
+        ...originalConfig,
+        omnichannel: getOmnichannelConfig(originalConfig),
+     })));
      setView('edit');
   };
 
@@ -52,6 +58,7 @@ export const OpsBrandConfigView: React.FC = () => {
   const handleSaveConfig = () => {
       if (currentBrandId && tempConfig) {
           updateBrandConfig(currentBrandId, tempConfig);
+          setShowPublishConfirm(false);
           setView('list');
       }
   };
@@ -83,7 +90,11 @@ export const OpsBrandConfigView: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                     <button onClick={() => setView('list')} className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition-all text-sm">取消</button>
-                    <button onClick={handleSaveConfig} className="px-8 py-3 bg-[#1F2129] text-white font-black rounded-2xl shadow-lg hover:bg-black transition-all active:scale-95 flex items-center text-sm">
+                    <button
+                        onClick={() => setShowPublishConfirm(true)}
+                        title="保存并发布品牌配置"
+                        className="px-8 py-3 bg-[#1F2129] text-white font-black rounded-2xl shadow-lg hover:bg-black transition-all active:scale-95 flex items-center text-sm"
+                    >
                         <Save size={16} className="mr-2"/> 保存配置
                     </button>
                 </div>
@@ -128,6 +139,11 @@ export const OpsBrandConfigView: React.FC = () => {
                         </div>
                     </div>
 
+                    <OpsOmnichannelConfigSection
+                        value={tempConfig.omnichannel || getOmnichannelConfig(tempConfig)}
+                        onChange={(omnichannel) => setTempConfig(prev => prev ? ({ ...prev, omnichannel }) : null)}
+                    />
+
                     {/* We removed the Channel Grouping config from here, it is now in WebAdmin -> General Settings */}
 
                     {/* We removed the POS Store Ops Config Section (SPU/SKU mode & Threshold) from here, it is now in WebAdmin -> General Settings */}
@@ -153,6 +169,26 @@ export const OpsBrandConfigView: React.FC = () => {
                                 allFields={AVAILABLE_DYNAMIC_FIELDS} 
                                 readOnlyName={true}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showPublishConfirm && (
+                <div className="fixed inset-0 z-[260] flex items-center justify-center bg-[#111827]/60 backdrop-blur-sm">
+                    <div className="w-[520px] overflow-hidden border border-gray-200 bg-white shadow-2xl">
+                        <div className="flex items-start gap-4 border-b border-amber-200 bg-amber-50 px-7 py-6">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"><AlertTriangle size={20} /></div>
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900">确认发布品牌全渠道配置？</h3>
+                                <p className="mt-1 text-sm leading-6 text-gray-600">发布后，商家 Web 后台菜单、商品资料维护位置、模板来源和渠道发布任务将立即按新配置展示。</p>
+                            </div>
+                        </div>
+                        <div className="px-7 py-5 text-sm text-gray-600">
+                            建议仅在完成商家管理模式确认、渠道职责划分和历史数据检查后调整。现有商品数据不会自动迁移。
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-7 py-4">
+                            <button type="button" onClick={() => setShowPublishConfirm(false)} className="border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50">取消</button>
+                            <button type="button" onClick={handleSaveConfig} className="bg-orange-500 px-5 py-2.5 text-sm font-black text-white hover:bg-orange-600">确认发布</button>
                         </div>
                     </div>
                 </div>

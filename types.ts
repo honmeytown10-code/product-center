@@ -45,6 +45,41 @@ export interface ChannelGroup {
   channels: string[];
 }
 
+export type ThirdPartyChannelId =
+  | 'meituan'
+  | 'taobao'
+  | 'douyin'
+  | 'meituan_dine'
+  | 'meituan_pinhaofan';
+export type PrivateChannelId =
+  | 'pos'
+  | 'mini_program_dine_in'
+  | 'mini_program_delivery';
+export type OmnichannelChannelId = PrivateChannelId | ThirdPartyChannelId;
+export type ThirdPartyManagementMode = 'qimai' | 'platform';
+export type OmnichannelCollaborationMode = 'unified' | 'channel_division';
+export type ChannelProductCreationMode = 'existing_master_only' | 'create_master_and_channel';
+export type QimaiChannelCapability = 'order_receiving' | 'product_operations';
+
+export interface ThirdPartyChannelConnection {
+  capabilities: QimaiChannelCapability[];
+}
+
+export interface OmnichannelChannelGroup {
+  id: string;
+  name: string;
+  channels: OmnichannelChannelId[];
+}
+
+export interface OmnichannelBrandConfig {
+  enabled: boolean;
+  collaborationMode: OmnichannelCollaborationMode;
+  channelProductCreationMode: ChannelProductCreationMode;
+  thirdPartyStrategies: Record<ThirdPartyChannelId, ThirdPartyManagementMode>;
+  channelConnections: Record<ThirdPartyChannelId, ThirdPartyChannelConnection>;
+  channelGroups: OmnichannelChannelGroup[];
+}
+
 export interface BrandConfig {
   policyId: string;
   customPolicy?: ManagementPolicy;
@@ -64,6 +99,7 @@ export interface BrandConfig {
   channelGroups?: ChannelGroup[];
   posStockoutMode?: 'spu' | 'sku'; // POS沽清模式 (SPU / SKU)
   posStockoutWarningThreshold?: number; // POS已沽清列表预警阈值
+  omnichannel?: OmnichannelBrandConfig;
 }
 
 export const MOCK_BRANDS = [
@@ -177,6 +213,7 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   // 1. 基础属性 (base)
   { id: 'p_name', label: '商品名称', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 10, isRequired: true, placeholder: '请输入商品名称' },
   { id: 'p_alias', label: '商品别名', module: 'base', type: 'input', sortOrder: 20, placeholder: '请输入商品别名' },
+  { id: 'p_merchant_code', label: '商家商品标识', module: 'base', type: 'input', sortOrder: 25, description: '商家自有主数据编码，用于跨系统识别，不直接发布到售卖渠道', placeholder: '请输入商家商品标识' },
   { id: 'p_code', label: '数字助记码', module: 'base', type: 'input', sortOrder: 30, description: '便于仓边收银使用助记码查找商品', placeholder: '请输入商品助记码' },
   { id: 'p_front_cat', label: '前台分类', module: 'base', type: 'selector', applyToBrands: ['b_1', 'b_2'], sortOrder: 40, isRequired: true, description: '用于前台展示，如小程序、美团、淘宝闪购等渠道的分类展示', presetValues: ['热销推荐', '奶茶系列', '咖啡系列', '果茶系列'] },
   { id: 'p_back_cat', label: '后台分类', module: 'base', type: 'selector', sortOrder: 45, description: '用于店铺内部经营管理和数据统计等，不在前台展示', presetValues: ['常规商品', '新品商品', '活动商品', '原料商品'] },
@@ -248,8 +285,11 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   { id: 'st_member', label: '会员折扣/积分', module: 'others', type: 'switch', applyToBrands: ['b_1', 'b_2', 'b_3'], sortOrder: 10 },
   { id: 'o_tax', label: '税率设置', module: 'others', type: 'number', sortOrder: 20 },
   { id: 'o_invoice', label: '开票项目', module: 'others', type: 'input', sortOrder: 30 },
+  { id: 'o_tax_category', label: '税务分类', module: 'others', type: 'selector', presetValues: ['餐饮服务', '食品销售', '饮品销售', '其他'], sortOrder: 35, description: '用于统一财税归类，渠道实际税率按业务规则计算' },
   { id: 'o_origin', label: '生产地', module: 'others', type: 'input', sortOrder: 40 },
   { id: 'o_ingredients', label: '原料说明', module: 'others', type: 'textarea', sortOrder: 50 },
+  { id: 'o_recipe_ref', label: '配方引用', module: 'others', type: 'selector', presetValues: ['经典奶茶配方', '鲜果茶标准配方', '咖啡基底配方'], sortOrder: 52, description: '关联统一配方主数据' },
+  { id: 'o_nutrition_ref', label: '营养成分引用', module: 'others', type: 'selector', presetValues: ['标准饮品营养表', '轻食营养表', '烘焙营养表'], sortOrder: 54, description: '关联统一营养成分主数据' },
   { id: 'o_print_stat_test', label: '测试打印统计', module: 'others', type: 'radio_group', presetValues: ['番茄酱', '糖醋酱'], sortOrder: 60 },
   { id: 'o_1202_attr', label: '1202属性', module: 'others', type: 'checkbox_group', presetValues: ['多选1', '多选2', '多选3', '多选4', '多选5', '多选6', '多选7', '多选8'], sortOrder: 70 },
 ];

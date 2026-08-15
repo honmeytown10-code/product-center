@@ -292,7 +292,10 @@ const SummaryCard = ({ label, count, icon, color, bg, onClick, active, warning }
 
 // --- Sub Views ---
 
-const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => (
+const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => {
+    const [keyword, setKeyword] = useState('');
+    const filteredRows = data.previewData.filter(row => `${row.name}${row.cat}${row.spec}`.toLowerCase().includes(keyword.trim().toLowerCase()));
+    return (
     <>
         <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
             <h4 className="font-bold text-sm text-gray-800 flex items-center">
@@ -302,7 +305,7 @@ const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => (
             <div className="flex items-center space-x-3">
                 <div className="relative">
                     <Search size={14} className="absolute left-3 top-2 text-gray-400"/>
-                    <input className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white outline-none focus:border-gray-400 w-48" placeholder="搜索商品..."/>
+                    <input value={keyword} onChange={event => setKeyword(event.target.value)} className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white outline-none focus:border-gray-400 w-48" placeholder="搜索商品..."/>
                 </div>
                 <span className="text-xs text-gray-400">仅展示部分字段</span>
             </div>
@@ -318,7 +321,7 @@ const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => (
                     </tr>
                 </thead>
                 <tbody className="text-sm">
-                    {data.previewData.map((row, idx) => (
+                    {filteredRows.map((row, idx) => (
                         <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
                             <td className="px-6 py-3.5 font-bold text-gray-800">{row.name}</td>
                             <td className="px-6 py-3.5 text-gray-600">
@@ -337,16 +340,17 @@ const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => (
             <span className="text-xs text-gray-400">共 {data.totalProducts} 条数据</span>
             <div className="flex items-center space-x-2">
                 <button className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-50" disabled><ChevronLeftIcon size={14}/></button>
-                <span className="text-xs font-bold text-gray-700 px-2">1 / 13</span>
-                <button className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"><ChevronRight size={14}/></button>
-                <select className="ml-2 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none">
+                <span className="text-xs font-bold text-gray-700 px-2">1 / 1</span>
+                <button type="button" disabled title="当前预览数据仅一页" className="p-1.5 cursor-not-allowed rounded-lg border border-gray-200 text-gray-300"><ChevronRight size={14}/></button>
+                <select disabled title="当前预览固定展示全部样例数据" className="ml-2 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none disabled:text-gray-400">
                     <option>20条/页</option>
                     <option>50条/页</option>
                 </select>
             </div>
         </div>
     </>
-);
+    );
+};
 
 const ErrorsDetailView = ({ errors }: { errors: ImportError[] }) => (
     <div className="flex-1 flex flex-col">

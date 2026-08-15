@@ -1,9 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Search, ChevronRight, CheckCircle2, ChevronDown,
     Layers, RefreshCw, FileUp, FileEdit, X, PackagePlus, Tickets, Tags, Copy, Trash2, SquarePen
 } from 'lucide-react';
 import { WebBatchAddonAssociation } from './WebBatchAddonAssociation';
+import { useProducts } from '../../context';
+import {
+    channelGroupIncludesMiniProgram,
+    getEffectiveChannelGroups,
+    getOmnichannelChannel,
+    getOmnichannelConfig,
+    shouldShowChannelCatalog,
+} from '../../omnichannel';
+import type { OmnichannelChannelId } from '../../types';
+import { WebPublishRecords } from './WebPublishRecords';
+import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
 type ProductCategoryConfig = {
     id: string;
@@ -98,7 +109,7 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
         name: '柠檬茶',
         code: '1246829509485641731',
         type: '标准商品',
-        image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&q=80&w=100',
+        image: '',
         price: 16,
         salesMode: '仅套餐售卖',
         timeSale: {
@@ -120,6 +131,29 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
 
 const WEEKDAY_OPTIONS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const SALES_MODE_OPTIONS: EditableProduct['salesMode'][] = ['正常售卖', '仅套餐售卖'];
+const DEFAULT_PUBLISH_CHANNEL_IDS: OmnichannelChannelId[] = [
+    'mini_program_dine_in',
+    'mini_program_delivery',
+    'pos',
+    'meituan',
+    'taobao',
+];
+const BATCH_FIELD_GROUPS = [
+    { title: '基础信息', fields: ['商品名称', '前台分类', '是否展示商品'] },
+    { title: '商品属性', fields: ['基础价格', '商品标识', '商品条码', '预计成本', '商品份量'] },
+    { title: '展示设置', fields: ['商品主图', '规格图片', '商品详情图', '列表页简述', '描述标签'] },
+    { title: '销售属性', fields: ['售卖时间', '是否为套餐商品', '是否为小料商品', '起购限购', '单点不送', '包装费'] },
+];
+const TEMPLATE_RANGE_OPTIONS = [
+    { id: 'template-1', name: '华南直营门店模板', count: 56, channels: ['mini_program_dine_in', 'pos'] as OmnichannelChannelId[] },
+    { id: 'template-2', name: '机场枢纽门店模板', count: 12, channels: ['pos', 'mini_program_dine_in'] as OmnichannelChannelId[] },
+    { id: 'template-3', name: '外卖渠道模板', count: 128, channels: ['mini_program_delivery', 'meituan', 'taobao'] as OmnichannelChannelId[] },
+];
+const STORE_RANGE_OPTIONS = [
+    { id: 'store-1', name: '南山万象店', code: 'SZ001' },
+    { id: 'store-2', name: '福田卓悦店', code: 'SZ002' },
+    { id: 'store-3', name: '虹桥枢纽店', code: 'SH001' },
+];
 
 const cloneInitialProducts = () => INITIAL_SYNC_PRODUCTS.map(product => ({
     ...product,
@@ -182,13 +216,83 @@ const getChangedFields = (product: EditableProduct) => {
     return changed;
 };
 
-export const WebProductSync: React.FC = () => {
+export const WebProductSync: React.FC<{ initialTab?: 'publish' | 'records' }> = ({ initialTab = 'publish' }) => {
+    const { activeBrandId, brandConfigs } = useProducts();
+    const omnichannelConfig = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
+    const channelCatalogGroups = getEffectiveChannelGroups(omnichannelConfig);
+    const channelCatalogEnabled = shouldShowChannelCatalog(omnichannelConfig) && channelCatalogGroups.length > 0;
     const [step, setStep] = useState(0);
     const [activeBatchTool, setActiveBatchTool] = useState<'addon-association' | null>(null);
+    const [pageTab, setPageTab] = useState<'publish' | 'records'>(initialTab);
+    const [operationMode, setOperationMode] = useState<'sync' | 'batch_standard' | 'batch_combo'>('sync');
+    const [syncSource, setSyncSource] = useState<'master' | 'template' | 'channel_catalog'>(() => channelCatalogEnabled ? 'channel_catalog' : 'master');
+    // 原型默认当前账号拥有全部固定渠道权限；生产环境需先按账号的 channelId 数据范围过滤，
+    // 再由当前动态分组反向计算可见/可选商品库，不能把菜单权限等同于全部商品库权限。
+    const authorizedChannelCatalogGroups = channelCatalogGroups;
+    const [selectedChannelGroupIds, setSelectedChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
+    const [selectedTargetChannelGroupIds, setSelectedTargetChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
+    const [selectedTargetScopes, setSelectedTargetScopes] = useState<Array<'master' | 'template' | 'store' | 'channel_catalog'>>(['master', 'template', 'store']);
+    const [batchChangeMode, setBatchChangeMode] = useState<'individual' | 'unified'>('individual');
+    const [batchProductSource, setBatchProductSource] = useState<'master' | 'channel_catalog'>('master');
+    const [batchChannelGroupId, setBatchChannelGroupId] = useState<string>(() => channelCatalogGroups[0]?.id || '');
+    const [templateRangeMode, setTemplateRangeMode] = useState<'all' | 'selected'>('all');
+    const [storeRangeMode, setStoreRangeMode] = useState<'all' | 'selected' | 'template'>('selected');
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(['template-1']);
+    const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(['store-1', 'store-2']);
+    const [selectedBatchChannelIds, setSelectedBatchChannelIds] = useState<OmnichannelChannelId[]>(() => (
+        channelCatalogEnabled
+            ? Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)))
+            : DEFAULT_PUBLISH_CHANNEL_IDS
+    ));
+    const [selectedBatchFields, setSelectedBatchFields] = useState<string[]>(['商品名称', '前台分类', '基础价格']);
+    const [selectedBatchProductIds, setSelectedBatchProductIds] = useState<string[]>(['1', '2']);
+    const [selectedSyncProductIds, setSelectedSyncProductIds] = useState<string[]>(['1', '2', '3']);
+    const [selectedPublishChannelIds, setSelectedPublishChannelIds] = useState<OmnichannelChannelId[]>(() => (
+        channelCatalogEnabled
+            ? Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)))
+            : DEFAULT_PUBLISH_CHANNEL_IDS
+    ));
+    const [publishValidationMessage, setPublishValidationMessage] = useState('');
+    const [productSelectorMode, setProductSelectorMode] = useState<'sync' | 'batch' | null>(null);
+    const [pendingSelectorProductIds, setPendingSelectorProductIds] = useState<string[]>([]);
     const [products, setProducts] = useState<EditableProduct[]>(() => cloneInitialProducts());
     const [selectedCategoryName, setSelectedCategoryName] = useState<string>('all');
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+
+    const availablePublishChannelIds = useMemo<OmnichannelChannelId[]>(() => (
+        syncSource === 'channel_catalog'
+            ? Array.from(new Set(
+                authorizedChannelCatalogGroups
+                    .filter(group => selectedChannelGroupIds.includes(group.id))
+                    .flatMap(group => group.channels)
+            ))
+            : DEFAULT_PUBLISH_CHANNEL_IDS
+    ), [authorizedChannelCatalogGroups, selectedChannelGroupIds, syncSource]);
+    const availablePublishChannelKey = availablePublishChannelIds.join('|');
+
+    useEffect(() => {
+        setSelectedPublishChannelIds(availablePublishChannelIds);
+        setPublishValidationMessage('');
+    }, [availablePublishChannelKey]);
+
+    const selectedSyncProducts = useMemo(
+        () => products.filter(product => selectedSyncProductIds.includes(product.id)),
+        [products, selectedSyncProductIds]
+    );
+    const batchRangeInvalid = operationMode !== 'sync' && (
+        selectedTargetScopes.length === 0
+        || (selectedTargetScopes.includes('template') && templateRangeMode === 'selected' && selectedTemplateIds.length === 0)
+        || (selectedTargetScopes.includes('store') && storeRangeMode === 'selected' && selectedStoreIds.length === 0)
+        || (selectedTargetScopes.includes('store') && storeRangeMode === 'template' && !selectedTargetScopes.includes('template'))
+        || (selectedTargetScopes.includes('store') && storeRangeMode !== 'template' && selectedBatchChannelIds.length === 0)
+        || (selectedTargetScopes.includes('channel_catalog') && selectedTargetChannelGroupIds.length === 0)
+    );
+    const miniProgramMainImageMissingProducts = useMemo(() => (
+        channelGroupIncludesMiniProgram(selectedPublishChannelIds)
+            ? selectedSyncProducts.filter(product => !String(product.image || '').trim())
+            : []
+    ), [selectedPublishChannelIds, selectedSyncProducts]);
 
     const categoryList = useMemo(() => {
         const map = new Map<string, { name: string; categorySort: number; productCount: number }>();
@@ -225,6 +329,30 @@ export const WebProductSync: React.FC = () => {
             return a.name.localeCompare(b.name, 'zh-CN');
         });
     }, [products, selectedCategoryName]);
+
+    const selectorProducts = useMemo<SelectableProduct[]>(() => products.map(product => ({
+        id: product.id,
+        name: product.name,
+        image: product.image,
+        skuCode: product.code,
+        productCode: product.code,
+        category: product.categories[0]?.name || '未分类',
+        frontendCategory: product.categories[0]?.name || '未分类',
+        type: product.type.includes('套餐') ? 'combo' : 'standard',
+        price: product.price,
+        status: 'on_shelf',
+    })), [products]);
+
+    const openProductSelector = (mode: 'sync' | 'batch') => {
+        setProductSelectorMode(mode);
+        setPendingSelectorProductIds(mode === 'sync' ? selectedSyncProductIds : selectedBatchProductIds);
+    };
+
+    const confirmProductSelector = () => {
+        if (productSelectorMode === 'sync') setSelectedSyncProductIds(pendingSelectorProductIds);
+        if (productSelectorMode === 'batch') setSelectedBatchProductIds(pendingSelectorProductIds);
+        setProductSelectorMode(null);
+    };
 
     const updateProduct = (productId: string, updater: (product: EditableProduct) => EditableProduct) => {
         setProducts(prev => prev.map(product => (
@@ -303,24 +431,26 @@ export const WebProductSync: React.FC = () => {
     const renderToolsMenu = () => {
         const syncCards: ToolCardConfig[] = [
             {
-                title: '同步商品至门店',
-                desc: '同步商品至门店',
+                title: '发布商品至门店',
+                desc: '按商品来源创建门店渠道发布任务',
                 icon: <RefreshCw size={24} className="text-orange-500" />,
                 iconWrapClass: 'bg-orange-50',
-                onClick: () => setStep(1),
+                onClick: () => { setOperationMode('sync'); setStep(1); },
                 featured: true,
             },
             {
-                title: '批量同步模板至门店',
-                desc: '批量同步多个模板的商品至门店',
+                title: '批量发布模板商品',
+                desc: '批量选择模板并发布至适用门店',
                 icon: <Layers size={24} className="text-cyan-500" />,
                 iconWrapClass: 'bg-cyan-50',
+                disabled: true,
             },
             {
                 title: '更新门店商品属性',
                 desc: '更新商品属性至门店',
                 icon: <SquarePen size={24} className="text-green-500" />,
                 iconWrapClass: 'bg-green-50',
+                disabled: true,
             },
             {
                 title: '同步套餐商品至门店',
@@ -336,18 +466,22 @@ export const WebProductSync: React.FC = () => {
                 desc: '批量修改商品库、模板、门店的商品信息',
                 icon: <FileEdit size={24} className="text-blue-500" />,
                 iconWrapClass: 'bg-blue-50',
+                onClick: () => { setOperationMode('batch_standard'); setStep(1); },
             },
             {
                 title: '批量修改套餐商品',
                 desc: '批量修改商品库、模板、门店的商品信息',
                 icon: <PackagePlus size={24} className="text-emerald-500" />,
                 iconWrapClass: 'bg-emerald-50',
+                disabled: true,
+                onClick: () => { setOperationMode('batch_combo'); setStep(1); },
             },
             {
                 title: '批量修改加料商品',
                 desc: '批量修改门店商品信息',
                 icon: <Tickets size={24} className="text-violet-500" />,
                 iconWrapClass: 'bg-violet-50',
+                disabled: true,
             },
             {
                 title: '批量修改商品关联加料',
@@ -361,12 +495,14 @@ export const WebProductSync: React.FC = () => {
                 desc: '批量修改商品库、模板、门店商品的做法',
                 icon: <Layers size={24} className="text-lime-500" />,
                 iconWrapClass: 'bg-lime-50',
+                disabled: true,
             },
             {
                 title: '批量启用/禁用门店做法',
                 desc: '批量启用或禁用门店对应的做法',
                 icon: <Layers size={24} className="text-yellow-500" />,
                 iconWrapClass: 'bg-yellow-50',
+                disabled: true,
             },
         ];
 
@@ -376,18 +512,21 @@ export const WebProductSync: React.FC = () => {
                 desc: '根据各种匹配配置信息从门店删除',
                 icon: <Trash2 size={24} className="text-red-500" />,
                 iconWrapClass: 'bg-red-50',
+                disabled: true,
             },
             {
                 title: '删除门店加料',
                 desc: '根据各种匹配配置从门店删除加料',
                 icon: <Trash2 size={24} className="text-red-500" />,
                 iconWrapClass: 'bg-red-50',
+                disabled: true,
             },
             {
                 title: '门店商品复制',
                 desc: '适用于将店开业等门店商品完整克隆至目标门店',
                 icon: <Copy size={24} className="text-emerald-500" />,
                 iconWrapClass: 'bg-emerald-50',
+                disabled: true,
             },
         ];
 
@@ -398,11 +537,12 @@ export const WebProductSync: React.FC = () => {
                         key={card.title}
                         type="button"
                         onClick={card.onClick}
-                        className={`relative overflow-hidden rounded-xl border bg-white p-5 text-left transition-all ${
+                        disabled={card.disabled}
+                        className={`relative overflow-hidden rounded-lg border bg-white p-4 text-left transition-colors ${
                             card.featured
-                                ? 'border-[#00C06B] shadow-sm hover:shadow-md'
-                                : 'border-gray-100 shadow-sm hover:shadow-md'
-                        } ${card.disabled ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
+                                ? 'border-[#00C06B] hover:bg-[#F8FFFB]'
+                                : 'border-gray-200 hover:border-[#A9E4C3]'
+                        } ${card.disabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'}`}
                     >
                         {card.featured && <div className="absolute left-0 top-0 h-full w-1 bg-[#00C06B]" />}
                         <div className="flex items-start">
@@ -410,7 +550,7 @@ export const WebProductSync: React.FC = () => {
                                 {card.icon}
                             </div>
                             <div className="min-w-0">
-                                <h4 className="mb-1 text-base font-bold text-gray-800">{card.title}</h4>
+                                <div className="mb-1 flex items-center gap-2"><h4 className="text-base font-bold text-gray-800">{card.title}</h4>{card.disabled && <span className="rounded bg-[#F2F4F7] px-1.5 py-0.5 text-[11px] font-medium text-[#667085]">现有系统未接入</span>}</div>
                                 <p className="text-xs text-gray-400">{card.desc}</p>
                             </div>
                         </div>
@@ -422,7 +562,7 @@ export const WebProductSync: React.FC = () => {
         return (
             <div className="h-full overflow-y-auto p-8">
                 <div className="mb-8">
-                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">商品同步</h3>
+                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">商品发布</h3>
                     {renderCardGrid(syncCards)}
                 </div>
 
@@ -432,7 +572,7 @@ export const WebProductSync: React.FC = () => {
                 </div>
 
                 <div>
-                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">商品工具</h3>
+                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">发布工具</h3>
                     {renderCardGrid(productToolCards)}
                 </div>
             </div>
@@ -464,7 +604,7 @@ export const WebProductSync: React.FC = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8F9FB]">
-                        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+                        <div className="rounded-lg border border-gray-200 bg-white p-5 space-y-5">
                             <div className="text-base font-bold text-gray-800">基础信息</div>
                             <div className="grid grid-cols-[120px_1fr] gap-y-5 items-start">
                                 <div className="text-sm text-gray-600 pt-2">商品名称</div>
@@ -521,7 +661,7 @@ export const WebProductSync: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-gray-200 p-6">
+                        <div className="rounded-lg border border-gray-200 bg-white p-5">
                             <div className="text-base font-bold text-gray-800 mb-4">商品属性</div>
                             <div className="text-sm text-gray-600 mb-3">基础售价</div>
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -565,7 +705,7 @@ export const WebProductSync: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-gray-200 p-6">
+                        <div className="rounded-lg border border-gray-200 bg-white p-5">
                             <div className="text-base font-bold text-gray-800 mb-4">销售属性</div>
                             <div className="grid grid-cols-[120px_1fr] gap-y-6 items-start">
                                 <div className="text-sm text-gray-600 pt-2">可售卖时间</div>
@@ -716,37 +856,125 @@ export const WebProductSync: React.FC = () => {
         );
     };
 
+    const renderBatchStep1 = () => (
+        <div className="flex h-full flex-1 flex-col bg-white">
+            <div className="min-h-0 flex-1 overflow-auto p-7">
+                <div className="max-w-5xl">
+                    <div className="mb-7">
+                        <h2 className="text-xl font-black text-gray-900">{operationMode === 'batch_combo' ? '批量修改套餐商品' : '批量修改标准商品'}</h2>
+                    </div>
+
+                    <div className="mb-7 border-b border-gray-100 pb-6">
+                        <div className="mb-3 text-sm font-black text-gray-800">修改方式</div>
+                        <div className="flex items-center gap-8 text-sm">
+                            <label className={`flex cursor-pointer items-center font-bold ${batchChangeMode === 'individual' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" checked={batchChangeMode === 'individual'} onChange={() => setBatchChangeMode('individual')} className="mr-2" />个性修改</label>
+                            <label className={`flex cursor-pointer items-center font-bold ${batchChangeMode === 'unified' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" checked={batchChangeMode === 'unified'} onChange={() => setBatchChangeMode('unified')} className="mr-2" />统一修改</label>
+                        </div>
+                    </div>
+
+                    <div className="mb-7 border-b border-gray-100 pb-6">
+                        <div className="mb-3 text-sm font-black text-gray-800">选择商品</div>
+                        <div className="flex items-center gap-8 text-sm">
+                            <label className={`flex cursor-pointer items-center font-bold ${batchProductSource === 'master' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
+                                <input type="radio" name="batch-product-source" checked={batchProductSource === 'master'} onChange={() => { setBatchProductSource('master'); setSelectedBatchProductIds([]); }} className="mr-2" />
+                                商品主档
+                            </label>
+                            {channelCatalogEnabled && (
+                                <label className={`flex cursor-pointer items-center font-bold ${batchProductSource === 'channel_catalog' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
+                                    <input type="radio" name="batch-product-source" checked={batchProductSource === 'channel_catalog'} onChange={() => { setBatchProductSource('channel_catalog'); setSelectedBatchProductIds([]); }} className="mr-2" />
+                                    渠道商品库
+                                </label>
+                            )}
+                        </div>
+                        {batchProductSource === 'channel_catalog' && channelCatalogEnabled && (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                {authorizedChannelCatalogGroups.map(group => {
+                                    const selected = batchChannelGroupId === group.id;
+                                    return <button key={group.id} type="button" onClick={() => { setBatchChannelGroupId(group.id); setSelectedBatchProductIds([]); }} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-[#F0FBF5] text-[#008F53]' : 'border-gray-200 text-gray-500'}`}><span>{group.name}</span><span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>;
+                                })}
+                            </div>
+                        )}
+                        <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
+                            <span className="text-sm text-gray-500">已选 <span className="font-bold text-gray-800">{selectedBatchProductIds.length}</span> 个商品</span>
+                            <button type="button" onClick={() => openProductSelector('batch')} className="border border-[#00B460] bg-white px-4 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FBF5]">选择商品</button>
+                        </div>
+                        {selectedBatchProductIds.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2 border border-gray-200 bg-[#FAFBFC] px-4 py-3">
+                                {products.filter(product => selectedBatchProductIds.includes(product.id)).map(product => (
+                                    <span key={product.id} className="inline-flex items-center border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700">
+                                        {product.name}
+                                        <button type="button" aria-label={`移除${product.name}`} onClick={() => setSelectedBatchProductIds(prev => prev.filter(id => id !== product.id))} className="ml-2 text-gray-400 hover:text-red-500"><X size={13} /></button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mb-8 space-y-5">
+                        {BATCH_FIELD_GROUPS.map(group => (
+                            <div key={group.title} className="flex items-start">
+                                <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
+                                <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
+                                    {group.fields.map(field => {
+                                        const selected = selectedBatchFields.includes(field);
+                                        return <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />{field}</label>;
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                </div>
+            </div>
+            <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchFields.length === 0 || selectedBatchProductIds.length === 0} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
+        </div>
+    );
+
     const renderStep1 = () => (
         <div className="flex-1 flex flex-col h-full bg-white relative">
-            <div className="p-6 border-b border-gray-100 flex items-center space-x-6">
-                <label className="flex items-center space-x-2 text-sm text-gray-500 cursor-pointer">
-                    <input type="radio" name="source" className="w-4 h-4 text-[#00C06B] focus:ring-[#00C06B]" />
-                    <span>选择模板商品</span>
-                </label>
-                <label className="flex items-center space-x-2 text-sm font-bold text-[#00C06B] cursor-pointer">
-                    <input type="radio" name="source" defaultChecked className="w-4 h-4 text-[#00C06B] focus:ring-[#00C06B]" />
-                    <span>选择商品库商品</span>
-                </label>
+            <div className="border-b border-gray-100 p-6">
+                <div className="mb-3 text-sm font-bold text-gray-700">选择商品</div>
+                <div className="flex items-center gap-6">
+                    {!channelCatalogEnabled && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'master' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'master'} onChange={() => setSyncSource('master')} className="h-4 w-4 text-[#00C06B]" /><span>商品主档</span></label>}
+                    <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'template' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'template'} onChange={() => setSyncSource('template')} className="h-4 w-4 text-[#00C06B]" /><span>商品模板</span></label>
+                    {channelCatalogEnabled && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'channel_catalog' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'channel_catalog'} onChange={() => setSyncSource('channel_catalog')} className="h-4 w-4 text-[#00C06B]" /><span>渠道商品库</span></label>}
+                </div>
+                {syncSource === 'channel_catalog' && (
+                    <div className="mt-4"><div className="flex flex-wrap gap-2">
+                        {authorizedChannelCatalogGroups.map(group => { const selected = selectedChannelGroupIds[0] === group.id; return <button key={group.id} type="button" onClick={() => { setSelectedChannelGroupIds([group.id]); setSelectedSyncProductIds([]); }} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-[#F0FBF5] text-[#008F53]' : 'border-gray-200 text-gray-500'}`}><span>{group.name}</span><span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>; })}
+                    </div></div>
+                )}
+                <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
+                    <span className="text-sm text-gray-500">已选 <span className="font-bold text-gray-800">{selectedSyncProductIds.length}</span> 个商品</span>
+                    <button type="button" onClick={() => openProductSelector('sync')} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">选择商品</button>
+                </div>
             </div>
 
             <div className="p-6 border-b border-gray-100">
                 <div className="text-sm font-bold text-gray-700 mb-3">选择渠道</div>
-                <div className="flex space-x-4">
-                    {['全选', '小程序堂食', '小程序外卖', 'POS', '美团外卖', '淘宝闪购'].map(ch => (
-                        <label key={ch} className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
-                            <input type="checkbox" defaultChecked className="w-4 h-4 text-[#00C06B] rounded border-gray-300 focus:ring-[#00C06B]" />
-                            <span>{ch}</span>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {availablePublishChannelIds.map(channelId => {
+                        const checked = selectedPublishChannelIds.includes(channelId);
+                        return (
+                        <label key={channelId} className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                    setSelectedPublishChannelIds(prev => (
+                                        checked
+                                            ? prev.filter(id => id !== channelId)
+                                            : [...prev, channelId]
+                                    ));
+                                    setPublishValidationMessage('');
+                                }}
+                                className="w-4 h-4 text-[#00C06B] rounded border-gray-300 focus:ring-[#00C06B]"
+                            />
+                            <span>{getOmnichannelChannel(channelId).shortName}</span>
                         </label>
-                    ))}
+                        );
+                    })}
                 </div>
-                <div className="mt-4 flex items-center space-x-4">
-                    <button className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-sm font-bold hover:bg-[#00A35B]">选择商品</button>
-                    <span className="text-xs text-gray-400">选择套餐商品同步至门店，会默认将套餐中所有子商品同步至门店</span>
-                </div>
-            </div>
-
-            <div className="px-6 py-3 border-b border-gray-100 bg-[#FAFBFC] text-sm text-gray-500">
-                已选 <span className="font-bold text-gray-800">{products.length}</span> 个商品
             </div>
 
             <div className="flex-1 overflow-hidden flex">
@@ -810,7 +1038,7 @@ export const WebProductSync: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="text-sm text-gray-600">
-                            {filteredProducts.map(product => {
+                            {filteredProducts.filter(product => selectedSyncProductIds.includes(product.id)).map(product => {
                                 const activeCategory = getDisplayCategory(product, selectedCategoryName);
 
                                 return (
@@ -880,7 +1108,7 @@ export const WebProductSync: React.FC = () => {
             </div>
 
             <div className="p-4 border-t border-gray-100 bg-white flex justify-end items-center shrink-0">
-                <button className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors mr-4">取消</button>
+                <button onClick={() => setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors mr-4">取消</button>
                 <button onClick={() => setStep(2)} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">下一步</button>
             </div>
 
@@ -888,12 +1116,152 @@ export const WebProductSync: React.FC = () => {
         </div>
     );
 
+    const renderStoreSelector = () => (
+        <div className="flex h-[400px] min-h-[400px] shrink-0 border border-gray-200">
+            <div className="flex w-64 shrink-0 flex-col border-r border-gray-200">
+                <div className="border-b border-gray-200 bg-gray-50 p-2">
+                    <div className="relative">
+                        <Search size={14} className="absolute left-2 top-2 text-gray-400" />
+                        <input className="w-full border border-gray-200 py-1 pl-7 pr-2 text-xs outline-none focus:border-[#00C06B]" placeholder="请输入门店名称/编码/ID" />
+                    </div>
+                </div>
+                <div className="flex-1 space-y-1 overflow-auto p-2">
+                    <div className="flex cursor-pointer items-center bg-[#00C06B]/10 px-2 py-1.5 text-sm font-bold text-[#00C06B]">
+                        <ChevronDown size={14} className="mr-1" /> 餐饮2.0
+                    </div>
+                    <div className="ml-4 flex cursor-pointer items-center px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
+                        <ChevronRight size={14} className="mr-1" /> S茶
+                    </div>
+                    <div className="ml-4 flex cursor-pointer items-center px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
+                        <ChevronRight size={14} className="mr-1" /> No1A
+                    </div>
+                </div>
+            </div>
+            <div className="flex flex-1 flex-col">
+                <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 p-2 text-xs text-gray-500">
+                    <span>餐饮2.0 <span className="mx-2">|</span> 共 5348 家门店</span>
+                </div>
+                <div className="flex-1 overflow-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="sticky top-0 border-b border-gray-100 bg-white text-gray-500">
+                            <tr>
+                                <th className="w-10 px-4 py-2"><input type="checkbox" className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]" /></th>
+                                <th className="px-4 py-2">门店名称</th>
+                                <th className="px-4 py-2">门店ID</th>
+                                <th className="px-4 py-2">门店编码</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {[1, 2, 3].map(i => (
+                                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                                    <td className="px-4 py-2"><input type="checkbox" className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]" /></td>
+                                    <td className="px-4 py-2 text-gray-800">新建门店 {i}</td>
+                                    <td className="px-4 py-2 text-gray-500">56563{i}</td>
+                                    <td className="px-4 py-2 text-gray-500">--</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+
     const renderStep2 = () => (
         <div className="flex-1 flex flex-col h-full bg-white relative">
             <div className="p-6 flex-1 overflow-auto">
                 <div className="max-w-4xl">
-                    <h3 className="font-bold text-gray-800 mb-4 text-base">商品同步规则</h3>
-                    <div className="flex items-start mb-6">
+                    {operationMode !== 'sync' && (
+                        <div className="mb-8">
+                            <h3 className="mb-4 text-base font-bold text-gray-800">确认生效范围</h3>
+                            <div className="divide-y divide-gray-100 border border-gray-200">
+                                <div className={`px-4 py-3 ${selectedTargetScopes.includes('master') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
+                                    <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('master') ? 'text-[#008F53]' : 'text-gray-700'}`}>
+                                        <input type="checkbox" checked={selectedTargetScopes.includes('master')} onChange={() => setSelectedTargetScopes(prev => prev.includes('master') ? prev.filter(id => id !== 'master') : [...prev, 'master'])} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                        商品主档
+                                    </label>
+                                </div>
+
+                                <div className={`px-4 py-3 ${selectedTargetScopes.includes('template') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
+                                    <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('template') ? 'text-[#008F53]' : 'text-gray-700'}`}>
+                                        <input type="checkbox" checked={selectedTargetScopes.includes('template')} onChange={() => {
+                                            if (selectedTargetScopes.includes('template') && storeRangeMode === 'template') setStoreRangeMode('selected');
+                                            setSelectedTargetScopes(prev => prev.includes('template') ? prev.filter(id => id !== 'template') : [...prev, 'template']);
+                                        }} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                        商品模板
+                                    </label>
+                                    {selectedTargetScopes.includes('template') && (
+                                        <div className="ml-7 mt-3 border-t border-[#DDEFE5] pt-3">
+                                            <div className="flex items-center gap-6">
+                                                <label className={`flex cursor-pointer items-center text-sm ${templateRangeMode === 'all' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="templateRange" checked={templateRangeMode === 'all'} onChange={() => setTemplateRangeMode('all')} className="mr-2" />全部模板</label>
+                                                <label className={`flex cursor-pointer items-center text-sm ${templateRangeMode === 'selected' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="templateRange" checked={templateRangeMode === 'selected'} onChange={() => setTemplateRangeMode('selected')} className="mr-2" />指定模板</label>
+                                            </div>
+                                            {templateRangeMode === 'selected' && <div className="mt-3 flex flex-wrap gap-2">{TEMPLATE_RANGE_OPTIONS.map(template => { const selected = selectedTemplateIds.includes(template.id); return <button key={template.id} type="button" onClick={() => setSelectedTemplateIds(prev => selected ? prev.filter(id => id !== template.id) : [...prev, template.id])} className={`border px-3 py-2 text-xs ${selected ? 'border-[#8BD7AE] bg-white font-bold text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{template.name}<span className="ml-2 font-normal">{template.count} 家门店</span></button>; })}</div>}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className={`px-4 py-3 ${selectedTargetScopes.includes('store') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
+                                    <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('store') ? 'text-[#008F53]' : 'text-gray-700'}`}>
+                                        <input type="checkbox" checked={selectedTargetScopes.includes('store')} onChange={() => setSelectedTargetScopes(prev => prev.includes('store') ? prev.filter(id => id !== 'store') : [...prev, 'store'])} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                        门店渠道商品
+                                    </label>
+                                    {selectedTargetScopes.includes('store') && (
+                                        <div className="ml-7 mt-3 border-t border-[#DDEFE5] pt-3">
+                                            <div className="flex items-center gap-6">
+                                                <label className={`flex cursor-pointer items-center text-sm ${storeRangeMode === 'all' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="storeRange" checked={storeRangeMode === 'all'} onChange={() => setStoreRangeMode('all')} className="mr-2" />全部门店</label>
+                                                <label className={`flex cursor-pointer items-center text-sm ${storeRangeMode === 'selected' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="storeRange" checked={storeRangeMode === 'selected'} onChange={() => setStoreRangeMode('selected')} className="mr-2" />指定门店</label>
+                                                {selectedTargetScopes.includes('template') && <label className={`flex cursor-pointer items-center text-sm ${storeRangeMode === 'template' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="storeRange" checked={storeRangeMode === 'template'} onChange={() => setStoreRangeMode('template')} className="mr-2" />指定模板门店及渠道</label>}
+                                            </div>
+                                            {storeRangeMode === 'selected' && <div className="mt-3">{renderStoreSelector()}</div>}
+                                            {storeRangeMode !== 'template' && (
+                                                <div className="mt-3 border-t border-[#DDEFE5] pt-3">
+                                                    <div className="mb-2 text-xs font-medium text-gray-500">修改渠道</div>
+                                                    <div className="flex flex-wrap gap-x-5 gap-y-2">
+                                                        {(channelCatalogEnabled ? Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels))) : DEFAULT_PUBLISH_CHANNEL_IDS).map(channelId => {
+                                                            const checked = selectedBatchChannelIds.includes(channelId);
+                                                            return (
+                                                                <label key={channelId} className="flex cursor-pointer items-center text-sm text-gray-600">
+                                                                    <input type="checkbox" checked={checked} onChange={() => setSelectedBatchChannelIds(prev => checked ? prev.filter(id => id !== channelId) : [...prev, channelId])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                                                    {getOmnichannelChannel(channelId).shortName}
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {storeRangeMode === 'template' && (
+                                                <div className="mt-3 flex flex-wrap gap-2 border-t border-[#DDEFE5] pt-3">
+                                                    {(templateRangeMode === 'all' ? TEMPLATE_RANGE_OPTIONS : TEMPLATE_RANGE_OPTIONS.filter(template => selectedTemplateIds.includes(template.id))).map(template => (
+                                                        <span key={template.id} className="border border-[#8BD7AE] bg-white px-3 py-2 text-xs font-bold text-[#008F53]">
+                                                            {template.name}<span className="ml-2 font-normal">{template.count} 家门店 · {template.channels.map(channelId => getOmnichannelChannel(channelId).shortName).join('、')}</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {channelCatalogEnabled && (
+                                    <div className={`px-4 py-3 ${selectedTargetScopes.includes('channel_catalog') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
+                                        <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('channel_catalog') ? 'text-[#008F53]' : 'text-gray-700'}`}>
+                                            <input type="checkbox" checked={selectedTargetScopes.includes('channel_catalog')} onChange={() => setSelectedTargetScopes(prev => prev.includes('channel_catalog') ? prev.filter(id => id !== 'channel_catalog') : [...prev, 'channel_catalog'])} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                            渠道商品库
+                                        </label>
+                                        {selectedTargetScopes.includes('channel_catalog') && (
+                                            <div className="ml-7 mt-3 flex flex-wrap gap-2 border-t border-[#DDEFE5] pt-3">
+                                                {authorizedChannelCatalogGroups.map(group => { const selected = selectedTargetChannelGroupIds.includes(group.id); return <button key={group.id} type="button" onClick={() => setSelectedTargetChannelGroupIds(prev => selected ? prev.filter(id => id !== group.id) : [...prev, group.id])} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-white text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{group.name}<span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>; })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <h3 className="font-bold text-gray-800 mb-4 text-base">{operationMode === 'sync' ? '商品同步规则' : '修改规则'}</h3>
+                    {operationMode === 'sync' ? <div className="flex items-start mb-6">
                         <span className="w-24 text-gray-500 text-sm mt-0.5">相同商品</span>
                         <div className="flex-1">
                             <label className="flex items-center text-[#00C06B] font-bold text-sm mb-2 cursor-pointer">
@@ -914,7 +1282,7 @@ export const WebProductSync: React.FC = () => {
                                 <p className="text-xs text-gray-400 mt-4 border-t border-gray-200 pt-3">勾选以上任意选项后，将覆盖门店对应的商品属性</p>
                             </div>
                         </div>
-                    </div>
+                    </div> : <div className="mb-6 flex items-start"><span className="w-24 text-sm text-gray-500">修改内容</span><div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div></div>}
 
                     <div className="flex items-center mb-8">
                         <span className="w-24 text-gray-500 text-sm">同步时间</span>
@@ -926,63 +1294,38 @@ export const WebProductSync: React.FC = () => {
                         <span className="ml-4 text-xs text-red-500">高峰期进行商品同步等待时间可能较久，请尽量在非高峰期进行（定时）下发</span>
                     </div>
 
+                    {operationMode === 'sync' && <>
                     <h3 className="font-bold text-gray-800 mb-4 text-base">选择门店</h3>
-                    <div className="border border-gray-200 rounded-lg flex h-[400px] shrink-0 min-h-[400px]">
-                        {/* Tree Left */}
-                        <div className="w-64 border-r border-gray-200 flex flex-col shrink-0">
-                            <div className="p-2 border-b border-gray-200 bg-gray-50">
-                                <div className="relative">
-                                    <Search size={14} className="absolute left-2 top-2 text-gray-400"/>
-                                    <input className="w-full pl-7 pr-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-[#00C06B]" placeholder="请输入门店名称/编码/ID"/>
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-auto p-2 space-y-1">
-                                <div className="flex items-center px-2 py-1.5 bg-[#00C06B]/10 text-[#00C06B] rounded cursor-pointer text-sm font-bold">
-                                    <ChevronDown size={14} className="mr-1"/> 餐饮2.0
-                                </div>
-                                <div className="flex items-center px-2 py-1.5 text-gray-600 hover:bg-gray-50 rounded cursor-pointer text-sm ml-4">
-                                    <ChevronRight size={14} className="mr-1"/> S茶
-                                </div>
-                                <div className="flex items-center px-2 py-1.5 text-gray-600 hover:bg-gray-50 rounded cursor-pointer text-sm ml-4">
-                                    <ChevronRight size={14} className="mr-1"/> No1A
-                                </div>
-                            </div>
-                        </div>
-                        {/* List Right */}
-                        <div className="flex-1 flex flex-col">
-                            <div className="p-2 border-b border-gray-200 bg-gray-50 flex justify-between items-center text-xs text-gray-500">
-                                <span>餐饮2.0 <span className="mx-2">|</span> 共 5348 家门店</span>
-                            </div>
-                            <div className="flex-1 overflow-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-white text-gray-500 sticky top-0 border-b border-gray-100">
-                                        <tr>
-                                            <th className="py-2 px-4 w-10"><input type="checkbox" className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"/></th>
-                                            <th className="py-2 px-4">门店名称</th>
-                                            <th className="py-2 px-4">门店ID</th>
-                                            <th className="py-2 px-4">门店编码</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {[1, 2, 3].map(i => (
-                                            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                                                <td className="py-2 px-4"><input type="checkbox" className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"/></td>
-                                                <td className="py-2 px-4 text-gray-800">新建门店 {i}</td>
-                                                <td className="py-2 px-4 text-gray-500">56563{i}</td>
-                                                <td className="py-2 px-4 text-gray-500">-</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
+                    {renderStoreSelector()}
+                    </>}
                 </div>
             </div>
 
+            {publishValidationMessage && (
+                <div className="mx-6 mb-3 border border-[#FECACA] bg-[#FFF7F7] px-4 py-3 text-sm text-[#B42318]">
+                    {publishValidationMessage}
+                </div>
+            )}
             <div className="p-4 border-t border-gray-100 bg-white flex justify-end items-center shrink-0">
                 <button onClick={() => setStep(1)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors mr-4">上一步</button>
-                <button onClick={() => setStep(3)} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">提交并同步</button>
+                <button
+                    onClick={() => {
+                        if (operationMode === 'sync' && miniProgramMainImageMissingProducts.length > 0) {
+                            const names = miniProgramMainImageMissingProducts.slice(0, 3).map(product => product.name).join('、');
+                            const suffix = miniProgramMainImageMissingProducts.length > 3
+                                ? `等 ${miniProgramMainImageMissingProducts.length} 个商品`
+                                : '';
+                            setPublishValidationMessage(`所选渠道包含小程序，${names}${suffix}缺少商品主图，请补充后再发布。`);
+                            return;
+                        }
+                        setPublishValidationMessage('');
+                        setStep(3);
+                    }}
+                    disabled={batchRangeInvalid}
+                    className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md disabled:bg-gray-300"
+                >
+                    {operationMode === 'sync' ? '提交并同步' : '提交修改'}
+                </button>
             </div>
         </div>
     );
@@ -992,13 +1335,13 @@ export const WebProductSync: React.FC = () => {
             <div className="w-16 h-16 bg-[#00C06B] rounded-full flex items-center justify-center text-white mb-6 shadow-lg animate-in zoom-in">
                 <CheckCircle2 size={32}/>
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">同步任务已提交</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">{operationMode === 'sync' ? '同步任务已提交' : '批量修改任务已提交'}</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
-                请在同步记录中查看任务执行进度。
+                请在发布记录中查看任务执行进度和各范围处理结果。
             </p>
             <div className="flex space-x-4">
                 <button onClick={() => setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors">返回工具页</button>
-                <button className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">查看同步记录</button>
+                <button onClick={() => setPageTab('records')} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">查看发布记录</button>
             </div>
         </div>
     );
@@ -1008,15 +1351,34 @@ export const WebProductSync: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-[#F5F6FA] font-sans overflow-hidden">
-            {/* Header Tabs Mock */}
-            <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 space-x-6 shrink-0 text-sm">
-                <div className="text-[#00C06B] font-bold border-b-2 border-[#00C06B] h-full flex items-center px-2">商品工具</div>
-                <div className="text-gray-600 hover:text-gray-800 cursor-pointer h-full flex items-center px-2">同步记录</div>
+        <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA] font-sans">
+            <div className="flex h-[48px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-6 text-sm" role="tablist" aria-label="商品同步">
+                <div className="flex h-full items-stretch gap-8">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={pageTab === 'publish'}
+                        onClick={() => setPageTab('publish')}
+                        className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'publish' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
+                    >
+                        同步与批量工具
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={pageTab === 'records'}
+                        onClick={() => setPageTab('records')}
+                        className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'records' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
+                    >
+                        同步记录
+                    </button>
+                </div>
             </div>
 
             {/* Main Content Area */}
-            {step === 0 ? (
+            {pageTab === 'records' ? (
+                <WebPublishRecords />
+            ) : step === 0 ? (
                 renderToolsMenu()
             ) : (
                 <div className="flex-1 flex overflow-hidden m-4 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -1030,7 +1392,7 @@ export const WebProductSync: React.FC = () => {
                                     {step > 1 ? <CheckCircle2 size={14}/> : '1'}
                                 </div>
                                 <div>
-                                    <div className={`font-bold whitespace-nowrap ${step === 1 ? 'text-[#00C06B]' : 'text-gray-800'}`}>选择商品及渠道</div>
+                                    <div className={`font-bold whitespace-nowrap ${step === 1 ? 'text-[#00C06B]' : 'text-gray-800'}`}>{operationMode === 'sync' ? '选择商品及渠道' : '选择修改内容'}</div>
                                 </div>
                             </div>
 
@@ -1039,7 +1401,7 @@ export const WebProductSync: React.FC = () => {
                                     {step > 2 ? <CheckCircle2 size={14}/> : '2'}
                                 </div>
                                 <div>
-                                    <div className={`font-bold whitespace-nowrap ${step === 2 ? 'text-[#00C06B]' : 'text-gray-800'}`}>选择门店及规则设置</div>
+                                    <div className={`font-bold whitespace-nowrap ${step === 2 ? 'text-[#00C06B]' : 'text-gray-800'}`}>{operationMode === 'sync' ? '选择门店及规则设置' : '确认生效范围'}</div>
                                 </div>
                             </div>
 
@@ -1056,12 +1418,25 @@ export const WebProductSync: React.FC = () => {
 
                     {/* Step Content */}
                     <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-                        {step === 1 && renderStep1()}
+                        {step === 1 && (operationMode === 'sync' ? renderStep1() : renderBatchStep1())}
                         {step === 2 && renderStep2()}
                         {step === 3 && renderStep3()}
                     </div>
                 </div>
             )}
+            <WebProductSelectorDialog
+                open={productSelectorMode !== null}
+                title={productSelectorMode === 'batch' ? '选择批量修改商品' : '选择同步商品'}
+                description={productSelectorMode === 'batch'
+                    ? `筛选并选择本次需要批量修改的商品；当前来源：${batchProductSource === 'master' ? '商品主档' : authorizedChannelCatalogGroups.find(group => group.id === batchChannelGroupId)?.name || '渠道商品库'}。`
+                    : `筛选并选择本次需要同步下发的商品；当前来源：${syncSource === 'channel_catalog' ? authorizedChannelCatalogGroups.find(group => group.id === selectedChannelGroupIds[0])?.name || '渠道商品库' : syncSource === 'template' ? '商品模板' : '商品主档'}。`}
+                products={selectorProducts}
+                selectedIds={pendingSelectorProductIds}
+                onSelectedIdsChange={setPendingSelectorProductIds}
+                onCancel={() => setProductSelectorMode(null)}
+                onConfirm={confirmProductSelector}
+                fixedType={productSelectorMode === 'batch' ? (operationMode === 'batch_combo' ? 'combo' : 'standard') : undefined}
+            />
         </div>
     );
 };

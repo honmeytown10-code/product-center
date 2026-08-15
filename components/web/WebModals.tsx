@@ -147,6 +147,19 @@ const getProductPriceText = (product: AuthProduct) => {
 };
 const canImportProduct = (product: AuthProduct) => !!product.name && !!product.category && hasValidProductPrice(product);
 
+const downloadProductTemplate = (type: ProductType) => {
+  const headers = type === 'combo'
+    ? ['套餐名称', '套餐分类', '套餐售价', '子商品名称', '子商品数量']
+    : ['商品名称', '商品分类', '商品售价', '规格名称', '商品条码'];
+  const blob = new Blob([`\uFEFF${headers.join(',')}\n`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = type === 'combo' ? '套餐商品导入模板.csv' : '标准商品导入模板.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 export const WebThirdPartyImportRecordsModal: React.FC<{ onClose: () => void; onStartImport?: () => void }> = ({ onClose, onStartImport }) => {
   return (
     <ModalShell widthClass="w-[calc(100vw-48px)] max-w-[1040px]">
@@ -199,7 +212,7 @@ export const WebThirdPartyImportRecordsModal: React.FC<{ onClose: () => void; on
                     <RecordStatusBadge status={record.status} />
                   </td>
                   <td className="sticky right-0 whitespace-nowrap bg-white px-4 py-4 shadow-[-8px_0_16px_rgba(15,23,42,0.04)]">
-                    <button className="text-xs font-bold text-[#00A35B] hover:text-[#008C5A]">查看导入明细</button>
+                    <button type="button" disabled title="导入明细接口尚未接入当前原型" className="cursor-not-allowed text-xs font-bold text-[#98A2B3]">明细待接入</button>
                   </td>
                 </tr>
               ))}
@@ -515,11 +528,11 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
               <div className="space-y-4">
                 <div className="text-[18px] font-black text-[#344054]">导入前准备</div>
                 <div className="flex gap-3">
-                  <button className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
+                  <button type="button" onClick={() => downloadProductTemplate('standard')} className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
                     <FileSpreadsheet size={14} className="mr-1.5 inline" />
                     下载标准商品模板
                   </button>
-                  <button className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
+                  <button type="button" onClick={() => downloadProductTemplate('combo')} className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
                     <FileText size={14} className="mr-1.5 inline" />
                     下载套餐商品模板
                   </button>
@@ -552,11 +565,11 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
             <div className="text-sm font-bold text-[#344054]">{uploadConfig.prepTitle}</div>
             {importSource === 'local' ? (
               <div className="mt-3 flex gap-3">
-                <button className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
+                <button type="button" onClick={() => downloadProductTemplate('standard')} className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
                   <FileSpreadsheet size={14} className="mr-1.5 inline" />
                   下载标准商品模板
                 </button>
-                <button className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
+                <button type="button" onClick={() => downloadProductTemplate('combo')} className="rounded-xl border border-[#D8E0E8] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F8FAFC]">
                   <FileText size={14} className="mr-1.5 inline" />
                   下载套餐商品模板
                 </button>

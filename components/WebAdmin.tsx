@@ -1,16 +1,31 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
-  Box, ChevronDown, ChevronUp, Search, Bell, LayoutGrid, Clock, Settings, Store
+  Bell,
+  Box,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  FlaskConical,
+  LayoutGrid,
+  Link2,
+  Package,
+  Rocket,
+  Search,
+  Settings,
+  ShoppingBag,
+  SlidersHorizontal,
+  Sparkles,
+  Store,
+  Tags,
 } from 'lucide-react';
 import { useProducts } from '../context';
-import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, resolveChildRequiredConfigs } from '../types';
+import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, OmnichannelChannelId, resolveChildRequiredConfigs, ThirdPartyChannelId } from '../types';
 import { SidebarItem } from './web/WebCommon';
 import { WebProductList } from './web/WebProductList';
 import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new component
 import { WebStoreCategoryList } from './web/WebStoreCategoryList';
 import { WebCategoryManager } from './web/WebCategoryManager';
-import { WebCategoryListManager } from './web/WebCategoryListManager';
 import { WebStoreAttributeManager } from './web/WebStoreAttributeManager';
 import { WebStoreRegionList } from './web/WebStoreRegionList';
 import { WebRequiredProductPolicyList } from './web/WebRequiredProductPolicyList';
@@ -30,8 +45,23 @@ import { WebTakeoutMenuSync } from './web/WebTakeoutMenuSync';
 import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
+import { WebSalesScopeManager } from './web/WebSalesScopeManager';
 import { WebProductLogPage } from './web/WebProductLogPage';
 import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
+import { WebChannelProductLibrary } from './web/WebChannelProductLibrary';
+import { WebChannelOverrideSettings } from './web/WebChannelOverrideSettings';
+import { WebOmnichannelSettings } from './web/WebOmnichannelSettings';
+import { WebProductMapping } from './web/WebProductMapping';
+import { WebProductRecommendationManager } from './web/WebProductRecommendationManager';
+import { WebDifferenceInspection } from './web/WebDifferenceInspection';
+import {
+  UNIFIED_CHANNEL_CATALOG_ID,
+  getEffectiveChannelGroups,
+  getOmnichannelChannel,
+  getOmnichannelConfig,
+  isThirdPartyChannelId,
+  shouldShowChannelCatalog,
+} from '../omnichannel';
 
 import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new component
 
@@ -50,6 +80,17 @@ type CreationContext = {
   mode?: 'create' | 'edit';
   product?: any;
   scope?: TopNavView;
+  formScope?: 'master' | 'channel' | 'unified' | 'store';
+  channelContext?: {
+    catalogId: string;
+    catalogName: string;
+    channelIds: OmnichannelChannelId[];
+    channelNames: string[];
+    masterName: string;
+    skuId: string;
+  };
+  channelAttributeIds?: ThirdPartyChannelId[];
+  channelProductKey?: string;
 };
 
 type TopNavView = 'brand' | 'store';
@@ -62,6 +103,7 @@ const COMMON_FIELD_PRIORITY: Record<'standard' | 'combo', string[]> = {
 };
 
 const getCommonFieldConfigKey = (type: 'standard' | 'combo', categoryId: string) => `${type}:${categoryId}`;
+const FULL_FIELD_DEMO_CATEGORY_IDS = new Set(['w_cat_s1']);
 
 const normalizeChildDisplayMode = (
   value: boolean | 'visible' | 'collapsed' | 'hidden' | undefined,
@@ -116,9 +158,25 @@ const buildInitialCommonFieldConfigs = (categories: WebCategory[]): CommonFieldC
     const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
     const fieldConfigMap = new Map(fieldConfigs.map(field => [field.id, field]));
     const defaultIds = new Set(buildDefaultCommonFieldIds(category));
-    acc[getCommonFieldConfigKey(category.classification, category.id)] = fieldConfigs
-      .filter(field => defaultIds.has(field.id))
-      .map(field => buildCommonFieldConfigEntry(field, fieldConfigMap));
+    const showAllFieldsForDemo = FULL_FIELD_DEMO_CATEGORY_IDS.has(category.id);
+    const sourceFields = Array.from(new Map(fieldConfigs.map(field => [field.id, field])).values())
+      .filter(field => showAllFieldsForDemo || defaultIds.has(field.id));
+    acc[getCommonFieldConfigKey(category.classification, category.id)] = sourceFields
+      .map(field => {
+        const entry = buildCommonFieldConfigEntry(field, fieldConfigMap);
+        if (!showAllFieldsForDemo) return entry;
+        const childTemplates = COMMON_FIELD_CHILD_CONFIG_LIBRARY[field.id] || [];
+        return {
+          ...entry,
+          displayMode: 'visible' as const,
+          childConfigs: childTemplates.length > 0
+            ? childTemplates.reduce<Record<string, 'visible'>>((childAcc, child) => {
+              childAcc[child.id] = 'visible';
+              return childAcc;
+            }, {})
+            : entry.childConfigs,
+        };
+      });
     return acc;
   }, {})
 );
@@ -135,7 +193,7 @@ const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_remark', isRequired: false },
   { id: 'p_stat_tags', isRequired: false },
   { id: 'p_tare_weight', isRequired: false },
-  { id: 'p_img', isRequired: true },
+  { id: 'p_img', isRequired: false },
   { id: 's_specs', isRequired: false },
   { id: 'm_methods', isRequired: false },
   { id: 'a_addons', isRequired: false },
@@ -157,7 +215,6 @@ const DEFAULT_STANDARD_FIELDS: CategoryFieldConfig[] = [
   { id: 's_tax_rate', isRequired: false },
   { id: 'p_stat_tags', isRequired: false },
   { id: 'p_desc_tags', isRequired: false },
-  { id: 'p_order_tags', isRequired: false },
   { id: 'p_list_desc', isRequired: false },
   { id: 'p_badge', isRequired: false },
   { id: 'p_badge_date', isRequired: false },
@@ -180,7 +237,7 @@ const DEFAULT_COMBO_FIELDS: CategoryFieldConfig[] = [
   { id: 'p_display_type', isRequired: false },
   { id: 'p_remark', isRequired: false },
   { id: 'p_stat_tags', isRequired: false },
-  { id: 'p_img', isRequired: true },
+  { id: 'p_img', isRequired: false },
   { id: 'm_methods', isRequired: false },
   { id: 'a_addons', isRequired: false },
   { id: 'p_points_exchange_rule', isRequired: false },
@@ -256,23 +313,38 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
 ];
 
 export const WebAdmin: React.FC = () => {
-  const { products } = useProducts();
+  const { products, brandConfigs, activeBrandId, addProduct, updateProduct } = useProducts();
+  const omnichannelConfig = useMemo(
+    () => getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1),
+    [activeBrandId, brandConfigs]
+  );
+  const unifiedManagement = omnichannelConfig.collaborationMode === 'unified';
+  const channelCatalogMenuVisible = shouldShowChannelCatalog(omnichannelConfig);
+  const productMappingVisible = Object.values(omnichannelConfig.thirdPartyStrategies).some(mode => mode === 'platform')
+    || Object.values(omnichannelConfig.channelConnections).some(connection => connection.capabilities.length > 0);
+  const unifiedDefaultGroup = useMemo(
+    () => getEffectiveChannelGroups(omnichannelConfig)[0],
+    [omnichannelConfig]
+  );
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>('store');
-  const [activeMenu, setActiveMenu] = useState('takeout_menu_sync');
+  const [activeMenu, setActiveMenu] = useState('product_list');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
-  const [expandedMenus, setExpandedMenus] = useState<string[]>([
-    'security_compliance',
-    'log_audit',
-    'coupon_logs',
-  ]);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+  const [productSyncInitialTab, setProductSyncInitialTab] = useState<'publish' | 'records'>('publish');
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isThirdPartyImportRecordsOpen, setIsThirdPartyImportRecordsOpen] = useState(false);
-  const [categorySelectContext, setCategorySelectContext] = useState<{ type: 'standard' | 'combo'; scope: TopNavView } | null>(null);
+  const [categorySelectContext, setCategorySelectContext] = useState<{
+    type: 'standard' | 'combo';
+    scope: TopNavView;
+    formScope?: 'master' | 'channel' | 'unified' | 'store';
+    channelContext?: CreationContext['channelContext'];
+    channelAttributeIds?: ThirdPartyChannelId[];
+  } | null>(null);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
   const [creationContext, setCreationContext] = useState<CreationContext | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
@@ -283,13 +355,22 @@ export const WebAdmin: React.FC = () => {
   const [showProductMenuGuide, setShowProductMenuGuide] = useState(false);
   const [currentProductMenuGuideStep, setCurrentProductMenuGuideStep] = useState(0);
   const [commonFieldConfigs, setCommonFieldConfigs] = useState<CommonFieldConfigs>(() => buildInitialCommonFieldConfigs(INITIAL_WEB_CATEGORIES));
-  const [commonFieldSettingsContext, setCommonFieldSettingsContext] = useState<{ type: 'standard' | 'combo'; categoryId: string | null } | null>(null);
+  const [channelCommonFieldConfigs, setChannelCommonFieldConfigs] = useState<CommonFieldConfigs>(() => buildInitialCommonFieldConfigs(INITIAL_WEB_CATEGORIES));
+  const [channelEditableFieldIds, setChannelEditableFieldIds] = useState<string[]>(['p_name']);
+  const [channelProductOverrides, setChannelProductOverrides] = useState<Record<string, any>>({});
+  const [commonFieldSettingsContext, setCommonFieldSettingsContext] = useState<{
+    type: 'standard' | 'combo';
+    categoryId: string | null;
+    formScope?: 'master' | 'channel' | 'store';
+    catalogName?: string;
+  } | null>(null);
   const [storeGroupedTagOptions, setStoreGroupedTagOptions] = useState<Record<GroupedTagFieldId, GroupedTagGroup[]>>(() => ({
     ...DEFAULT_GROUPED_TAG_OPTIONS,
     p_desc_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_desc_tags.map(group => ({
       ...group,
       options: group.options.map(option => ({ ...option })),
     })),
+    // Keep legacy point-order tag data compatible, but do not expose it in the fusion UI.
     p_order_tags: DEFAULT_GROUPED_TAG_OPTIONS.p_order_tags.map(group => ({
       ...group,
       options: group.options.map(option => ({ ...option })),
@@ -310,7 +391,7 @@ export const WebAdmin: React.FC = () => {
     webCategories.reduce<CommonFieldConfigs>((acc, category) => {
       const key = getCommonFieldConfigKey(category.classification, category.id);
       const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
-      const fieldMap = new Map(fieldConfigs.map(field => [field.id, field]));
+      const fieldMap = new Map<string, CategoryFieldConfig>(fieldConfigs.map(field => [field.id, field] as const));
       const nextConfigList = (commonFieldConfigs[key] || []).map(item => ({ ...item }));
 
       storeRequiredVisibleFieldIds.forEach(fieldId => {
@@ -331,14 +412,33 @@ export const WebAdmin: React.FC = () => {
     }, {})
   ), [commonFieldConfigs, webCategories]);
 
+  const unifiedCommonFieldConfigs = useMemo<CommonFieldConfigs>(() => {
+    const keys = new Set([
+      ...Object.keys(commonFieldConfigs),
+      ...Object.keys(channelCommonFieldConfigs),
+    ]);
+    const merged: CommonFieldConfigs = {};
+
+    keys.forEach(key => {
+      const fieldMap = new Map<string, CategoryFieldConfig>();
+      (commonFieldConfigs[key] || []).forEach(field => fieldMap.set(field.id, { ...field }));
+      (channelCommonFieldConfigs[key] || []).forEach(field => {
+        fieldMap.set(field.id, { ...(fieldMap.get(field.id) || {}), ...field });
+      });
+      merged[key] = Array.from(fieldMap.values());
+    });
+
+    return merged;
+  }, [channelCommonFieldConfigs, commonFieldConfigs]);
+
   useEffect(() => {
-    setCommonFieldConfigs(prev => {
+    const syncConfigs = (prev: CommonFieldConfigs) => {
       const next: CommonFieldConfigs = {};
 
       webCategories.forEach(category => {
         const key = getCommonFieldConfigKey(category.classification, category.id);
         const fieldConfigs = category.classification === 'standard' ? category.standardFields : category.comboFields;
-        const fieldMap = new Map(fieldConfigs.map(field => [field.id, field]));
+        const fieldMap = new Map<string, CategoryFieldConfig>(fieldConfigs.map(field => [field.id, field] as const));
         const defaultEntries = buildInitialCommonFieldConfigs([category])[key] || [];
         const prevEntries = prev[key] || defaultEntries;
         const selectedIds = new Set([
@@ -370,11 +470,21 @@ export const WebAdmin: React.FC = () => {
       const serialize = (value: CategoryFieldConfig[] = []) => JSON.stringify(value);
       const changed = prevKeys.length !== nextKeys.length || nextKeys.some(key => serialize(prev[key]) !== serialize(next[key]));
       return changed ? next : prev;
-    });
+    };
+
+    setCommonFieldConfigs(syncConfigs);
+    setChannelCommonFieldConfigs(syncConfigs);
   }, [webCategories]);
 
   const toggleMenu = (key: string) => {
     setExpandedMenus(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  const toggleProductMenu = (key: 'product_library' | 'product_operations') => {
+    setExpandedMenus(prev => {
+      const otherGroups = prev.filter(item => !['product_library', 'product_operations'].includes(item));
+      return prev.includes(key) ? otherGroups : [...otherGroups, key];
+    });
   };
 
   const resetTransientViews = () => {
@@ -392,12 +502,12 @@ export const WebAdmin: React.FC = () => {
     setActiveTopNav(target);
 
     if (target === 'brand') {
-      setExpandedMenus(['security_compliance', 'log_audit', 'coupon_logs']);
+      setExpandedMenus([]);
       setActiveMenu('product_logs');
       return;
     }
 
-    setExpandedMenus(['product_archives', 'product_archives_recipe', 'store_products', 'chain_management', 'platform_products']);
+    setExpandedMenus([]);
     setActiveMenu('product_list');
   };
 
@@ -406,6 +516,36 @@ export const WebAdmin: React.FC = () => {
     window.localStorage.setItem(productMenuGuideStorageKey, 'seen');
     setShowProductMenuGuide(false);
   }, []);
+
+  useEffect(() => {
+    if (!channelCatalogMenuVisible && activeMenu === 'channel_product_library') {
+      setActiveMenu('product_list');
+    }
+  }, [activeMenu, channelCatalogMenuVisible]);
+
+  useEffect(() => {
+    const libraryMenus = [
+      'product_list', 'categories', 'category_management', 'product_attributes',
+      'channel_product_library', 'channel_categories', 'channel_attributes', 'channel_custom_attributes',
+      'ingredient_library', 'nutrition_manager',
+      'recipe_default', 'recipe_legacy', 'recipe_new', 'addon_group',
+    ];
+    const operationMenus = [
+      'product_sync', 'product_template', 'sales_scope', 'price_systems',
+      'attribute_mutex_rules', 'required_product_policy', 'product_recommendation', 'product_mapping',
+    ];
+    const targetGroup = libraryMenus.includes(activeMenu)
+      ? 'product_library'
+      : operationMenus.includes(activeMenu)
+        ? 'product_operations'
+        : null;
+
+    if (!targetGroup) return;
+    setExpandedMenus(prev => [
+      ...prev.filter(item => !['product_library', 'product_operations'].includes(item)),
+      targetGroup,
+    ]);
+  }, [activeMenu]);
 
   const handleCloseProductMenuGuide = () => {
     if (typeof window !== 'undefined') {
@@ -417,8 +557,8 @@ export const WebAdmin: React.FC = () => {
   const productMenuGuideSteps = [
     {
       step: '1/2',
-      title: '新增【商品运营】菜单',
-      desc: '商品同步、模板管理、价格体系等商品运营管理能力搬家至【商品运营】菜单',
+      title: '新增【商品销售管理】入口',
+      desc: '商品模板、门店售卖规则、价格策略等能力统一进入【商品销售管理】',
       cardPosition: 'left-[164px] top-[138px]',
       highlightPosition: 'left-[12px] top-[198px] h-[120px] w-[176px]',
     },
@@ -455,12 +595,21 @@ export const WebAdmin: React.FC = () => {
           return (
               <WebCommonFieldSettings
                   categories={webCategories}
-                  configs={commonFieldConfigs}
+                  configs={commonFieldSettingsContext?.formScope === 'channel' ? channelCommonFieldConfigs : commonFieldConfigs}
                   initialType={commonFieldSettingsContext?.type}
                   initialCategoryId={commonFieldSettingsContext?.categoryId || null}
+                  fieldScope={commonFieldSettingsContext?.formScope || 'master'}
+                  scopeLabel={commonFieldSettingsContext?.formScope === 'channel'
+                    ? `${commonFieldSettingsContext.catalogName || '渠道商品库'}常用字段`
+                    : commonFieldSettingsContext?.formScope === 'unified'
+                      ? '商品常用字段'
+                      : '商品主档常用字段'}
                   onBack={() => setActiveMenu('product_list')}
                   onSave={(type, categoryId, fieldConfigs) => {
-                      setCommonFieldConfigs(prev => ({
+                      const updateConfigs = commonFieldSettingsContext?.formScope === 'channel'
+                        ? setChannelCommonFieldConfigs
+                        : setCommonFieldConfigs;
+                      updateConfigs(prev => ({
                           ...prev,
                           [getCommonFieldConfigKey(type, categoryId)]: fieldConfigs,
                       }));
@@ -470,7 +619,10 @@ export const WebAdmin: React.FC = () => {
                       if (!targetCategory) return;
                       const defaultConfigKey = getCommonFieldConfigKey(type, categoryId);
                       const defaultConfigs = buildInitialCommonFieldConfigs([targetCategory])[defaultConfigKey] || [];
-                      setCommonFieldConfigs(prev => ({
+                      const updateConfigs = commonFieldSettingsContext?.formScope === 'channel'
+                        ? setChannelCommonFieldConfigs
+                        : setCommonFieldConfigs;
+                      updateConfigs(prev => ({
                           ...prev,
                           [defaultConfigKey]: defaultConfigs,
                       }));
@@ -480,6 +632,25 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (creationContext) {
+          const effectiveFormScope = creationContext.formScope
+            || (creationContext.scope === 'store'
+              ? 'store'
+              : unifiedManagement
+                ? 'unified'
+                : 'master');
+          const unifiedChannelIds = unifiedDefaultGroup?.channels || [];
+          const effectiveChannelContext = creationContext.channelContext || (
+            effectiveFormScope === 'unified'
+              ? {
+                  catalogId: unifiedDefaultGroup?.id || UNIFIED_CHANNEL_CATALOG_ID,
+                  catalogName: '商品',
+                  channelIds: unifiedChannelIds,
+                  channelNames: unifiedChannelIds.map(channelId => getOmnichannelChannel(channelId).shortName),
+                  masterName: creationContext.product?.name || '新建商品',
+                  skuId: creationContext.product?.skuId || creationContext.product?.id || '',
+                }
+              : undefined
+          );
           return (
               <WebProductForm 
                   type={creationContext.type} 
@@ -487,15 +658,100 @@ export const WebAdmin: React.FC = () => {
                   categories={webCategories.filter(cat => cat.classification === creationContext.type)}
                   mode={creationContext.mode || 'create'}
                   initialProduct={creationContext.product || null}
+                  formScope={effectiveFormScope}
+                  channelContext={effectiveChannelContext}
                   existingProductCount={products.length}
                   previewPreferenceKey={creationContext.scope === 'store' ? 'web-admin-store-product-form' : 'web-admin-qimai-jingjing'}
-                  commonFieldConfigs={creationContext.scope === 'store' ? storeCommonFieldConfigs : commonFieldConfigs}
+                  commonFieldConfigs={creationContext.scope === 'store'
+                    ? storeCommonFieldConfigs
+                    : effectiveFormScope === 'unified'
+                    ? unifiedCommonFieldConfigs
+                    : effectiveFormScope === 'channel'
+                    ? channelCommonFieldConfigs
+                    : commonFieldConfigs}
+                  channelEditableFieldIds={channelEditableFieldIds}
                   groupedTagOptions={creationContext.scope === 'store' ? storeGroupedTagOptions : undefined}
                   badgeOptions={creationContext.scope === 'store' ? storeBadgeOptions : undefined}
                   onGroupedTagOptionsChange={creationContext.scope === 'store' ? setStoreGroupedTagOptions : undefined}
                   onBadgeOptionsChange={creationContext.scope === 'store' ? setStoreBadgeOptions : undefined}
-                  onOpenCommonFieldSettings={(type, categoryId) => {
-                      setCommonFieldSettingsContext({ type, categoryId });
+                   thirdPartyChannelAttributeIds={creationContext.channelAttributeIds || (
+                     effectiveFormScope === 'unified'
+                       ? unifiedChannelIds.filter(isThirdPartyChannelId)
+                       : []
+                   )}
+                   onProductSaved={(draft, action) => {
+                     if (creationContext.formScope === 'channel') {
+                       if (creationContext.channelProductKey) {
+                         setChannelProductOverrides(prev => ({
+                           ...prev,
+                           [creationContext.channelProductKey as string]: {
+                             ...(prev[creationContext.channelProductKey as string] || creationContext.product),
+                             ...draft,
+                           },
+                         }));
+                       }
+                       return;
+                     }
+                      if (effectiveFormScope === 'unified') {
+                        const productId = draft.id || creationContext.product?.id || `product-${Date.now()}`;
+                        const channelProductName = String(draft.formData?.p_name || draft.name || '');
+                        const nextProduct = {
+                          ...creationContext.product,
+                          ...draft,
+                          id: productId,
+                          name: draft.name,
+                          formData: {
+                            ...(draft.formData || {}),
+                            p_name: draft.name,
+                          },
+                          status: action === 'create' ? 'draft' : (draft.status || creationContext.product?.status),
+                          stockStatus: draft.stockStatus || creationContext.product?.stockStatus || 'available',
+                        };
+                       if (action === 'edit' && creationContext.product?.id) {
+                         updateProduct(creationContext.product.id, nextProduct);
+                       } else {
+                         addProduct(nextProduct);
+                       }
+                        const targetCatalogId = effectiveChannelContext?.catalogId || UNIFIED_CHANNEL_CATALOG_ID;
+                        setChannelProductOverrides(prev => ({
+                          ...prev,
+                          [`${targetCatalogId}:${productId}`]: {
+                            ...nextProduct,
+                            name: channelProductName,
+                            formData: {
+                              ...(draft.formData || {}),
+                              p_name: channelProductName,
+                            },
+                          },
+                        }));
+                       return;
+                     }
+                     if (action === 'edit' && draft.id) {
+                       updateProduct(draft.id, draft);
+                       return;
+                     }
+                     if (action === 'create') {
+                       addProduct({
+                         ...draft,
+                         id: `product-${Date.now()}`,
+                         status: 'draft',
+                         stockStatus: 'available',
+                       });
+                     }
+                   }}
+                   onOpenChannelCatalog={() => {
+                     setCreationContext(null);
+                     setActiveMenu('channel_product_library');
+                   }}
+                   onOpenCommonFieldSettings={(type, categoryId) => {
+                      setCommonFieldSettingsContext({
+                        type,
+                        categoryId,
+                        formScope: effectiveFormScope === 'unified' ? 'channel' : effectiveFormScope,
+                        catalogName: effectiveFormScope === 'unified'
+                          ? creationContext.channelContext?.catalogName || '品牌默认商品库'
+                          : creationContext.channelContext?.catalogName,
+                      });
                       setActiveMenu('common_field_settings');
                   }}
                   onClose={() => setCreationContext(null)} 
@@ -508,6 +764,25 @@ export const WebAdmin: React.FC = () => {
               <WebProductDetail 
                   product={detailContext} 
                   onClose={() => setDetailContext(null)} 
+                  onEdit={() => {
+                    const product = detailContext;
+                    const targetType = product.type === 'combo' ? 'combo' : 'standard';
+                    const matchedCategory = webCategories
+                      .filter(category => category.classification === targetType)
+                      .find(category => category.children?.some(child => child.id === product.category));
+                    const targetCategory = matchedCategory?.children?.find(child => child.id === product.category)
+                      || webCategories.find(category => category.classification === targetType)
+                      || webCategories[0];
+                    setCreationContext({
+                      type: targetType,
+                      category: targetCategory,
+                      mode: 'edit',
+                      product,
+                      scope: 'brand',
+                      formScope: 'master',
+                    });
+                    setDetailContext(null);
+                  }}
               />
           );
       }
@@ -546,7 +821,6 @@ export const WebAdmin: React.FC = () => {
             <WebStoreProductList
               mode="manage"
               managePreset={storeProductManagePreset}
-              onCreateClick={(type) => setCategorySelectContext({ type, scope: 'store' })}
               onEditProduct={(product) => {
                 const targetType = product.type === 'Combo' ? 'combo' : 'standard';
                 const targetCategory = webCategories.find(cat => cat.classification === targetType) || webCategories[0];
@@ -641,7 +915,16 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'categories') {
-          return <WebCategoryListManager />;
+          return (
+            <WebProductAttributeManager
+              scope="master"
+              initialTab="category"
+            />
+          );
+      }
+
+      if (activeMenu === 'channel_categories') {
+          return <WebProductAttributeManager scope="channel" initialTab="category" />;
       }
 
       if (activeMenu === 'category_management') {
@@ -683,7 +966,7 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'nutrition_manager') {
-          return <WebNutritionManager />;
+          return <WebNutritionManager onNavigate={(path) => setActiveMenu(path)} />;
       }
 
       if (activeMenu === 'addon_group') {
@@ -691,11 +974,49 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'general_settings') {
-          return <WebGeneralSettings />;
+          return (
+            <WebGeneralSettings
+              onOpenChannelFieldSettings={() => {
+                const firstStandardCategory = webCategories.find(item => item.classification === 'standard');
+                setCommonFieldSettingsContext({
+                  type: 'standard',
+                  categoryId: firstStandardCategory?.id || null,
+                  formScope: 'channel',
+                  catalogName: '渠道商品库',
+                });
+                setActiveMenu('common_field_settings');
+              }}
+              onOpenChannelOverrideSettings={() => setActiveMenu('channel_override_settings')}
+               onOpenOmnichannelSettings={() => setActiveMenu('omnichannel_settings')}
+               onOpenProductRecommendation={() => setActiveMenu('product_recommendation')}
+            />
+          );
+      }
+
+      if (activeMenu === 'omnichannel_settings') {
+          return <WebOmnichannelSettings onBack={() => setActiveMenu('general_settings')} />;
+      }
+
+      if (activeMenu === 'channel_override_settings') {
+          return (
+            <WebChannelOverrideSettings
+              value={channelEditableFieldIds}
+              onChange={setChannelEditableFieldIds}
+              onBack={() => setActiveMenu('general_settings')}
+            />
+          );
       }
 
       if (activeMenu === 'product_attributes') {
-          return <WebProductAttributeManager />;
+          return <WebProductAttributeManager scope="master" />;
+      }
+
+      if (activeMenu === 'channel_attributes') {
+          return <WebProductAttributeManager scope="channel" />;
+      }
+
+      if (activeMenu === 'channel_custom_attributes') {
+          return <WebProductAttributeManager scope="channel" initialTab="custom_attribute" />;
       }
 
       if (activeMenu === 'price_systems') {
@@ -703,7 +1024,19 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'product_sync') {
-          return <WebProductSync />;
+          return <WebProductSync initialTab={productSyncInitialTab} />;
+      }
+
+      if (activeMenu === 'product_mapping') {
+          return <WebProductMapping />;
+      }
+
+      if (activeMenu === 'difference_inspection') {
+          return <WebDifferenceInspection />;
+      }
+
+      if (activeMenu === 'product_recommendation') {
+          return <WebProductRecommendationManager />;
       }
 
       if (activeMenu === 'takeout_menu_sync') {
@@ -711,7 +1044,90 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'product_template') {
-          return <WebProductTemplateManager />;
+          return <WebProductTemplateManager onNavigate={(path) => {
+            if (path === 'product_sync') setProductSyncInitialTab('publish');
+            setActiveMenu(path);
+          }} />;
+      }
+
+      if (activeMenu === 'sales_scope') {
+          return <WebSalesScopeManager />;
+      }
+
+      if (activeMenu === 'channel_product_library') {
+          return (
+            <WebChannelProductLibrary
+              productOverrides={channelProductOverrides}
+              onBatchEdit={() => {
+                setCreationContext(null);
+                setActiveMenu('product_sync');
+              }}
+              onCreateProduct={({ type, catalogId, catalogName, channelIds, channelNames, thirdPartyChannelIds }) => {
+                setCategorySelectContext({
+                  type,
+                  scope: 'brand',
+                  formScope: 'unified',
+                  channelContext: {
+                    catalogId,
+                    catalogName,
+                    channelIds,
+                    channelNames,
+                    masterName: '新建商品',
+                    skuId: '',
+                  },
+                  channelAttributeIds: thirdPartyChannelIds,
+                });
+              }}
+              onEditProduct={({ product, catalogId, catalogName, channelIds, channelNames, thirdPartyChannelIds }) => {
+                const masterProduct = products.find(item => item.id === product.id) || product;
+                const targetType = masterProduct.type === 'combo' ? 'combo' : 'standard';
+                const matchedCategory = webCategories
+                  .filter(category => category.classification === targetType)
+                  .find(category => category.children?.some(child => child.id === masterProduct.category));
+                const targetCategory = matchedCategory?.children?.find(child => child.id === masterProduct.category)
+                  || webCategories.find(category => category.classification === targetType)
+                  || webCategories[0];
+                const channelProductKey = `${catalogId}:${product.id}`;
+                const channelProduct = channelProductOverrides[channelProductKey] || product;
+                setCreationContext({
+                  type: targetType,
+                  category: targetCategory,
+                  mode: 'edit',
+                  product: channelProduct,
+                  scope: 'brand',
+                  formScope: 'channel',
+                  channelContext: {
+                    catalogId,
+                    catalogName,
+                    channelIds,
+                    channelNames,
+                    masterName: masterProduct.name,
+                    skuId: masterProduct.skuCode,
+                  },
+                  channelAttributeIds: thirdPartyChannelIds,
+                  channelProductKey,
+                });
+              }}
+              onEditMasterProduct={({ product }) => {
+                const masterProduct = products.find(item => item.id === product.id) || product;
+                const targetType = masterProduct.type === 'combo' ? 'combo' : 'standard';
+                const matchedCategory = webCategories
+                  .filter(category => category.classification === targetType)
+                  .find(category => category.children?.some(child => child.id === masterProduct.category));
+                const targetCategory = matchedCategory?.children?.find(child => child.id === masterProduct.category)
+                  || webCategories.find(category => category.classification === targetType)
+                  || webCategories[0];
+                setCreationContext({
+                  type: targetType,
+                  category: targetCategory,
+                  mode: 'edit',
+                  product: masterProduct,
+                  scope: 'brand',
+                  formScope: 'master',
+                });
+              }}
+            />
+          );
       }
 
       if (activeMenu === 'product_logs') {
@@ -728,27 +1144,181 @@ export const WebAdmin: React.FC = () => {
             onImportRecordsClick={() => setIsThirdPartyImportRecordsOpen(true)}
             onViewDetail={(p: any) => setDetailContext(p)}
             onEditProduct={(p: any) => {
+              const targetType = p.type === 'combo' ? 'combo' : 'standard';
               const matchedCategory = webCategories
-                .filter(cat => cat.classification === p.type)
+                .filter(cat => cat.classification === targetType)
                 .find(cat => cat.children?.some(sc => sc.id === p.category));
-              const targetCategory = matchedCategory?.children?.find(sc => sc.id === p.category) || webCategories.find(cat => cat.classification === p.type) || categoryData[0];
+              const targetCategory = matchedCategory?.children?.find(sc => sc.id === p.category) || webCategories.find(cat => cat.classification === targetType) || webCategories[0];
               setCreationContext({
-                type: p.type,
+                type: targetType,
                 category: targetCategory,
                 mode: 'edit',
                 product: p,
                 scope: 'brand',
+                formScope: 'master',
               });
             }}
+            unifiedManagement={false}
          />
       );
   };
 
+  const renderContextTabs = () => {
+    if (
+      creationContext
+      || detailContext
+      || commonFieldSettingsContext && activeMenu === 'common_field_settings'
+      || requiredPolicyEditorContext
+      || attributeMutexEditorContext
+      || storeRegionEditorContext
+      || activeMenu === 'addon_group'
+    ) {
+      return null;
+    }
+
+    type ContextTab = {
+      key: string;
+      label: string;
+      active: boolean;
+      onClick: () => void;
+    };
+
+    let ariaLabel = '';
+    let tabs: ContextTab[] = [];
+
+    const recipeMenus = [
+      'ingredient_library', 'nutrition_manager',
+      'recipe_default', 'recipe_legacy', 'recipe_new',
+    ];
+    if (recipeMenus.includes(activeMenu)) {
+      ariaLabel = '配方与营养';
+      tabs = [
+        {
+          key: 'recipe',
+          label: '商品配方',
+          active: ['ingredient_library', 'recipe_default', 'recipe_legacy', 'recipe_new'].includes(activeMenu),
+          onClick: () => {
+            setLastRecipeMenu('recipe_new');
+            setActiveMenu('recipe_new');
+          },
+        },
+        { key: 'nutrition', label: '营养成分', active: activeMenu === 'nutrition_manager', onClick: () => setActiveMenu('nutrition_manager') },
+      ];
+    }
+
+    if ([
+      'sales_scope', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy',
+    ].includes(activeMenu)) {
+      ariaLabel = '销售规则';
+      tabs = [
+        {
+          key: 'sales-scope',
+          label: '门店售卖规则',
+          active: activeMenu === 'sales_scope',
+          onClick: () => setActiveMenu('sales_scope'),
+        },
+        {
+          key: 'product-template',
+          label: '商品模板',
+          active: activeMenu === 'product_template',
+          onClick: () => setActiveMenu('product_template'),
+        },
+        { key: 'price', label: '价格策略', active: activeMenu === 'price_systems', onClick: () => setActiveMenu('price_systems') },
+        {
+          key: 'mutex',
+          label: '属性互斥',
+          active: activeMenu === 'attribute_mutex_rules',
+          onClick: () => {
+            setAttributeMutexEditorContext(null);
+            setActiveMenu('attribute_mutex_rules');
+          },
+        },
+        {
+          key: 'required',
+          label: '必选商品',
+          active: activeMenu === 'required_product_policy',
+          onClick: () => {
+            setRequiredPolicyEditorContext(null);
+            setActiveMenu('required_product_policy');
+          },
+        },
+      ];
+    }
+
+    const storeMenus = [
+      'store_product_list', 'store_category_list',
+      'store_attribute_list', 'store_addon_list', 'store_method_list', 'store_region_list',
+    ];
+    if (storeMenus.includes(activeMenu)) {
+      ariaLabel = '门店商品';
+      tabs = [
+        {
+          key: 'store-products',
+          label: '门店渠道商品',
+          active: activeMenu === 'store_product_list',
+          onClick: () => {
+            setStoreProductManagePreset(null);
+            setActiveMenu('store_product_list');
+          },
+        },
+        {
+          key: 'store-category',
+          label: '门店分类',
+          active: activeMenu === 'store_category_list',
+          onClick: () => {
+            setStoreCategoryReturnMenu('store_product_list');
+            setActiveMenu('store_category_list');
+          },
+        },
+        {
+          key: 'store-attribute',
+          label: '门店属性',
+          active: ['store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu),
+          onClick: () => setActiveMenu('store_attribute_list'),
+        },
+        {
+          key: 'store-region',
+          label: '门店区域',
+          active: activeMenu === 'store_region_list',
+          onClick: () => {
+            setStoreRegionEditorContext(null);
+            setActiveMenu('store_region_list');
+          },
+        },
+      ];
+    }
+
+    if (tabs.length === 0) return null;
+
+    return (
+      <div className="flex h-[48px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-6" role="tablist" aria-label={ariaLabel}>
+        <div className="flex h-full min-w-0 items-stretch gap-8 overflow-x-auto no-scrollbar">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={tab.active}
+              onClick={tab.onClick}
+              className={`relative flex h-full shrink-0 items-center px-0.5 text-[14px] transition-colors ${
+                tab.active
+                  ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]'
+                  : 'font-medium text-[#667085] hover:text-[#1D2129]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-full w-full bg-[#F5F6FA] font-sans text-[14px] text-[#333] overflow-hidden">
+    <div className="console-shell flex h-full w-full flex-col overflow-hidden bg-[#F5F6FA] font-sans text-[14px] text-[#333]">
       
       {/* Header */}
-      <header className="h-[50px] bg-white flex items-center justify-between px-4 z-40 shadow-sm border-b border-[#E8E8E8] shrink-0">
+      <header className="z-40 flex h-[52px] shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-4">
         <div className="flex items-center space-x-4">
           <div className="flex items-center text-[#333] font-bold text-[16px] cursor-pointer hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors">
              槐店王婆 <ChevronDown size={14} className="ml-2 text-[#999]"/>
@@ -903,172 +1473,112 @@ export const WebAdmin: React.FC = () => {
            </div>
         </aside>
         ) : (
-        <aside className="w-[200px] bg-white border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30">
+        <aside className="z-30 flex w-[216px] shrink-0 flex-col overflow-y-auto border-r border-[#E8E8E8] bg-white pt-2 no-scrollbar">
            <div className="px-4 py-3 mb-2">
               <div className="flex items-center font-bold text-[#333] mb-1">
-                 <Box size={18} className="mr-2 text-[#00C06B]"/> 商品管理
+                 <Box size={18} className="mr-2 text-[#00C06B]"/> 商品中心
               </div>
            </div>
 
-           <div className="mb-1">
-              <div 
-                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
-                 onClick={() => toggleMenu('product_archives')}
-              >
-                 <span className="font-bold">商品档案</span>
-                 {expandedMenus.includes('product_archives') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-              </div>
-              {expandedMenus.includes('product_archives') && (
-                 <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="商品管理" active={activeMenu === 'product_list' && !creationContext} onClick={() => { setActiveMenu('product_list'); setCreationContext(null); }} />
-                    <SidebarItem label="商品分类" active={activeMenu === 'categories'} onClick={() => { setActiveMenu('categories'); setCreationContext(null); }} />
-                    <SidebarItem label="商品属性" active={activeMenu === 'product_attributes'} onClick={() => { setActiveMenu('product_attributes'); setCreationContext(null); }} />
-                    <div>
-                       <div
-                          className="flex items-center justify-between pl-6 pr-6 py-2.5 text-[13px] font-medium cursor-pointer text-[#666] hover:bg-gray-50 hover:text-[#333] transition-all"
-                          onClick={() => toggleMenu('product_archives_recipe')}
-                       >
-                          <span>配方管理</span>
-                          {expandedMenus.includes('product_archives_recipe') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-                       </div>
-                       {expandedMenus.includes('product_archives_recipe') && (
-                          <div className="space-y-0.5">
-                             <div className="pl-6">
-                                <SidebarItem
-                                  label="配料库"
-                                  active={activeMenu === 'ingredient_library'}
-                                  onClick={() => {
-                                    setActiveMenu('ingredient_library');
-                                    setCreationContext(null);
-                                  }}
-                                />
-                             </div>
-                             <div className="pl-6">
-                                <SidebarItem
-                                  label="营养成分"
-                                  active={activeMenu === 'nutrition_manager'}
-                                  onClick={() => {
-                                    setActiveMenu('nutrition_manager');
-                                    setCreationContext(null);
-                                  }}
-                                />
-                             </div>
-                             <div className="pl-6">
-                                {!newRecipeEnabled && (
-                                  <SidebarItem
-                                    label="商品配方"
-                                    active={activeMenu === 'recipe_legacy' || (activeMenu === 'addon_group' && lastRecipeMenu === 'recipe_legacy')}
-                                    onClick={() => {
-                                      setLastRecipeMenu('recipe_legacy');
-                                      setActiveMenu('recipe_legacy');
-                                      setCreationContext(null);
-                                    }}
-                                  />
-                                )}
-                                <SidebarItem
-                                  label="新商品配方"
-                                  active={activeMenu === 'recipe_new' || (activeMenu === 'addon_group' && lastRecipeMenu === 'recipe_new')}
-                                  onClick={() => {
-                                    setLastRecipeMenu('recipe_new');
-                                    setActiveMenu('recipe_new');
-                                    setCreationContext(null);
-                                  }}
-                                />
-                             </div>
-                          </div>
-                       )}
-                    </div>
-                 </div>
-              )}
-           </div>
+           <div className="px-5 pb-1 pt-2 text-[12px] font-medium text-[#98A2B3]">商品资料</div>
+           <SidebarItem
+             label="商品主档"
+             icon={<Package size={17} />}
+             active={activeMenu === 'product_list' && !creationContext}
+             onClick={() => { setActiveMenu('product_list'); setCreationContext(null); }}
+           />
+           <SidebarItem
+             label="分类与属性"
+             icon={<Tags size={17} />}
+             active={['product_attributes', 'categories', 'category_management'].includes(activeMenu)}
+             onClick={() => { setActiveMenu('product_attributes'); setCreationContext(null); }}
+           />
+           <SidebarItem
+             label="配方与营养"
+             icon={<FlaskConical size={17} />}
+             active={['ingredient_library', 'nutrition_manager', 'recipe_default', 'recipe_legacy', 'recipe_new', 'addon_group'].includes(activeMenu)}
+             onClick={() => { setLastRecipeMenu('recipe_new'); setActiveMenu('recipe_new'); setCreationContext(null); }}
+           />
 
-           <div className="mb-1">
-              <div
-                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
-                 onClick={() => toggleMenu('chain_management')}
-              >
-                 <span className="font-bold">商品运营</span>
-                 {expandedMenus.includes('chain_management') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-              </div>
-              {expandedMenus.includes('chain_management') && (
-                 <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="商品模板" active={activeMenu === 'product_template'} onClick={() => { setActiveMenu('product_template'); setCreationContext(null); }} />
-                    <SidebarItem label="商品同步" active={activeMenu === 'product_sync'} onClick={() => { setActiveMenu('product_sync'); setCreationContext(null); }} />
-                    <SidebarItem label="价格策略" active={activeMenu === 'price_systems'} onClick={() => { setActiveMenu('price_systems'); setCreationContext(null); }} />
-                    <SidebarItem label="商品推荐" />
-                    <SidebarItem label="属性互斥" active={activeMenu === 'attribute_mutex_rules'} onClick={() => { setActiveMenu('attribute_mutex_rules'); setCreationContext(null); setAttributeMutexEditorContext(null); }} />
-                    <SidebarItem label="必选商品" active={activeMenu === 'required_product_policy'} onClick={() => { setActiveMenu('required_product_policy'); setCreationContext(null); setRequiredPolicyEditorContext(null); }} />
-                 </div>
-              )}
-           </div>
+           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">渠道经营</div>
+           {channelCatalogMenuVisible && (
+             <>
+               <SidebarItem
+                 label="渠道商品"
+                 icon={<Store size={17} />}
+                 active={activeMenu === 'channel_product_library'}
+                 onClick={() => { setActiveMenu('channel_product_library'); setCreationContext(null); }}
+               />
+               <SidebarItem
+                 label="渠道属性"
+                 icon={<Tags size={17} />}
+                 active={['channel_attributes', 'channel_categories', 'channel_custom_attributes'].includes(activeMenu)}
+                 onClick={() => { setActiveMenu('channel_attributes'); setCreationContext(null); }}
+               />
+             </>
+           )}
+           <SidebarItem
+             label="销售规则"
+             icon={<SlidersHorizontal size={17} />}
+             active={['sales_scope', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy'].includes(activeMenu)}
+             onClick={() => { setActiveMenu('sales_scope'); setCreationContext(null); }}
+           />
+           <SidebarItem
+             label="商品推荐"
+             icon={<Sparkles size={17} />}
+             active={activeMenu === 'product_recommendation'}
+             onClick={() => { setActiveMenu('product_recommendation'); setCreationContext(null); }}
+           />
 
-           <div className="mb-1">
-              <div 
-                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
-                 onClick={() => toggleMenu('store_products')}
-              >
-                 <span className="font-bold">门店商品</span>
-                 {expandedMenus.includes('store_products') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-              </div>
-              {expandedMenus.includes('store_products') && (
-                 <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="门店商品管理" active={activeMenu === 'store_product_list'} onClick={() => { setActiveMenu('store_product_list'); setStoreProductManagePreset(null); setCreationContext(null); }} />
-                    <SidebarItem label="商品在售门店" active={activeMenu === 'store_product_coverage'} onClick={() => { setActiveMenu('store_product_coverage'); setCreationContext(null); }} />
-                    <SidebarItem label="门店商品分类" active={activeMenu === 'store_category_list'} onClick={() => { setStoreCategoryReturnMenu(activeMenu); setActiveMenu('store_category_list'); setCreationContext(null); }} />
-                    <SidebarItem label="门店商品属性" active={['store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu)} onClick={() => { setActiveMenu('store_attribute_list'); setCreationContext(null); }} />
-                    <SidebarItem label="区域商品" active={activeMenu === 'store_region_list'} onClick={() => { setActiveMenu('store_region_list'); setCreationContext(null); setStoreRegionEditorContext(null); }} />
-                 </div>
-              )}
-           </div>
+           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">发布与治理</div>
+           <SidebarItem
+             label="发布中心"
+             icon={<Rocket size={17} />}
+             active={activeMenu === 'product_sync'}
+             onClick={() => { setProductSyncInitialTab('publish'); setActiveMenu('product_sync'); setCreationContext(null); }}
+           />
+           {productMappingVisible && (
+             <SidebarItem
+               label="映射治理"
+               icon={<Link2 size={17} />}
+               active={activeMenu === 'product_mapping'}
+               onClick={() => { setActiveMenu('product_mapping'); setCreationContext(null); }}
+             />
+           )}
+           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">门店执行</div>
+           <SidebarItem
+             label="门店商品"
+             icon={<ShoppingBag size={17} />}
+             active={['store_product_list', 'store_product_coverage', 'store_category_list', 'store_attribute_list', 'store_addon_list', 'store_method_list', 'store_region_list'].includes(activeMenu)}
+             onClick={() => {
+               setActiveMenu('store_product_list');
+               setStoreProductManagePreset(null);
+               setCreationContext(null);
+             }}
+           />
 
-           <div className="mb-1">
-              <div
-                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
-                 onClick={() => toggleMenu('platform_products')}
-              >
-                 <span className="font-bold">平台商品</span>
-                 {expandedMenus.includes('platform_products') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-              </div>
-              {expandedMenus.includes('platform_products') && (
-                 <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="菜单管理" />
-                     <SidebarItem label="菜单同步" active={activeMenu === 'takeout_menu_sync'} onClick={() => { setActiveMenu('takeout_menu_sync'); setCreationContext(null); }} />
-                    <SidebarItem label="美团团单" />
-                    <SidebarItem label="在线点餐" />
-                    <SidebarItem label="商品映射" />
-                 </div>
-              )}
-           </div>
-
-           <div className="mb-1">
-              <div 
-                 className="flex items-center justify-between px-6 py-2 cursor-pointer text-[#666] hover:text-[#333] text-[13px]"
-                 onClick={() => toggleMenu('product_settings')}
-              >
-                 <span className="font-bold">商品设置</span>
-                 {expandedMenus.includes('product_settings') ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-              </div>
-              {expandedMenus.includes('product_settings') && (
-                 <div className="mt-1 space-y-0.5">
-                    <SidebarItem label="通用设置" active={activeMenu === 'general_settings'} onClick={() => { setActiveMenu('general_settings'); setCreationContext(null); }} />
-                    <SidebarItem
-                      label="常用字段"
-                      active={activeMenu === 'common_field_settings'}
-                      onClick={() => {
-                        setCommonFieldSettingsContext(null);
-                        setActiveMenu('common_field_settings');
-                      }}
-                    />
-                 </div>
-              )}
-           </div>
+           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">配置</div>
+           <SidebarItem
+             label="商品设置"
+             icon={<Settings size={17} />}
+             active={['general_settings', 'channel_override_settings', 'omnichannel_settings'].includes(activeMenu)}
+             onClick={() => {
+               setActiveMenu('general_settings');
+               setCreationContext(null);
+             }}
+           />
 
            <div className="mt-auto h-4"></div>
         </aside>
         )}
 
         {/* Main Content */}
-        {renderContent()}
+         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+           {renderContextTabs()}
+           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+             {renderContent()}
+           </div>
+        </div>
       </div>
 
       {/* Global Modals */}
@@ -1089,6 +1599,9 @@ export const WebAdmin: React.FC = () => {
               type: categorySelectContext.type,
               category: selectedCategory,
               scope: categorySelectContext.scope,
+              formScope: categorySelectContext.formScope || (categorySelectContext.scope === 'store' ? 'store' : 'master'),
+              channelContext: categorySelectContext.channelContext,
+              channelAttributeIds: categorySelectContext.channelAttributeIds,
             });
             setCategorySelectContext(null);
           }}
@@ -1096,14 +1609,14 @@ export const WebAdmin: React.FC = () => {
       )}
       {showProductMenuGuide && (
         <div className="absolute inset-0 z-[80] bg-black/35">
-          <div className={`pointer-events-none absolute rounded-[18px] border-2 border-[#17C964] bg-white/10 shadow-[0_0_0_9999px_rgba(17,24,39,0.20),0_0_0_6px_rgba(23,201,100,0.12)] ${currentGuideStep.highlightPosition}`}></div>
-          <div className={`absolute w-[360px] rounded-[16px] bg-[#17C964] p-5 text-white shadow-[0_18px_48px_rgba(6,78,59,0.28)] ${currentGuideStep.cardPosition}`}>
+          <div className={`pointer-events-none absolute rounded-lg border-2 border-[#17C964] bg-white/10 shadow-[0_0_0_9999px_rgba(17,24,39,0.20),0_0_0_6px_rgba(23,201,100,0.12)] ${currentGuideStep.highlightPosition}`}></div>
+          <div className={`absolute w-[360px] rounded-lg bg-[#17C964] p-5 text-white shadow-[0_18px_48px_rgba(6,78,59,0.28)] ${currentGuideStep.cardPosition}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="rounded-full bg-white/16 px-3 py-1 text-[12px] font-black">
                 {currentGuideStep.step}
               </div>
             </div>
-            <div className="mt-2 rounded-[12px] bg-white/12 p-4">
+            <div className="mt-2 rounded-lg bg-white/12 p-4">
               <div className="text-[16px] font-black">{currentGuideStep.title}</div>
               <div className="mt-1 text-[13px] leading-6 text-white/90">
                 {currentGuideStep.desc}
@@ -1113,7 +1626,7 @@ export const WebAdmin: React.FC = () => {
               <button
                 onClick={handlePrevProductMenuGuide}
                 disabled={currentProductMenuGuideStep === 0}
-                className="rounded-[10px] border border-white/22 px-4 py-2 text-[13px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg border border-white/22 px-4 py-2 text-[13px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 上一步
               </button>
@@ -1129,7 +1642,7 @@ export const WebAdmin: React.FC = () => {
               </div>
               <button
                 onClick={handleNextProductMenuGuide}
-                className="rounded-[10px] bg-white px-4 py-2 text-[13px] font-black text-[#12A150] shadow-sm transition-colors hover:bg-[#F3FFF8]"
+                className="rounded-lg bg-white px-4 py-2 text-[13px] font-black text-[#12A150] shadow-sm transition-colors hover:bg-[#F3FFF8]"
               >
                 {currentProductMenuGuideStep === productMenuGuideSteps.length - 1 ? '完成' : '下一步'}
               </button>

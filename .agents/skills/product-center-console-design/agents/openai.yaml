@@ -1,0 +1,7 @@
+interface:
+  display_name: "商品中心全域 Web 设计规范"
+  short_description: "覆盖商品中心全部 Web 后台模块的设计、实现与验收"
+  default_prompt: "使用 $product-center-console-design 设计、实现并校验任意企迈商品中心 Web 后台页面。"
+
+policy:
+  allow_implicit_invocation: true

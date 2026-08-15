@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>全渠道商品管理策略 — 现状视觉基线</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #E9EBEF;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    color: #1D2129;
+    -webkit-font-smoothing: antialiased;
+  }
+  svg { display: block; }
+
+  /* ===== 展板外壳（仅用于本快照文档，不属于产品界面） ===== */
+  .doc { padding: 32px; }
+  .doc-title { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+  .doc-sub { font-size: 13px; color: #667085; margin: 0 0 28px; line-height: 22px; max-width: 900px; }
+  .board { margin-bottom: 36px; }
+  .board-label {
+    font-size: 13px; font-weight: 700; color: #4E5969;
+    background: #fff; border: 1px solid #D8DCE3; border-radius: 6px;
+    display: inline-block; padding: 5px 10px; margin-bottom: 10px;
+  }
+  .board-note { font-size: 12px; color: #667085; margin: 0 0 10px; line-height: 20px; max-width: 1100px; }
+  .frame {
+    width: 1440px; border: 1px solid #D8DCE3; border-radius: 4px;
+    overflow: hidden; background: #F5F6F8; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+
+  /* ===== 产品界面样式（以下为真实实现的还原） ===== */
+  .page { display: flex; flex-direction: column; background: #F5F6F8; }
+
+  /* Header 72px */
+  .pc-header {
+    height: 72px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: space-between; border-bottom: 1px solid #E5E6EB;
+    background: #fff; padding: 0 24px;
+  }
+  .pc-header-left { display: flex; align-items: center; gap: 12px; }
+  .icon-btn-32 {
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; color: #4E5969; border: 0; background: transparent; cursor: pointer;
+  }
+  .icon-btn-32:hover { background: #F2F3F5; }
+  .pc-title { font-size: 20px; font-weight: 700; color: #1D2129; margin: 0; }
+  .pc-subtitle { font-size: 12px; color: #86909C; margin: 4px 0 0; }
+
+  .btn { border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; font-family: inherit; }
+  .btn-primary-dark {
+    height: 36px; background: #1D2129; padding: 0 16px; font-size: 13px;
+    font-weight: 700; color: #fff; border: 0;
+  }
+  .btn-primary-dark:hover { background: #000; }
+  .btn-outline {
+    height: 36px; border: 1px solid #C9CDD4; background: #fff; padding: 0 12px;
+    font-size: 13px; font-weight: 500; color: #4E5969;
+  }
+  .btn-outline:hover { border-color: #00B460; color: #00A35B; }
+  .btn-outline-sm {
+    border: 1px solid #C9CDD4; background: #fff; padding: 8px 12px;
+    font-size: 13px; font-weight: 500; color: #4E5969; border-radius: 6px; cursor: pointer;
+    display: inline-flex; align-items: center; flex-shrink: 0;
+  }
+  .btn-green {
+    height: 36px; background: #00B460; padding: 0 12px; font-size: 13px;
+    font-weight: 700; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .btn-ghost {
+    height: 36px; border: 1px solid #C9CDD4; background: #fff; padding: 0 16px;
+    font-size: 13px; color: #4E5969; border-radius: 6px; cursor: pointer;
+  }
+
+  /* Main */
+  .pc-main { padding: 16px; }
+  .pc-main-inner { max-width: 1480px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  /* 校验提示条 */
+  .feedback {
+    display: flex; align-items: flex-start; gap: 8px; border-radius: 6px;
+    border: 1px solid #FFD8A8; background: #FFF9F0; padding: 12px 16px;
+    font-size: 13px; color: #9A5A16; line-height: 20px;
+  }
+  .feedback svg { margin-top: 2px; flex-shrink: 0; }
+
+  /* Section */
+  .section { border-radius: 8px; border: 1px solid #E5E6EB; background: #fff; }
+  .section-pad { padding: 20px; }
+  .section-h { font-size: 16px; font-weight: 700; color: #1D2129; margin: 0; }
+  .section-p { font-size: 13px; color: #86909C; margin: 4px 0 0; }
+
+  /* 协作方式选项卡 */
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mode-card {
+    display: flex; align-items: flex-start; gap: 12px; border-radius: 8px;
+    border: 1px solid #E5E6EB; background: #fff; padding: 16px; text-align: left;
+    cursor: pointer; font-family: inherit;
+  }
+  .mode-card:hover { border-color: #C9CDD4; }
+  .mode-card.is-active { border-color: #00B460; background: #F2FFF8; }
+  .mode-card .lead-icon { margin-top: 2px; color: #00B460; flex-shrink: 0; }
+  .mode-card-body { min-width: 0; flex: 1; }
+  .mode-card-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #1D2129; }
+  .mode-card-desc { margin: 8px 0 0; font-size: 12px; line-height: 20px; color: #86909C; }
+
+  /* Radio / Checkbox */
+  .radio {
+    width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; border-radius: 50%; border: 2px solid #C9CDD4;
+  }
+  .radio.is-on { border-color: #00B460; }
+  .radio .dot { width: 8px; height: 8px; border-radius: 50%; background: #00B460; }
+  .cbox {
+    width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; border-radius: 4px; border: 1px solid #C9CDD4; background: #fff; color: #fff;
+  }
+  .cbox.is-on { border-color: #00B460; background: #00B460; }
+  .cbox.is-disabled { border-color: #E5E6EB; background: #F2F3F5; }
+
+  /* 分组摘要条 */
+  .summary-bar {
+    margin-top: 16px; display: flex; align-items: center; justify-content: space-between;
+    border-radius: 6px; background: #F7F8FA; padding: 12px 16px;
+  }
+  .summary-title { font-size: 13px; font-weight: 700; color: #1D2129; }
+  .summary-desc {
+    margin-top: 4px; font-size: 12px; color: #86909C;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .warn-inline { margin-left: 8px; color: #D46B08; }
+
+  /* 三方渠道表 */
+  .ch-head-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    border-bottom: 1px solid #E5E6EB; padding: 16px 20px;
+  }
+  .ch-grid { display: grid; grid-template-columns: 170px 250px 1fr 150px; }
+  .ch-thead { background: #F7F8FA; padding: 12px 20px; font-size: 12px; font-weight: 500; color: #4E5969; }
+  .ch-row { border-top: 1px solid #F0F1F2; padding: 16px 20px; align-items: center; }
+  .ch-name { font-size: 14px; font-weight: 700; color: #1D2129; }
+  .ch-radios { display: flex; gap: 12px; }
+  .radio-label {
+    display: flex; align-items: center; gap: 6px; font-size: 13px; color: #4E5969;
+    background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit;
+  }
+  .cap-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cap-tag { border-radius: 4px; background: #E8FFF3; padding: 4px 8px; font-size: 12px; color: #008A4B; }
+  .cap-checks { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  .cap-none { font-size: 12px; color: #86909C; }
+  .badge { display: inline-flex; border-radius: 4px; padding: 4px 8px; font-size: 12px; font-weight: 500; }
+  .badge-warn { background: #FFF7E8; color: #D46B08; }
+  .badge-mute { background: #F2F3F5; color: #86909C; }
+  .ch-foot {
+    display: flex; align-items: flex-start; gap: 8px; border-top: 1px solid #E5E6EB;
+    background: #F7F8FA; padding: 12px 20px; font-size: 12px; line-height: 20px; color: #667085;
+  }
+  .ch-foot svg { margin-top: 2px; flex-shrink: 0; }
+
+  /* ===== 弹窗 ===== */
+  .modal-scrim {
+    width: 1440px; height: 800px; display: flex; align-items: center; justify-content: center;
+    background: rgba(29,33,41,.55);
+  }
+  .modal {
+    display: flex; flex-direction: column; width: 920px; height: 720px;
+    overflow: hidden; border-radius: 8px; background: #fff;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+  }
+  .modal-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    border-bottom: 1px solid #E5E6EB; padding: 20px 24px;
+  }
+  .modal-title { font-size: 18px; font-weight: 700; color: #1D2129; margin: 0; }
+  .modal-sub { margin: 4px 0 0; font-size: 12px; color: #86909C; }
+  .modal-body { display: grid; grid-template-columns: 330px 1fr; flex: 1; min-height: 0; }
+  .modal-side { overflow-y: auto; border-right: 1px solid #E5E6EB; background: #F7F8FA; padding: 16px; }
+  .modal-pane { min-width: 0; overflow-y: auto; padding: 20px; }
+  .modal-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid #E5E6EB; background: #F7F8FA; padding: 16px 24px;
+  }
+  .modal-foot-text { font-size: 12px; color: #86909C; }
+
+  .grp-card { border-radius: 6px; border: 1px solid #E5E6EB; background: #fff; padding: 12px; margin-bottom: 8px; }
+  .grp-card.is-active { border-color: #00B460; }
+  .grp-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .grp-name { font-size: 13px; font-weight: 700; color: #1D2129; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grp-count { margin-top: 4px; font-size: 12px; color: #86909C; }
+  .grp-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .icon-btn-28 {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; color: #667085; border: 0; background: transparent; cursor: pointer;
+  }
+  .icon-btn-28:hover { background: #F2F3F5; }
+  .icon-btn-28.danger { color: #CB2634; }
+  .icon-btn-28.danger:hover { background: #FFF1F0; }
+  .chip-row { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { border-radius: 4px; background: #F2F3F5; padding: 2px 6px; font-size: 11px; color: #4E5969; }
+
+  .field-label { display: block; margin-top: 20px; font-size: 13px; font-weight: 700; color: #1D2129; }
+  .req { color: #F53F3F; }
+  .text-input {
+    margin-top: 8px; height: 36px; width: 100%; border-radius: 6px; border: 1px solid #C9CDD4;
+    padding: 0 12px; font-size: 13px; outline: none; font-family: inherit;
+  }
+  .text-input:focus { border-color: #00B460; }
+  .text-input::placeholder { color: #C9CDD4; }
+  .ch-pick-grid { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ch-pick {
+    display: flex; align-items: center; justify-content: space-between; min-height: 52px;
+    border-radius: 6px; border: 1px solid #E5E6EB; background: #fff; padding: 8px 12px;
+    text-align: left; cursor: pointer; font-family: inherit;
+  }
+  .ch-pick:hover { border-color: #C9CDD4; }
+  .ch-pick.is-on { border-color: #00B460; background: #F2FFF8; }
+  .ch-pick-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #1D2129; }
+  .ch-pick-owner {
+    max-width: 120px; font-size: 11px; color: #D46B08;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pane-empty {
+    height: 100%; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center;
+  }
+  .pane-empty-title { margin-top: 12px; font-size: 14px; font-weight: 700; color: #4E5969; }
+  .pane-empty-desc { margin-top: 4px; font-size: 12px; color: #86909C; }
+
+  /* ===== Token 展板 ===== */
+  .tok-wrap { background: #fff; border: 1px solid #D8DCE3; border-radius: 6px; padding: 20px; width: 1440px; }
+  .tok-group { margin-bottom: 20px; }
+  .tok-group:last-child { margin-bottom: 0; }
+  .tok-group-h { font-size: 13px; font-weight: 700; color: #4E5969; margin: 0 0 10px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .sw { width: 132px; }
+  .sw-chip { height: 46px; border-radius: 6px; border: 1px solid rgba(0,0,0,.08); }
+  .sw-name { margin-top: 5px; font-size: 11px; font-weight: 600; color: #1D2129; }
+  .sw-hex { font-size: 11px; color: #86909C; font-family: ui-monospace, Consolas, monospace; }
+  .type-row { display: flex; align-items: baseline; gap: 14px; padding: 5px 0; border-bottom: 1px dashed #EEF0F3; }
+  .type-tag { font-size: 11px; color: #86909C; font-family: ui-monospace, Consolas, monospace; width: 150px; flex-shrink: 0; }
+  .state-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+  .state-cell { }
+  .state-cap { font-size: 11px; color: #86909C; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <h1 class="doc-title">全渠道商品管理策略 — 现状视觉基线</h1>
+  <p class="doc-sub">
+    这是企迈商品中心「全渠道商品管理策略」页面当前线上实现的像素级还原，作为重设计的对照基线。
+    所有尺寸、色值、间距均取自生产代码。展板标签（灰色圆角标签）与本段说明文字不属于产品界面。
+    页面运行在 Console 2.0 基座内，此处仅呈现业务内容区，顶部全局导航与左侧模块菜单由基座提供、不在改版范围内。
+    画板宽度 1440px（设计基准宽度）。
+  </p>
+
+  <!-- ============ 展板 0：Token ============ -->
+  <div class="board">
+    <div class="board-label">展板 0 · 设计 Token（色彩 / 字号 / 控件状态）</div>
+    <div class="tok-wrap">
+
+      <div class="tok-group">
+        <div class="tok-group-h">品牌与主色</div>
+        <div class="swatches">
+          <div class="sw"><div class="sw-chip" style="background:#00B460"></div><div class="sw-name">主色 / 选中态</div><div class="sw-hex">#00B460</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#00A35B"></div><div class="sw-name">主色 hover</div><div class="sw-hex">#00A35B</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#F2FFF8"></div><div class="sw-name">选中卡片底</div><div class="sw-hex">#F2FFF8</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#E8FFF3"></div><div class="sw-name">能力标签底</div><div class="sw-hex">#E8FFF3</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#008A4B"></div><div class="sw-name">能力标签字</div><div class="sw-hex">#008A4B</div></div>
+        </div>
+      </div>
+
+      <div class="tok-group">
+        <div class="tok-group-h">中性色</div>
+        <div class="swatches">
+          <div class="sw"><div class="sw-chip" style="background:#1D2129"></div><div class="sw-name">主文字 / 主按钮</div><div class="sw-hex">#1D2129</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#4E5969"></div><div class="sw-name">次级文字</div><div class="sw-hex">#4E5969</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#667085"></div><div class="sw-name">辅助说明</div><div class="sw-hex">#667085</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#86909C"></div><div class="sw-name">弱文字</div><div class="sw-hex">#86909C</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#C9CDD4"></div><div class="sw-name">控件边框</div><div class="sw-hex">#C9CDD4</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#E5E6EB"></div><div class="sw-name">容器边框</div><div class="sw-hex">#E5E6EB</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#F0F1F2"></div><div class="sw-name">表格行分隔</div><div class="sw-hex">#F0F1F2</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#F2F3F5"></div><div class="sw-name">hover / 禁用底</div><div class="sw-hex">#F2F3F5</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#F7F8FA"></div><div class="sw-name">表头 / 摘要条底</div><div class="sw-hex">#F7F8FA</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#F5F6F8"></div><div class="sw-name">页面底色</div><div class="sw-hex">#F5F6F8</div></div>
+        </div>
+      </div>
+
+      <div class="tok-group">
+        <div class="tok-group-h">语义色（红色仅用于失败 / 危险 / 异常）</div>
+        <div class="swatches">
+          <div class="sw"><div class="sw-chip" style="background:#D46B08"></div><div class="sw-name">警示字</div><div class="sw-hex">#D46B08</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#FFF7E8"></div><div class="sw-name">警示 badge 底</div><div class="sw-hex">#FFF7E8</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#FFF9F0"></div><div class="sw-name">提示条底</div><div class="sw-hex">#FFF9F0</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#FFD8A8"></div><div class="sw-name">提示条边</div><div class="sw-hex">#FFD8A8</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#9A5A16"></div><div class="sw-name">提示条字</div><div class="sw-hex">#9A5A16</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#F53F3F"></div><div class="sw-name">必填星号</div><div class="sw-hex">#F53F3F</div></div>
+          <div class="sw"><div class="sw-chip" style="background:#CB2634"></div><div class="sw-name">危险操作</div><div class="sw-hex">#CB2634</div></div>
+        </div>
+      </div>
+
+      <div class="tok-group">
+        <div class="tok-group-h">字号阶梯（基础 14px，行高 24px；禁止营销式大标题）</div>
+        <div class="type-row"><span class="type-tag">20 / 700 页面标题</span><span style="font-size:20px;font-weight:700">全渠道商品管理策略</span></div>
+        <div class="type-row"><span class="type-tag">18 / 700 弹窗标题</span><span style="font-size:18px;font-weight:700">管理渠道商品库分组</span></div>
+        <div class="type-row"><span class="type-tag">16 / 700 区块标题</span><span style="font-size:16px;font-weight:700">三方渠道管理策略</span></div>
+        <div class="type-row"><span class="type-tag">14 / 700 内容强调</span><span style="font-size:14px;font-weight:700">美团外卖</span></div>
+        <div class="type-row"><span class="type-tag">13 / 400 正文 · 控件</span><span style="font-size:13px">企迈管理商品时默认参与接单、商品发布和上下架库存。</span></div>
+        <div class="type-row"><span class="type-tag">12 / 400 辅助说明</span><span style="font-size:12px;color:#86909C">品牌级经营配置，决定商品维护方式、渠道商品库结构和企迈参与范围。</span></div>
+        <div class="type-row"><span class="type-tag">11 / 400 标签</span><span style="font-size:11px;color:#4E5969">小程序堂食</span></div>
+      </div>
+
+      <div class="tok-group">
+        <div class="tok-group-h">控件状态</div>
+        <div class="state-grid">
+          <div class="state-cell">
+            <div class="state-cap">Radio 未选 / 选中</div>
+            <div style="display:flex;gap:12px;align-items:center">
+              <span class="radio"></span>
+              <span class="radio is-on"><span class="dot"></span></span>
+            </div>
+          </div>
+          <div class="state-cell">
+            <div class="state-cap">Checkbox 未选 / 选中 / 禁用</div>
+            <div style="display:flex;gap:12px;align-items:center">
+              <span class="cbox"></span>
+              <span class="cbox is-on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <span class="cbox is-disabled"></span>
+            </div>
+          </div>
+          <div class="state-cell">
+            <div class="state-cap">状态 badge（派生，不可编辑）</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="badge badge-warn">需门店绑定</span>
+              <span class="badge badge-mute">无需绑定</span>
+            </div>
+          </div>
+          <div class="state-cell">
+            <div class="state-cap">能力标签（企迈管理模式下只读）</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span class="cap-tag">企迈接单</span>
+              <span class="cap-tag">商品发布、上下架与库存</span>
+            </div>
+          </div>
+          <div class="state-cell">
+            <div class="state-cap">按钮</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary-dark">保存策略</button>
+              <button class="btn btn-outline">前往门店绑定</button>
+              <button class="btn-green" style="padding:0 16px">新增渠道商品库</button>
+              <button class="btn btn-ghost">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 展板 1：默认态 ============ -->
+  <div class="board">
+    <div class="board-label">展板 1 · 默认态：按渠道职责协作（collaborationMode = channel_division）</div>
+    <p class="board-note">
+      进入页面的默认状态。注意两个 section 在版面上是完全并列的白卡，但业务上存在依赖：只有在 Section 2 里被设为「企迈管理」的三方渠道，才会进入 Section 1 的渠道商品库分组体系。这层因果关系目前需要用户自己在脑中拼接。
+    </p>
+    <div class="frame">
+      <div class="page">
+        <div class="pc-header">
+          <div class="pc-header-left">
+            <button class="icon-btn-32" title="返回">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+            </button>
+            <div>
+              <h2 class="pc-title">全渠道商品管理策略</h2>
+              <p class="pc-subtitle">品牌级经营配置，决定商品维护方式、渠道商品库结构和企迈参与范围。</p>
+            </div>
+          </div>
+          <button class="btn btn-primary-dark">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
+            保存策略
+          </button>
+        </div>
+
+        <div class="pc-main">
+          <div class="pc-main-inner">
+
+            <!-- Section 1 -->
+            <div class="section section-pad">
+              <div style="margin-bottom:16px">
+                <h3 class="section-h">组织协作方式</h3>
+                <p class="section-p">决定品牌使用一个默认渠道商品库，还是按运营职责拆分多个渠道商品库。</p>
+              </div>
+              <div class="mode-grid">
+                <button class="mode-card">
+                  <span class="lead-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></span>
+                  <span class="mode-card-body">
+                    <span class="mode-card-title"><span class="radio"></span>统一商品维护</span>
+                    <span class="mode-card-desc">商品身份、结构和渠道售卖资料在同一个商品入口维护，一次保存即可完成。</span>
+                  </span>
+                </button>
+                <button class="mode-card is-active">
+                  <span class="lead-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg></span>
+                  <span class="mode-card-body">
+                    <span class="mode-card-title"><span class="radio is-on"><span class="dot"></span></span>按渠道职责协作</span>
+                    <span class="mode-card-desc">按堂食、外卖、在线点等职责建立渠道商品库，并通过角色权限控制管理范围。</span>
+                  </span>
+                </button>
+              </div>
+              <div class="summary-bar">
+                <div style="min-width:0">
+                  <div class="summary-title">当前共 3 个渠道商品库</div>
+                  <div class="summary-desc">堂食商品库、外卖商品库、在线点商品库</div>
+                </div>
+                <button class="btn-outline-sm">
+                  管理渠道商品库分组
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Section 2 -->
+            <div class="section" style="overflow:hidden">
+              <div class="ch-head-row">
+                <div>
+                  <h3 class="section-h">三方渠道管理策略</h3>
+                  <p class="section-p">企迈管理商品时默认参与接单、商品发布和上下架库存；平台管理商品时可按需启用企迈能力。</p>
+                </div>
+                <button class="btn btn-outline">
+                  前往门店绑定
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                </button>
+              </div>
+
+              <div class="ch-grid ch-thead">
+                <div>渠道</div><div>商品资料维护位置</div><div>企迈参与能力</div><div>门店连接要求</div>
+              </div>
+
+              <!-- 美团外卖 qimai -->
+              <div class="ch-grid ch-row">
+                <div class="ch-name">美团外卖</div>
+                <div class="ch-radios">
+                  <button class="radio-label"><span class="radio is-on"><span class="dot"></span></span>企迈管理</button>
+                  <button class="radio-label"><span class="radio"></span>平台管理</button>
+                </div>
+                <div><div class="cap-tags"><span class="cap-tag">企迈接单</span><span class="cap-tag">商品发布、上下架与库存</span></div></div>
+                <div><span class="badge badge-warn">需门店绑定</span></div>
+              </div>
+
+              <!-- 淘宝闪购 qimai -->
+              <div class="ch-grid ch-row">
+                <div class="ch-name">淘宝闪购</div>
+                <div class="ch-radios">
+                  <button class="radio-label"><span class="radio is-on"><span class="dot"></span></span>企迈管理</button>
+                  <button class="radio-label"><span class="radio"></span>平台管理</button>
+                </div>
+                <div><div class="cap-tags"><span class="cap-tag">企迈接单</span><span class="cap-tag">商品发布、上下架与库存</span></div></div>
+                <div><span class="badge badge-warn">需门店绑定</span></div>
+              </div>
+
+              <!-- 京东外卖 platform 未勾选 -->
+              <div class="ch-grid ch-row">
+                <div class="ch-name">京东外卖</div>
+                <div class="ch-radios">
+                  <button class="radio-label"><span class="radio"></span>企迈管理</button>
+                  <button class="radio-label"><span class="radio is-on"><span class="dot"></span></span>平台管理</button>
+                </div>
+                <div>
+                  <div class="cap-checks">
+                    <button class="radio-label"><span class="cbox"></span>企迈接单</button>
+                    <button class="radio-label"><span class="cbox"></span>上下架/库存</button>
+                    <span class="cap-none">企迈不参与</span>
+                  </div>
+                </div>
+                <div><span class="badge badge-mute">无需绑定</span></div>
+              </div>
+
+              <!-- 抖音在线点 qimai -->
+              <div class="ch-grid ch-row">
+                <div class="ch-name">抖音在线点</div>
+                <div class="ch-radios">
+                  <button class="radio-label"><span class="radio is-on"><span class="dot"></span></span>企迈管理</button>
+                  <button class="radio-label"><span class="radio"></span>平台管理</button>
+                </div>
+                <div><div class="cap-tags"><span class="cap-tag">企迈接单</span><span class="cap-tag">商品发布、上下架与库存</span></div></div>
+                <div><span class="badge badge-warn">需门店绑定</span></div>
+              </div>
+
+              <!-- 美团在线点 qimai -->
+              <div class="ch-grid ch-row">
+                <div class="ch-name">美团在线点</div>
+                <div class="ch-radios">
+                  <button class="radio-label"><span class="radio is-on"><span class="dot"></span></span>企迈管理</button>
+                  <button class="radio-label"><span class="radio"></span>平台管理</button>
+                </div>
+                <div><div class="cap-tags"><span class="cap-tag">企迈接单</span><span class="cap-tag">商品发布、上下架与库存</span></div></div>
+                <div><span class="badge badge-warn">需门店绑定</span></div>
+              </div>
+
+              <!-- 美团拼好饭 qimai -->
+              <div class="ch-grid ch-row">
+                <div class="ch-name">美团拼好饭</div>
+                <div class="ch-radios">
+                  <button class="radio-label"><span class="radio is-on"><span class="dot"></span></span>企迈管理</button>
+                  <button class="radio-label"><span class="radio"></span>平台管理</button>
+                </div>
+                <div><div class="cap-tags"><span class="cap-tag">企迈接单</span><span class="cap-tag">商品发布、上下架与库存</span></div></div>
+                <div><span class="badge badge-warn">需门店绑定</span></div>
+              </div>
+
+              <div class="ch-foot">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                <span>门店绑定、授权方式及可能产生的平台接口费用均在门店绑定中心按渠道和门店维护，不在品牌策略中配置。</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 展板 2：统一模式 ============ -->
+  <div class="board">
+    <div class="board-label">展板 2 · 统一商品维护态（collaborationMode = unified）</div>
+    <p class="board-note">
+      切到「统一商品维护」后，分组摘要条整条消失，Section 1 只剩两张选项卡。用户此时得不到任何关于「品牌默认商品库会覆盖哪些渠道」的反馈——系统实际上会自动生成一个覆盖全部企迈管理渠道的默认商品库，但界面上不可见。此处仅展示 Section 1，Section 2 与展板 1 相同。
+    </p>
+    <div class="frame" style="padding:16px">
+      <div class="section section-pad">
+        <div style="margin-bottom:16px">
+          <h3 class="section-h">组织协作方式</h3>
+          <p class="section-p">决定品牌使用一个默认渠道商品库，还是按运营职责拆分多个渠道商品库。</p>
+        </div>
+        <div class="mode-grid">
+          <button class="mode-card is-active">
+            <span class="lead-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></span>
+            <span class="mode-card-body">
+              <span class="mode-card-title"><span class="radio is-on"><span class="dot"></span></span>统一商品维护</span>
+              <span class="mode-card-desc">商品身份、结构和渠道售卖资料在同一个商品入口维护，一次保存即可完成。</span>
+            </span>
+          </button>
+          <button class="mode-card">
+            <span class="lead-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg></span>
+            <span class="mode-card-body">
+              <span class="mode-card-title"><span class="radio"></span>按渠道职责协作</span>
+              <span class="mode-card-desc">按堂食、外卖、在线点等职责建立渠道商品库，并通过角色权限控制管理范围。</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 展板 3：校验错误态 ============ -->
+  <div class="board">
+    <div class="board-label">展板 3 · 校验错误态：存在未分组渠道，保存被拒绝</div>
+    <p class="board-note">
+      唯一的错误反馈是页面顶部一条橙色提示条，不定位到具体出错的控件。摘要条里同时有一处橙色文案「另有 2 个渠道未分组」。两处提示相距很远，用户需要自己关联。此处仅展示 Header + 提示条 + Section 1。
+    </p>
+    <div class="frame">
+      <div class="page">
+        <div class="pc-header">
+          <div class="pc-header-left">
+            <button class="icon-btn-32" title="返回">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+            </button>
+            <div>
+              <h2 class="pc-title">全渠道商品管理策略</h2>
+              <p class="pc-subtitle">品牌级经营配置，决定商品维护方式、渠道商品库结构和企迈参与范围。</p>
+            </div>
+          </div>
+          <button class="btn btn-primary-dark">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
+            保存策略
+          </button>
+        </div>
+        <div class="pc-main">
+          <div class="pc-main-inner">
+            <div class="feedback">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              <span>请先将美团在线点、美团拼好饭加入渠道商品库分组。</span>
+            </div>
+            <div class="section section-pad">
+              <div style="margin-bottom:16px">
+                <h3 class="section-h">组织协作方式</h3>
+                <p class="section-p">决定品牌使用一个默认渠道商品库，还是按运营职责拆分多个渠道商品库。</p>
+              </div>
+              <div class="mode-grid">
+                <button class="mode-card">
+                  <span class="lead-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></span>
+                  <span class="mode-card-body">
+                    <span class="mode-card-title"><span class="radio"></span>统一商品维护</span>
+                    <span class="mode-card-desc">商品身份、结构和渠道售卖资料在同一个商品入口维护，一次保存即可完成。</span>
+                  </span>
+                </button>
+                <button class="mode-card is-active">
+                  <span class="lead-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg></span>
+                  <span class="mode-card-body">
+                    <span class="mode-card-title"><span class="radio is-on"><span class="dot"></span></span>按渠道职责协作</span>
+                    <span class="mode-card-desc">按堂食、外卖、在线点等职责建立渠道商品库，并通过角色权限控制管理范围。</span>
+                  </span>
+                </button>
+              </div>
+              <div class="summary-bar">
+                <div style="min-width:0">
+                  <div class="summary-title">当前共 2 个渠道商品库</div>
+                  <div class="summary-desc">堂食商品库、外卖商品库<span class="warn-inline">另有 2 个渠道未分组</span></div>
+                </div>
+                <button class="btn-outline-sm">
+                  管理渠道商品库分组
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 展板 4：弹窗空态 ============ -->
+  <div class="board">
+    <div class="board-label">展板 4 · 弹窗「管理渠道商品库分组」— 未选中分组（空态）</div>
+    <p class="board-note">
+      920 × 720px 居中弹窗，遮罩 rgba(29,33,41,.55)。这是本页面信息量最大的部分，却被放进弹窗、并在弹窗内再做左右分栏 + 二级编辑态，层级达到三层。右侧在未选中分组时是一块大面积空区。
+    </p>
+    <div class="frame">
+      <div class="modal-scrim">
+        <div class="modal">
+          <div class="modal-head">
+            <div>
+              <h3 class="modal-title">管理渠道商品库分组</h3>
+              <p class="modal-sub">每个由企迈管理的渠道只能归属一个渠道商品库，角色权限可进一步限制人员可管理范围。</p>
+            </div>
+            <button class="icon-btn-32" title="关闭">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-side">
+              <button class="btn-green" style="width:100%;margin-bottom:12px">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                新增渠道商品库
+              </button>
+              <div class="grp-card">
+                <div class="grp-card-top">
+                  <div style="min-width:0">
+                    <div class="grp-name">堂食商品库</div>
+                    <div class="grp-count">2 个渠道</div>
+                  </div>
+                  <div class="grp-actions">
+                    <button class="icon-btn-28" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                    <button class="icon-btn-28 danger" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                  </div>
+                </div>
+                <div class="chip-row"><span class="chip">POS</span><span class="chip">小程序堂食</span></div>
+              </div>
+              <div class="grp-card">
+                <div class="grp-card-top">
+                  <div style="min-width:0">
+                    <div class="grp-name">外卖商品库</div>
+                    <div class="grp-count">4 个渠道</div>
+                  </div>
+                  <div class="grp-actions">
+                    <button class="icon-btn-28" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                    <button class="icon-btn-28 danger" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                  </div>
+                </div>
+                <div class="chip-row"><span class="chip">小程序外卖</span><span class="chip">美团外卖</span><span class="chip">淘宝闪购</span><span class="chip">美团拼好饭</span></div>
+              </div>
+              <div class="grp-card">
+                <div class="grp-card-top">
+                  <div style="min-width:0">
+                    <div class="grp-name">在线点商品库</div>
+                    <div class="grp-count">2 个渠道</div>
+                  </div>
+                  <div class="grp-actions">
+                    <button class="icon-btn-28" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                    <button class="icon-btn-28 danger" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                  </div>
+                </div>
+                <div class="chip-row"><span class="chip">抖音在线点</span><span class="chip">美团在线点</span></div>
+              </div>
+            </div>
+            <div class="modal-pane">
+              <div class="pane-empty">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9CDD4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>
+                <div class="pane-empty-title">选择左侧商品库进行编辑</div>
+                <div class="pane-empty-desc">也可以新增一个渠道商品库并分配渠道。</div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <div class="modal-foot-text">全部企迈管理渠道均已分组</div>
+            <button class="btn btn-primary-dark">完成</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 展板 5：弹窗编辑态 ============ -->
+  <div class="board">
+    <div class="board-label">展板 5 · 弹窗编辑态 — 正在编辑「外卖商品库」，存在跨分组抢占提示</div>
+    <p class="board-note">
+      渠道选择网格只列出「企迈管理」的渠道（本例 8 个：3 个自有 + 5 个企迈管理的三方；京东外卖因设为平台管理而不出现）。勾选已属于其他分组的渠道时，右上角出现橙色「当前：xxx」提示，保存后会把该渠道从原分组移走——这是一个静默的破坏性操作，没有二次确认。底部条同时提示未分组渠道。
+    </p>
+    <div class="frame">
+      <div class="modal-scrim">
+        <div class="modal">
+          <div class="modal-head">
+            <div>
+              <h3 class="modal-title">管理渠道商品库分组</h3>
+              <p class="modal-sub">每个由企迈管理的渠道只能归属一个渠道商品库，角色权限可进一步限制人员可管理范围。</p>
+            </div>
+            <button class="icon-btn-32" title="关闭">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-side">
+              <button class="btn-green" style="width:100%;margin-bottom:12px">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                新增渠道商品库
+              </button>
+              <div class="grp-card">
+                <div class="grp-card-top">
+                  <div style="min-width:0">
+                    <div class="grp-name">堂食商品库</div>
+                    <div class="grp-count">2 个渠道</div>
+                  </div>
+                  <div class="grp-actions">
+                    <button class="icon-btn-28" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                    <button class="icon-btn-28 danger" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                  </div>
+                </div>
+                <div class="chip-row"><span class="chip">POS</span><span class="chip">小程序堂食</span></div>
+              </div>
+              <div class="grp-card is-active">
+                <div class="grp-card-top">
+                  <div style="min-width:0">
+                    <div class="grp-name">外卖商品库</div>
+                    <div class="grp-count">4 个渠道</div>
+                  </div>
+                  <div class="grp-actions">
+                    <button class="icon-btn-28" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                    <button class="icon-btn-28 danger" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                  </div>
+                </div>
+                <div class="chip-row"><span class="chip">小程序外卖</span><span class="chip">美团外卖</span><span class="chip">淘宝闪购</span><span class="chip">美团拼好饭</span></div>
+              </div>
+              <div class="grp-card">
+                <div class="grp-card-top">
+                  <div style="min-width:0">
+                    <div class="grp-name">在线点商品库</div>
+                    <div class="grp-count">2 个渠道</div>
+                  </div>
+                  <div class="grp-actions">
+                    <button class="icon-btn-28" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                    <button class="icon-btn-28 danger" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                  </div>
+                </div>
+                <div class="chip-row"><span class="chip">抖音在线点</span><span class="chip">美团在线点</span></div>
+              </div>
+            </div>
+            <div class="modal-pane">
+              <h4 style="font-size:16px;font-weight:700;color:#1D2129;margin:0">编辑渠道商品库</h4>
+              <label class="field-label">商品库名称 <span class="req">*</span></label>
+              <input class="text-input" value="外卖商品库" placeholder="如：外卖商品库">
+              <div style="margin-top:20px">
+                <div style="font-size:13px;font-weight:700;color:#1D2129">适用渠道 <span class="req">*</span></div>
+                <p style="margin:4px 0 0;font-size:12px;color:#86909C">选择已属于其他商品库的渠道后，保存时将调整到当前商品库。</p>
+                <div class="ch-pick-grid">
+                  <button class="ch-pick"><span class="ch-pick-name"><span class="cbox"></span>POS</span><span class="ch-pick-owner" title="堂食商品库">当前：堂食商品库</span></button>
+                  <button class="ch-pick"><span class="ch-pick-name"><span class="cbox"></span>小程序堂食</span><span class="ch-pick-owner" title="堂食商品库">当前：堂食商品库</span></button>
+                  <button class="ch-pick is-on"><span class="ch-pick-name"><span class="cbox is-on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>小程序外卖</span></button>
+                  <button class="ch-pick is-on"><span class="ch-pick-name"><span class="cbox is-on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>美团外卖</span></button>
+                  <button class="ch-pick is-on"><span class="ch-pick-name"><span class="cbox is-on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>淘宝闪购</span></button>
+                  <button class="ch-pick is-on"><span class="ch-pick-name"><span class="cbox is-on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>美团拼好饭</span></button>
+                  <button class="ch-pick"><span class="ch-pick-name"><span class="cbox"></span>抖音在线点</span><span class="ch-pick-owner" title="在线点商品库">当前：在线点商品库</span></button>
+                  <button class="ch-pick is-on"><span class="ch-pick-name"><span class="cbox is-on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>美团在线点</span><span class="ch-pick-owner" title="在线点商品库">当前：在线点商品库</span></button>
+                </div>
+              </div>
+              <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px">
+                <button class="btn btn-ghost">取消</button>
+                <button class="btn-green" style="padding:0 16px">保存分组</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <div class="modal-foot-text" style="color:#D46B08">未分组：美团拼好饭</div>
+            <button class="btn btn-primary-dark">完成</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 展板 6：保存成功态 ============ -->
+  <div class="board">
+    <div class="board-label">展板 6 · 保存成功态（按钮文案与图标切换，2.2 秒后自动复原）</div>
+    <p class="board-note">
+      这是当前唯一的成功反馈：按钮从「保存策略 + 软盘图标」变为「已保存 + 对勾图标」，2.2 秒后复原。没有 Toast、没有说明改动生效范围、没有提交中（submitting）态，也没有防重复提交。
+    </p>
+    <div class="frame">
+      <div class="pc-header">
+        <div class="pc-header-left">
+          <button class="icon-btn-32" title="返回">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          </button>
+          <div>
+            <h2 class="pc-title">全渠道商品管理策略</h2>
+            <p class="pc-subtitle">品牌级经营配置，决定商品维护方式、渠道商品库结构和企迈参与范围。</p>
+          </div>
+        </div>
+        <button class="btn btn-primary-dark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          已保存
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

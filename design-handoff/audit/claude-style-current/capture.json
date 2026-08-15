@@ -1,0 +1,70 @@
+{
+  "targetUrl": "http://127.0.0.1:5183/",
+  "results": [
+    {
+      "label": "workbench",
+      "titles": [
+        "商品工作台",
+        "待处理事项",
+        "渠道商品库运行情况",
+        "最近动态"
+      ],
+      "horizontalOverflow": false,
+      "viewport": [
+        1440,
+        900
+      ],
+      "dialogs": 0
+    },
+    {
+      "label": "workbench-drawer",
+      "titles": [
+        "商品工作台",
+        "待处理事项",
+        "渠道商品库运行情况",
+        "最近动态",
+        "待办详情"
+      ],
+      "horizontalOverflow": false,
+      "viewport": [
+        1440,
+        900
+      ],
+      "dialogs": 0,
+      "taskOpened": true
+    },
+    {
+      "label": "strategy-top",
+      "titles": [
+        "全渠道商品管理策略",
+        "谁来管每个三方渠道",
+        "商品资料怎么分工",
+        "确认每个渠道的商品来源"
+      ],
+      "horizontalOverflow": false,
+      "viewport": [
+        1440,
+        900
+      ],
+      "dialogs": 0,
+      "settingsOpened": true,
+      "strategyOpened": true
+    },
+    {
+      "label": "strategy-lower",
+      "titles": [
+        "全渠道商品管理策略",
+        "谁来管每个三方渠道",
+        "商品资料怎么分工",
+        "确认每个渠道的商品来源"
+      ],
+      "horizontalOverflow": false,
+      "viewport": [
+        1440,
+        900
+      ],
+      "dialogs": 0
+    }
+  ],
+  "consoleErrors": []
+}

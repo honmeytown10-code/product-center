@@ -1,0 +1,388 @@
+{
+  "targetUrl": "http://127.0.0.1:5184/",
+  "createdAt": "2026-08-02T09:07:46.870Z",
+  "results": [
+    {
+      "label": "商品工作台-初始",
+      "titles": [
+        "商品工作台"
+      ],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ]
+    },
+    {
+      "label": "商品工作台-详情抽屉",
+      "titles": [
+        "商品工作台",
+        "待办详情",
+        "处理记录"
+      ],
+      "drawers": [
+        "待办详情"
+      ],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ]
+    },
+    {
+      "label": "商品主档",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "分类与属性",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "配方与营养",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "渠道商品",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "渠道分类与属性",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "商品模板",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "销售规则",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "商品推荐",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "发布中心",
+      "titles": [
+        "商品发布",
+        "批量修改",
+        "发布工具"
+      ],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "映射治理",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "差异巡检",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "门店商品",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "商品设置",
+      "titles": [
+        "全渠道商品管理策略",
+        "渠道商品常用字段设置",
+        "渠道字段覆盖规则",
+        "商品属性设置",
+        "功能设置",
+        "门店业务设置",
+        "渠道库存分组设置"
+      ],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    }
+  ],
+  "workbench": {
+    "openedDrawer": true,
+    "initialDrawerCount": 0,
+    "initialCheckedCount": 0,
+    "contentWidthBefore": 1682,
+    "contentWidthWithDrawer": 1682,
+    "stickyAction": {
+      "found": true,
+      "position": "sticky",
+      "right": "0px",
+      "beforeRight": 1877,
+      "afterRight": 1877,
+      "viewportRight": 1898,
+      "scrollerRight": 1877
+    }
+  },
+  "templateContext": [],
+  "salesContext": [
+    {
+      "label": "销售规则",
+      "text": "售卖范围\n价格策略\n属性互斥\n必选商品"
+    }
+  ],
+  "flowResults": [
+    {
+      "label": "新建商品主档",
+      "titles": [
+        "选择商品类目"
+      ],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "opened": true
+    },
+    {
+      "label": "创建商品模板",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "opened": true
+    },
+    {
+      "label": "售卖范围",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "价格策略",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "属性互斥",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "必选商品",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "clicked": true
+    },
+    {
+      "label": "全渠道商品管理策略",
+      "titles": [
+        "全渠道商品管理策略",
+        "组织协作方式",
+        "渠道总表"
+      ],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "opened": true
+    },
+    {
+      "label": "统一维护-影响确认",
+      "titles": [
+        "全渠道商品管理策略",
+        "组织协作方式",
+        "渠道总表",
+        "确认本次策略变更"
+      ],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "unifiedSelected": true,
+      "impactOpened": true
+    },
+    {
+      "label": "统一维护-商品管理",
+      "titles": [],
+      "drawers": [],
+      "dialogs": 0,
+      "checked": 0,
+      "horizontalOverflow": false,
+      "viewport": [
+        1898,
+        1046
+      ],
+      "unifiedSaved": true,
+      "unifiedMenu": [
+        "商品工作台",
+        "商品管理",
+        "分类与属性",
+        "配方与营养",
+        "商品模板",
+        "销售规则",
+        "商品推荐",
+        "发布中心",
+        "映射治理",
+        "差异巡检",
+        "门店商品",
+        "商品设置"
+      ]
+    }
+  ],
+  "consoleErrors": []
+}

@@ -51,6 +51,11 @@ import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
 import { WebChannelProductLibrary } from './web/WebChannelProductLibrary';
 import { WebChannelOverrideSettings } from './web/WebChannelOverrideSettings';
 import { WebOmnichannelSettings } from './web/WebOmnichannelSettings';
+import {
+  PrototypeOmnichannelScenario,
+  WebChannelProductInitializationEmpty,
+  WebOmnichannelInitialization,
+} from './web/WebOmnichannelInitialization';
 import { WebProductMapping } from './web/WebProductMapping';
 import { WebProductRecommendationManager } from './web/WebProductRecommendationManager';
 import { WebDifferenceInspection } from './web/WebDifferenceInspection';
@@ -314,12 +319,13 @@ const INITIAL_WEB_CATEGORIES: WebCategory[] = [
 
 export const WebAdmin: React.FC = () => {
   const { products, brandConfigs, activeBrandId, addProduct, updateProduct } = useProducts();
+  const [prototypeOmnichannelScenario, setPrototypeOmnichannelScenario] = useState<PrototypeOmnichannelScenario>('initialized');
   const omnichannelConfig = useMemo(
     () => getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1),
     [activeBrandId, brandConfigs]
   );
   const unifiedManagement = omnichannelConfig.collaborationMode === 'unified';
-  const channelCatalogMenuVisible = shouldShowChannelCatalog(omnichannelConfig);
+  const channelCatalogMenuVisible = prototypeOmnichannelScenario === 'first_activation' || shouldShowChannelCatalog(omnichannelConfig);
   const productMappingVisible = Object.values(omnichannelConfig.thirdPartyStrategies).some(mode => mode === 'platform')
     || Object.values(omnichannelConfig.channelConnections).some(connection => connection.capabilities.length > 0);
   const unifiedDefaultGroup = useMemo(
@@ -986,14 +992,30 @@ export const WebAdmin: React.FC = () => {
                 });
                 setActiveMenu('common_field_settings');
               }}
-              onOpenChannelOverrideSettings={() => setActiveMenu('channel_override_settings')}
-               onOpenOmnichannelSettings={() => setActiveMenu('omnichannel_settings')}
-               onOpenProductRecommendation={() => setActiveMenu('product_recommendation')}
-            />
+               onOpenChannelOverrideSettings={() => setActiveMenu('channel_override_settings')}
+                onOpenOmnichannelSettings={() => setActiveMenu('omnichannel_settings')}
+                onOpenProductRecommendation={() => setActiveMenu('product_recommendation')}
+                prototypeOmnichannelScenario={prototypeOmnichannelScenario}
+                onPrototypeOmnichannelScenarioChange={scenario => {
+                  setPrototypeOmnichannelScenario(scenario);
+                  setCreationContext(null);
+                }}
+             />
           );
       }
 
       if (activeMenu === 'omnichannel_settings') {
+          if (prototypeOmnichannelScenario === 'first_activation') {
+            return (
+              <WebOmnichannelInitialization
+                onBack={() => setActiveMenu('general_settings')}
+                onComplete={() => {
+                  setPrototypeOmnichannelScenario('initialized');
+                  setActiveMenu('channel_product_library');
+                }}
+              />
+            );
+          }
           return <WebOmnichannelSettings onBack={() => setActiveMenu('general_settings')} />;
       }
 
@@ -1055,6 +1077,14 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'channel_product_library') {
+          if (prototypeOmnichannelScenario === 'first_activation') {
+            return (
+              <WebChannelProductInitializationEmpty
+                onStartInitialization={() => setActiveMenu('omnichannel_settings')}
+                onBackToMaster={() => setActiveMenu('product_list')}
+              />
+            );
+          }
           return (
             <WebChannelProductLibrary
               productOverrides={channelProductOverrides}

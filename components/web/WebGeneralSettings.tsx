@@ -1,20 +1,25 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, Network, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Beaker, CheckCircle2, Network, X } from 'lucide-react';
 import { useProducts } from '../../context';
 import { getChannelCatalogChannels, getEffectiveChannelGroups, getOmnichannelConfig } from '../../omnichannel';
 import { Switch } from '../ops/OpsCommon';
 import { OpsChannelGroupingConfig } from '../ops/OpsChannelGroupingConfig'; // Reuse the existing config component
+import type { PrototypeOmnichannelScenario } from './WebOmnichannelInitialization';
 
 interface Props {
     onOpenChannelFieldSettings?: () => void;
     onOpenChannelOverrideSettings?: () => void;
     onOpenOmnichannelSettings?: () => void;
     onOpenProductRecommendation?: () => void;
+    prototypeOmnichannelScenario?: PrototypeOmnichannelScenario;
+    onPrototypeOmnichannelScenarioChange?: (scenario: PrototypeOmnichannelScenario) => void;
 }
 
 export const WebGeneralSettings: React.FC<Props> = ({
     onOpenOmnichannelSettings,
     onOpenProductRecommendation,
+    prototypeOmnichannelScenario = 'initialized',
+    onPrototypeOmnichannelScenarioChange,
 }) => {
     const { activeBrandId, brandConfigs, updateBrandConfig } = useProducts();
     const currentBrandConfig = brandConfigs[activeBrandId];
@@ -22,6 +27,7 @@ export const WebGeneralSettings: React.FC<Props> = ({
     const omnichannelConfig = getOmnichannelConfig(currentBrandConfig);
     const effectiveChannelGroups = getEffectiveChannelGroups(omnichannelConfig);
     const catalogChannelCount = getChannelCatalogChannels(omnichannelConfig).length;
+    const firstActivationScenario = prototypeOmnichannelScenario === 'first_activation';
 
     // Form states matching the screenshot (mock data)
     const [purchaseLimitCustomText, setPurchaseLimitCustomText] = useState(true);
@@ -46,6 +52,20 @@ export const WebGeneralSettings: React.FC<Props> = ({
             {saved && <div className="absolute left-1/2 top-4 z-[100] flex -translate-x-1/2 items-center rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg"><CheckCircle2 size={15} className="mr-2" />商品设置已保存</div>}
             <div className="flex-1 overflow-y-auto p-3 space-y-4">
 
+                <section className="flex items-center justify-between gap-6 rounded-lg border border-dashed border-[#B8DBFF] bg-[#F7FBFF] px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E7F3FF] text-[#2475C1]"><Beaker size={17} /></div>
+                        <div>
+                            <div className="flex items-center gap-2"><strong className="text-[13px] text-[#344054]">原型演示场景</strong><span className="rounded bg-white px-1.5 py-0.5 text-[10px] text-[#2475C1]">仅当前预览</span></div>
+                            <p className="mt-0.5 text-[11px] text-[#667085]">用于查看首次启用交互，不会修改品牌正式配置或默认演示数据。</p>
+                        </div>
+                    </div>
+                    <div className="flex shrink-0 rounded-md border border-[#D6E8F8] bg-white p-1">
+                        <button type="button" onClick={() => onPrototypeOmnichannelScenarioChange?.('initialized')} className={`h-7 rounded px-3 text-[12px] ${!firstActivationScenario ? 'bg-[#EAF9F1] font-medium text-[#008F53]' : 'text-[#667085] hover:bg-[#F7F8FA]'}`}>已初始化品牌（默认）</button>
+                        <button type="button" onClick={() => onPrototypeOmnichannelScenarioChange?.('first_activation')} className={`h-7 rounded px-3 text-[12px] ${firstActivationScenario ? 'bg-[#E7F3FF] font-medium text-[#245B8A]' : 'text-[#667085] hover:bg-[#F7F8FA]'}`}>首次启用品牌</button>
+                    </div>
+                </section>
+
                 <section className="overflow-hidden rounded-lg border border-[#D9EDE2] bg-white shadow-sm">
                     <div className="flex items-center justify-between gap-8 px-5 py-4">
                         <div className="flex min-w-0 items-center gap-3">
@@ -67,16 +87,16 @@ export const WebGeneralSettings: React.FC<Props> = ({
                             onClick={onOpenOmnichannelSettings}
                             className="inline-flex h-9 shrink-0 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009E54]"
                         >
-                            进入管理
+                            {firstActivationScenario ? '开始初始化' : '进入管理'}
                             <ArrowRight size={15} className="ml-1.5" />
                         </button>
                     </div>
                     <div className="grid grid-cols-2 border-t border-[#EEF1F4] bg-[#FAFBFC] lg:grid-cols-4">
                         {[
-                            ['当前协作方式', omnichannelConfig.collaborationMode === 'unified' ? '统一管理' : '分渠道协作'],
-                            ['渠道商品库', `${effectiveChannelGroups.length} 个`],
+                            ['当前协作方式', firstActivationScenario ? '待确认' : omnichannelConfig.collaborationMode === 'unified' ? '统一管理' : '分渠道协作'],
+                            ['渠道商品库', firstActivationScenario ? '0 个' : `${effectiveChannelGroups.length} 个`],
                             ['已接入渠道', `${catalogChannelCount} 个`],
-                            ['渠道建品方式', omnichannelConfig.channelProductCreationMode === 'create_master_and_channel' ? '允许联合创建' : '仅从主档添加'],
+                            ['渠道建品方式', firstActivationScenario ? '待设置' : omnichannelConfig.channelProductCreationMode === 'create_master_and_channel' ? '允许联合创建' : '仅从主档添加'],
                         ].map(([label, value], index) => (
                             <div key={label} className={`px-5 py-3 ${index > 0 ? 'border-l border-[#EEF1F4]' : ''}`}>
                                 <div className="text-[12px] text-[#98A2B3]">{label}</div>

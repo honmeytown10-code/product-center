@@ -335,7 +335,7 @@ export const WebTakeoutMenuSync: React.FC = () => {
   };
 
   const renderHome = () => (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="pc-page h-full overflow-y-auto bg-white">
       <div className="border-b border-gray-100 px-7 py-5">
         <div className="flex items-center gap-2 text-base font-bold text-gray-800">
           外卖菜单同步
@@ -488,7 +488,7 @@ export const WebTakeoutMenuSync: React.FC = () => {
     const tool = TOOL_CONFIG[activeTool];
 
     return (
-      <div className="h-full overflow-y-auto bg-white">
+      <div className="pc-page h-full overflow-y-auto bg-white">
         <div className="sticky top-0 z-20 flex h-[58px] items-center border-b border-gray-100 bg-white px-7">
           <button onClick={() => setActiveTool(null)} className="mr-3 text-gray-500 hover:text-gray-800" title="返回同步工具"><ChevronLeft size={20} /></button>
           <div>

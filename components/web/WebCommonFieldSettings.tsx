@@ -469,7 +469,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                                 <div className="rounded-lg border border-gray-200 bg-white p-5">
                                     <div className="flex flex-wrap items-center gap-3">
-                                        <div className="text-[22px] font-black text-[#1F2129]">{selectedCategory.name}</div>
+              <div className="text-[18px] font-semibold text-[#1F2129]">{selectedCategory.name}</div>
                                         <span className="rounded-full bg-[#F5F6FA] px-3 py-1 text-xs font-bold text-gray-500">
                                             {activeType === 'standard' ? '标准商品' : '套餐商品'}
                                         </span>

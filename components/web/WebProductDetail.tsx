@@ -413,8 +413,8 @@ export const WebProductDetail: React.FC<Props> = ({ product, onClose, onEdit }) 
   };
 
   return (
-    <div className="relative flex h-full flex-1 flex-col bg-[#F5F6FA]">
-      <div className="z-10 flex h-[48px] shrink-0 items-center border-b border-[#E8E8E8] bg-white px-4 shadow-sm">
+    <div className="pc-page relative flex h-full flex-1 flex-col bg-[#F5F6FA]">
+      <div className="pc-page-header z-10 flex h-[48px] shrink-0 items-center border-b border-[#E8E8E8] bg-white px-4">
         <div className="flex items-center text-[13px] text-[#666]">
           <span className="cursor-pointer hover:text-[#00C06B]">商品管理</span>
           <ChevronRight size={14} className="mx-1" />
@@ -423,7 +423,7 @@ export const WebProductDetail: React.FC<Props> = ({ product, onClose, onEdit }) 
           <span className="font-bold text-[#333]">商品详情</span>
         </div>
         <div className="ml-auto flex items-center">
-          <button onClick={onClose} className="p-1 text-[#999] transition-colors hover:text-[#333]">
+          <button type="button" aria-label="关闭商品详情" onClick={onClose} className="p-1 text-[#999] transition-colors hover:text-[#333]">
             <X size={20} />
           </button>
         </div>
@@ -515,19 +515,19 @@ export const WebProductDetail: React.FC<Props> = ({ product, onClose, onEdit }) 
           <div className="grid grid-cols-4 gap-4">
             <div className="rounded-lg bg-[#F7F8FA] p-4">
               <div className="mb-2 text-[13px] text-[#666]">累计销量</div>
-              <div className="text-[28px] font-bold text-[#333]">{salesMetrics.saleCount}</div>
+            <div className="text-[24px] font-semibold text-[#333]">{salesMetrics.saleCount}</div>
             </div>
             <div className="rounded-lg bg-[#F7F8FA] p-4">
               <div className="mb-2 text-[13px] text-[#666]">累计销售金额</div>
-              <div className="text-[28px] font-bold text-[#333]">{salesMetrics.grossAmount}</div>
+            <div className="text-[24px] font-semibold text-[#333]">{salesMetrics.grossAmount}</div>
             </div>
             <div className="rounded-lg bg-[#F7F8FA] p-4">
               <div className="mb-2 text-[13px] text-[#666]">累计实收金额</div>
-              <div className="text-[28px] font-bold text-[#333]">{salesMetrics.receiptAmount}</div>
+            <div className="text-[24px] font-semibold text-[#333]">{salesMetrics.receiptAmount}</div>
             </div>
             <div className="rounded-lg bg-[#F7F8FA] p-4">
               <div className="mb-2 text-[13px] text-[#666]">平均单价(元)</div>
-              <div className="text-[28px] font-bold text-[#333]">{salesMetrics.avgPrice}</div>
+            <div className="text-[24px] font-semibold text-[#333]">{salesMetrics.avgPrice}</div>
             </div>
           </div>
         </div>

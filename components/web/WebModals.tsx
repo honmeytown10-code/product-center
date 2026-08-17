@@ -437,7 +437,7 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#EAF8F1] text-[#00A35B]">
               <Loader2 size={34} className="animate-spin" />
             </div>
-            <div className="mt-6 text-[24px] font-black text-[#1F2937]">正在拉取并清洗商品资料</div>
+              <div className="mt-6 text-[18px] font-semibold text-[#1F2937]">正在拉取并校验商品资料</div>
             <div className="mt-2 text-sm text-[#667085]">
               {selectedPlatformName} · {selectedStore?.name || '已选门店'}，完成后将自动进入商品确认页
             </div>
@@ -858,7 +858,7 @@ const BindingModeModal: React.FC<{
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45">
       <div className="w-[900px] overflow-hidden rounded-[12px] bg-white shadow-2xl">
         <div className="flex items-center justify-between px-8 py-7">
-          <div className="text-[26px] font-medium text-[#1F2937]">
+              <div className="text-[18px] font-semibold text-[#1F2937]">
             {platform === 'meituan' ? '选择绑定模式' : '外卖门店绑定'}
           </div>
           <button onClick={onCancel} className="rounded-lg p-2 text-[#8B95A1] hover:bg-[#F4F5F7]">
@@ -867,11 +867,11 @@ const BindingModeModal: React.FC<{
         </div>
 
         <div className="px-8">
-          <div className="rounded-lg bg-[#F7F8FB] px-6 py-8 text-[22px] text-[#9AA1AD]">
+              <div className="rounded-lg bg-[#F7F8FB] px-6 py-6 text-[16px] text-[#9AA1AD]">
             门店ID：<span className="ml-2 text-[#313844]">{store.storeNo}</span>
           </div>
 
-          <div className="mt-9 flex items-center gap-2 text-[22px] text-[#59616E]">
+                <div className="mt-6 flex items-center gap-2 text-[16px] text-[#59616E]">
             <span className="text-[#F04438]">*</span>
             <span>授权绑定类型</span>
             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#98A2B3] text-[13px] text-[#667085]">?</span>
@@ -887,7 +887,7 @@ const BindingModeModal: React.FC<{
                   onChange={() => onBindingTypeChange(option.id)}
                 />
                 <span>
-                  <span className="block text-[22px] leading-7 text-[#59616E] group-hover:text-[#00A35B]">{option.label}</span>
+                        <span className="block text-[16px] leading-6 text-[#59616E] group-hover:text-[#00A35B]">{option.label}</span>
                   <span className="mt-1 block max-w-[230px] text-xs leading-5 text-[#98A2B3]">{option.desc}</span>
                 </span>
               </label>
@@ -1036,7 +1036,7 @@ const ModalHeader: React.FC<{ title: string; onClose: () => void; onBack?: () =>
           <ArrowLeft size={18} />
         </button>
       )}
-      <div className="text-[24px] font-black leading-none text-[#1F2937]">{title}</div>
+          <div className="text-[18px] font-semibold leading-none text-[#1F2937]">{title}</div>
     </div>
     <button onClick={onClose} className="rounded-lg p-2 text-[#667085] hover:bg-[#F4F5F7] hover:text-[#344054]">
       <X size={22} />
@@ -1076,7 +1076,7 @@ const InfoField: React.FC<{ label: string; value: string }> = ({ label, value })
 const SummaryCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="rounded-2xl border border-[#E6ECF2] bg-white p-4">
     <div className="text-xs font-bold text-[#98A2B3]">{label}</div>
-    <div className="mt-2 text-[24px] font-bold text-[#1F2937]">{value}</div>
+          <div className="mt-2 text-[18px] font-semibold text-[#1F2937]">{value}</div>
   </div>
 );
 

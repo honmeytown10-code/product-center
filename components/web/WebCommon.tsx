@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Plus, ChevronDown, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 export const Switch: React.FC<{ active: boolean; onClick: () => void; label?: string }> = ({ active, onClick, label = '切换状态' }) => (
   <button
@@ -108,7 +108,14 @@ export const FormAnchor: React.FC<{ label: string; active: boolean; onClick: () 
 );
 
 export const ChannelSwitch: React.FC<{ label: string; icon: React.ReactNode; active: boolean; onChange: () => void }> = ({ label, icon, active, onChange }) => (
-  <div onClick={onChange} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between group ${active ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+  <button
+    type="button"
+    aria-pressed={active}
+    onClick={onChange}
+    className={`group flex w-full items-center justify-between rounded-lg border p-4 text-left transition-all ${
+      active ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-200 bg-white hover:border-gray-300'
+    }`}
+  >
      <div className="flex items-center">
         <div className={`p-2 rounded-lg mr-3 ${active ? 'bg-[#00C06B] text-white' : 'bg-gray-100 text-gray-400'}`}>{icon}</div>
         <span className={`text-sm font-bold ${active ? 'text-gray-800' : 'text-gray-400'}`}>{label}</span>
@@ -116,5 +123,5 @@ export const ChannelSwitch: React.FC<{ label: string; icon: React.ReactNode; act
      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${active ? 'border-[#00C06B]' : 'border-gray-300'}`}>
         {active && <div className="w-2.5 h-2.5 bg-[#00C06B] rounded-full"></div>}
      </div>
-  </div>
+  </button>
 );

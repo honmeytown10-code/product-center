@@ -138,7 +138,7 @@ export const WebCategoryManager: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="pc-page flex flex-1 overflow-hidden">
         <aside className="w-[280px] bg-white border-r border-[#E8E8E8] flex flex-col shrink-0">
            <div className="p-6 border-b">
               <div className="flex bg-gray-100 p-1 rounded-lg mb-4">

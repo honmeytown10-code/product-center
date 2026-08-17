@@ -433,7 +433,7 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
   };
 
   return (
-    <div className="relative flex h-full flex-col bg-[#F5F6FA] text-gray-800">
+    <div className="pc-page relative flex h-full flex-col bg-[#F5F6FA] text-gray-800">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6">
         <button type="button" title="返回商品工具" onClick={onBack} className="flex h-8 w-8 items-center justify-center text-gray-500 hover:bg-gray-100"><ArrowLeft size={19} /></button>
         <div><h2 className="text-base font-bold">批量修改商品关联加料</h2><p className="text-xs text-gray-400">修改加料 & 选择商品</p></div>

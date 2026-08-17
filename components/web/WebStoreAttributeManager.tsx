@@ -209,8 +209,8 @@ export const WebStoreAttributeManager: React.FC<{
   };
 
   const renderLabelManager = () => (
-    <div className="flex-1 overflow-auto p-4">
-      <div className="min-h-full rounded-lg bg-white shadow-sm">
+      <div className="flex-1 overflow-auto p-3">
+        <div className="pc-surface min-h-full bg-white">
         <div className="border-b border-[#E8E8E8] px-6 pt-5 pb-4">
           <div className="text-xs leading-6 text-[#666]">
             描述标签会展示在商品名称下方，可用于口味、食材、卖点说明。总部下发的标签组和标签门店仅可选择，不可编辑或删除。
@@ -355,8 +355,8 @@ export const WebStoreAttributeManager: React.FC<{
   );
 
   const renderBadgeManager = () => (
-    <div className="flex-1 overflow-auto p-4">
-      <div className="min-h-full rounded-lg bg-white shadow-sm">
+      <div className="flex-1 overflow-auto p-3">
+        <div className="pc-surface min-h-full bg-white">
         <div className="border-b border-[#E8E8E8] px-6 pt-5 pb-4">
           <div className="text-xs leading-6 text-[#666]">
             商品角标会展示在商品图片区域，创建商品时会默认带入角标有效期，并支持在表单内二次修改。
@@ -457,34 +457,32 @@ export const WebStoreAttributeManager: React.FC<{
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
-      <div className="shrink-0 bg-white px-6 pt-5">
-        <div className="rounded-2xl border border-[#E8E8E8] bg-white p-2">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+    <div className="pc-page flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
+      <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5 pt-4">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="text-[18px] font-semibold text-[#333]">门店商品属性</div>
+            <div className="mt-1 text-[12px] text-[#999]">{tabs.find(tab => tab.id === activeTab)?.desc}</div>
+          </div>
+        </div>
+        <div role="tablist" className="mt-3 flex h-10 gap-6 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`min-w-[220px] rounded-xl border px-5 py-3 text-left transition-all ${
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-all ${
                 activeTab === tab.id
-                  ? 'border-[#B7E8CB] bg-[#F3FCF7] text-[#00C06B]'
-                  : 'border-transparent bg-white text-[#666] hover:border-[#E8E8E8] hover:bg-[#FAFAFA] hover:text-[#333]'
+                  ? 'border-[#00C06B] text-[#00C06B]'
+                  : 'border-transparent text-[#666] hover:text-[#333]'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-                  activeTab === tab.id ? 'bg-[#E6F8F0] text-[#00C06B]' : 'bg-[#F3F4F6] text-[#8C8C8C]'
-                }`}>
-                  {tab.icon}
-                </div>
-                <div className="text-sm font-bold">{tab.label}</div>
-              </div>
-              <div className={`mt-1 text-xs leading-5 ${activeTab === tab.id ? 'text-[#52B87A]' : 'text-[#999]'}`}>
-                {tab.desc}
-              </div>
+              {tab.icon}
+              <span>{tab.label}</span>
             </button>
           ))}
-          </div>
         </div>
       </div>
 

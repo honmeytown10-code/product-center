@@ -3,7 +3,8 @@ import {
   Search, Plus, ChevronDown, MoreHorizontal, FileUp,
   Printer, Smartphone, Store, ShoppingBag, ChevronLeft,
   ChevronRight, CheckCircle2, X, Link, Layers, Eye, GripVertical,
-  ArrowUpDown, PackageOpen, Bike, UtensilsCrossed
+  ArrowUpDown, PackageOpen, Bike, UtensilsCrossed, Download,
+  FileSpreadsheet, Loader2, Settings
 } from 'lucide-react';
 import { useProducts } from '../../context';
 import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
@@ -70,12 +71,20 @@ type CoverageStoreDetail = {
 
 type CoverageStatusFilter = 'all' | 'has_on_shelf_store' | 'has_off_shelf_store' | 'has_sold_out_store';
 
-const STORE_OPTIONS = [
+type StoreBusinessStatus = 'operating' | 'closed';
+
+type StoreOption = {
+  id: string;
+  name: string;
+  businessStatus?: StoreBusinessStatus;
+};
+
+const STORE_OPTIONS: StoreOption[] = [
   { id: 'all', name: '全部门店' },
-  { id: 's1', name: '南山万象店' },
-  { id: 's2', name: '福田卓悦店' },
-  { id: 's3', name: '宝安壹方城店' },
-  { id: 's4', name: '龙华红山店' },
+  { id: 's1', name: '南山万象店', businessStatus: 'operating' },
+  { id: 's2', name: '福田卓悦店', businessStatus: 'operating' },
+  { id: 's3', name: '宝安壹方城店', businessStatus: 'closed' },
+  { id: 's4', name: '龙华红山店', businessStatus: 'closed' },
 ];
 
 const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
@@ -427,6 +436,7 @@ export const WebStoreProductList: React.FC<{
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [coverageStoreDetail, setCoverageStoreDetail] = useState<CoverageStoreDetail | null>(null);
   const [coverageStatusFilter, setCoverageStatusFilter] = useState<CoverageStatusFilter>('all');
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     setIsSorting(false);
@@ -779,9 +789,9 @@ export const WebStoreProductList: React.FC<{
   );
 
   const renderManagePage = () => (
-    <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4">
+    <div className="pc-page flex min-w-0 flex-1 overflow-hidden bg-[#F0F2F5] p-3 font-sans">
       {renderNotification()}
-      <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden min-w-0">
+      <div className="pc-surface flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
         <div className="p-5 border-b border-[#E8E8E8] bg-white space-y-4 shrink-0 z-20">
           <div className="flex flex-wrap gap-3 items-center">
             <FilterInput label="商品ID" placeholder="请输入" />
@@ -838,6 +848,9 @@ export const WebStoreProductList: React.FC<{
           <div className="flex items-center space-x-3 shrink-0">
             <button onClick={() => setIsSorting(true)} className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
               <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
+            </button>
+            <button onClick={() => setShowExportModal(true)} className="flex items-center px-4 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:border-[#00C06B] hover:text-[#00C06B] hover:bg-[#00C06B]/5 font-medium transition-colors">
+              <Download size={14} className="mr-1.5" /> 导出
             </button>
             <button onClick={() => setNotification({ type: 'success', message: '门店商品日志已导出' })} className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">
               日志导出
@@ -1032,6 +1045,23 @@ export const WebStoreProductList: React.FC<{
           defaultNextDayUnlimited={!isStockShared}
           onClose={() => setStockDialog(null)}
           onConfirm={handleStockConfirm}
+        />
+      )}
+      {showExportModal && (
+        <StoreProductExportModal
+          activeChannelId={activeTabId}
+          products={filteredProducts}
+          stores={STORE_OPTIONS}
+          channels={COVERAGE_CHANNEL_OPTIONS}
+          onClose={() => setShowExportModal(false)}
+          onViewDownloads={() => {
+            setShowExportModal(false);
+            setNotification({
+              type: 'success',
+              message: '下载任务已创建',
+              subMessage: '文件正在生成，可前往右上角「下载」查看进度。',
+            });
+          }}
         />
       )}
     </div>
@@ -1344,6 +1374,387 @@ const CoverageStatCard = ({
   );
 };
 
+type ExportTaskStatus = 'configuring' | 'creating' | 'created';
+
+const EXPORT_REQUIRED_FIELDS = ['门店名称', '门店状态', '所属渠道', '商品名称'];
+const EXPORT_OPTIONAL_FIELDS = [
+  { id: 'category', label: '分类名称' },
+  { id: 'productType', label: '商品类型' },
+  { id: 'specName', label: '规格名称' },
+  { id: 'baseProductId', label: '商品库商品 ID' },
+  { id: 'skuId', label: '商品库 SkuID' },
+  { id: 'storeProductId', label: '门店商品 ID' },
+  { id: 'storeSkuId', label: '门店商品 SkuID' },
+  { id: 'storeId', label: '门店 ID' },
+  { id: 'saleStatus', label: '商品状态' },
+  { id: 'stockStatus', label: '沽清状态' },
+  { id: 'stockCount', label: '库存信息' },
+  { id: 'price', label: '基础价格' },
+  { id: 'packageFee', label: '包装费' },
+  { id: 'unit', label: '单位' },
+  { id: 'barcode', label: '商品条码' },
+  { id: 'remark', label: '备注' },
+];
+
+const EXPORT_FIELD_GROUPS = [
+  {
+    label: '基础信息',
+    fields: ['category', 'specName', 'productType', 'price', 'packageFee', 'unit', 'stockCount', 'remark'],
+  },
+  {
+    label: '识别码',
+    fields: ['baseProductId', 'skuId', 'storeProductId', 'storeSkuId', 'storeId', 'barcode'],
+  },
+  {
+    label: '状态',
+    fields: ['saleStatus', 'stockStatus'],
+  },
+];
+
+const DEFAULT_EXPORT_FIELDS = new Set([
+  'category',
+  'productType',
+  'specName',
+  'baseProductId',
+  'storeProductId',
+  'storeId',
+  'saleStatus',
+  'stockStatus',
+  'stockCount',
+]);
+
+const StoreProductExportModal = ({
+  activeChannelId,
+  products,
+  stores,
+  channels,
+  onClose,
+  onViewDownloads,
+}: {
+  activeChannelId: string;
+  products: StoreProductRecord[];
+  stores: StoreOption[];
+  channels: Array<{ id: string; label: string }>;
+  onClose: () => void;
+  onViewDownloads: () => void;
+}) => {
+  const isAllChannelEntry = activeChannelId === 'all';
+  const availableChannelIds = useMemo(
+    () => channels.map(channel => channel.id).filter(channelId => products.some(product => product.channels.includes(channelId))),
+    [channels, products]
+  );
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(
+    isAllChannelEntry ? [] : [activeChannelId]
+  );
+  const [exportMode, setExportMode] = useState<'default' | 'custom'>('default');
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(() => new Set(DEFAULT_EXPORT_FIELDS));
+  const [taskStatus, setTaskStatus] = useState<ExportTaskStatus>('configuring');
+  const [showDetailPreview, setShowDetailPreview] = useState(false);
+
+  useEffect(() => {
+    if (taskStatus !== 'creating') return undefined;
+    const timer = setTimeout(() => setTaskStatus('created'), 900);
+    return () => clearTimeout(timer);
+  }, [taskStatus]);
+
+  const storeStatusMap = useMemo(
+    () => Object.fromEntries(stores.filter(store => store.id !== 'all').map(store => [store.id, store.businessStatus || 'operating'])),
+    [stores]
+  );
+
+  const exportSummary = useMemo(() => {
+    const selectedChannelSet = new Set(selectedChannels);
+    const storeIds = new Set<string>();
+    let rowCount = 0;
+
+    products.forEach(product => {
+      const matchedChannelCount = product.channels.filter(channelId => selectedChannelSet.has(channelId)).length;
+      if (matchedChannelCount > 0) {
+        storeIds.add(product.storeId);
+        rowCount += matchedChannelCount;
+      }
+    });
+
+    return {
+      channelCount: selectedChannels.length,
+      storeCount: storeIds.size,
+      rowCount,
+    };
+  }, [products, selectedChannels]);
+
+  const previewRows = useMemo(() => {
+    const selectedChannelSet = new Set(selectedChannels);
+    return products
+      .flatMap(product => product.channels
+        .filter(channelId => selectedChannelSet.has(channelId))
+        .map(channelId => ({
+          id: `${product.id}-${channelId}`,
+          storeName: product.storeName,
+          storeStatus: storeStatusMap[product.storeId] === 'closed' ? '已停业' : '营业中',
+          channel: channels.find(item => item.id === channelId)?.label || channelId,
+          productName: product.name,
+          productId: product.baseProductId,
+          category: product.category,
+          saleStatus: product.status === 'on_shelf' ? '已上架' : '已下架',
+          stockStatus: product.stockStatus === 'empty' ? '已沽清' : product.stockStatus === 'low' ? '库存不足' : '正常',
+        })))
+      .slice(0, 8);
+  }, [channels, products, selectedChannels, storeStatusMap]);
+
+  const toggleChannel = (channelId: string) => {
+    if (!isAllChannelEntry) return;
+    setSelectedChannels(current => current.includes(channelId)
+      ? current.filter(id => id !== channelId)
+      : [...current, channelId]);
+  };
+
+  const toggleField = (fieldId: string) => {
+    setSelectedFields(current => {
+      const next = new Set(current);
+      if (next.has(fieldId)) next.delete(fieldId);
+      else next.add(fieldId);
+      return next;
+    });
+  };
+
+  const canCreateTask = selectedChannels.length > 0 && exportSummary.rowCount > 0;
+  const activeStep = taskStatus === 'configuring' ? 1 : taskStatus === 'creating' ? 2 : 3;
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-6 py-5">
+      <div className="flex max-h-[92vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-[8px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+        <div className="flex items-center justify-between border-b border-[#E8E8E8] px-7 py-5">
+          <div className="text-[18px] font-bold text-[#1F2129]">导出</div>
+          <button onClick={onClose} disabled={taskStatus === 'creating'} className="text-[#9AA3B2] hover:text-[#5B6475] disabled:cursor-not-allowed disabled:opacity-40">
+            <X size={21} />
+          </button>
+        </div>
+
+        <div className="border-b border-[#EEF1F5] px-10 py-5">
+          <div className="grid grid-cols-3">
+            {[
+              { step: 1, label: '选择导出信息' },
+              { step: 2, label: '创建下载任务' },
+              { step: 3, label: '任务创建完成' },
+            ].map((item, index) => (
+              <div key={item.step} className="relative flex flex-col items-center">
+                {index > 0 && <div className={`absolute right-1/2 top-[15px] h-px w-full ${activeStep >= item.step ? 'bg-[#00C06B]' : 'bg-[#DDE1E7]'}`} />}
+                <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-sm font-bold ${activeStep >= item.step ? 'border-[#00C06B] bg-[#00C06B] text-white' : 'border-[#D4D9E1] bg-white text-[#A5ADBA]'}`}>
+                  {activeStep > item.step ? <CheckCircle2 size={17} /> : item.step}
+                </div>
+                <div className={`mt-2 text-xs font-medium ${activeStep >= item.step ? 'text-[#00A35B]' : 'text-[#A5ADBA]'}`}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {taskStatus === 'configuring' && (
+          <div className="flex-1 overflow-y-auto px-7 py-5">
+            <section>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex overflow-hidden rounded border border-[#DDE2E9]">
+                    <button onClick={() => setExportMode('default')} className={`px-5 py-2 text-sm ${exportMode === 'default' ? 'bg-[#F7F8FA] text-[#303642]' : 'bg-white text-[#6B7280]'}`}>默认导出</button>
+                    <button onClick={() => setExportMode('default')} className="border-l border-[#DDE2E9] px-2.5 text-[#7B8494] hover:bg-[#F7F8FA]" aria-label="默认导出设置" title="默认导出设置"><Settings size={15} /></button>
+                  </div>
+                  <button onClick={() => setExportMode('custom')} className={`rounded border px-5 py-2 text-sm ${exportMode === 'custom' ? 'border-[#00C06B] text-[#00A35B]' : 'border-[#DDE2E9] text-[#6B7280] hover:border-[#00C06B] hover:text-[#00A35B]'}`}>自定义导出</button>
+                </div>
+                <button onClick={() => setShowDetailPreview(true)} className="inline-flex items-center gap-1.5 text-xs text-[#00A35B] hover:underline">
+                  <Eye size={14} /> 查看导出明细示例
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-5">
+                {isAllChannelEntry && (
+                  <div className="flex items-start gap-6">
+                    <div className="w-24 shrink-0 pt-0.5 text-sm text-[#5B6475]"><span className="mr-1 text-red-500">*</span>导出渠道：</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="grid grid-cols-4 gap-x-8 gap-y-4">
+                        {channels.map(channel => {
+                          const selected = selectedChannels.includes(channel.id);
+                          const hasData = availableChannelIds.includes(channel.id);
+                          return (
+                            <label key={channel.id} className={`flex items-center gap-2 text-sm ${hasData ? 'cursor-pointer text-[#303642]' : 'cursor-not-allowed text-[#B5BCC8]'}`} title={hasData ? undefined : '当前查询条件下暂无该渠道商品'}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                disabled={!hasData}
+                                onChange={() => toggleChannel(channel.id)}
+                                className="h-4 w-4 accent-[#00C06B]"
+                              />
+                              {channel.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex items-center gap-4 text-xs">
+                        <button onClick={() => setSelectedChannels(availableChannelIds)} className="text-[#00A35B] hover:underline">全选可用渠道</button>
+                        {selectedChannels.length > 0 && <button onClick={() => setSelectedChannels([])} className="text-[#6B7280] hover:text-[#1F2129]">清空</button>}
+                        {selectedChannels.length === 0 && <span className="text-red-500">请至少选择一个导出渠道</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {EXPORT_FIELD_GROUPS.map((group, groupIndex) => (
+                  <div key={group.label} className="flex items-start gap-6">
+                    <div className="w-24 shrink-0 pt-0.5 text-sm text-[#5B6475]">{group.label}：</div>
+                    <div className="grid min-w-0 flex-1 grid-cols-4 gap-x-8 gap-y-4">
+                      {groupIndex === 0 && EXPORT_REQUIRED_FIELDS.map(field => (
+                        <label key={field} className="flex items-center gap-2 text-sm text-[#A5ADBA]">
+                          <input type="checkbox" checked disabled readOnly className="h-4 w-4 accent-[#00C06B]" />
+                          {field}
+                        </label>
+                      ))}
+                      {group.fields.map(fieldId => {
+                        const field = EXPORT_OPTIONAL_FIELDS.find(item => item.id === fieldId);
+                        if (!field) return null;
+                        const checked = exportMode === 'default' ? DEFAULT_EXPORT_FIELDS.has(field.id) : selectedFields.has(field.id);
+                        return (
+                          <label key={field.id} className={`flex items-center gap-2 text-sm ${exportMode === 'default' ? 'cursor-default text-[#A5ADBA]' : 'cursor-pointer text-[#303642]'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={exportMode === 'default'}
+                              onChange={() => toggleField(field.id)}
+                              className="h-4 w-4 accent-[#00C06B]"
+                            />
+                            {field.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {taskStatus === 'creating' && (
+          <div className="flex min-h-[390px] flex-1 flex-col items-center justify-center px-8 py-12 text-center">
+            <Loader2 size={40} className="animate-spin text-[#00C06B]" />
+            <div className="mt-5 text-lg font-bold text-[#1F2129]">正在创建下载任务</div>
+            <div className="mt-2 text-sm text-[#8B95A7]">正在提交 {exportSummary.channelCount} 个渠道的导出请求，请稍候...</div>
+          </div>
+        )}
+
+        {taskStatus === 'created' && (
+          <div className="flex min-h-[390px] flex-1 flex-col items-center justify-center px-8 py-12 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#EAF9F1] text-[#00A35B]"><CheckCircle2 size={30} /></div>
+            <div className="mt-5 text-xl font-bold text-[#1F2129]">下载任务已创建</div>
+            <div className="mt-2 max-w-[520px] text-sm leading-6 text-[#7B8494]">系统正在异步生成 Excel 文件。完成后可前往右上角“下载”查看并下载，不需要停留在当前页面等待。</div>
+            <div className="mt-6 flex items-center gap-7 rounded-[8px] bg-[#F7F8FA] px-8 py-4 text-sm text-[#5B6475]">
+              <span><strong className="mr-1 text-[#1F2129]">{exportSummary.channelCount}</strong>个渠道</span>
+              <span className="h-4 w-px bg-[#DDE2E9]" />
+              <span><strong className="mr-1 text-[#1F2129]">{exportSummary.storeCount}</strong>家门店</span>
+              <span className="h-4 w-px bg-[#DDE2E9]" />
+              <span><strong className="mr-1 text-[#1F2129]">{exportSummary.rowCount}</strong>条明细</span>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between border-t border-[#E8E8E8] bg-white px-7 py-4">
+          {taskStatus === 'configuring' ? (
+            <div className="flex items-center gap-2 text-xs text-[#7B8494]">
+              <FileSpreadsheet size={15} className="text-[#00A35B]" />
+              默认导出当前查询条件下全部门店商品，文件包含“门店状态”和“所属渠道”字段
+            </div>
+          ) : <div />}
+          <div className="flex items-center gap-3">
+            {taskStatus !== 'creating' && (
+              <button onClick={onClose} className="rounded-[8px] border border-[#DDE2E9] px-5 py-2.5 text-sm text-[#5B6475] hover:bg-[#F7F8FA]">关闭</button>
+            )}
+            {taskStatus === 'configuring' && (
+              <button onClick={() => setTaskStatus('creating')} disabled={!canCreateTask} className="rounded-[8px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B] disabled:cursor-not-allowed disabled:bg-[#C9CED6]">创建下载任务</button>
+            )}
+            {taskStatus === 'created' && (
+              <button onClick={onViewDownloads} className="rounded-[8px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">查看下载任务</button>
+            )}
+          </div>
+        </div>
+        {showDetailPreview && (
+          <ExportDetailPreviewModal rows={previewRows} onClose={() => setShowDetailPreview(false)} />
+        )}
+      </div>
+    </div>
+  );
+};
+
+type ExportPreviewRow = {
+  id: string;
+  storeName: string;
+  storeStatus: string;
+  channel: string;
+  productName: string;
+  productId: string;
+  category: string;
+  saleStatus: string;
+  stockStatus: string;
+};
+
+const ExportDetailPreviewModal = ({ rows, onClose }: { rows: ExportPreviewRow[]; onClose: () => void }) => (
+  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-8 py-8">
+    <div className="flex max-h-[82vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[10px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+      <div className="flex items-start justify-between border-b border-[#E8E8E8] px-6 py-5">
+        <div>
+          <div className="text-[18px] font-bold text-[#1F2129]">门店商品导出明细示例</div>
+          <div className="mt-1 text-xs text-[#8B95A7]">供开发确认导出文件字段及数据粒度，不生成实际下载文件。</div>
+        </div>
+        <button onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]" aria-label="关闭明细示例">
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-6 border-b border-[#EEF1F5] bg-[#F7F8FA] px-6 py-3 text-xs text-[#5B6475]">
+        <span className="inline-flex items-center gap-2"><FileSpreadsheet size={15} className="text-[#00A35B]" />工作表：门店商品明细</span>
+        <span>一条商品在多个渠道售卖时，按渠道拆分为多行</span>
+        <span className="font-medium text-[#00A35B]">新增字段：门店状态、所属渠道</span>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <table className="w-full min-w-[1020px] table-fixed border-collapse text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-[#F4F6F8] text-[#4E5969]">
+            <tr>
+              <th className="w-[150px] border-b border-r border-[#E5E8ED] px-4 py-3 font-bold">门店名称</th>
+              <th className="w-[100px] border-b border-r border-[#BDEBD2] bg-[#EAF9F1] px-4 py-3 font-bold text-[#008F50]">门店状态 <span className="ml-1 text-[10px]">新增</span></th>
+              <th className="w-[130px] border-b border-r border-[#BDEBD2] bg-[#EAF9F1] px-4 py-3 font-bold text-[#008F50]">所属渠道 <span className="ml-1 text-[10px]">新增</span></th>
+              <th className="w-[180px] border-b border-r border-[#E5E8ED] px-4 py-3 font-bold">商品名称</th>
+              <th className="w-[170px] border-b border-r border-[#E5E8ED] px-4 py-3 font-bold">商品库商品 ID</th>
+              <th className="w-[130px] border-b border-r border-[#E5E8ED] px-4 py-3 font-bold">分类名称</th>
+              <th className="w-[90px] border-b border-r border-[#E5E8ED] px-4 py-3 font-bold">商品状态</th>
+              <th className="w-[90px] border-b border-[#E5E8ED] px-4 py-3 font-bold">沽清状态</th>
+            </tr>
+          </thead>
+          <tbody className="text-[#303642]">
+            {rows.map(row => (
+              <tr key={row.id} className="hover:bg-[#FAFBFC]">
+                <td className="border-b border-r border-[#EEF1F5] px-4 py-3">{row.storeName}</td>
+                <td className="border-b border-r border-[#DDF3E7] bg-[#F7FCF9] px-4 py-3">
+                  <span className={`font-medium ${row.storeStatus === '营业中' ? 'text-[#008F50]' : 'text-[#D46B08]'}`}>{row.storeStatus}</span>
+                </td>
+                <td className="border-b border-r border-[#DDF3E7] bg-[#F7FCF9] px-4 py-3">{row.channel}</td>
+                <td className="truncate border-b border-r border-[#EEF1F5] px-4 py-3 font-medium" title={row.productName}>{row.productName}</td>
+                <td className="border-b border-r border-[#EEF1F5] px-4 py-3 text-[#667085]">{row.productId}</td>
+                <td className="truncate border-b border-r border-[#EEF1F5] px-4 py-3" title={row.category}>{row.category}</td>
+                <td className="border-b border-r border-[#EEF1F5] px-4 py-3">{row.saleStatus}</td>
+                <td className="border-b border-[#EEF1F5] px-4 py-3">{row.stockStatus}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={8} className="py-14 text-center text-[#98A0B3]">当前所选渠道暂无可预览的商品明细</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-[#E8E8E8] px-6 py-4">
+        <div className="text-xs text-[#8B95A7]">示例仅展示前 {Math.min(rows.length, 8)} 条数据，实际导出包含当前条件下全部门店商品。</div>
+        <button onClick={onClose} className="rounded-[8px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">我知道了</button>
+      </div>
+    </div>
+  </div>
+);
+
 const CoverageStoreDetailModal = ({
   detail,
   onQuickAction,
@@ -1368,7 +1779,7 @@ const CoverageStoreDetailModal = ({
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-6">
       <div className="w-full max-w-[760px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
-          <div className="text-[22px] font-black text-[#1F2129]">{detail.title}</div>
+            <div className="text-[18px] font-semibold text-[#1F2129]">{detail.title}</div>
           <button onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]">
             <X size={20} />
           </button>

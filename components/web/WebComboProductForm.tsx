@@ -529,7 +529,7 @@ export const WebComboProductForm: React.FC<WebComboProductFormProps> = ({ catego
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#FAFAFA] animate-in slide-in-from-right duration-300">
+    <div className="pc-page flex h-full flex-col bg-[#FAFAFA] animate-in slide-in-from-right duration-300">
             {/* Header */}
             <div className="h-16 px-8 bg-white border-b border-[#E8E8E8] flex justify-between items-center shrink-0 shadow-sm z-20">
                 <div className="flex items-center">

@@ -283,8 +283,8 @@ export const WebNutritionManager: React.FC<{ onNavigate?: (path: string) => void
   };
 
   return (
-    <div className="flex-1 bg-[#F5F6FA] p-4">
-      <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="pc-page flex-1 bg-[#F5F6FA] p-3">
+      <div className="pc-surface flex h-full flex-col overflow-hidden bg-white">
         <div className="flex items-center justify-between gap-4 border-b border-[#EDEDED] px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="relative">

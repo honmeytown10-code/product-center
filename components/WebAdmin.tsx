@@ -1350,9 +1350,9 @@ export const WebAdmin: React.FC = () => {
       {/* Header */}
       <header className="z-40 flex h-[52px] shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-4">
         <div className="flex items-center space-x-4">
-          <div className="flex items-center text-[#333] font-bold text-[16px] cursor-pointer hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors">
+          <button type="button" className="flex items-center text-[#333] font-semibold text-[15px] hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors">
              槐店王婆 <ChevronDown size={14} className="ml-2 text-[#999]"/>
-          </div>
+          </button>
           <div className="h-5 w-px bg-gray-200"></div>
           <nav className="flex space-x-2 text-[#666] font-medium text-[13px]">
             <button
@@ -1383,7 +1383,7 @@ export const WebAdmin: React.FC = () => {
         <div className="flex items-center space-x-6 text-[13px]">
            <div className="relative">
               <Search size={14} className="absolute left-3 top-2 text-[#AAA]"/>
-              <input className="bg-[#F2F3F5] border-none rounded-full pl-9 pr-12 py-1.5 w-[240px] transition-all focus:bg-white focus:ring-2 focus:ring-[#00C06B]/20 focus:outline-none" placeholder="搜索功能导航、帮助文档..."/>
+              <input className="h-8 w-[280px] rounded-md border border-transparent bg-[#F2F3F5] pl-9 pr-12 text-[13px] transition-all focus:bg-white focus:outline-none" placeholder="搜索功能导航、帮助文档"/>
               <span className="absolute right-3 top-2 text-[#AAA] text-xs scale-90 bg-white px-1 rounded border border-gray-200">Ctrl+K</span>
            </div>
            <button className="bg-[#5C6BF0] text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-[#4B5AE0] flex items-center">
@@ -1406,7 +1406,11 @@ export const WebAdmin: React.FC = () => {
         
         {/* Sidebar */}
         {activeTopNav === 'brand' ? (
-        <aside className="w-[200px] bg-[#F7F8FA] border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30">
+        <aside
+          className="pc-sidebar-scroll w-[200px] bg-[#F7F8FA] border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30"
+          tabIndex={0}
+          aria-label="品牌管理菜单"
+        >
            <div className="px-3 py-2">
               <div className="flex items-center rounded-xl bg-white px-3 py-3 shadow-sm border border-[#EEF0F3]">
                  <Box size={18} className="mr-2 text-[#00C06B]"/>

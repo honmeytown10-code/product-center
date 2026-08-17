@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, ChevronDown, ChevronRight, Eye, GripVertical, I
 type DisplayCategory = {
   id: string;
   name: string;
+  alias: string;
   code: string;
   sort: number;
   iconText: string;
@@ -35,6 +36,7 @@ type LinkProductCandidate = LinkedProduct & {
 
 type CategoryFormState = {
   name: string;
+  alias: string;
   code: string;
   iconText: string;
   iconUploaded: boolean;
@@ -46,7 +48,6 @@ type CategoryFormState = {
   requiredGroupDineInLimit: number;
   requiredGroupTakeoutLimit: number;
   displaySettings: string[];
-  description: string;
   remark: string;
   sort: number;
   shelfTime: 'all_day' | 'custom';
@@ -62,6 +63,7 @@ type SecondaryCategoryEditorDraft = {
   parentId: string;
   parentName: string;
   name: string;
+  alias: string;
   sort: number;
 };
 
@@ -82,12 +84,13 @@ type BackendCategory = {
 };
 
 type SortSyncMode = 'immediate' | 'manual' | 'scheduled';
-type CategoryColumnKey = 'sort' | 'icon' | 'name' | 'code' | 'tag' | 'requiredGroup' | 'displaySettings' | 'linkedProducts' | 'remark' | 'source';
+type CategoryColumnKey = 'sort' | 'icon' | 'name' | 'alias' | 'code' | 'tag' | 'requiredGroup' | 'displaySettings' | 'linkedProducts' | 'remark' | 'source';
 
 const MOCK_DATA: DisplayCategory[] = [
   {
     id: '1',
     name: '测试',
+    alias: '本周推荐',
     code: '-',
     sort: 1,
     iconText: '测',
@@ -102,6 +105,7 @@ const MOCK_DATA: DisplayCategory[] = [
       {
         id: '1-1',
         name: '子测试1',
+        alias: '人气单品',
         code: '-',
         sort: 1,
         iconText: '',
@@ -132,6 +136,7 @@ const MOCK_DATA: DisplayCategory[] = [
   {
     id: '2',
     name: '精品套餐',
+    alias: '多人分享更划算',
     code: 'combo',
     sort: 2,
     iconText: '套',
@@ -152,6 +157,7 @@ const MOCK_DATA: DisplayCategory[] = [
   {
     id: '3',
     name: '蛋糕',
+    alias: '生日仪式感',
     code: 'cake',
     sort: 3,
     iconText: '糕',
@@ -172,6 +178,7 @@ const MOCK_DATA: DisplayCategory[] = [
   {
     id: '4',
     name: '0318分类',
+    alias: '',
     code: '0318',
     sort: 4,
     iconText: '03',
@@ -193,6 +200,7 @@ const MOCK_DATA: DisplayCategory[] = [
   {
     id: '5',
     name: '酒水',
+    alias: '清爽饮品',
     code: 'drink',
     sort: 5,
     iconText: '饮',
@@ -285,6 +293,7 @@ const COLUMN_DEFS: Array<{ key: CategoryColumnKey; label: string; width: string 
   { key: 'sort', label: '分类排序', width: '110px' },
   { key: 'icon', label: '分类图标', width: '80px' },
   { key: 'name', label: '分类名称', width: '220px' },
+  { key: 'alias', label: '分类别名', width: '180px' },
   { key: 'code', label: '分类标识', width: '140px' },
   { key: 'tag', label: '分类标签', width: '110px' },
   { key: 'displaySettings', label: '展示渠道', width: '170px' },
@@ -300,6 +309,7 @@ const DEFAULT_VISIBLE_COLUMNS: Record<CategoryColumnKey, boolean> = {
   sort: true,
   icon: true,
   name: true,
+  alias: true,
   code: true,
   tag: true,
   requiredGroup: true,
@@ -311,6 +321,7 @@ const DEFAULT_VISIBLE_COLUMNS: Record<CategoryColumnKey, boolean> = {
 
 const createRootDraft = (sort: number): CategoryFormState => ({
   name: '',
+  alias: '',
   code: '',
   iconText: '',
   iconUploaded: false,
@@ -322,7 +333,6 @@ const createRootDraft = (sort: number): CategoryFormState => ({
   requiredGroupDineInLimit: 1,
   requiredGroupTakeoutLimit: 0,
   displaySettings: ['微信小程序', '企迈数店 app&企迈数店POS'],
-  description: '',
   remark: '',
   sort,
   shelfTime: 'all_day',
@@ -335,6 +345,7 @@ const createRootDraft = (sort: number): CategoryFormState => ({
 
 const createRootDraftFromCategory = (category: DisplayCategory): CategoryFormState => ({
   name: category.name,
+  alias: category.alias,
   code: category.code === '-' ? '' : category.code,
   iconText: category.iconText,
   iconUploaded: Boolean(category.iconText),
@@ -346,7 +357,6 @@ const createRootDraftFromCategory = (category: DisplayCategory): CategoryFormSta
   requiredGroupDineInLimit: 1,
   requiredGroupTakeoutLimit: 0,
   displaySettings: category.displaySettings,
-  description: '',
   remark: category.remark,
   sort: category.sort,
   shelfTime: 'all_day',
@@ -553,6 +563,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
   const [visibleColumns, setVisibleColumns] = useState<Record<CategoryColumnKey, boolean>>(DEFAULT_VISIBLE_COLUMNS);
   const [editingRootId, setEditingRootId] = useState<string | null>(null);
   const [editingSecondCategory, setEditingSecondCategory] = useState<SecondaryCategoryEditorDraft | null>(null);
+  const [showAliasExample, setShowAliasExample] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
   const [sortDraftRows, setSortDraftRows] = useState<CategorySortDraftRow[]>([]);
   const [showSortSyncModal, setShowSortSyncModal] = useState(false);
@@ -662,6 +673,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
         parentId: category.parentId,
         parentName: parent?.name || '',
         name: category.name,
+        alias: category.alias,
         sort: category.sort,
       });
       return;
@@ -676,6 +688,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       parentId: parent.id,
       parentName: parent.name,
       name: '',
+      alias: '',
       sort: (parent.children?.length || 0) + 1,
     });
   };
@@ -687,6 +700,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       const nextRoot: DisplayCategory = {
         id: `root-${Date.now()}`,
         name: formState.name.trim() || '未命名分类',
+        alias: formState.alias.trim(),
         code: formState.code.trim() || '-',
         sort: formState.sort,
         iconText: formState.iconText.trim() || (formState.name.trim().slice(0, 1) || '图'),
@@ -707,6 +721,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       setCategories(prev => normalizeLinkedProductCounts(sortCategories(prev.map(item => item.id === editingRootId ? {
         ...item,
         name: formState.name.trim() || item.name,
+        alias: formState.alias.trim(),
         code: formState.code.trim() || '-',
         sort: formState.sort,
         iconText: formState.iconText.trim() || (formState.name.trim().slice(0, 1) || item.iconText),
@@ -728,6 +743,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       id: editingSecondCategory.id || `child-${Date.now()}`,
       parentId: editingSecondCategory.parentId,
       name: editingSecondCategory.name.trim() || '未命名二级分类',
+      alias: editingSecondCategory.alias.trim(),
       code: '-',
       sort: editingSecondCategory.sort,
       iconText: '',
@@ -1213,6 +1229,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
               </div>
             </div>
           )}
+          {visibleColumns.alias && <div className="truncate pr-3 text-sm text-gray-600">{cat.alias || '-'}</div>}
           {visibleColumns.code && <div className="pr-3 text-sm text-gray-600 truncate">{isChild ? '-' : cat.code}</div>}
           {visibleColumns.tag && (
             <div className="pr-3">{!isChild && cat.tag ? <span className="inline-flex rounded-full bg-[#FFF7ED] px-2 py-1 text-[11px] font-bold text-[#EA580C]">{cat.tag}</span> : <span className="text-sm text-gray-400">-</span>}</div>
@@ -1318,8 +1335,8 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
     const editingCategory = editingRootId === 'new' ? null : categories.find(item => item.id === editingRootId) || null;
 
     return (
-      <div className="flex min-w-0 flex-1 bg-[#F0F2F5] p-4 font-sans">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm">
+    <div className="pc-page flex min-w-0 flex-1 bg-[#F0F2F5] p-3 font-sans">
+      <div className="pc-surface flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
           <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -1357,6 +1374,25 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
                         </div>
                       </div>
                       <div className="grid grid-cols-[88px_1fr] items-start gap-4">
+                        <div className="pt-2 text-sm text-[#333]">分类别名</div>
+                        <div>
+                          <div className="relative">
+                            <input
+                              value={formState.alias}
+                              placeholder="请输入分类别名"
+                              maxLength={10}
+                              onChange={e => setFormState(prev => ({ ...prev, alias: e.target.value.slice(0, 10) }))}
+                              className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 pr-14 text-sm focus:border-[#00C06B] focus:outline-none"
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#999]">{formState.alias.length}/10</div>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs text-[#999]">
+                            <span>用于补充说明分类，配置后将在小程序分类名称下方默认展示</span>
+                            <button type="button" onClick={() => setShowAliasExample(true)} className="shrink-0 font-bold text-[#00A35B] hover:text-[#008F50]">查看示例</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-4">
                         <div className="pt-2 text-sm text-[#333]">分类标识</div>
                         <div>
                           <input value={formState.code} onChange={e => setFormState(prev => ({ ...prev, code: e.target.value.slice(0, 40) }))} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
@@ -1372,10 +1408,6 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
                           <option value="新品">新品</option>
                           <option value="活动">活动</option>
                         </select>
-                      </div>
-                      <div className="grid grid-cols-[88px_1fr] items-start gap-4">
-                        <div className="pt-2 text-sm text-[#333]">分类描述</div>
-                        <input value={formState.description} onChange={e => setFormState(prev => ({ ...prev, description: e.target.value.slice(0, 30) }))} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
                       </div>
                       <div className="grid grid-cols-[88px_1fr] items-start gap-4">
                         <div className="pt-2 text-sm text-[#333]">分类备注</div>
@@ -1450,6 +1482,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
                                   </div>
                                 )}
                                 <div className="text-xs text-[#333]">{formState.name || '分类名称'}</div>
+                                {formState.alias && <div className="mt-0.5 truncate text-[10px] text-[#98A2B3]">{formState.alias}</div>}
                               </div>
                             </div>
                             <div className="h-[92px] rounded-2xl bg-white/45" />
@@ -1457,10 +1490,8 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
                           </div>
                           <div className="rounded-2xl bg-white p-5 shadow-sm">
                             <div className="mb-4">
-                              <div className="flex items-center gap-2">
-                                <div className="text-xl font-black text-[#1F2129]">{formState.name || '分类名称'}</div>
-                                {formState.description && <span className="text-sm text-[#98A2B3]">{formState.description}</span>}
-                              </div>
+                              <div className="text-xl font-black text-[#1F2129]">{formState.name || '分类名称'}</div>
+                              {formState.alias && <div className="mt-1 text-sm text-[#98A2B3]">{formState.alias}</div>}
                             </div>
                             {formState.bannerUploaded && (
                               <div className="mb-4 overflow-hidden rounded-[14px]">
@@ -1649,6 +1680,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
             </div>
           </div>
         </div>
+        {showAliasExample && <CategoryAliasExampleModal onClose={() => setShowAliasExample(false)} />}
       </div>
     );
   }
@@ -1796,11 +1828,12 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
           </div>
 
           <div className="flex-1 overflow-auto">
-            <div className="min-w-[1640px]">
+            <div className="min-w-[1820px]">
               <div className="grid border-y border-gray-100 bg-gray-50 py-3 text-xs font-bold text-gray-500" style={tableGridStyle}>
                 {visibleColumns.sort && <div className="pl-4 pr-3">分类排序</div>}
                 {visibleColumns.icon && <div className="px-2">分类图标</div>}
                 {visibleColumns.name && <div className="pr-3">分类名称</div>}
+                {visibleColumns.alias && <div className="pr-3">分类别名</div>}
                 {visibleColumns.code && <div className="pr-3">分类标识</div>}
                 {visibleColumns.tag && <div className="pr-3">分类标签</div>}
                 {visibleColumns.displaySettings && <div className="pr-3">展示渠道</div>}
@@ -1822,8 +1855,10 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
           onChange={setEditingSecondCategory}
           onCancel={() => setEditingSecondCategory(null)}
           onConfirm={handleSaveSecondCategory}
+          onViewAliasExample={() => setShowAliasExample(true)}
         />
       )}
+      {showAliasExample && <CategoryAliasExampleModal onClose={() => setShowAliasExample(false)} />}
       {showSortModal && (
         <CategorySortModal
           rows={sortDraftRows}
@@ -2004,11 +2039,13 @@ const SecondaryCategoryEditorModal = ({
   onChange,
   onCancel,
   onConfirm,
+  onViewAliasExample,
 }: {
   draft: SecondaryCategoryEditorDraft;
   onChange: (draft: SecondaryCategoryEditorDraft) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  onViewAliasExample: () => void;
 }) => {
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35 px-6">
@@ -2029,6 +2066,25 @@ const SecondaryCategoryEditorModal = ({
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#98A2B3]">{draft.name.length}/10</div>
             </div>
           </div>
+          <div className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-4">
+            <div className="pt-3 text-[16px] text-[#5B6475]">分类别名：</div>
+            <div>
+              <div className="relative">
+                <input
+                  value={draft.alias}
+                  maxLength={10}
+                  placeholder="请输入分类别名"
+                  onChange={e => onChange({ ...draft, alias: e.target.value.slice(0, 10) })}
+                  className="h-[48px] w-full rounded-[10px] border border-[#D9DDE7] px-4 pr-16 text-[16px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#98A2B3]">{draft.alias.length}/10</div>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-sm text-[#98A2B3]">
+                <span>用于补充说明分类，配置后将在小程序分类名称下方默认展示</span>
+                <button type="button" onClick={onViewAliasExample} className="shrink-0 font-bold text-[#00A35B] hover:text-[#008F50]">查看示例</button>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-[160px_minmax(0,1fr)] items-center gap-4">
             <div className="text-[16px] text-[#5B6475]"><span className="mr-1 text-[#FF4D4F]">*</span>排序：</div>
             <div className="inline-flex overflow-hidden rounded-[10px] border border-[#D9DDE7]">
@@ -2046,6 +2102,51 @@ const SecondaryCategoryEditorModal = ({
     </div>
   );
 };
+
+const CategoryAliasExampleModal = ({ onClose }: { onClose: () => void }) => (
+  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 px-6" onClick={onClose}>
+    <div className="w-full max-w-[680px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]" onClick={event => event.stopPropagation()}>
+      <div className="flex items-center justify-between border-b border-[#EEF1F5] px-7 py-5">
+        <div>
+          <div className="text-[20px] font-black text-[#1F2129]">分类别名展示示例</div>
+          <div className="mt-1 text-sm text-[#98A2B3]">配置别名后，小程序会在分类名称下方展示补充说明</div>
+        </div>
+        <button type="button" onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
+      </div>
+      <div className="px-7 py-7">
+        <div className="rounded-2xl bg-[#F6F7FB] p-5">
+          <div className="mb-4 text-sm font-bold text-[#5B6475]">小程序点单页</div>
+          <div className="grid grid-cols-[128px_minmax(0,1fr)] overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="border-r border-[#EEF1F5] bg-[#F8FAFB] p-3">
+              <div className="rounded-xl border border-[#BFECD3] bg-white px-3 py-4 text-center shadow-sm">
+                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9FAF1] text-lg font-black text-[#00A35B]">披</div>
+                <div className="text-sm font-bold leading-5 text-[#1F2129]">披萨系列</div>
+                <div className="mt-1 text-xs leading-4 text-[#98A2B3]">现烤薄脆</div>
+              </div>
+              <div className="mt-3 rounded-xl px-3 py-4 text-center text-sm text-[#5B6475]">能量碗</div>
+            </div>
+            <div className="p-5">
+              <div className="text-lg font-black text-[#1F2129]">披萨系列</div>
+              <div className="mt-1 text-sm text-[#98A2B3]">现烤薄脆</div>
+              <div className="mt-5 space-y-3">
+                <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-5 text-xs text-[#5B6475]">
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#1F2129]" />分类名称：披萨系列</span>
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#98A2B3]" />分类别名：现烤薄脆</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end border-t border-[#EEF1F5] px-7 py-5">
+        <button type="button" onClick={onClose} className="rounded-[10px] bg-[#00C06B] px-7 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">我知道了</button>
+      </div>
+    </div>
+  </div>
+);
 
 const CategorySortModal = ({
   rows,

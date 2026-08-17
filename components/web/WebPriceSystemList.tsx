@@ -24,14 +24,15 @@ const INITIAL_PRICE_SYSTEMS: PriceSystemRecord[] = [
   { id: '1194672688387309568', name: '餐饮2.0', storeName: '餐饮2.0品牌+', status: 'enabled', channels: ['mini', 'takeout', 'pos'], effectiveTime: '每周一至周五 09:00-22:00' },
 ];
 
-const CHANNEL_LABELS: Record<PriceChannel, string> = { mini: '小程序', pos: 'POS', takeout: '外卖' };
+const CHANNEL_LABELS: Record<PriceChannel, string> = { mini: '小程序-堂食', pos: 'POS', takeout: '小程序-外卖' };
 
 export const WebPriceSystemList: React.FC = () => {
   const [records, setRecords] = useState(INITIAL_PRICE_SYSTEMS);
   const [systemId, setSystemId] = useState('');
   const [systemName, setSystemName] = useState('');
   const [storeKeyword, setStoreKeyword] = useState('');
-  const [status, setStatus] = useState<'all' | PriceStatus>('all');
+  const [channel, setChannel] = useState<'' | PriceChannel>('');
+  const [status, setStatus] = useState<'' | PriceStatus>('');
   const [modalState, setModalState] = useState<PriceStrategyModalState | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [detailState, setDetailState] = useState<DetailState | null>(null);
@@ -42,10 +43,11 @@ export const WebPriceSystemList: React.FC = () => {
     if (systemId.trim() && !record.id.includes(systemId.trim())) return false;
     if (systemName.trim() && !record.name.toLowerCase().includes(systemName.trim().toLowerCase())) return false;
     if (storeKeyword.trim() && !record.storeName.toLowerCase().includes(storeKeyword.trim().toLowerCase())) return false;
-    return status === 'all' || record.status === status;
-  }), [records, systemId, systemName, storeKeyword, status]);
+    if (channel && !record.channels.includes(channel)) return false;
+    return !status || record.status === status;
+  }), [records, systemId, systemName, storeKeyword, channel, status]);
 
-  const resetFilters = () => { setSystemId(''); setSystemName(''); setStoreKeyword(''); setStatus('all'); };
+  const resetFilters = () => { setSystemId(''); setSystemName(''); setStoreKeyword(''); setChannel(''); setStatus(''); };
   const feedback = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2600); };
   const saveRecord = (record: PriceSystemRecord) => {
     setRecords(current => modalState?.mode === 'edit'
@@ -73,26 +75,35 @@ export const WebPriceSystemList: React.FC = () => {
         {toast && <div className="absolute left-1/2 top-4 z-[100] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{toast}</div>}
 
         <div className="shrink-0 border-b border-[#E9EDF2] px-4 py-3">
-          <div className="grid grid-cols-2 gap-2 xl:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_minmax(200px,1.2fr)_160px_auto]">
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-[minmax(150px,0.8fr)_minmax(170px,1fr)_minmax(190px,1.15fr)_170px_150px_auto]">
             <FilterInput value={systemId} onChange={setSystemId} placeholder="策略ID" />
             <FilterInput value={systemName} onChange={setSystemName} placeholder="策略名称" />
             <FilterInput value={storeKeyword} onChange={setStoreKeyword} placeholder="机构/门店名称" />
             <label className="relative">
-              <select value={status} onChange={event => setStatus(event.target.value as 'all' | PriceStatus)} className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
-                <option value="all">启用状态：全部</option><option value="enabled">启用中</option><option value="disabled">禁用中</option>
+              <select value={channel} onChange={event => setChannel(event.target.value as '' | PriceChannel)} className={`h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460] ${channel ? 'text-[#344054]' : 'text-[#98A2B3]'}`}>
+                <option value="">生效渠道：请选择</option>
+                <option value="mini">小程序-堂食</option>
+                <option value="takeout">小程序-外卖</option>
+                <option value="pos">POS</option>
+              </select>
+              <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+            </label>
+            <label className="relative">
+              <select value={status} onChange={event => setStatus(event.target.value as '' | PriceStatus)} className={`h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460] ${status ? 'text-[#344054]' : 'text-[#98A2B3]'}`}>
+                <option value="">启用状态：请选择</option><option value="enabled">启用中</option><option value="disabled">禁用中</option>
               </select>
               <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
             </label>
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={resetFilters} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969] hover:bg-[#F7F8FA]">重置</button>
-              <button type="button" onClick={() => setModalState({ mode: 'create' })} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F55]">新增价格策略</button>
+              <button type="button" onClick={() => feedback(`已查询到 ${filteredRecords.length} 条价格策略`)} className="h-9 rounded-md bg-[#00B460] px-5 text-[13px] font-medium text-white hover:bg-[#009F55]">查询</button>
             </div>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]">
           <span>共 <strong className="text-[#1D2129]">{filteredRecords.length}</strong> 条策略 · 启用 {records.filter(item => item.status === 'enabled').length} 条</span>
-          <span>保存策略配置不会直接改动门店商品价格，实际价格下发仍通过发布流程执行</span>
+          <button type="button" onClick={() => setModalState({ mode: 'create' })} className="h-9 shrink-0 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F55]">新增价格策略</button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">

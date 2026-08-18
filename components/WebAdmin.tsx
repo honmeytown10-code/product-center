@@ -96,6 +96,12 @@ type CreationContext = {
   };
   channelAttributeIds?: ThirdPartyChannelId[];
   channelProductKey?: string;
+  storeContext?: {
+    storeId: string;
+    storeName: string;
+    currentChannelIds: string[];
+    activeChannelId: string;
+  };
 };
 
 type TopNavView = 'brand' | 'store';
@@ -666,6 +672,7 @@ export const WebAdmin: React.FC = () => {
                   initialProduct={creationContext.product || null}
                   formScope={effectiveFormScope}
                   channelContext={effectiveChannelContext}
+                  storeContext={creationContext.storeContext}
                   existingProductCount={products.length}
                   previewPreferenceKey={creationContext.scope === 'store' ? 'web-admin-store-product-form' : 'web-admin-qimai-jingjing'}
                   commonFieldConfigs={creationContext.scope === 'store'
@@ -827,7 +834,7 @@ export const WebAdmin: React.FC = () => {
             <WebStoreProductList
               mode="manage"
               managePreset={storeProductManagePreset}
-              onEditProduct={(product) => {
+              onEditProduct={(product, channelId) => {
                 const targetType = product.type === 'Combo' ? 'combo' : 'standard';
                 const targetCategory = webCategories.find(cat => cat.classification === targetType) || webCategories[0];
                 if (!targetCategory) return;
@@ -840,6 +847,13 @@ export const WebAdmin: React.FC = () => {
                     category: product.category,
                   },
                   scope: 'store',
+                  formScope: 'store',
+                  storeContext: {
+                    storeId: product.storeId,
+                    storeName: product.storeName,
+                    currentChannelIds: product.channels,
+                    activeChannelId: channelId,
+                  },
                 });
               }}
             />

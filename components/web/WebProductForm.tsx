@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Pencil, Settings, Printer, 
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
-  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronLeft, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search
+  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronLeft, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search, LoaderCircle
 } from 'lucide-react';
 import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, OmnichannelChannelId, ThirdPartyChannelId, resolveChildRequiredConfigs } from '../../types';
 import { channelGroupIncludesMiniProgram } from '../../omnichannel';
@@ -35,6 +35,12 @@ interface WebProductFormProps {
         channelNames: string[];
         masterName: string;
         skuId: string;
+    };
+    storeContext?: {
+        storeId: string;
+        storeName: string;
+        currentChannelIds: string[];
+        activeChannelId: string;
     };
     onProductSaved?: (product: {
         id?: string;
@@ -81,6 +87,7 @@ type ValidationItem = {
 };
 type PreviewField = 'p_name' | 'p_img' | 'p_list_desc' | 's_specs' | 'm_methods' | 'a_addons' | 'default';
 type PageView = 'form' | 'success' | 'sync' | 'template' | 'detail' | 'templateHistory';
+type StoreSaveStage = 'confirm' | 'saving' | 'result';
 type TaskFlowView = 'sync' | 'template';
 type TaskExecutionMode = 'manual' | 'immediate' | 'scheduled';
 type TemplateTaskStatus = 'processing' | 'completed';
@@ -101,6 +108,24 @@ type CategoryTreeNode = {
         id: string;
         name: string;
     }>;
+};
+
+const STORE_CHANNEL_LABELS: Record<string, string> = {
+    mini_dine: '小程序-堂食',
+    mini_take: '小程序-外卖',
+    pos: 'POS',
+    meituan: '美团-外卖',
+    meituan_dine: '美团-在线点',
+    meituan_tuangou: '美团-团购',
+    taobao: '淘宝闪购',
+    eleme: '饿了么',
+    douyin_dine: '抖音在线点',
+};
+
+const STORE_COMBO_MISSING_CHILDREN: Record<string, string[]> = {
+    taobao: ['经典薯条', '可口可乐'],
+    meituan: ['经典薯条'],
+    eleme: ['可口可乐'],
 };
 export type TagStyleType = 'text' | 'image';
 export type GroupedTagFieldId = 'p_desc_tags' | 'p_order_tags' | 'p_stat_tags';
@@ -935,6 +960,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     thirdPartyChannelAttributeIds = [],
     formScope = 'store',
     channelContext,
+    storeContext,
     onProductSaved,
     onOpenChannelCatalog,
 }) => {
@@ -943,6 +969,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const isMasterForm = formScope === 'master';
     const isChannelForm = formScope === 'channel';
     const isUnifiedForm = formScope === 'unified';
+    const isStoreForm = formScope === 'store';
     const isPosChannelProduct = (isChannelForm || isUnifiedForm) && !!channelContext?.channelNames.some(name => (
         name.toUpperCase().includes('POS')
     ));
@@ -991,6 +1018,25 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const specSectionHeaderRefs = useRef<Partial<Record<SpecConfigModuleKey, HTMLTableCellElement | null>>>({});
     const [activeFormSection, setActiveFormSection] = useState<SectionId>('basic');
     const [pageView, setPageView] = useState<PageView>('form');
+    const [storeSaveStage, setStoreSaveStage] = useState<StoreSaveStage | null>(null);
+    const [selectedStoreChannelIds, setSelectedStoreChannelIds] = useState<string[]>(() => {
+        const availableChannelIds = storeContext?.currentChannelIds || [];
+        if (storeContext?.activeChannelId && storeContext.activeChannelId !== 'all') {
+            return availableChannelIds.includes(storeContext.activeChannelId)
+                ? [storeContext.activeChannelId]
+                : availableChannelIds.slice(0, 1);
+        }
+        return availableChannelIds;
+    });
+    const selectedStoreChannelImpacts = useMemo(() => selectedStoreChannelIds.map(channelId => ({
+        channelId,
+        label: STORE_CHANNEL_LABELS[channelId] || channelId,
+        missingChildren: isComboProduct ? (STORE_COMBO_MISSING_CHILDREN[channelId] || []) : [],
+    })), [isComboProduct, selectedStoreChannelIds]);
+    const storeMissingChildCount = selectedStoreChannelImpacts.reduce(
+        (total, item) => total + item.missingChildren.length,
+        0,
+    );
     const [currentCategory, setCurrentCategory] = useState(category);
     const isBuffetTicketCategory = currentCategory.businessType === 'buffet_ticket';
     const [prepEnabled, setPrepEnabled] = useState(true);
@@ -2217,13 +2263,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         );
     };
 
-    const handleSave = () => {
-        setDraftSaved(false);
-        setSaveAttempted(true);
-        if (requiredMissingItems.length > 0) {
-            locateValidationItem(requiredMissingItems[0]);
-            return;
-        }
+    const commitProductSave = (showSuccessPage = true) => {
         const nextSuccessMode = hasSavedProduct ? 'edit' : 'create';
         const inheritedChannelFormData = isUnifiedForm
             ? {
@@ -2266,8 +2306,36 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         }, nextSuccessMode);
         setSuccessMode(nextSuccessMode);
         setHasSavedProduct(true);
-        setPageView('success');
+        if (showSuccessPage) setPageView('success');
         setSelectedSuccessAction(null);
+    };
+
+    const handleSave = () => {
+        setDraftSaved(false);
+        setSaveAttempted(true);
+        if (!isStoreForm && requiredMissingItems.length > 0) {
+            locateValidationItem(requiredMissingItems[0]);
+            return;
+        }
+        if (isStoreForm) {
+            setStoreSaveStage('confirm');
+            return;
+        }
+        commitProductSave();
+    };
+
+    const handleConfirmStoreSave = () => {
+        if (selectedStoreChannelIds.length === 0) return;
+        setStoreSaveStage('saving');
+        window.setTimeout(() => {
+            commitProductSave(false);
+            setStoreSaveStage('result');
+        }, 900);
+    };
+
+    const handleFinishStoreSave = () => {
+        setStoreSaveStage(null);
+        onClose();
     };
 
     const handleSaveDraft = () => {
@@ -9214,6 +9282,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             ? `${hasSavedProduct ? '编辑' : '新建'}${isComboProduct ? '套餐商品' : '商品'}（主档 + 渠道商品）`
                                         : isMasterForm
                                             ? `${hasSavedProduct ? '编辑' : '新建'}商品主档`
+                                            : isStoreForm
+                                                ? `编辑门店${isComboProduct ? '套餐商品' : '商品'}`
                                             : (hasSavedProduct ? `编辑${isComboProduct ? '套餐商品' : '商品'}资料` : `填写${isComboProduct ? '套餐商品' : '商品'}资料`)
                                 )}
                                 {pageView === 'success' && (successMode === 'edit' ? `${isComboProduct ? '套餐商品' : '商品'}编辑成功` : `${isComboProduct ? '套餐商品' : '商品'}创建成功`)}
@@ -9222,7 +9292,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 {pageView === 'detail' && '商品详情'}
                                 {pageView === 'templateHistory' && '模板批量操作历史'}
                             </h3>
-                            {pageView === 'form' && !isChannelForm && (
+                            {pageView === 'form' && !isChannelForm && !isStoreForm && (
                                 <button
                                     type="button"
                                     onClick={() => setShowCategoryPickerModal(true)}
@@ -9232,6 +9302,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 </button>
                             )}
                         </div>
+                        {pageView === 'form' && isStoreForm && (
+                            <p className="truncate text-xs text-gray-400 mt-0.5">
+                                {storeContext?.storeName || '当前门店'} · 商品 ID：{initialProduct?.baseProductId || initialProduct?.id || '--'}
+                            </p>
+                        )}
                         {pageView !== 'form' && (
                             <p className="truncate text-xs text-gray-400 mt-0.5">
                                 {`已从${successMode === 'edit' ? '编辑商品页' : '创建商品页'}进入后续处理流程`}
@@ -9245,7 +9320,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             <button onClick={onClose} className="px-5 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm">
                                 取消
                             </button>
-                            {!isChannelForm && (
+                            {!isChannelForm && !isStoreForm && (
                                 <button onClick={handleSaveDraft} className="px-5 py-2 border border-gray-200 bg-white text-gray-600 font-bold rounded-lg hover:bg-gray-50 transition-colors text-sm">
                                     保存为草稿
                                 </button>
@@ -9402,7 +9477,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 </button>
                                             ))}
                                         </div>
-                                        <div className="shrink-0">
+                                        {!isStoreForm && <div className="shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => onOpenCommonFieldSettings?.(type, currentCategory.id)}
@@ -9411,10 +9486,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 <Settings size={14} className="mr-2" />
                                                 常用字段设置
                                             </button>
-                                        </div>
+                                        </div>}
                                     </div>
                                 </div>
-                                {!isChannelForm && (
+                                {!isChannelForm && !isStoreForm && (
                                 <div className="px-4 py-2 bg-[#FCFCFD]">
                                     <div className="flex flex-wrap items-center gap-2 min-w-0">
                                         <div className="text-sm font-black text-[#1F2129] shrink-0">创建进度</div>
@@ -9478,7 +9553,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {/* Basic Section */}
                         {sectionVisibility.basic && (
                             <div id="basic" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-1.5' : 'p-4 xl:p-5 space-y-2'}`}>
-                                <SectionHeader title={getSectionLabel('basic')} icon={<FileText size={20}/>} meta={formScope === 'store' ? renderSectionMeta('basic') : undefined} />
+                                <SectionHeader title={getSectionLabel('basic')} icon={<FileText size={20}/>} />
                                 {isUnifiedForm && (
                                     <div id="field-master-name" className="col-span-full mb-2 max-w-[760px]">
                                             <label className="mb-2 block text-sm font-bold text-[#1D2129]"><span className="mr-1 text-[#E5484D]">*</span>{isComboProduct ? '套餐名称' : '商品名称'}</label>
@@ -9564,7 +9639,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {/* Product Attr Section */}
                         {sectionVisibility.method && (
                             <div id="method" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title={getSectionLabel('method')} icon={<ChefHat size={20}/>} meta={formScope === 'store' ? renderSectionMeta('method') : undefined} />
+                                <SectionHeader title={getSectionLabel('method')} icon={<ChefHat size={20}/>} />
                                 {isComboProduct ? (
                                     <div id="field-s_specs">
                                         {renderComboProductPanel()}
@@ -9578,7 +9653,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {/* Display Section */}
                         {sectionVisibility.display && (
                             <div id="display" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title={getSectionLabel('display')} icon={<Tags size={20}/>} meta={formScope === 'store' ? renderSectionMeta('display') : undefined} />
+                                <SectionHeader title={getSectionLabel('display')} icon={<Tags size={20}/>} />
                                 {isUnifiedForm && visibleUnifiedChannelBasicFields.length > 0 && (
                                     <div className="rounded-lg border border-[#DDE5EC] bg-[#FAFCFD] p-4">
                                         <div className="mb-3">
@@ -9611,7 +9686,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {/* Sales Section */}
                         {sectionVisibility.spec && (
                             <div id="spec" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title={getSectionLabel('spec')} icon={<Scale size={20}/>} meta={formScope === 'store' ? renderSectionMeta('spec') : undefined} />
+                                <SectionHeader title={getSectionLabel('spec')} icon={<Scale size={20}/>} />
                                 {renderSalesAttributePanel()}
                                 <div className={`grid ${compactFormMode ? 'grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-2' : 'grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-2.5'}`}>
                                     {AVAILABLE_DYNAMIC_FIELDS.filter(f => (
@@ -9654,7 +9729,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {/* Others Section */}
                         {sectionVisibility.settings && (
                             <div id="settings" className={`scroll-mt-[190px] bg-white rounded-lg border border-gray-200 min-w-0 overflow-hidden ${compactFormMode ? 'p-3.5 xl:p-4 space-y-2' : 'p-4 xl:p-5 space-y-2.5'}`}>
-                                <SectionHeader title={getSectionLabel('settings')} icon={<Settings size={20}/>} meta={formScope === 'store' ? renderSectionMeta('settings') : undefined} />
+                                <SectionHeader title={getSectionLabel('settings')} icon={<Settings size={20}/>} />
                                 {renderOthersAttributePanel()}
                                 {renderSectionCollapsedEntry(otherCollapsedFieldMappings)}
                             </div>
@@ -9687,6 +9762,165 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             {renderSpecPickerModal()}
             {renderMethodPickerModal()}
             {renderAddonPickerModal()}
+            {isStoreForm && storeSaveStage && (
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-6">
+                    <div className="flex max-h-[82vh] w-full max-w-[760px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+                        <div className="flex items-start justify-between border-b border-[#E8E8E8] px-6 py-5">
+                            <div>
+                                <h3 className="text-lg font-black text-[#1F2129]">
+                                    {storeSaveStage === 'saving'
+                                        ? '正在保存门店商品'
+                                        : storeSaveStage === 'result'
+                                            ? '门店商品保存完成'
+                                            : '确认保存门店商品'}
+                                </h3>
+                                <p className="mt-1 text-xs text-[#667085]">
+                                    {storeContext?.storeName || '当前门店'} · {initialProduct?.name || (isComboProduct ? '套餐商品' : '商品')}
+                                </p>
+                            </div>
+                            {storeSaveStage !== 'saving' && (
+                                <button
+                                    type="button"
+                                    aria-label="关闭"
+                                    onClick={() => setStoreSaveStage(null)}
+                                    className="rounded-md p-1.5 text-[#98A2B3] hover:bg-[#F5F6F8] hover:text-[#475467]"
+                                >
+                                    <X size={20} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                            {storeSaveStage === 'saving' ? (
+                                <div className="flex min-h-[280px] flex-col items-center justify-center text-center">
+                                    <LoaderCircle size={36} className="animate-spin text-[#00B865]" />
+                                    <div className="mt-4 text-base font-black text-[#1F2129]">正在实时更新 {selectedStoreChannelIds.length} 个渠道</div>
+                                    <div className="mt-2 text-sm text-[#667085]">请勿关闭页面，全部渠道保存完成后将直接反馈结果。</div>
+                                </div>
+                            ) : (
+                                <>
+                                    {storeSaveStage === 'confirm' && (
+                                        <div className="mb-4 rounded-md border border-[#E5EAF0] bg-white px-4 py-4">
+                                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 text-sm font-black text-[#1F2129]">
+                                                        <span className="text-[#F04438]">*</span>
+                                                        生效渠道
+                                                        <span className="ml-1 text-xs font-normal text-[#98A2B3]">已选 {selectedStoreChannelIds.length} 个</span>
+                                                    </div>
+                                                    <div className="mt-1 text-xs leading-5 text-[#667085]">
+                                                        {storeContext?.activeChannelId === 'all'
+                                                            ? '默认选中该商品当前所在渠道，可按本次修改范围调整。'
+                                                            : `当前从${STORE_CHANNEL_LABELS[storeContext?.activeChannelId || ''] || '指定渠道'}进入，本次仅保存到该渠道。`}
+                                                    </div>
+                                                </div>
+                                                {storeContext?.activeChannelId === 'all' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedStoreChannelIds(storeContext?.currentChannelIds || [])}
+                                                        className="text-xs font-bold text-[#00A35B] hover:text-[#008F50]"
+                                                    >
+                                                        全选当前渠道
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {(storeContext?.currentChannelIds || []).map(channelId => {
+                                                    const selected = selectedStoreChannelIds.includes(channelId);
+                                                    const selectable = storeContext?.activeChannelId === 'all';
+                                                    return (
+                                                        <button
+                                                            key={channelId}
+                                                            type="button"
+                                                            disabled={!selectable}
+                                                            onClick={() => {
+                                                                if (!selectable) return;
+                                                                setSelectedStoreChannelIds(prev => selected
+                                                                    ? prev.filter(id => id !== channelId)
+                                                                    : [...prev, channelId]);
+                                                            }}
+                                                            className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors ${
+                                                                selected
+                                                                    ? 'border-[#7AD7A6] bg-[#F0FBF5] text-[#087443]'
+                                                                    : 'border-[#DDE3EA] bg-white text-[#667085] hover:border-[#B7E7CB]'
+                                                            } ${selectable ? '' : 'cursor-default opacity-80'}`}
+                                                        >
+                                                            <span className={`flex h-4 w-4 items-center justify-center rounded border ${selected ? 'border-[#00B865] bg-[#00B865] text-white' : 'border-[#B8C0CC] bg-white'}`}>
+                                                                {selected && <Check size={11} strokeWidth={3} />}
+                                                            </span>
+                                                            {STORE_CHANNEL_LABELS[channelId] || channelId}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            {selectedStoreChannelIds.length === 0 && (
+                                                <div className="mt-2 text-xs text-[#F04438]">请至少选择一个生效渠道</div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className={`flex items-start gap-3 rounded-md border px-4 py-3 ${
+                                        storeSaveStage === 'result'
+                                            ? 'border-[#B7E7CB] bg-[#F0FBF5]'
+                                            : storeMissingChildCount > 0
+                                                ? 'border-[#F4D28C] bg-[#FFF9EB]'
+                                                : 'border-[#DDE5EC] bg-[#F7F9FB]'
+                                    }`}>
+                                        {storeSaveStage === 'result'
+                                            ? <CheckCircle2 size={19} className="mt-0.5 shrink-0 text-[#00A35B]" />
+                                            : <CircleAlert size={19} className={`mt-0.5 shrink-0 ${storeMissingChildCount > 0 ? 'text-[#D97706]' : 'text-[#667085]'}`} />}
+                                        <div>
+                                            <div className="text-sm font-black text-[#1F2129]">
+                                                {storeSaveStage === 'result'
+                                                    ? `已成功更新 ${selectedStoreChannelIds.length} 个渠道`
+                                                    : `本次修改将作用于 ${selectedStoreChannelIds.length} 个渠道`}
+                                            </div>
+                                            <div className="mt-1 text-xs leading-5 text-[#667085]">
+                                                {storeSaveStage === 'result'
+                                                    ? '所选渠道均已实时保存完成，本次修改已生效。'
+                                                    : storeMissingChildCount > 0
+                                                        ? '缺失的套餐子商品将继承门店商品资料并默认上架；每个渠道内先补齐子商品，成功后再更新套餐结构。'
+                                                        : '确认后将实时更新所选渠道，全部保存完成后再返回结果。'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {storeSaveStage === 'confirm' && storeMissingChildCount > 0 && (
+                                        <div className="mt-4 text-xs leading-5 text-[#667085]">
+                                            共需在所选渠道补齐 {storeMissingChildCount} 个套餐子商品。若某渠道补齐失败，该渠道不会继续更新套餐结构，其他渠道不受影响。
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
+                        {storeSaveStage !== 'saving' && (
+                            <div className="flex items-center justify-between border-t border-[#E8E8E8] bg-white px-6 py-4">
+                                <div className="text-xs text-[#98A2B3]">
+                                    {storeSaveStage === 'result' ? '本次保存已完成' : '保存时将实时更新所选渠道'}
+                                </div>
+                                <div className="flex gap-3">
+                                    {storeSaveStage === 'confirm' ? (
+                                        <>
+                                            <button type="button" onClick={() => setStoreSaveStage(null)} className="rounded-md border border-[#DDE3EA] px-5 py-2 text-sm font-bold text-[#475467] hover:bg-[#F7F8FA]">取消</button>
+                                            <button
+                                                type="button"
+                                                onClick={handleConfirmStoreSave}
+                                                disabled={selectedStoreChannelIds.length === 0}
+                                                className="rounded-md bg-[#00B865] px-5 py-2 text-sm font-bold text-white hover:bg-[#009F57] disabled:cursor-not-allowed disabled:bg-[#B7E7CB]"
+                                            >
+                                                确认保存
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button type="button" onClick={handleFinishStoreSave} className="rounded-md bg-[#00B865] px-5 py-2 text-sm font-bold text-white hover:bg-[#009F57]">返回门店商品</button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
             <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; } .q-form-input:disabled, .q-form-select:disabled, fieldset:disabled .q-form-input, fieldset:disabled .q-form-select { cursor: not-allowed; border-color: #E5E7EB; color: #6B7280; background-color: #F5F6F7; }`}</style>
         </div>
     );

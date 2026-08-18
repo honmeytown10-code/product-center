@@ -16,7 +16,7 @@ type StoreProductManagePreset = {
   channelId?: string;
 };
 
-type StoreProductRecord = {
+export type StoreProductRecord = {
   id: string;
   baseProductId: string;
   name: string;
@@ -410,7 +410,7 @@ export const WebStoreProductList: React.FC<{
   mode?: StoreProductPageMode;
   managePreset?: StoreProductManagePreset | null;
   onOpenManageProduct?: (preset: StoreProductManagePreset) => void;
-  onEditProduct?: (product: StoreProductRecord) => void;
+  onEditProduct?: (product: StoreProductRecord, channelId: string) => void;
 }> = ({ mode = 'manage', managePreset = null, onOpenManageProduct, onEditProduct }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const config = brandConfigs[activeBrandId];
@@ -570,7 +570,7 @@ export const WebStoreProductList: React.FC<{
 
   const handleAction = (product: StoreProductRecord, action: 'shelf' | 'stock' | 'edit') => {
     if (action === 'edit') {
-      onEditProduct?.(product);
+      onEditProduct?.(product, activeTabId);
       if (onEditProduct) return;
       setNotification({ type: 'info', message: `打开 ${product.storeName} 的商品编辑页` });
       return;
@@ -920,7 +920,7 @@ export const WebStoreProductList: React.FC<{
 
           <div className="flex-1 flex flex-col overflow-hidden relative bg-white">
             <div className="flex-1 overflow-auto no-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[1180px]">
+              <table className="w-full text-left border-collapse min-w-[1240px]">
                 <thead className="sticky top-0 bg-[#F7F8FA] z-10 text-xs font-bold text-[#333]">
                   <tr>
                     <th className="w-12 py-3 pl-5 border-b border-[#E8E8E8]"><input type="checkbox" className="rounded border-gray-300" /></th>
@@ -931,7 +931,7 @@ export const WebStoreProductList: React.FC<{
                     <th className="py-3 px-4 border-b border-[#E8E8E8] w-32">门店名称</th>
                     <th className="py-3 px-4 border-b border-[#E8E8E8] w-[220px]">{activeTabId === 'all' ? '投放渠道' : '渠道'}</th>
                     <th className="py-3 px-4 border-b border-[#E8E8E8] w-24">库存状态</th>
-                    <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-48 text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
+                    <th className="sticky right-0 w-[220px] min-w-[220px] whitespace-nowrap border-b border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm text-[#333]">
@@ -979,15 +979,15 @@ export const WebStoreProductList: React.FC<{
                           {product.stockStatus === 'normal' ? `库存 ${product.stockCount}` : product.stockStatus === 'low' ? `库存紧张 ${product.stockCount}` : '已售罄'}
                         </div>
                       </td>
-                      <td className="sticky right-0 py-4 px-4 text-center bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
-                        <div className="flex items-center justify-center space-x-3 text-sm">
-                          <button onClick={() => handleAction(product, 'shelf')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">
+                      <td className="sticky right-0 w-[220px] min-w-[220px] whitespace-nowrap bg-white px-4 py-4 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)] group-hover:bg-[#F9FFFC]">
+                        <div className="flex flex-nowrap items-center justify-center gap-3 whitespace-nowrap text-sm">
+                          <button onClick={() => handleAction(product, 'shelf')} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">
                             {activeTabId === 'all' ? '上下架' : product.status === 'on_shelf' ? '下架' : '上架'}
                           </button>
-                          <button onClick={() => handleAction(product, 'edit')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">编辑</button>
-                          <button onClick={() => handleAction(product, 'stock')} className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">沽清</button>
-                          <div className="h-3 w-px bg-gray-300" />
-                          <button onClick={() => setNotification({ type: 'info', message: `${product.name}：可在编辑页维护分类、价格、售卖时间与渠道差异字段` })} className="text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
+                          <button onClick={() => handleAction(product, 'edit')} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">编辑</button>
+                          <button onClick={() => handleAction(product, 'stock')} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">沽清</button>
+                          <div className="h-3 w-px shrink-0 bg-gray-300" />
+                          <button aria-label="更多操作" title="更多操作" onClick={() => setNotification({ type: 'info', message: `${product.name}：可在编辑页维护分类、价格、售卖时间与渠道差异字段` })} className="shrink-0 text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
                         </div>
                       </td>
                     </tr>
@@ -1170,7 +1170,7 @@ export const WebStoreProductList: React.FC<{
                 <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="上架门店" tip="商品在当前所选渠道状态为上架的门店数。" /></th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="下架门店" tip="商品在当前所选渠道状态为下架的门店数。" /></th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8]"><LabelWithTip label="售罄门店" tip="商品在当前所选渠道状态为售罄的门店数。" /></th>
-                <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-32 text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
+                <th className="sticky right-0 w-32 min-w-[128px] whitespace-nowrap border-b border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
@@ -1217,9 +1217,9 @@ export const WebStoreProductList: React.FC<{
                       {item.soldOutStoreCount} 家
                     </button>
                   </td>
-                  <td className="sticky right-0 py-4 px-4 bg-white group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
-                    <div className="flex items-center justify-center text-sm">
-                      <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId, channelId: coverageChannelId })} className="text-[#00C06B] font-medium hover:underline">管理商品</button>
+                  <td className="sticky right-0 w-32 min-w-[128px] whitespace-nowrap bg-white px-4 py-4 group-hover:bg-[#F9FFFC] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">
+                    <div className="flex flex-nowrap items-center justify-center whitespace-nowrap text-sm">
+                      <button onClick={() => onOpenManageProduct?.({ keyword: item.baseProductId, channelId: coverageChannelId })} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:underline">管理商品</button>
                     </div>
                   </td>
                 </tr>

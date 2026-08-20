@@ -278,6 +278,7 @@ type ComboOptionalItem = {
     quantity: number;
     surcharge: number;
     isDefault: boolean;
+    channelEnabled?: boolean;
 };
 type ComboOptionalProductFilters = {
     name: string;
@@ -302,6 +303,7 @@ type ComboGroupCard = {
     saveAsFreeMatch?: boolean;
     remark?: string;
     affectedStoreCount?: number;
+    channelEnabled?: boolean;
 };
 type ComboOptionalGroupModalState = {
     mode: 'create' | 'edit';
@@ -1107,29 +1109,52 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         isRequired: false,
     });
     const [addonGroupRules, setAddonGroupRules] = useState<Record<string, AddonGroupRule>>({});
-    const [comboGroupCards, setComboGroupCards] = useState<ComboGroupCard[]>(() => (
-        mode === 'create'
-            ? []
-            : [
-                { id: 'combo-fixed-1', type: 'fixed', title: '固定搭配', desc: '已添加 2 个固定商品' },
-                {
-                    id: 'combo-optional-1',
-                    type: 'optional',
-                    title: '主食任选',
-                    desc: '按种类选择 · 3 选 1',
-                    items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 3),
-                    requiredOptionCount: 1,
-                    minTotalQuantity: 1,
-                    maxTotalQuantity: 2,
-                    isRequired: true,
-                    configMode: 'pick',
-                    relativePrice: false,
-                    saveAsFreeMatch: false,
-                    remark: '套餐主食选择',
-                    affectedStoreCount: 18,
-                },
-            ]
-    ));
+    const [comboGroupCards, setComboGroupCards] = useState<ComboGroupCard[]>(() => {
+        if (mode === 'create') return [];
+
+        const inheritedGroups: ComboGroupCard[] = [
+            {
+                id: 'combo-fixed-1',
+                type: 'fixed',
+                title: '固定搭配',
+                desc: '已添加 2 个固定商品',
+                items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 2).map(item => ({
+                    ...item,
+                    channelEnabled: true,
+                })),
+            },
+            {
+                id: 'combo-optional-1',
+                type: 'optional',
+                title: '主食任选',
+                desc: '按种类选择 · 3 选 1',
+                items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 3),
+                requiredOptionCount: 1,
+                minTotalQuantity: 1,
+                maxTotalQuantity: 2,
+                isRequired: true,
+                configMode: 'pick',
+                relativePrice: false,
+                saveAsFreeMatch: false,
+                remark: '套餐主食选择',
+                affectedStoreCount: 18,
+                channelEnabled: true,
+            },
+        ];
+
+        if (isChannelForm) {
+            inheritedGroups.push({
+                id: 'combo-free-1',
+                type: 'free',
+                title: '饮品随心配',
+                desc: '2 个可选商品 · 最多选 1 份',
+                items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(7, 9),
+                channelEnabled: false,
+            });
+        }
+
+        return inheritedGroups;
+    });
     const [comboOptionalGroupModal, setComboOptionalGroupModal] = useState<ComboOptionalGroupModalState | null>(null);
     const [confirmingComboOptionalSave, setConfirmingComboOptionalSave] = useState(false);
     const [comboOptionalProductPickerOpen, setComboOptionalProductPickerOpen] = useState(false);
@@ -6469,6 +6494,29 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             ));
         };
 
+        const toggleChannelComboGroup = (cardId: string) => {
+            setComboGroupCards(current => current.map(card => (
+                card.id === cardId
+                    ? { ...card, channelEnabled: card.channelEnabled === false }
+                    : card
+            )));
+        };
+
+        const toggleChannelFixedItem = (cardId: string, itemId: string) => {
+            setComboGroupCards(current => current.map(card => (
+                card.id === cardId
+                    ? {
+                        ...card,
+                        items: card.items?.map(item => (
+                            item.id === itemId
+                                ? { ...item, channelEnabled: item.channelEnabled === false }
+                                : item
+                        )),
+                    }
+                    : card
+            )));
+        };
+
         const optionalGroupDraft = comboOptionalGroupModal?.draft;
         const canSaveOptionalGroup = !!optionalGroupDraft?.title.trim()
             && (optionalGroupDraft.items?.length || 0) > 0;
@@ -6535,87 +6583,149 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐信息</div>
                         <div className="rounded-2xl bg-[#FAFAFA] p-4 space-y-4">
-                            <div className="flex flex-wrap gap-3">
-                                {comboButtons.map(button => (
-                                    <button
-                                        key={button.key}
-                                        type="button"
-                                        onClick={() => addComboCard(button.key)}
-                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                    >
-                                        <Plus size={15} className="mr-2" />
-                                        {button.label}
-                                    </button>
-                                ))}
-                            </div>
-                            {comboGroupCards.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                                    {comboGroupCards.map(card => (
-                                        <div
-                                            key={card.id}
-                                            className={`rounded-xl border border-gray-200 bg-white ${
-                                                card.type === 'optional' ? 'xl:col-span-2' : ''
-                                            }`}
+                            {isChannelForm ? (
+                                <div className="flex items-start gap-2.5 rounded-lg border border-[#B7E7D0] bg-[#F2FBF7] px-3.5 py-3 text-sm leading-5 text-[#32654E]">
+                                    <CircleAlert size={16} className="mt-0.5 shrink-0 text-[#00A35B]" />
+                                    <span>套餐结构继承商品主档。当前渠道仅可调整可售范围：固定搭配按子商品启停，可选分组和随心配按整组启停。</span>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-3">
+                                    {comboButtons.map(button => (
+                                        <button
+                                            key={button.key}
+                                            type="button"
+                                            onClick={() => addComboCard(button.key)}
+                                            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
                                         >
-                                            <div className="flex items-start justify-between gap-4 px-4 py-3.5">
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <div className="text-sm font-bold text-[#1F2129]">{card.title}</div>
-                                                        <span className="rounded bg-[#F0FDF4] px-2 py-0.5 text-[11px] font-bold text-[#15803D]">
-                                                            {card.type === 'optional' ? '可选分组' : card.type === 'free' ? '随心配' : '固定搭配'}
-                                                        </span>
-                                                    </div>
-                                                    <div className="mt-1.5 text-xs text-gray-500">{card.desc}</div>
-                                                    {card.type === 'optional' ? (
-                                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                                                            <span>{card.configMode === 'flexible' ? '按数量选择' : '按种类选择'}</span>
-                                                            {card.configMode === 'flexible' ? (
-                                                                <span>{card.isRequired === false ? '非必选' : '必选'}</span>
-                                                            ) : null}
-                                                            <span>{card.relativePrice ? '启用相对价' : '未启用相对价'}</span>
-                                                            {card.saveAsFreeMatch ? <span className="font-bold text-[#00A35B]">已保存为随心配</span> : null}
-                                                            <span>备注：{card.remark || '--'}</span>
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-1">
-                                                    {card.type === 'optional' ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openOptionalGroupEditor(card)}
-                                                            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
-                                                        >
-                                                            <Pencil size={13} />
-                                                            编辑
-                                                        </button>
-                                                    ) : null}
-                                                    <button
-                                                        type="button"
-                                                        title="删除分组"
-                                                        aria-label={`删除${card.title}`}
-                                                        onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            {card.type === 'optional' && (card.items?.length || 0) > 0 ? (
-                                                <div className="flex flex-wrap gap-2 border-t border-gray-100 bg-[#FCFCFD] px-4 py-3">
-                                                    {card.items?.map(item => (
-                                                        <span
-                                                            key={item.id}
-                                                            className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600"
-                                                        >
-                                                            {item.name}
-                                                            {item.surcharge > 0 ? ` +¥${item.surcharge}` : ''}
-                                                            {item.isDefault ? <span className="ml-1.5 text-[#00A35B]">默认</span> : null}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                        </div>
+                                            <Plus size={15} className="mr-2" />
+                                            {button.label}
+                                        </button>
                                     ))}
+                                </div>
+                            )}
+                            {comboGroupCards.length > 0 ? (
+                                <div className={`grid grid-cols-1 gap-3 ${isChannelForm ? '' : 'xl:grid-cols-2'}`}>
+                                    {comboGroupCards.map(card => {
+                                        const isFixedGroup = card.type === 'fixed' || card.type === 'fixed_multi';
+                                        const groupEnabled = card.channelEnabled !== false;
+                                        const enabledItemCount = card.items?.filter(item => item.channelEnabled !== false).length || 0;
+                                        const itemCount = card.items?.length || 0;
+
+                                        return (
+                                            <div
+                                                key={card.id}
+                                                className={`rounded-xl border bg-white transition-colors ${
+                                                    isChannelForm && !isFixedGroup && !groupEnabled
+                                                        ? 'border-gray-200 bg-[#FCFCFD]'
+                                                        : 'border-gray-200'
+                                                } ${!isChannelForm && card.type === 'optional' ? 'xl:col-span-2' : ''}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <div className={`text-sm font-bold ${isChannelForm && !isFixedGroup && !groupEnabled ? 'text-gray-500' : 'text-[#1F2129]'}`}>{card.title}</div>
+                                                            <span className="rounded bg-[#F0FDF4] px-2 py-0.5 text-[11px] font-bold text-[#15803D]">
+                                                                {card.type === 'optional' ? '可选分组' : card.type === 'free' ? '随心配' : '固定搭配'}
+                                                            </span>
+                                                            {isChannelForm ? (
+                                                                <span className="text-[11px] text-gray-400">结构由商品主档维护</span>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="mt-1.5 text-xs text-gray-500">
+                                                            {isChannelForm && isFixedGroup
+                                                                ? `${enabledItemCount}/${itemCount} 个子商品已启用`
+                                                                : isChannelForm
+                                                                    ? `${groupEnabled ? '整组已启用' : '整组已禁用'} · ${itemCount} 个子商品`
+                                                                    : card.desc}
+                                                        </div>
+                                                        {card.type === 'optional' ? (
+                                                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                                                                <span>{card.configMode === 'flexible' ? '按数量选择' : '按种类选择'}</span>
+                                                                {card.configMode === 'flexible' ? (
+                                                                    <span>{card.isRequired === false ? '非必选' : '必选'}</span>
+                                                                ) : null}
+                                                                <span>{card.relativePrice ? '启用相对价' : '未启用相对价'}</span>
+                                                                {card.saveAsFreeMatch ? <span className="font-bold text-[#00A35B]">已保存为随心配</span> : null}
+                                                                <span>备注：{card.remark || '--'}</span>
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                    {isChannelForm ? (
+                                                        isFixedGroup ? (
+                                                            <span className="shrink-0 pt-1 text-xs text-gray-400">按子商品设置</span>
+                                                        ) : (
+                                                            <div className="flex shrink-0 items-center gap-2">
+                                                                <Switch active={groupEnabled} onClick={() => toggleChannelComboGroup(card.id)} />
+                                                                <span className={`min-w-[42px] text-xs ${groupEnabled ? 'text-[#008F4C]' : 'text-gray-400'}`}>
+                                                                    {groupEnabled ? '已启用' : '已禁用'}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    ) : (
+                                                        <div className="flex shrink-0 items-center gap-1">
+                                                            {card.type === 'optional' ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openOptionalGroupEditor(card)}
+                                                                    className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
+                                                                >
+                                                                    <Pencil size={13} />
+                                                                    编辑
+                                                                </button>
+                                                            ) : null}
+                                                            <button
+                                                                type="button"
+                                                                title="删除分组"
+                                                                aria-label={`删除${card.title}`}
+                                                                onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
+                                                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {isChannelForm && isFixedGroup && itemCount > 0 ? (
+                                                    <div className="divide-y divide-gray-100 border-t border-gray-100 bg-[#FCFCFD]">
+                                                        {card.items?.map(item => {
+                                                            const itemEnabled = item.channelEnabled !== false;
+                                                            return (
+                                                                <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3">
+                                                                    <div className="min-w-0">
+                                                                        <div className={`truncate text-sm font-medium ${itemEnabled ? 'text-[#1F2129]' : 'text-gray-400'}`}>{item.name}</div>
+                                                                        <div className="mt-1 text-xs text-gray-400">{item.spec} · 数量 {item.quantity}</div>
+                                                                    </div>
+                                                                    <div className="flex shrink-0 items-center gap-2">
+                                                                        <Switch active={itemEnabled} onClick={() => toggleChannelFixedItem(card.id, item.id)} />
+                                                                        <span className={`min-w-[42px] text-xs ${itemEnabled ? 'text-[#008F4C]' : 'text-gray-400'}`}>
+                                                                            {itemEnabled ? '已启用' : '已禁用'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : null}
+                                                {!isFixedGroup && itemCount > 0 ? (
+                                                    <div className={`flex flex-wrap gap-2 border-t border-gray-100 bg-[#FCFCFD] px-4 py-3 ${isChannelForm && !groupEnabled ? 'opacity-50' : ''}`}>
+                                                        {card.items?.map(item => (
+                                                            <span
+                                                                key={item.id}
+                                                                className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600"
+                                                            >
+                                                                {item.name}
+                                                                {item.surcharge > 0 ? ` +¥${item.surcharge}` : ''}
+                                                                {item.isDefault ? <span className="ml-1.5 text-[#00A35B]">默认</span> : null}
+                                                            </span>
+                                                        ))}
+                                                        {isChannelForm && !groupEnabled ? (
+                                                            <span className="self-center text-xs text-gray-500">当前渠道不展示该分组</span>
+                                                        ) : null}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-400">

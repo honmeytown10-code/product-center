@@ -24,6 +24,8 @@ type Props = {
   onCancel: () => void;
   onConfirm: () => void;
   confirmLabel?: string;
+  onSecondaryConfirm?: () => void;
+  secondaryConfirmLabel?: string;
   maxSelected?: number;
   fixedType?: 'standard' | 'combo';
   disabledIds?: string[];
@@ -53,6 +55,8 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
   onCancel,
   onConfirm,
   confirmLabel = '确定',
+  onSecondaryConfirm,
+  secondaryConfirmLabel,
   maxSelected,
   fixedType,
   disabledIds = [],
@@ -235,6 +239,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
             </div>
             <button type="button" onClick={() => onSelectedIdsChange([])} className="h-9 border border-[#E5E6EB] bg-white px-5 text-[13px] text-[#4E5969]">清空选择</button>
             <button type="button" onClick={onCancel} className="h-9 border border-[#E5E6EB] bg-white px-5 text-[13px] font-medium text-[#4E5969]">取消</button>
+            {onSecondaryConfirm && secondaryConfirmLabel ? <button type="button" onClick={onSecondaryConfirm} className="h-9 border border-[#00B460] bg-white px-5 text-[13px] font-medium text-[#008F4C] hover:bg-[#F3FCF7]">{secondaryConfirmLabel}</button> : null}
             <button type="button" onClick={onConfirm} className="h-9 bg-[#00B460] px-6 text-[13px] font-medium text-white hover:bg-[#009A52]">{confirmLabel}</button>
           </div>
         </div>

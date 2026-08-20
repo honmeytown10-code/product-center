@@ -1048,7 +1048,7 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'channel_attributes') {
-          return <WebProductAttributeManager scope="channel" />;
+          return <WebProductAttributeManager scope="channel" onOpenSyncRecords={() => { setProductSyncInitialTab('records'); setActiveMenu('product_sync'); }} />;
       }
 
       if (activeMenu === 'channel_custom_attributes') {
@@ -1102,6 +1102,10 @@ export const WebAdmin: React.FC = () => {
           return (
             <WebChannelProductLibrary
               productOverrides={channelProductOverrides}
+              onOpenSyncRecords={() => {
+                setProductSyncInitialTab('records');
+                setActiveMenu('product_sync');
+              }}
               onBatchEdit={() => {
                 setCreationContext(null);
                 setActiveMenu('product_sync');

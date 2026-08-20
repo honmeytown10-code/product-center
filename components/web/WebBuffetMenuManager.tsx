@@ -721,7 +721,7 @@ export const WebBuffetMenuManager: React.FC = () => {
 
   const renderTicketStep = () => (
     <div className="mx-auto w-full max-w-[980px] space-y-6 p-6">
-      <h2 className="text-[16px] font-semibold text-[#1D2939]">菜单与餐标</h2>
+      <h2 className="text-[18px] font-semibold text-[#1D2939]">菜单与餐标</h2>
       <div className="rounded-lg border border-[#EAECF0] bg-white p-5">
         <FieldLabel required helper="品牌内不可重名，最多 40 个字符">菜单名称</FieldLabel>
         <input value={draftName} maxLength={40} onChange={event => setDraftName(event.target.value)} className={`h-9 w-full max-w-[520px] rounded border px-3 text-[13px] outline-none ${validatedSteps[1] && (!draftName.trim() || nameConflict) ? 'border-[#E5484D]' : 'border-[#D0D5DD] focus:border-[#00B460]'}`} placeholder="例如：深圳午市成人畅享菜单" />
@@ -774,7 +774,7 @@ export const WebBuffetMenuManager: React.FC = () => {
   const renderProductsStep = () => (
     <div className="mx-auto w-full max-w-[1080px] space-y-4 p-6">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[16px] font-semibold text-[#1D2939]">菜单商品</h2>
+        <h2 className="text-[18px] font-semibold text-[#1D2939]">菜单商品</h2>
         <span className="text-[12px] text-[#667085]">共 {draftItems.length} 个商品</span>
       </div>
       <div className="flex h-11 items-end gap-6 border-b border-[#EAECF0] bg-white px-4" role="tablist" aria-label="菜单商品类型">
@@ -788,7 +788,7 @@ export const WebBuffetMenuManager: React.FC = () => {
 
   const renderStoreStep = () => (
     <div className="mx-auto w-full max-w-[1020px] space-y-5 p-6">
-      <h2 className="text-[16px] font-semibold text-[#1D2939]">适用门店</h2>
+      <h2 className="text-[18px] font-semibold text-[#1D2939]">适用门店</h2>
       <div className="rounded-lg border border-[#EAECF0] bg-white">
         <div className="border-b border-[#EAECF0] px-5 py-4">
           <FieldLabel required>适用范围</FieldLabel>

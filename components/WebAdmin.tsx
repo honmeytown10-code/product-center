@@ -46,6 +46,7 @@ import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
 import { WebSalesScopeManager } from './web/WebSalesScopeManager';
+import { WebBuffetMenuManager } from './web/WebBuffetMenuManager';
 import { WebProductLogPage } from './web/WebProductLogPage';
 import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
 import { WebChannelProductLibrary } from './web/WebChannelProductLibrary';
@@ -341,7 +342,7 @@ export const WebAdmin: React.FC = () => {
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>('store');
-  const [activeMenu, setActiveMenu] = useState('product_list');
+  const [activeMenu, setActiveMenu] = useState('buffet_menu');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -543,7 +544,7 @@ export const WebAdmin: React.FC = () => {
       'recipe_default', 'recipe_legacy', 'recipe_new', 'addon_group',
     ];
     const operationMenus = [
-      'product_sync', 'product_template', 'sales_scope', 'price_systems',
+      'product_sync', 'product_template', 'sales_scope', 'buffet_menu', 'price_systems',
       'attribute_mutex_rules', 'required_product_policy', 'product_recommendation', 'product_mapping',
     ];
     const targetGroup = libraryMenus.includes(activeMenu)
@@ -1090,6 +1091,10 @@ export const WebAdmin: React.FC = () => {
           return <WebSalesScopeManager />;
       }
 
+      if (activeMenu === 'buffet_menu') {
+          return <WebBuffetMenuManager />;
+      }
+
       if (activeMenu === 'channel_product_library') {
           if (prototypeOmnichannelScenario === 'first_activation') {
             return (
@@ -1251,7 +1256,7 @@ export const WebAdmin: React.FC = () => {
     }
 
     if ([
-      'sales_scope', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy',
+      'sales_scope', 'buffet_menu', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy',
     ].includes(activeMenu)) {
       ariaLabel = '销售规则';
       tabs = [
@@ -1285,6 +1290,12 @@ export const WebAdmin: React.FC = () => {
             setRequiredPolicyEditorContext(null);
             setActiveMenu('required_product_policy');
           },
+        },
+        {
+          key: 'buffet-menu',
+          label: '自助餐菜单',
+          active: activeMenu === 'buffet_menu',
+          onClick: () => setActiveMenu('buffet_menu'),
         },
       ];
     }
@@ -1336,7 +1347,7 @@ export const WebAdmin: React.FC = () => {
 
     return (
       <div className="flex h-[48px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-6" role="tablist" aria-label={ariaLabel}>
-        <div className="flex h-full min-w-0 items-stretch gap-8 overflow-x-auto no-scrollbar">
+        <div className="flex h-full min-w-0 items-stretch gap-6 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (
             <button
               key={tab.key}
@@ -1568,7 +1579,7 @@ export const WebAdmin: React.FC = () => {
            <SidebarItem
              label="销售规则"
              icon={<SlidersHorizontal size={17} />}
-             active={['sales_scope', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy'].includes(activeMenu)}
+             active={['sales_scope', 'buffet_menu', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy'].includes(activeMenu)}
              onClick={() => { setActiveMenu('sales_scope'); setCreationContext(null); }}
            />
            <SidebarItem

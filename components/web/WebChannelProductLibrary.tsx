@@ -105,9 +105,14 @@ export type ChannelProductCreateRequest = Omit<ChannelProductEditRequest, 'produ
   type: 'standard' | 'combo';
 };
 
+export type ChannelProductsSyncRequest = Omit<ChannelProductEditRequest, 'product'> & {
+  products: Product[];
+};
+
 interface Props {
   onEditProduct?: (request: ChannelProductEditRequest) => void;
   onEditMasterProduct?: (request: ChannelProductEditRequest) => void;
+  onSyncFromMaster?: (request: ChannelProductsSyncRequest) => void;
   onCreateProduct?: (request: ChannelProductCreateRequest) => void;
   onBatchEdit?: (catalogId: string) => void;
   productOverrides?: Record<string, any>;
@@ -117,6 +122,7 @@ interface Props {
 export const WebChannelProductLibrary: React.FC<Props> = ({
   onEditProduct,
   onEditMasterProduct,
+  onSyncFromMaster,
   onCreateProduct,
   onBatchEdit,
   productOverrides = {},
@@ -134,6 +140,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       : availableGroups[0]?.id || ''
   );
   const [quickSearch, setQuickSearch] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [selectedQuickCategory, setSelectedQuickCategory] = useState<string | null>(null);
@@ -176,6 +183,10 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       setActiveGroupId(initialGroupId);
     }
   }, [availableGroups, initialGroupId]);
+
+  useEffect(() => {
+    setSelectedProductIds([]);
+  }, [activeGroupId]);
 
   useEffect(() => {
     if (!availableGroups.some(group => group.id === activeGroupId)) {
@@ -276,6 +287,21 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       if (secondIndex === -1) return -1;
       return firstIndex - secondIndex;
     });
+  const allVisibleSelected = visibleProducts.length > 0
+    && visibleProducts.every(product => selectedProductIds.includes(product.id));
+
+  const toggleVisibleSelection = () => {
+    const visibleIds = visibleProducts.map(product => product.id);
+    setSelectedProductIds(current => allVisibleSelected
+      ? current.filter(id => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds(current => current.includes(productId)
+      ? current.filter(id => id !== productId)
+      : [...current, productId]);
+  };
   const hasActiveFilters = Boolean(
     quickSearch.trim()
     || appliedFilters.productId.trim()
@@ -386,6 +412,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   const removeProductFromGroup = (productId: string) => {
     if (!activeGroup) return;
+    setSelectedProductIds(current => current.filter(id => id !== productId));
     setGroupProductIds(prev => ({
       ...prev,
       [activeGroup.id]: (prev[activeGroup.id] || []).filter(id => id !== productId),
@@ -408,6 +435,20 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     if (!activeGroup || !canCreateMasterFromCatalog) return;
     onEditMasterProduct?.({
       product,
+      catalogId: activeGroup.id,
+      catalogName: activeGroup.name,
+      channelIds: activeGroup.channels,
+      channelNames: activeGroup.channels.map(channelId => getOmnichannelChannel(channelId).name),
+      thirdPartyChannelIds,
+    });
+  };
+
+  const syncSelectedFromMaster = () => {
+    if (!activeGroup) return;
+    const selectedProducts = products.filter(product => selectedProductIds.includes(product.id));
+    if (selectedProducts.length === 0) return;
+    onSyncFromMaster?.({
+      products: selectedProducts,
       catalogId: activeGroup.id,
       catalogName: activeGroup.name,
       channelIds: activeGroup.channels,
@@ -487,6 +528,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     onClick={() => {
                       setActiveGroupId(group.id);
                       setSelectedQuickCategory(null);
+                      setSelectedProductIds([]);
                     }}
                     className={`min-w-[176px] rounded-md border px-3 py-2 text-left transition-colors ${
                       active
@@ -574,11 +616,23 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
         <section className="console-panel flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E8E8E8] px-4 py-3">
-            <div className="flex h-9 w-[320px] items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
-              <Search size={15} className="mr-2 text-gray-400" />
-              <input value={quickSearch} onChange={event => setQuickSearch(event.target.value)} className="w-full text-sm outline-none" placeholder="搜索商品名称、商品ID、SKUID" />
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-[320px] items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
+                <Search size={15} className="mr-2 text-gray-400" />
+                <input value={quickSearch} onChange={event => setQuickSearch(event.target.value)} className="w-full text-sm outline-none" placeholder="搜索商品名称、商品ID、SKUID" />
+              </div>
+              {selectedProductIds.length > 0 && <span className="text-xs font-medium text-[#667085]">已选 {selectedProductIds.length} 个商品</span>}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={selectedProductIds.length === 0}
+                onClick={syncSelectedFromMaster}
+                className="console-secondary-button border-[#8BD7AE] text-[#008F53] disabled:cursor-not-allowed disabled:border-[#E5E6EB] disabled:text-[#C9CDD4]"
+                title={selectedProductIds.length === 0 ? '请先勾选需要更新的渠道商品' : `从主档更新已选 ${selectedProductIds.length} 个商品`}
+              >
+                <RefreshCw size={15} />从主档更新
+              </button>
               <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
                 <ListFilter size={15} />排序管理
               </button>
@@ -672,9 +726,12 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               </button>
             )}
             <div className="min-w-0 flex-1 overflow-auto">
-            <table className={`${reviewChannel ? 'min-w-[1320px]' : 'min-w-[1140px]'} w-full table-fixed text-left text-sm`}>
+            <table className={`${reviewChannel ? 'min-w-[1370px]' : 'min-w-[1190px]'} w-full table-fixed text-left text-sm`}>
               <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-gray-500">
                 <tr>
+                  <th className="w-[50px] border-b border-[#E8E8E8] px-4 py-3 text-center">
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="选择当前列表全部商品" className="h-4 w-4 rounded border-gray-300 accent-[#00B460]" />
+                  </th>
                   <th className="w-[250px] border-b border-[#E8E8E8] px-5 py-3">商品</th>
                   <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">商品类型</th>
                   <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">前台分类</th>
@@ -688,6 +745,9 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               <tbody>
                 {visibleProducts.map((product, index) => (
                   <tr key={product.id} className="group hover:bg-[#FAFBFC]">
+                    <td className="border-b border-[#F0F0F0] px-4 py-4 text-center">
+                      <input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`选择${product.name}`} className="h-4 w-4 rounded border-gray-300 accent-[#00B460]" />
+                    </td>
                     <td className="border-b border-[#F0F0F0] px-5 py-4">
                       <div className="flex items-center gap-3">
                         <img src={product.image} alt="" className="h-11 w-11 shrink-0 border border-gray-100 object-cover" />
@@ -718,7 +778,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     </td>
                   </tr>
                 ))}
-                {visibleProducts.length === 0 && <tr><td colSpan={reviewChannel ? 8 : 7} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
+                {visibleProducts.length === 0 && <tr><td colSpan={reviewChannel ? 9 : 8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
               </tbody>
             </table>
             </div>

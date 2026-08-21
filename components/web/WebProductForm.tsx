@@ -463,6 +463,7 @@ const CHANNEL_READONLY_FIELD_IDS = new Set([
     'p_cat',
     'p_weight_flag',
     'p_unit',
+    's_tax_rate',
 ]);
 const CHANNEL_POS_ONLY_FIELD_IDS = new Set(['p_tare_weight']);
 const MASTER_SPEC_CHILD_IDS = new Set([
@@ -597,6 +598,19 @@ const COMBO_FALLBACK_FIELDS: CategoryFieldConfig[] = [
     { id: 'o_ingredients', isRequired: false },
 ];
 const WEIGHT_UNIT_OPTIONS = ['克', '千克', '斤', '两'] as const;
+type TaxCategoryOption = {
+    code: string;
+    name: string;
+    rate: string;
+    remark: string;
+};
+const TAX_CATEGORY_OPTIONS: TaxCategoryOption[] = [
+    { code: '1010101080000000000', name: '黑麦', rate: '1%', remark: '谷物及其制品' },
+    { code: '1010101060000000000', name: '大麦', rate: '3%', remark: '谷物及其制品' },
+    { code: '1010115013200000000', name: '石榴', rate: '13%', remark: '水果及坚果' },
+    { code: '1030201010000000000', name: '饮料', rate: '6%', remark: '非酒精饮料' },
+    { code: '1030301000000000000', name: '餐饮服务', rate: '6%', remark: '现场制售餐饮服务' },
+];
 const DEFAULT_FRONT_CATEGORY_TREE: CategoryTreeNode[] = [
     {
         id: 'front-cat-1',
@@ -1053,6 +1067,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [previewPreference, setPreviewPreference] = useState<PreviewDisplayPreference | null>(() => getStoredPreviewPreference(previewPreferenceKey));
     const [showPreviewPreferenceMenu, setShowPreviewPreferenceMenu] = useState(false);
     const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
+    const [showTaxCategoryModal, setShowTaxCategoryModal] = useState(false);
+    const [taxCategoryFilters, setTaxCategoryFilters] = useState({ name: '', code: '', rate: '', remark: '' });
     const [expandedMoreFields, setExpandedMoreFields] = useState<string[]>([]);
     const [expandedComboAdvancedFields, setExpandedComboAdvancedFields] = useState<string[]>([]);
     const [comboAdvancedExpandedAll, setComboAdvancedExpandedAll] = useState(false);
@@ -1091,6 +1107,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [draftDisabledChannelSpecValues, setDraftDisabledChannelSpecValues] = useState<string[]>([]);
     const [showChannelSpecValueModal, setShowChannelSpecValueModal] = useState(false);
     const [pendingChannelSpecValueToggle, setPendingChannelSpecValueToggle] = useState<PendingChannelSpecValueToggle | null>(null);
+    const filteredTaxCategoryOptions = useMemo(() => TAX_CATEGORY_OPTIONS.filter(option => (
+        option.name.includes(taxCategoryFilters.name.trim())
+        && option.code.includes(taxCategoryFilters.code.trim())
+        && option.rate.includes(taxCategoryFilters.rate.trim())
+        && option.remark.includes(taxCategoryFilters.remark.trim())
+    )), [taxCategoryFilters]);
     const [activeSpecGroupId, setActiveSpecGroupId] = useState<string>(SPEC_LIBRARY[0].id);
     const [selectedSpecValuesByGroup, setSelectedSpecValuesByGroup] = useState<SpecSelectionMap>(() => (
         mode === 'create' ? {} : deriveSpecSelectionMap(['8寸', '10寸', '12寸'])
@@ -4838,6 +4860,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const saleSettings = dynamicFormData.s_sale_settings || {};
         const takeoutRule = dynamicFormData.s_takeout_rule || '正常售卖';
         const taxRate = dynamicFormData.s_tax_rate || '';
+        const taxCategoryName = dynamicFormData.s_tax_category_name || '';
+        const taxCategoryCode = dynamicFormData.s_tax_category_code || '';
+        const taxReadonly = isChannelFieldReadonly('s_tax_rate');
         const thirdMiniProgramEnabled = !!dynamicFormData.s_jump_third_mini_program;
         const thirdMiniProgramPath = dynamicFormData.s_third_mini_program_path || '';
         const salesCommissionAmount = dynamicFormData.s_sales_commission_amount || '';
@@ -5022,48 +5047,57 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 {expandedSalesFields.includes('s_tax_rate') && isFieldEnabled('s_tax_rate') && (
                                     <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">税率</div>
-                                        <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
-                                            <div className="max-w-[260px]">
+                                        <div className="space-y-4 rounded-lg border border-[#EEF0F2] bg-[#FAFAFA] p-4">
+                                            <div>
                                                 <div className="mb-2 text-sm font-bold text-[#1F2129]">选择税率</div>
-                                                <select
-                                                    className="q-form-select"
-                                                    value={taxRate}
-                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_tax_rate: e.target.value }))}
-                                                >
-                                                    <option value="">请选择</option>
-                                                    <option value="0%">0%</option>
-                                                    <option value="1%">1%</option>
-                                                    <option value="3%">3%</option>
-                                                    <option value="6%">6%</option>
-                                                    <option value="9%">9%</option>
-                                                    <option value="13%">13%</option>
-                                                </select>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {taxRate ? (
+                                                        <div className="inline-flex min-h-10 items-center rounded-md border border-[#DDE3E8] bg-white px-3 text-sm text-[#1F2129]">
+                                                            <span>{taxCategoryName || '已选税收分类'}（税率：{taxRate}）</span>
+                                                            <span className="ml-2 text-[#00A35B]">已选择</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-sm text-[#98A2B3]">暂未选择税收分类</span>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        disabled={taxReadonly}
+                                                        onClick={() => setShowTaxCategoryModal(true)}
+                                                        className="console-secondary-button disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {taxRate ? '重新选择' : '请选择'}
+                                                    </button>
+                                                    {taxCategoryCode && <span className="text-xs text-[#98A2B3]">税收分类编码：{taxCategoryCode}</span>}
+                                                </div>
                                             </div>
 
                                             {taxRate && (
-                                                <>
-                                                    <div className="max-w-[520px]">
+                                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                    <div>
                                                         <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
                                                         <input
                                                             className="q-form-input"
                                                             placeholder="请输入内容"
                                                             value={invoiceItemName}
+                                                            disabled={taxReadonly}
                                                             onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
                                                         />
                                                         <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
                                                     </div>
 
-                                                    <div className="max-w-[520px]">
+                                                    <div>
                                                         <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
                                                         <input
                                                             className="q-form-input"
                                                             placeholder="请输入内容"
                                                             value={invoiceCustomUnit}
+                                                            disabled={taxReadonly}
                                                             onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
                                                         />
                                                     </div>
-                                                </>
+                                                </div>
                                             )}
+                                            {taxReadonly && <div className="text-xs text-[#98A2B3]">该字段由商品主档统一维护，可通过“从商品主档更新”同步最新设置。</div>}
                                         </div>
                                     </div>
                                 )}
@@ -9868,6 +9902,83 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     categories={categories}
                     onSelect={handleCategorySelect}
                 />
+            )}
+            {showTaxCategoryModal && (
+                <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/45 p-6" role="dialog" aria-modal="true" aria-label="选择税率">
+                    <div className="flex max-h-[82vh] w-full max-w-[1000px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+                        <header className="flex items-center justify-between border-b border-[#E8E8E8] px-6 py-5">
+                            <div>
+                                <h3 className="text-lg font-black text-[#1F2129]">选择税率</h3>
+                                <p className="mt-1 text-xs text-[#667085]">选择税收分类后，系统同时带回税收分类编码与对应税率。</p>
+                            </div>
+                            <button type="button" onClick={() => setShowTaxCategoryModal(false)} className="rounded-md p-1.5 text-[#98A2B3] hover:bg-[#F5F6F8]" aria-label="关闭选择税率"><X size={20} /></button>
+                        </header>
+
+                        <div className="min-h-0 flex-1 overflow-auto p-6">
+                            <div className="grid grid-cols-4 gap-3 rounded-lg bg-[#F7F8FA] p-4">
+                                <input className="q-form-input bg-white" value={taxCategoryFilters.name} onChange={e => setTaxCategoryFilters(current => ({ ...current, name: e.target.value }))} placeholder="请输入税收分类名称" />
+                                <input className="q-form-input bg-white" value={taxCategoryFilters.code} onChange={e => setTaxCategoryFilters(current => ({ ...current, code: e.target.value }))} placeholder="请输入税收分类编码" />
+                                <input className="q-form-input bg-white" value={taxCategoryFilters.rate} onChange={e => setTaxCategoryFilters(current => ({ ...current, rate: e.target.value }))} placeholder="请输入税率" />
+                                <div className="flex items-center gap-2">
+                                    <input className="q-form-input min-w-0 flex-1 bg-white" value={taxCategoryFilters.remark} onChange={e => setTaxCategoryFilters(current => ({ ...current, remark: e.target.value }))} placeholder="请输入备注" />
+                                    <button type="button" onClick={() => setTaxCategoryFilters({ name: '', code: '', rate: '', remark: '' })} className="shrink-0 text-sm font-medium text-[#00A35B]">清空</button>
+                                </div>
+                            </div>
+
+                            <div className="mt-5 overflow-hidden rounded-lg border border-[#E5E7EB]">
+                                <table className="w-full table-fixed text-left text-sm">
+                                    <thead className="bg-[#F7F8FA] text-[#475467]">
+                                        <tr>
+                                            <th className="w-[250px] px-5 py-3 font-bold">税收分类编码</th>
+                                            <th className="w-[180px] px-5 py-3 font-bold">税收分类名称</th>
+                                            <th className="w-[110px] px-5 py-3 font-bold">税率</th>
+                                            <th className="px-5 py-3 font-bold">备注</th>
+                                            <th className="w-[100px] px-5 py-3 font-bold">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredTaxCategoryOptions.map(option => {
+                                            const selected = option.code === taxCategoryCode;
+                                            return (
+                                                <tr key={option.code} className="border-t border-[#EEF0F2] hover:bg-[#FAFBFC]">
+                                                    <td className="px-5 py-3 text-[#475467]">{option.code}</td>
+                                                    <td className="px-5 py-3 font-medium text-[#1F2129]">{option.name}</td>
+                                                    <td className="px-5 py-3 text-[#1F2129]">{option.rate}</td>
+                                                    <td className="px-5 py-3 text-[#667085]">{option.remark || '—'}</td>
+                                                    <td className="px-5 py-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setDynamicFormData(prev => ({
+                                                                    ...prev,
+                                                                    s_tax_rate: option.rate,
+                                                                    s_tax_category_code: option.code,
+                                                                    s_tax_category_name: option.name,
+                                                                }));
+                                                                setShowTaxCategoryModal(false);
+                                                            }}
+                                                            className={`font-medium ${selected ? 'text-[#98A2B3]' : 'text-[#00A35B] hover:text-[#008F4C]'}`}
+                                                        >
+                                                            {selected ? '已选择' : '选择'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {filteredTaxCategoryOptions.length === 0 && (
+                                            <tr><td colSpan={5} className="px-5 py-16 text-center text-sm text-[#98A2B3]">没有符合当前条件的税收分类</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <footer className="flex items-center justify-between border-t border-[#E8E8E8] px-6 py-4">
+                            <span className="text-xs text-[#98A2B3]">共 {filteredTaxCategoryOptions.length} 条</span>
+                            <button type="button" onClick={() => setShowTaxCategoryModal(false)} className="console-secondary-button">取消</button>
+                        </footer>
+                    </div>
+                </div>
             )}
             {renderSpecPickerModal()}
             {renderMethodPickerModal()}

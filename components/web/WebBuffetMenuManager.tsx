@@ -38,6 +38,7 @@ type TicketProduct = {
   applicablePeople: number;
   frontendCategory: string;
   requiresDeposit: boolean;
+  allowPosTemporaryPrice: boolean;
   availableStoreIds: string[];
 };
 
@@ -47,6 +48,7 @@ type NewTicketForm = {
   price: string;
   applicablePeople: string;
   requiresDeposit: boolean;
+  allowPosTemporaryPrice: boolean;
 };
 
 type MenuSku = {
@@ -98,11 +100,11 @@ const STORES: StoreOption[] = [
 const ALL_STORE_IDS = STORES.map(store => store.id);
 
 const TICKETS: TicketProduct[] = [
-  { id: 't-adult-lunch', name: '成人午市自助餐门票', code: 'BUFFET-A-L', price: 118, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-child-lunch', name: '儿童午市自助餐门票', code: 'BUFFET-C-L', price: 68, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-child-dinner', name: '儿童晚市自助餐门票', code: 'BUFFET-C-D', price: 88, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-adult-dinner', name: '成人晚市自助餐门票', code: 'BUFFET-A-D', price: 168, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-premium', name: '尊享海鲜双人自助餐门票', code: 'BUFFET-P', price: 438, applicablePeople: 2, frontendCategory: '双人自助餐', requiresDeposit: true, availableStoreIds: ['s001', 's002', 's004', 's007'] },
+  { id: 't-adult-lunch', name: '成人午市自助餐门票', code: 'BUFFET-A-L', price: 118, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, allowPosTemporaryPrice: false, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-child-lunch', name: '儿童午市自助餐门票', code: 'BUFFET-C-L', price: 68, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, allowPosTemporaryPrice: true, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-child-dinner', name: '儿童晚市自助餐门票', code: 'BUFFET-C-D', price: 88, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, allowPosTemporaryPrice: false, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-adult-dinner', name: '成人晚市自助餐门票', code: 'BUFFET-A-D', price: 168, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, allowPosTemporaryPrice: true, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-premium', name: '尊享海鲜双人自助餐门票', code: 'BUFFET-P', price: 438, applicablePeople: 2, frontendCategory: '双人自助餐', requiresDeposit: true, allowPosTemporaryPrice: false, availableStoreIds: ['s001', 's002', 's004', 's007'] },
 ];
 
 const FRONTEND_CATEGORIES = ['成人自助餐', '儿童自助餐', '双人自助餐', '家庭自助餐'];
@@ -338,11 +340,9 @@ export const WebBuffetMenuManager: React.FC = () => {
   const [ticketProducts, setTicketProducts] = useState<TicketProduct[]>(TICKETS);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | MenuStatus>('all');
-  const [ticketFilter, setTicketFilter] = useState('all');
   const [storeFilter, setStoreFilter] = useState('all');
   const [appliedKeyword, setAppliedKeyword] = useState('');
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<'all' | MenuStatus>('all');
-  const [appliedTicketFilter, setAppliedTicketFilter] = useState('all');
   const [appliedStoreFilter, setAppliedStoreFilter] = useState('all');
   const [detailMenu, setDetailMenu] = useState<BuffetMenu | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -371,6 +371,7 @@ export const WebBuffetMenuManager: React.FC = () => {
     price: '',
     applicablePeople: '1',
     requiresDeposit: false,
+    allowPosTemporaryPrice: false,
   });
 
   const getTicket = (id: string) => ticketProducts.find(ticket => ticket.id === id);
@@ -382,10 +383,9 @@ export const WebBuffetMenuManager: React.FC = () => {
       || menu.id.toLowerCase().includes(normalized)
       || menu.ticketIds.some(id => getTicket(id)?.name.toLowerCase().includes(normalized));
     const matchesStatus = appliedStatusFilter === 'all' || menu.status === appliedStatusFilter;
-    const matchesTicket = appliedTicketFilter === 'all' || menu.ticketIds.includes(appliedTicketFilter);
     const matchesStore = appliedStoreFilter === 'all' || menu.storeIds.includes(appliedStoreFilter);
-    return matchesKeyword && matchesStatus && matchesTicket && matchesStore;
-  }), [appliedKeyword, appliedStatusFilter, appliedStoreFilter, appliedTicketFilter, menus, ticketProducts]);
+    return matchesKeyword && matchesStatus && matchesStore;
+  }), [appliedKeyword, appliedStatusFilter, appliedStoreFilter, menus, ticketProducts]);
 
   const effectiveDraftStoreIds = useMemo(
     () => draftStoreScope === 'all' ? ALL_STORE_IDS : draftStoreIds,
@@ -468,7 +468,7 @@ export const WebBuffetMenuManager: React.FC = () => {
   };
 
   const openCreateTicket = () => {
-    setNewTicketForm({ name: '', frontendCategory: '', price: '', applicablePeople: '1', requiresDeposit: false });
+    setNewTicketForm({ name: '', frontendCategory: '', price: '', applicablePeople: '1', requiresDeposit: false, allowPosTemporaryPrice: false });
     setCreateTicketOpen(true);
   };
 
@@ -483,6 +483,7 @@ export const WebBuffetMenuManager: React.FC = () => {
       applicablePeople: newTicketPeople,
       frontendCategory: newTicketForm.frontendCategory,
       requiresDeposit: newTicketForm.requiresDeposit,
+      allowPosTemporaryPrice: newTicketForm.allowPosTemporaryPrice,
       availableStoreIds: ALL_STORE_IDS,
     };
     setTicketProducts(current => [ticket, ...current]);
@@ -591,7 +592,7 @@ export const WebBuffetMenuManager: React.FC = () => {
 
   const renderListState = () => {
     if (!filteredMenus.length) {
-      return <EmptyState icon={<Search size={22} />} title="没有符合条件的菜单" description="请调整查询条件后重试。" action={<button type="button" onClick={() => { setKeyword(''); setStatusFilter('all'); setTicketFilter('all'); setStoreFilter('all'); setAppliedKeyword(''); setAppliedStatusFilter('all'); setAppliedTicketFilter('all'); setAppliedStoreFilter('all'); }} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px]">清空筛选</button>} />;
+      return <EmptyState icon={<Search size={22} />} title="没有符合条件的菜单" description="请调整查询条件后重试。" action={<button type="button" onClick={() => { setKeyword(''); setStatusFilter('all'); setStoreFilter('all'); setAppliedKeyword(''); setAppliedStatusFilter('all'); setAppliedStoreFilter('all'); }} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px]">清空筛选</button>} />;
     }
     return (
       <div className="min-h-0 flex-1 overflow-auto no-scrollbar">
@@ -655,12 +656,8 @@ export const WebBuffetMenuManager: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3 border-b border-[#EAECF0] px-4 py-3">
           <div className="relative min-w-[260px] flex-1 max-w-[360px]">
             <Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" />
-            <input value={keyword} onChange={event => setKeyword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedTicketFilter(ticketFilter); setAppliedStoreFilter(storeFilter); } }} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索菜单名称、编号或餐标" />
+            <input value={keyword} onChange={event => setKeyword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedStoreFilter(storeFilter); } }} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索菜单名称、编号或餐标" />
           </div>
-          <select value={ticketFilter} onChange={event => setTicketFilter(event.target.value)} className="h-9 w-[190px] rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
-            <option value="all">全部餐标</option>
-            {ticketProducts.map(ticket => <option key={ticket.id} value={ticket.id}>{ticket.name}</option>)}
-          </select>
           <select value={storeFilter} onChange={event => setStoreFilter(event.target.value)} className="h-9 w-[170px] rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
             <option value="all">全部适用门店</option>
             {STORES.map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
@@ -671,19 +668,12 @@ export const WebBuffetMenuManager: React.FC = () => {
             <option value="disabled">已停用</option>
           </select>
           <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={() => { setKeyword(''); setStatusFilter('all'); setTicketFilter('all'); setStoreFilter('all'); setAppliedKeyword(''); setAppliedStatusFilter('all'); setAppliedTicketFilter('all'); setAppliedStoreFilter('all'); }} className="h-9 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054] hover:bg-[#F9FAFB]">重置</button>
-            <button type="button" onClick={() => { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedTicketFilter(ticketFilter); setAppliedStoreFilter(storeFilter); }} className="h-9 rounded bg-[#00B460] px-5 text-[13px] font-medium text-white hover:bg-[#009F56]">查询</button>
+            <button type="button" onClick={() => { setKeyword(''); setStatusFilter('all'); setStoreFilter('all'); setAppliedKeyword(''); setAppliedStatusFilter('all'); setAppliedStoreFilter('all'); }} className="h-9 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054] hover:bg-[#F9FAFB]">重置</button>
+            <button type="button" onClick={() => { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedStoreFilter(storeFilter); }} className="h-9 rounded bg-[#00B460] px-5 text-[13px] font-medium text-white hover:bg-[#009F56]">查询</button>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] px-4 py-3">
-          <div className="flex items-center gap-6 text-[13px] text-[#475467]">
-            <span>共 <strong className="text-[#1D2939]">{menus.length}</strong> 个菜单</span>
-            <span>已启用 <strong className="text-[#008F4C]">{menus.filter(menu => menu.status === 'enabled').length}</strong></span>
-            <span>覆盖 <strong className="text-[#1D2939]">{new Set(menus.flatMap(menu => menu.storeIds)).size}</strong> 家门店</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => openEditor()} className="flex h-8 items-center gap-2 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F56]"><Plus size={16} />创建自助餐菜单</button>
-          </div>
+        <div className="flex items-center justify-end border-b border-[#EAECF0] px-4 py-3">
+          <button type="button" onClick={() => openEditor()} className="flex h-8 items-center gap-2 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F56]"><Plus size={16} />创建自助餐菜单</button>
         </div>
         {renderListState()}
         {filteredMenus.length > 0 && (
@@ -733,7 +723,7 @@ export const WebBuffetMenuManager: React.FC = () => {
           <FieldLabel required>关联自助餐门票（餐标）</FieldLabel>
           <button type="button" onClick={openTicketSelector} className="flex h-8 items-center gap-2 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Ticket size={15} />选择自助餐门票</button>
         </div>
-        {draftTicketIds.length ? <div className="divide-y divide-[#EAECF0]">{draftTicketIds.map(id => { const ticket = getTicket(id); return ticket ? <div key={id} className="flex items-center gap-4 px-5 py-3"><span className="flex h-9 w-9 items-center justify-center rounded bg-[#E8F8F0] text-[#008F4C]"><Ticket size={17} /></span><span className="min-w-0 flex-1"><span className="block font-medium text-[#1D2939]">{ticket.name}</span><span className="mt-0.5 block text-[12px] text-[#98A2B3]">{ticket.code}</span></span><span className="shrink-0 text-right"><span className="block text-[13px] text-[#344054]">适用人数 {ticket.applicablePeople} 人</span><span className="mt-1 block text-[12px] text-[#667085]">售价 ¥{ticket.price.toFixed(2)}</span></span><button type="button" onClick={() => setDraftTicketIds(ids => ids.filter(ticketId => ticketId !== id))} className="rounded p-1.5 text-[#98A2B3] hover:bg-[#FFF1F0] hover:text-[#E5484D]" aria-label={`移除${ticket.name}`}><Trash2 size={15} /></button></div> : null; })}</div> : <div className="py-10 text-center text-[13px] text-[#98A2B3]">尚未选择自助餐门票</div>}
+        {draftTicketIds.length ? <div className="overflow-x-auto"><table className="w-full min-w-[860px] table-fixed text-left text-[13px]"><thead className="bg-[#F9FAFB] text-[#475467]"><tr><th className="w-[300px] px-5 py-3 font-medium">商品名称</th><th className="w-[110px] px-4 py-3 font-medium">适用人数</th><th className="w-[110px] px-4 py-3 font-medium">收取押金</th><th className="w-[130px] px-4 py-3 font-medium">POS临时改价</th><th className="w-[120px] px-4 py-3 font-medium">售价</th><th className="w-[80px] px-4 py-3 font-medium">操作</th></tr></thead><tbody className="divide-y divide-[#EAECF0]">{draftTicketIds.map(id => { const ticket = getTicket(id); return ticket ? <tr key={id} className="text-[#344054]"><td className="px-5 py-3"><span className="block truncate font-medium text-[#1D2939]" title={ticket.name}>{ticket.name}</span><span className="mt-1 block text-[12px] text-[#98A2B3]">{ticket.code}</span></td><td className="px-4 py-3">{ticket.applicablePeople} 人</td><td className="px-4 py-3">{ticket.requiresDeposit ? '是' : '否'}</td><td className="px-4 py-3">{ticket.allowPosTemporaryPrice ? '是' : '否'}</td><td className="px-4 py-3">¥{ticket.price.toFixed(2)}</td><td className="px-4 py-3"><button type="button" onClick={() => setDraftTicketIds(ids => ids.filter(ticketId => ticketId !== id))} className="text-[#008F4C] hover:text-[#007A41]" aria-label={`移除${ticket.name}`}>移除</button></td></tr> : null; })}</tbody></table></div> : <div className="py-10 text-center text-[13px] text-[#98A2B3]">尚未选择自助餐门票</div>}
         {validatedSteps[1] && draftTicketIds.length === 0 && <div className="border-t border-[#F1B7B3] bg-[#FFF5F4] px-5 py-3 text-[12px] text-[#B42318]">请至少选择一张自助餐门票</div>}
       </div>
     </div>
@@ -794,18 +784,22 @@ export const WebBuffetMenuManager: React.FC = () => {
           <FieldLabel required>适用范围</FieldLabel>
           <div className="mt-3 grid grid-cols-2 gap-3">
             {([
-              { value: 'all' as const, title: '全部门店', description: `当前品牌全部 ${STORES.length} 家门店` },
-              { value: 'selected' as const, title: '指定门店', description: '仅在选中的门店使用' },
+              { value: 'all' as const, title: '全部门店' },
+              { value: 'selected' as const, title: '指定门店' },
             ]).map(option => (
-              <label key={option.value} className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 ${draftStoreScope === option.value ? 'border-[#00B460] bg-[#F0FBF6]' : 'border-[#D0D5DD] hover:border-[#98A2B3]'}`}>
-                <input type="radio" name="buffet-store-scope" checked={draftStoreScope === option.value} onChange={() => setDraftStoreScope(option.value)} className="mt-0.5 h-4 w-4 accent-[#00B460]" />
-                <span><span className="block text-[13px] font-medium text-[#344054]">{option.title}</span><span className="mt-1 block text-[12px] text-[#667085]">{option.description}</span></span>
+              <label key={option.value} className={`flex min-h-[52px] cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 ${draftStoreScope === option.value ? 'border-[#00B460] bg-[#F0FBF6]' : 'border-[#D0D5DD] hover:border-[#98A2B3]'}`}>
+                <input type="radio" name="buffet-store-scope" checked={draftStoreScope === option.value} onChange={() => setDraftStoreScope(option.value)} className="h-4 w-4 accent-[#00B460]" />
+                <span className="text-[13px] font-medium text-[#344054]">{option.title}</span>
               </label>
             ))}
           </div>
         </div>
+        <div className="mx-5 mt-4 flex items-start gap-3 rounded border border-[#B2CCFF] bg-[#F5F8FF] px-4 py-3 text-[12px] leading-5 text-[#475467]">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[#3370FF]" />
+          <span><strong className="font-medium text-[#344054]">下发提醒：</strong>菜单关联的餐标和商品需下发至适用门店；未下发的商品不会在门店 POS、扫码点单页面展示。</span>
+        </div>
         {draftStoreScope === 'all' ? (
-          <div className="flex items-center gap-3 px-5 py-5 text-[13px] text-[#344054]"><span className="flex h-9 w-9 items-center justify-center rounded bg-[#E8F8F0] text-[#008F4C]"><Store size={18} /></span><span><span className="block font-medium">全部门店适用</span><span className="mt-1 block text-[12px] text-[#667085]">保存后自动覆盖当前品牌全部 {STORES.length} 家门店</span></span></div>
+          <div className="flex items-center gap-3 px-5 py-5 text-[13px] text-[#344054]"><span className="flex h-9 w-9 items-center justify-center rounded bg-[#E8F8F0] text-[#008F4C]"><Store size={18} /></span><span className="font-medium">全部门店适用</span></div>
         ) : (
           <div>
             <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] px-5 py-3"><span className="text-[13px] text-[#667085]">已选 {draftStoreIds.length} 家门店</span><button type="button" onClick={openStoreSelector} className="flex h-8 items-center gap-2 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Store size={15} />选择门店</button></div>
@@ -904,6 +898,7 @@ export const WebBuffetMenuManager: React.FC = () => {
               <label><span className="mb-2 block text-[13px] font-medium text-[#344054]">商品售价 <span className="text-[#E5484D]">*</span></span><span className="flex h-9 items-center rounded border border-[#D0D5DD] px-3 focus-within:border-[#00B460]"><span className="mr-2 text-[13px] text-[#667085]">¥</span><input type="number" min={0} step={0.01} value={newTicketForm.price} onChange={event => setNewTicketForm(form => ({ ...form, price: event.target.value }))} className="min-w-0 flex-1 text-[13px] outline-none" placeholder="0.00" /></span></label>
               <label><span className="mb-2 block text-[13px] font-medium text-[#344054]">适用人数 <span className="text-[#E5484D]">*</span></span><span className="flex h-9 items-center rounded border border-[#D0D5DD] px-3 focus-within:border-[#00B460]"><input type="number" min={1} step={1} value={newTicketForm.applicablePeople} onChange={event => setNewTicketForm(form => ({ ...form, applicablePeople: event.target.value }))} className="min-w-0 flex-1 text-[13px] outline-none" /><span className="ml-2 text-[13px] text-[#667085]">人</span></span></label>
               <div><span className="mb-2 block text-[13px] font-medium text-[#344054]">是否收取押金</span><div className="flex h-9 items-center gap-3"><Switch active={newTicketForm.requiresDeposit} onClick={() => setNewTicketForm(form => ({ ...form, requiresDeposit: !form.requiresDeposit }))} label={newTicketForm.requiresDeposit ? '收取押金' : '不收取押金'} /><span className="text-[13px] text-[#475467]">{newTicketForm.requiresDeposit ? '收取押金' : '不收取押金'}</span></div></div>
+              <label className="col-span-2 flex cursor-pointer items-start gap-3 rounded border border-[#EAECF0] bg-[#F9FAFB] px-4 py-3"><input type="checkbox" checked={newTicketForm.allowPosTemporaryPrice} onChange={event => setNewTicketForm(form => ({ ...form, allowPosTemporaryPrice: event.target.checked }))} className="mt-0.5 h-4 w-4 rounded border-[#D0D5DD] accent-[#00B460]" /><span><span className="block text-[13px] font-medium text-[#344054]">POS临时改价</span><span className="mt-1 block text-[12px] text-[#98A2B3]">开启后，用于企迈 POS 端临时改价场景</span></span></label>
             </div>
             <div className="flex h-16 items-center justify-end gap-2 border-t border-[#EAECF0] px-5">
               <button type="button" onClick={() => setCreateTicketOpen(false)} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054]">取消</button>

@@ -6,6 +6,8 @@ import {
   Check,
   Clock3,
   Copy,
+  GripVertical,
+  ListOrdered,
   Plus,
   Search,
   Store,
@@ -76,6 +78,7 @@ type BuffetMenuItem = {
 type BuffetMenu = {
   id: string;
   name: string;
+  sort: number;
   ticketIds: string[];
   storeScope: StoreScopeMode;
   storeIds: string[];
@@ -166,6 +169,7 @@ const INITIAL_MENUS: BuffetMenu[] = [
   {
     id: 'bm-001',
     name: '深圳午市成人畅享菜单',
+    sort: 1,
     ticketIds: ['t-adult-lunch'],
     storeScope: 'selected',
     storeIds: ['s001', 's002', 's003'],
@@ -183,6 +187,7 @@ const INITIAL_MENUS: BuffetMenu[] = [
   {
     id: 'bm-002',
     name: '深圳儿童自助菜单',
+    sort: 2,
     ticketIds: ['t-child-lunch', 't-child-dinner'],
     storeScope: 'selected',
     storeIds: ['s001', 's002', 's003'],
@@ -199,6 +204,7 @@ const INITIAL_MENUS: BuffetMenu[] = [
   {
     id: 'bm-003',
     name: '全门店晚市成人菜单',
+    sort: 3,
     ticketIds: ['t-adult-dinner'],
     storeScope: 'all',
     storeIds: ALL_STORE_IDS,
@@ -215,6 +221,7 @@ const INITIAL_MENUS: BuffetMenu[] = [
   {
     id: 'bm-004',
     name: '尊享海鲜试点菜单',
+    sort: 4,
     ticketIds: ['t-premium'],
     storeScope: 'selected',
     storeIds: ['s001', 's004'],
@@ -335,6 +342,82 @@ const SelectionModal: React.FC<{
   </div>
 );
 
+const MenuSortModal: React.FC<{
+  rows: BuffetMenu[];
+  dirty: boolean;
+  onMoveRow: (dragId: string, targetId: string) => void;
+  onChangeSort: (menuId: string, nextSort: number) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}> = ({ rows, dirty, onMoveRow, onChangeSort, onCancel, onSave }) => {
+  const [draggingMenuId, setDraggingMenuId] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="自助餐菜单排序">
+      <div className="flex max-h-[calc(100vh-48px)] w-[760px] max-w-full flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between border-b border-[#EAECF0] px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[16px] font-semibold text-[#1D2939]">自助餐菜单排序</h3>
+              {dirty && <span className="rounded bg-[#FFF7E8] px-2 py-0.5 text-[12px] text-[#B76500]">有未保存修改</span>}
+            </div>
+            <p className="mt-1.5 text-[12px] text-[#667085]">拖动菜单调整顺序，排序值越小越靠前。</p>
+          </div>
+          <button type="button" onClick={onCancel} aria-label="关闭" className="rounded p-1.5 text-[#667085] hover:bg-[#F2F4F7]"><X size={18} /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="overflow-hidden rounded border border-[#EAECF0]">
+            <div className="grid grid-cols-[minmax(0,1fr)_120px] bg-[#F9FAFB] px-4 py-3 text-[13px] font-medium text-[#667085]">
+              <div>菜单名称</div>
+              <div>排序</div>
+            </div>
+            <div className="max-h-[460px] overflow-y-auto no-scrollbar">
+              {rows.map(menu => (
+                <div
+                  key={menu.id}
+                  draggable
+                  onDragStart={event => {
+                    setDraggingMenuId(menu.id);
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', menu.id);
+                  }}
+                  onDragOver={event => {
+                    if (!draggingMenuId || draggingMenuId === menu.id) return;
+                    event.preventDefault();
+                  }}
+                  onDrop={event => {
+                    if (!draggingMenuId || draggingMenuId === menu.id) return;
+                    event.preventDefault();
+                    onMoveRow(draggingMenuId, menu.id);
+                    setDraggingMenuId(null);
+                  }}
+                  onDragEnd={() => setDraggingMenuId(null)}
+                  className={`grid grid-cols-[minmax(0,1fr)_120px] items-center border-t border-[#EAECF0] px-4 py-3 text-[13px] ${draggingMenuId === menu.id ? 'bg-[#F0FBF6]' : 'bg-white hover:bg-[#FCFCFD]'}`}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <GripVertical size={16} className="shrink-0 cursor-grab text-[#98A2B3] active:cursor-grabbing" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-[#344054]" title={menu.name}>{menu.name}</div>
+                      <div className="mt-1 flex items-center gap-2 text-[12px] text-[#98A2B3]"><span>{menu.id.toUpperCase()}</span><StatusBadge status={menu.status} /></div>
+                    </div>
+                  </div>
+                  <select value={menu.sort} onChange={event => onChangeSort(menu.id, Number(event.target.value))} className="h-9 w-full rounded border border-[#D0D5DD] bg-white px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
+                    {rows.map((_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex h-16 shrink-0 items-center justify-end gap-2 border-t border-[#EAECF0] px-5">
+          <button type="button" onClick={onCancel} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054] hover:bg-[#F9FAFB]">取消</button>
+          <button type="button" onClick={onSave} disabled={!dirty} className="h-8 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F56] disabled:cursor-not-allowed disabled:bg-[#A6DCC2]">保存</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const WebBuffetMenuManager: React.FC = () => {
   const [menus, setMenus] = useState<BuffetMenu[]>(INITIAL_MENUS);
   const [ticketProducts, setTicketProducts] = useState<TicketProduct[]>(TICKETS);
@@ -365,6 +448,10 @@ export const WebBuffetMenuManager: React.FC = () => {
   const [selectorKeyword, setSelectorKeyword] = useState('');
   const [confirmToggleMenu, setConfirmToggleMenu] = useState<BuffetMenu | null>(null);
   const [confirmDeleteMenu, setConfirmDeleteMenu] = useState<BuffetMenu | null>(null);
+  const [sortModalOpen, setSortModalOpen] = useState(false);
+  const [sortDraftRows, setSortDraftRows] = useState<BuffetMenu[]>([]);
+  const [sortDirty, setSortDirty] = useState(false);
+  const [discardSortOpen, setDiscardSortOpen] = useState(false);
   const [newTicketForm, setNewTicketForm] = useState<NewTicketForm>({
     name: '',
     frontendCategory: '',
@@ -376,7 +463,7 @@ export const WebBuffetMenuManager: React.FC = () => {
 
   const getTicket = (id: string) => ticketProducts.find(ticket => ticket.id === id);
 
-  const filteredMenus = useMemo(() => menus.filter(menu => {
+  const filteredMenus = useMemo(() => [...menus].sort((left, right) => left.sort - right.sort).filter(menu => {
     const normalized = appliedKeyword.trim().toLowerCase();
     const matchesKeyword = !normalized
       || menu.name.toLowerCase().includes(normalized)
@@ -562,6 +649,7 @@ export const WebBuffetMenuManager: React.FC = () => {
     const nextMenu: BuffetMenu = {
       id: existing?.id || `bm-${String(menus.length + 1).padStart(3, '0')}`,
       name: draftName.trim() || '未命名自助餐菜单',
+      sort: existing?.sort || Math.max(0, ...menus.map(menu => menu.sort)) + 1,
       ticketIds: draftTicketIds,
       storeScope: draftStoreScope,
       storeIds: effectiveDraftStoreIds,
@@ -572,7 +660,7 @@ export const WebBuffetMenuManager: React.FC = () => {
     };
     setMenus(current => existing
       ? current.map(menu => menu.id === existing.id ? nextMenu : menu)
-      : [nextMenu, ...current]);
+      : [...current, nextMenu]);
     setEditorOpen(false);
   };
 
@@ -586,8 +674,56 @@ export const WebBuffetMenuManager: React.FC = () => {
 
   const confirmDelete = () => {
     if (!confirmDeleteMenu || confirmDeleteMenu.status === 'enabled') return;
-    setMenus(current => current.filter(menu => menu.id !== confirmDeleteMenu.id));
+    setMenus(current => current
+      .filter(menu => menu.id !== confirmDeleteMenu.id)
+      .sort((left, right) => left.sort - right.sort)
+      .map((menu, index) => ({ ...menu, sort: index + 1 })));
     setConfirmDeleteMenu(null);
+  };
+
+  const openSortModal = () => {
+    setSortDraftRows([...menus]
+      .sort((left, right) => left.sort - right.sort)
+      .map((menu, index) => ({ ...menu, sort: index + 1 })));
+    setSortDirty(false);
+    setSortModalOpen(true);
+  };
+
+  const moveSortDraftRow = (dragId: string, targetId: string) => {
+    const next = [...sortDraftRows];
+    const dragIndex = next.findIndex(menu => menu.id === dragId);
+    const targetIndex = next.findIndex(menu => menu.id === targetId);
+    if (dragIndex === -1 || targetIndex === -1 || dragIndex === targetIndex) return;
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    setSortDraftRows(next.map((menu, index) => ({ ...menu, sort: index + 1 })));
+    setSortDirty(true);
+  };
+
+  const updateSortDraftRow = (menuId: string, nextSort: number) => {
+    const next = [...sortDraftRows];
+    const currentIndex = next.findIndex(menu => menu.id === menuId);
+    const targetIndex = nextSort - 1;
+    if (currentIndex === -1 || targetIndex < 0 || targetIndex >= next.length || currentIndex === targetIndex) return;
+    const [moved] = next.splice(currentIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    setSortDraftRows(next.map((menu, index) => ({ ...menu, sort: index + 1 })));
+    setSortDirty(true);
+  };
+
+  const requestCloseSortModal = () => {
+    if (sortDirty) {
+      setDiscardSortOpen(true);
+      return;
+    }
+    setSortModalOpen(false);
+  };
+
+  const saveSortDraft = () => {
+    const sortMap = new Map(sortDraftRows.map(menu => [menu.id, menu.sort]));
+    setMenus(current => current.map(menu => ({ ...menu, sort: sortMap.get(menu.id) || menu.sort })));
+    setSortDirty(false);
+    setSortModalOpen(false);
   };
 
   const renderListState = () => {
@@ -596,9 +732,10 @@ export const WebBuffetMenuManager: React.FC = () => {
     }
     return (
       <div className="min-h-0 flex-1 overflow-auto no-scrollbar">
-        <table className="w-full min-w-[1060px] table-fixed border-collapse text-left text-[13px]">
+        <table className="w-full min-w-[1130px] table-fixed border-collapse text-left text-[13px]">
           <thead className="sticky top-0 z-10 bg-[#F9FAFB] text-[#667085]">
             <tr className="h-10 border-y border-[#EAECF0]">
+              <th className="w-[72px] px-4 font-medium">排序</th>
               <th className="w-[210px] px-4 font-medium">菜单名称</th>
               <th className="w-[220px] px-4 font-medium">关联自助餐门票（餐标）</th>
               <th className="w-[150px] px-4 font-medium">菜单商品</th>
@@ -613,6 +750,7 @@ export const WebBuffetMenuManager: React.FC = () => {
               const counts = ITEM_MODES.map(mode => ({ mode, count: menu.items.filter(item => item.mode === mode).length }));
               return (
                 <tr key={menu.id} className="group h-[76px] border-b border-[#EAECF0] hover:bg-[#FAFFFC]">
+                  <td className="px-4 text-[#475467]">{menu.sort}</td>
                   <td className="px-4">
                     <button type="button" onClick={() => setDetailMenu(menu)} className="block max-w-full truncate text-left font-semibold text-[#1D2939] hover:text-[#008F4C]" title={menu.name}>{menu.name}</button>
                     <div className="mt-1 text-[12px] text-[#98A2B3]">{menu.id.toUpperCase()}</div>
@@ -672,7 +810,8 @@ export const WebBuffetMenuManager: React.FC = () => {
             <button type="button" onClick={() => { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedStoreFilter(storeFilter); }} className="h-9 rounded bg-[#00B460] px-5 text-[13px] font-medium text-white hover:bg-[#009F56]">查询</button>
           </div>
         </div>
-        <div className="flex items-center justify-end border-b border-[#EAECF0] px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-b border-[#EAECF0] px-4 py-3">
+          <button type="button" onClick={openSortModal} className="flex h-8 items-center gap-2 rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] hover:bg-[#F9FAFB]"><ListOrdered size={15} />排序管理</button>
           <button type="button" onClick={() => openEditor()} className="flex h-8 items-center gap-2 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F56]"><Plus size={16} />创建自助餐菜单</button>
         </div>
         {renderListState()}
@@ -875,6 +1014,32 @@ export const WebBuffetMenuManager: React.FC = () => {
     <>
       {editorOpen ? renderEditor() : renderList()}
       {renderDetailDrawer()}
+
+      {sortModalOpen && (
+        <MenuSortModal
+          rows={sortDraftRows}
+          dirty={sortDirty}
+          onMoveRow={moveSortDraftRow}
+          onChangeSort={updateSortDraftRow}
+          onCancel={requestCloseSortModal}
+          onSave={saveSortDraft}
+        />
+      )}
+
+      {discardSortOpen && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认放弃菜单排序修改">
+          <div className="w-[440px] max-w-full rounded-lg bg-white shadow-2xl">
+            <div className="flex items-start gap-3 p-5">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF7E8] text-[#B76500]"><AlertTriangle size={18} /></span>
+              <div><h3 className="text-[16px] font-semibold text-[#1D2939]">放弃排序修改？</h3><p className="mt-2 text-[13px] leading-6 text-[#667085]">当前菜单顺序尚未保存，放弃后将恢复为调整前的排序。</p></div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[#EAECF0] px-5 py-4">
+              <button type="button" onClick={() => setDiscardSortOpen(false)} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054]">继续调整</button>
+              <button type="button" onClick={() => { setDiscardSortOpen(false); setSortModalOpen(false); setSortDirty(false); }} className="h-8 rounded bg-[#E5484D] px-4 text-[13px] font-medium text-white">放弃修改</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {ticketSelectorOpen && (
         <SelectionModal title="选择自助餐门票" selectedCount={pendingTicketIds.length} width="w-[760px]" onClose={() => setTicketSelectorOpen(false)} onConfirm={() => { setDraftTicketIds(pendingTicketIds); setTicketSelectorOpen(false); }}>

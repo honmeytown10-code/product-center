@@ -609,7 +609,7 @@ const TAX_CATEGORY_OPTIONS: TaxCategoryOption[] = [
     { code: '1010101060000000000', name: '大麦', rate: '3%', remark: '谷物及其制品' },
     { code: '1010115013200000000', name: '石榴', rate: '13%', remark: '水果及坚果' },
     { code: '1030201010000000000', name: '饮料', rate: '6%', remark: '非酒精饮料' },
-    { code: '1030301000000000000', name: '餐饮服务', rate: '6%', remark: '现场制售餐饮服务' },
+    { code: '3070401000000000000', name: '餐饮服务', rate: '13%', remark: '' },
 ];
 const DEFAULT_FRONT_CATEGORY_TREE: CategoryTreeNode[] = [
     {
@@ -1122,7 +1122,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [activeAddonGroupId, setActiveAddonGroupId] = useState<string>(ADDON_LIBRARY[0].id);
     const [tempMethodSelections, setTempMethodSelections] = useState<string[]>([]);
     const [tempAddonSelections, setTempAddonSelections] = useState<string[]>([]);
-    const [addonScope, setAddonScope] = useState<AddonScope>('type');
+    const [addonScope, setAddonScope] = useState<AddonScope>('total');
     const [addonTotalRule, setAddonTotalRule] = useState<AddonRuleConfig>({
         ruleMode: 'unlimited',
         min: '0',
@@ -5071,32 +5071,30 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 </div>
                                             </div>
 
-                                            {taxRate && (
-                                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                                    <div>
-                                                        <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
-                                                        <input
-                                                            className="q-form-input"
-                                                            placeholder="请输入内容"
-                                                            value={invoiceItemName}
-                                                            disabled={taxReadonly}
-                                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
-                                                        />
-                                                        <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
-                                                    </div>
-
-                                                    <div>
-                                                        <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
-                                                        <input
-                                                            className="q-form-input"
-                                                            placeholder="请输入内容"
-                                                            value={invoiceCustomUnit}
-                                                            disabled={taxReadonly}
-                                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
-                                                        />
-                                                    </div>
+                                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                <div>
+                                                    <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
+                                                    <input
+                                                        className="q-form-input"
+                                                        placeholder="请输入内容"
+                                                        value={invoiceItemName}
+                                                        disabled={taxReadonly}
+                                                        onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
+                                                    />
+                                                    <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
                                                 </div>
-                                            )}
+
+                                                <div>
+                                                    <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
+                                                    <input
+                                                        className="q-form-input"
+                                                        placeholder="请输入内容"
+                                                        value={invoiceCustomUnit}
+                                                        disabled={taxReadonly}
+                                                        onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
+                                                    />
+                                                </div>
+                                            </div>
                                             {taxReadonly && <div className="text-xs text-[#98A2B3]">该字段由商品主档统一维护，可通过“从商品主档更新”同步最新设置。</div>}
                                         </div>
                                     </div>
@@ -7675,28 +7673,23 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 {showAddonRuleUnlimited && (
                     <label className={`flex items-center gap-2 text-sm ${config.ruleMode === 'unlimited' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
                         <input type="radio" name={name} checked={config.ruleMode === 'unlimited'} onChange={() => onChange({ ruleMode: 'unlimited' })} className="accent-[#00C06B]" />
-                        {unit === '种' ? '种类不限' : '数量不限'}
+                        {unit === '种' ? '点餐时种类不限' : '点餐时数量不限'}
                     </label>
                 )}
                 {showAddonRuleLimit && (
                     <label className={`flex items-center gap-2 text-sm ${config.ruleMode === 'range' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
                         <input type="radio" name={name} checked={config.ruleMode === 'range'} onChange={() => onChange({ ruleMode: 'range' })} className="accent-[#00C06B]" />
-                        {unit === '种' ? '起选/限选' : '起购/限购'}
+                        {unit === '种' ? '点餐时起选限选数' : '点餐时起购限购数'}
                     </label>
                 )}
                 {config.ruleMode === 'range' && (
                     <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>{unit === '种' ? '起选' : '起购'}</span>
                         <input value={config.min} onChange={e => onChange({ min: e.target.value })} className="w-16 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
-                        <span>至</span>
+                        <span>{unit}，{unit === '种' ? '限选' : '限购'}</span>
                         <input value={config.max} onChange={e => onChange({ max: e.target.value })} className="w-16 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
                         <span>{unit}</span>
                     </div>
-                )}
-                {showAddonRuleRequired && config.ruleMode === 'range' && (
-                    <label className={`flex items-center gap-2 text-sm ${config.isRequired ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
-                        <input type="checkbox" checked={config.isRequired} onChange={e => onChange({ isRequired: e.target.checked })} className="h-4 w-4 rounded border-gray-300 accent-[#00C06B]" />
-                        是否必选
-                    </label>
                 )}
                 {showAddonRuleRequired && (
                     <label className={`flex items-center gap-2 text-sm ${config.ruleMode === 'required' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
@@ -7871,18 +7864,22 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
                                             {showAddonRuleScope && (
                                                 <div className="flex flex-wrap items-center gap-4">
-                                                    <span className="text-sm font-bold text-[#1F2129]">购买限制范围</span>
-                                                    <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
-                                                        <button type="button" onClick={() => changeAddonScope('total')} className={`rounded-md px-3 py-1.5 text-sm ${addonScope === 'total' ? 'bg-[#E9F9F0] font-bold text-[#00A35B]' : 'text-gray-500'}`}>限制所有加料购买总量</button>
-                                                        <button type="button" onClick={() => setAddonScope('type')} className={`rounded-md px-3 py-1.5 text-sm ${addonScope === 'type' ? 'bg-[#E9F9F0] font-bold text-[#00A35B]' : 'text-gray-500'}`}>按加料类型限制购买数</button>
-                                                    </div>
+                                                    <label htmlFor="addon-rule-scope" className="text-sm font-bold text-[#1F2129]">加料配置：</label>
+                                                    <select
+                                                        id="addon-rule-scope"
+                                                        value={addonScope}
+                                                        onChange={event => changeAddonScope(event.target.value as AddonScope)}
+                                                        className="h-10 min-w-[260px] rounded-md border border-[#DDE2E8] bg-white px-3 text-sm text-[#1F2129] outline-none focus:border-[#00B460]"
+                                                    >
+                                                        <option value="total">限制所有加料购买总量</option>
+                                                        <option value="type">按加料类型限制购买数</option>
+                                                    </select>
                                                 </div>
                                             )}
                                             {addonScope === 'total' && (
                                                 <div className="border-t border-gray-200 pt-4">
                                                     <div className="mb-3 text-xs text-gray-500">下方所有加料共用一套购买数量规则。</div>
                                                     {renderRuleInputs(addonTotalRule, patch => setAddonTotalRule(prev => ({ ...prev, ...patch })), 'addon-total-rule')}
-                                                    {addonTotalRule.ruleMode === 'range' && !addonTotalRule.isRequired && <div className="mt-3 text-xs text-gray-400">非必选；顾客一旦购买，需要满足以上起购/限购规则。</div>}
                                                 </div>
                                             )}
                                         </div>
@@ -7893,7 +7890,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             const groupRule = getAddonGroupRule(groupName);
                                             const isFixedGroup = addonScope === 'type' && groupRule.mode === 'fixed';
                                             const fixedTotal = groupRows.reduce((sum, row) => sum + (Number(row.fixedQuantity) || 0), 0);
-                                            const ruleUnit = groupRule.countMetric === 'distinct' ? '种' : '份';
                                             return (
                                                 <div key={groupName} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                                                     <div className="space-y-3 border-b border-gray-200 px-4 py-3">
@@ -7911,15 +7907,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                         </div>
                                                         {addonScope === 'type' && !isFixedGroup && (
                                                             <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-gray-100 pt-3">
-                                                                <div className="flex items-center gap-2 text-sm">
-                                                                    <span className="text-gray-500">限制单位</span>
-                                                                    <select value={groupRule.countMetric} onChange={e => updateAddonGroupRule(groupName, { countMetric: e.target.value as AddonCountMetric })} className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 outline-none focus:border-[#00C06B]">
-                                                                        <option value="quantity">购买份数</option>
-                                                                        <option value="distinct">加料种类</option>
-                                                                    </select>
-                                                                </div>
-                                                                {renderRuleInputs(groupRule, patch => updateAddonGroupRule(groupName, patch), `addon-group-rule-${groupName}`, ruleUnit)}
-                                                                {groupRule.ruleMode === 'range' && !groupRule.isRequired && <div className="w-full text-xs text-gray-400">非必选；顾客一旦购买，需要满足以上起购/限购规则。</div>}
+                                                                {renderRuleInputs(groupRule, patch => updateAddonGroupRule(groupName, patch), `addon-group-rule-${groupName}`)}
                                                             </div>
                                                         )}
                                                         {isFixedGroup && <div className="border-t border-gray-100 pt-3 text-xs text-gray-400">该类型下的加料会随商品固定带入，顾客不可修改；如不需要某项，请从加料类型中移除。</div>}
@@ -7933,8 +7921,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                                     {isFixedGroup && <th className="w-[104px] px-3 py-3 border-b border-gray-200">固定数量</th>}
                                                                     {showAddonLimit && !isFixedGroup && <th className="w-[104px] px-3 py-3 border-b border-gray-200">单品限购</th>}
                                                                     {(showAddonPrice || showAddonSpecPrice) && <th className="w-[112px] px-3 py-3 border-b border-gray-200">加料价格</th>}
-                                                                    {showAddonStatus && <th className="w-[92px] px-3 py-3 border-b border-gray-200">商品状态</th>}
-                                                                    <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>
+                                                                    {(isChannelForm || showAddonStatus) && <th className="w-[126px] px-3 py-3 border-b border-gray-200">{isChannelForm ? '渠道状态' : '商品状态'}</th>}
+                                                                    {!isChannelForm && <th className="w-[64px] px-3 py-3 border-b border-gray-200">操作</th>}
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
@@ -7949,8 +7937,19 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                                                 <input value={row.addonLimit} onChange={e => updateAddonRow(row.id, 'addonLimit', e.target.value)} className="w-20 rounded-lg border border-gray-200 px-2.5 py-2 text-center outline-none focus:border-[#00C06B]" />
                                                                             </td>}
                                                                             {(showAddonPrice || showAddonSpecPrice) && <td className="px-3 py-3 border-b border-gray-100 font-bold">¥{row.addonPrice}</td>}
-                                                                            {showAddonStatus && <td className="px-3 py-3 border-b border-gray-100"><span className={`inline-flex rounded px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>{row.addonStatus === 'on' ? '启用中' : '已停用'}</span></td>}
-                                                                            <td className="px-3 py-3 border-b border-gray-100"><button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">删除</button></td>
+                                                                            {(isChannelForm || showAddonStatus) && (
+                                                                                <td className="px-3 py-3 border-b border-gray-100">
+                                                                                    {isChannelForm ? (
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Switch active={row.addonStatus === 'on'} onClick={() => updateAddonRow(row.id, 'addonStatus', row.addonStatus === 'on' ? 'off' : 'on')} />
+                                                                                            <span className={row.addonStatus === 'on' ? 'text-xs text-[#008F4C]' : 'text-xs text-gray-400'}>{row.addonStatus === 'on' ? '已启用' : '已禁用'}</span>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <span className={`inline-flex rounded px-2 py-1 text-[11px] font-bold ${row.addonStatus === 'on' ? 'bg-[#ECFDF3] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>{row.addonStatus === 'on' ? '启用中' : '已停用'}</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            )}
+                                                                            {!isChannelForm && <td className="px-3 py-3 border-b border-gray-100"><button type="button" onClick={() => removeAddonRow(row.id)} className="text-[13px] font-bold text-gray-400 hover:text-[#00A35B]">删除</button></td>}
                                                                         </tr>
                                                                 ))}
                                                             </tbody>

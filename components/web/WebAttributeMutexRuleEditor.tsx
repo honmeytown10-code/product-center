@@ -76,7 +76,7 @@ export const WebAttributeMutexRuleEditor: React.FC<{
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F6FA]">
+    <div className="pc-page flex flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
       <div className="h-[60px] bg-white border-b border-[#E8E8E8] flex items-center justify-between px-6 shrink-0 shadow-sm">
         <div className="flex items-center">
           <button onClick={onBack} className="mr-4 text-[#666] hover:text-[#333]"><ChevronLeft size={20} /></button>

@@ -15,6 +15,7 @@ type StoreCategoryRecord = {
   sortIndex: number;
   iconText: string;
   name: string;
+  alias: string;
   code: string;
   tag: string;
   requiredGroup: boolean;
@@ -30,7 +31,6 @@ type StoreCategoryListRow = StoreCategoryRecord & {
 type StoreCategoryEditorDraft = Omit<StoreCategoryListRow, 'channelId'> & {
   channelId: string;
   categoryLabel: string;
-  description: string;
   remark: string;
   shelfChannels: string[];
   saleTypes: string[];
@@ -50,6 +50,7 @@ type SecondaryCategoryEditorDraft = {
   parentCode: string;
   parentName: string;
   name: string;
+  alias: string;
   sortIndex: number;
 };
 
@@ -104,18 +105,18 @@ const DEFAULT_CHANNELS = [
 ];
 
 const MOCK_STORE_CATEGORIES: StoreCategoryRecord[] = [
-  { id: 'c-001', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-002', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-001-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-001-2', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-001-3', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
-  { id: 'c-001-4', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
-  { id: 'c-003', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 2, iconText: '果', name: '果茶系列', code: 'fruit-tea', tag: '推荐', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: true },
-  { id: 'c-003-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'fruit-tea', parentName: '果茶系列', sortIndex: 1, iconText: '子', name: '鲜柠果茶', code: 'fruit-tea-lemon', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
-  { id: 'c-004', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 3, iconText: '咖', name: '咖啡系列', code: 'coffee', tag: '新品', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-005', storeId: 's2', storeName: '福田卓悦店', channelId: 'pos', level: 1, sortIndex: 1, iconText: '甜', name: '甜品系列', code: 'dessert', tag: '甜品', requiredGroup: false, displayChannels: ['qimai_app'], limitTop: false },
-  { id: 'c-006', storeId: 's3', storeName: '宝安壹方城店', channelId: 'meituan', level: 1, sortIndex: 1, iconText: '早', name: '早餐系列', code: 'breakfast', tag: '早餐', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini'], limitTop: false },
-  { id: 'c-007', storeId: 's4', storeName: '龙华红山店', channelId: 'taobao', level: 1, sortIndex: 1, iconText: '夜', name: '夜宵系列', code: 'supper', tag: '夜宵', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_h5'], limitTop: false },
+  { id: 'c-001', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', alias: '现萃好茶', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-002', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', alias: '现萃好茶', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', alias: '经典回味', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001-2', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', alias: '经典回味', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001-3', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', alias: '鲜果轻乳', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
+  { id: 'c-001-4', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', alias: '鲜果轻乳', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
+  { id: 'c-003', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 2, iconText: '果', name: '果茶系列', alias: '新鲜果香', code: 'fruit-tea', tag: '推荐', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: true },
+  { id: 'c-003-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'fruit-tea', parentName: '果茶系列', sortIndex: 1, iconText: '子', name: '鲜柠果茶', alias: '鲜柠清爽', code: 'fruit-tea-lemon', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
+  { id: 'c-004', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 3, iconText: '咖', name: '咖啡系列', alias: '每日现磨', code: 'coffee', tag: '新品', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-005', storeId: 's2', storeName: '福田卓悦店', channelId: 'pos', level: 1, sortIndex: 1, iconText: '甜', name: '甜品系列', alias: '今日甜点', code: 'dessert', tag: '甜品', requiredGroup: false, displayChannels: ['qimai_app'], limitTop: false },
+  { id: 'c-006', storeId: 's3', storeName: '宝安壹方城店', channelId: 'meituan', level: 1, sortIndex: 1, iconText: '早', name: '早餐系列', alias: '元气早餐', code: 'breakfast', tag: '早餐', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini'], limitTop: false },
+  { id: 'c-007', storeId: 's4', storeName: '龙华红山店', channelId: 'taobao', level: 1, sortIndex: 1, iconText: '夜', name: '夜宵系列', alias: '深夜食堂', code: 'supper', tag: '夜宵', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_h5'], limitTop: false },
 ];
 
 const FilterInput = ({
@@ -149,6 +150,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
   const [categories, setCategories] = useState(MOCK_STORE_CATEGORIES);
   const [editingCategory, setEditingCategory] = useState<StoreCategoryEditorDraft | null>(null);
   const [editingSecondCategory, setEditingSecondCategory] = useState<SecondaryCategoryEditorDraft | null>(null);
+  const [showAliasExample, setShowAliasExample] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
   const [sortDraftRows, setSortDraftRows] = useState<CategorySortDraftRow[]>([]);
   const [expandedParentCodes, setExpandedParentCodes] = useState<string[]>([]);
@@ -312,6 +314,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
         parentCode: item.parentCode || '',
         parentName: item.parentName || '-',
         name: item.name,
+        alias: item.alias,
         sortIndex: item.sortIndex,
       });
       return;
@@ -321,7 +324,6 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
       ...item,
       channelId: activeTabId === 'all' ? 'all' : item.channelId,
       categoryLabel: item.tag,
-      description: `${item.name} 分类描述`,
       remark: `${item.name} 备注`,
       shelfChannels: ['mini_dine', 'meituan', 'taobao', 'pos'],
       saleTypes: ['dine', 'takeout'],
@@ -399,6 +401,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     setCategories(prev => prev.map(item => targetIds.has(item.id) ? {
       ...item,
       name: editingCategory.name,
+      alias: editingCategory.alias,
       code: editingCategory.code,
       tag: editingCategory.categoryLabel || editingCategory.tag,
       requiredGroup: editingCategory.requiredGroup,
@@ -415,6 +418,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     setCategories(prev => prev.map(item => targetIds.has(item.id) ? {
       ...item,
       name: editingSecondCategory.name,
+      alias: editingSecondCategory.alias,
       sortIndex: editingSecondCategory.sortIndex,
     } : item));
     setEditingSecondCategory(null);
@@ -524,6 +528,25 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                         </div>
                       </div>
                       <div className="grid grid-cols-[88px_1fr] items-start gap-3">
+                        <div className="pt-2 text-sm text-[#333]">分类别名</div>
+                        <div>
+                          <div className="relative">
+                            <input
+                              value={editingCategory.alias}
+                              maxLength={10}
+                              placeholder="请输入分类别名"
+                              onChange={e => updateEditingField('alias', e.target.value.slice(0, 10))}
+                              className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 pr-14 text-sm focus:border-[#00C06B] focus:outline-none"
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#999]">{editingCategory.alias.length}/10</div>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs text-[#999]">
+                            <span>用于补充说明分类，配置后将在小程序分类名称下方默认展示</span>
+                            <button type="button" onClick={() => setShowAliasExample(true)} className="shrink-0 font-bold text-[#00A35B] hover:text-[#008F50]">查看示例</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
                         <div className="pt-2 text-sm text-[#333]">分类标识</div>
                         <div>
                           <input value={editingCategory.code} onChange={e => updateEditingField('code', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
@@ -540,10 +563,6 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                           <option value="早餐">早餐</option>
                           <option value="夜宵">夜宵</option>
                         </select>
-                      </div>
-                      <div className="grid grid-cols-[88px_1fr] items-start gap-3">
-                        <div className="pt-2 text-sm text-[#333]">分类描述</div>
-                        <input value={editingCategory.description} onChange={e => updateEditingField('description', e.target.value)} className="h-10 w-full rounded-lg border border-[#E8E8E8] px-3 text-sm focus:border-[#00C06B] focus:outline-none" />
                       </div>
                       <div className="grid grid-cols-[88px_1fr] items-start gap-3">
                         <div className="pt-2 text-sm text-[#333]">分类备注</div>
@@ -573,13 +592,17 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                         <div className="flex h-[340px] gap-4 rounded-2xl bg-[#F2F3F7] p-4">
                           <div className="w-[92px] space-y-3">
                             <div className="h-[84px] rounded-xl bg-white/70 p-2 text-xs text-[#666] shadow-sm">
-                              <div className="mb-2 h-10 w-10 rounded-lg bg-[#D1D5DB]" />
-                              <div className="truncate">{editingCategory.name}</div>
-                            </div>
+                               <div className="mb-2 h-10 w-10 rounded-lg bg-[#D1D5DB]" />
+                               <div className="truncate">{editingCategory.name}</div>
+                               {editingCategory.alias && <div className="mt-0.5 truncate text-[10px] text-[#98A2B3]">{editingCategory.alias}</div>}
+                             </div>
                             <div className="h-[84px] rounded-xl bg-white/40" />
                           </div>
                           <div className="flex-1 rounded-xl bg-white p-4 shadow-sm">
-                            <div className="mb-4 text-lg font-bold text-[#333]">{editingCategory.name}</div>
+                            <div className="mb-4">
+                              <div className="text-lg font-bold text-[#333]">{editingCategory.name}</div>
+                              {editingCategory.alias && <div className="mt-1 text-xs text-[#98A2B3]">{editingCategory.alias}</div>}
+                            </div>
                             <div className="space-y-4">
                               <div className="h-16 rounded-xl bg-[#F7F8FA]" />
                               <div className="h-16 rounded-xl bg-[#F7F8FA]" />
@@ -723,15 +746,16 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
             </div>
           </div>
         </div>
+        {showAliasExample && <CategoryAliasExampleModal onClose={() => setShowAliasExample(false)} />}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex bg-[#F0F2F5] overflow-hidden min-w-0 font-sans p-4 relative">
+    <div className="pc-page relative flex min-w-0 flex-1 overflow-hidden bg-[#F0F2F5] p-3 font-sans">
       {renderNotification()}
 
-      <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden min-w-0">
+      <div className="pc-surface flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
         <div className="border-b border-[#E8E8E8] bg-white px-5 py-[18px] shrink-0 z-20">
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             <div className="flex flex-wrap gap-3 items-center">
@@ -836,14 +860,18 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                       <span className="text-[#999]">-</span>
                     )}
                   </td>
-                  <td className="py-4 px-4">
-                    {item.level === 2 ? (
-                      <div className="pl-5">
-                        <div className="font-bold text-[#333]">{item.name}</div>
-                      </div>
-                    ) : (
-                      <div className="font-bold text-[#333]">{item.name}</div>
-                    )}
+                   <td className="py-4 px-4">
+                     {item.level === 2 ? (
+                       <div className="pl-5">
+                         <div className="font-bold text-[#333]">{item.name}</div>
+                         {item.alias && <div className="mt-1 text-xs text-[#98A2B3]">{item.alias}</div>}
+                       </div>
+                     ) : (
+                       <div>
+                         <div className="font-bold text-[#333]">{item.name}</div>
+                         {item.alias && <div className="mt-1 text-xs text-[#98A2B3]">{item.alias}</div>}
+                       </div>
+                     )}
                   </td>
                   <td className="py-4 px-4 text-[#666] font-mono">{item.level === 2 ? '-' : item.code}</td>
                   <td className="py-4 px-4">
@@ -927,8 +955,10 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
           onChange={setEditingSecondCategory}
           onCancel={() => setEditingSecondCategory(null)}
           onConfirm={saveSecondCategory}
+          onViewAliasExample={() => setShowAliasExample(true)}
         />
       )}
+      {showAliasExample && <CategoryAliasExampleModal onClose={() => setShowAliasExample(false)} />}
       {showSortModal && (
         <CategorySortModal
           rows={sortDraftRows}
@@ -948,11 +978,13 @@ const SecondaryCategoryEditorModal = ({
   onChange,
   onCancel,
   onConfirm,
+  onViewAliasExample,
 }: {
   draft: SecondaryCategoryEditorDraft;
   onChange: (draft: SecondaryCategoryEditorDraft) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  onViewAliasExample: () => void;
 }) => {
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35 px-6">
@@ -983,6 +1015,26 @@ const SecondaryCategoryEditorModal = ({
                 className="h-[48px] w-full rounded-[10px] border border-[#D9DDE7] px-4 pr-16 text-[16px] text-[#1F2129] outline-none focus:border-[#00C06B]"
               />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#98A2B3]">{draft.name.length}/10</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-4">
+            <div className="pt-3 text-[16px] text-[#5B6475]">分类别名：</div>
+            <div>
+              <div className="relative">
+                <input
+                  value={draft.alias}
+                  maxLength={10}
+                  placeholder="请输入分类别名"
+                  onChange={e => onChange({ ...draft, alias: e.target.value.slice(0, 10) })}
+                  className="h-[48px] w-full rounded-[10px] border border-[#D9DDE7] px-4 pr-16 text-[16px] text-[#1F2129] outline-none focus:border-[#00C06B]"
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#98A2B3]">{draft.alias.length}/10</div>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-sm text-[#98A2B3]">
+                <span>用于补充说明分类，配置后将在小程序分类名称下方默认展示</span>
+                <button type="button" onClick={onViewAliasExample} className="shrink-0 font-bold text-[#00A35B] hover:text-[#008F50]">查看示例</button>
+              </div>
             </div>
           </div>
 
@@ -1022,6 +1074,51 @@ const SecondaryCategoryEditorModal = ({
     </div>
   );
 };
+
+const CategoryAliasExampleModal = ({ onClose }: { onClose: () => void }) => (
+  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 px-6" onClick={onClose}>
+    <div className="w-full max-w-[680px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]" onClick={event => event.stopPropagation()}>
+      <div className="flex items-center justify-between border-b border-[#EEF1F5] px-7 py-5">
+        <div>
+          <div className="text-[20px] font-black text-[#1F2129]">分类别名展示示例</div>
+          <div className="mt-1 text-sm text-[#98A2B3]">配置别名后，小程序会在分类名称下方展示补充说明</div>
+        </div>
+        <button type="button" onClick={onClose} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
+      </div>
+      <div className="px-7 py-7">
+        <div className="rounded-2xl bg-[#F6F7FB] p-5">
+          <div className="mb-4 text-sm font-bold text-[#5B6475]">小程序点单页</div>
+          <div className="grid grid-cols-[128px_minmax(0,1fr)] overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="border-r border-[#EEF1F5] bg-[#F8FAFB] p-3">
+              <div className="rounded-xl border border-[#BFECD3] bg-white px-3 py-4 text-center shadow-sm">
+                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9FAF1] text-lg font-black text-[#00A35B]">披</div>
+                <div className="text-sm font-bold leading-5 text-[#1F2129]">披萨系列</div>
+                <div className="mt-1 text-xs leading-4 text-[#98A2B3]">现烤薄脆</div>
+              </div>
+              <div className="mt-3 rounded-xl px-3 py-4 text-center text-sm text-[#5B6475]">能量碗</div>
+            </div>
+            <div className="p-5">
+              <div className="text-lg font-black text-[#1F2129]">披萨系列</div>
+              <div className="mt-1 text-sm text-[#98A2B3]">现烤薄脆</div>
+              <div className="mt-5 space-y-3">
+                <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+                <div className="h-16 rounded-xl bg-[#F7F8FA]" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-5 text-xs text-[#5B6475]">
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#1F2129]" />分类名称：披萨系列</span>
+            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-[#98A2B3]" />分类别名：现烤薄脆</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end border-t border-[#EEF1F5] px-7 py-5">
+        <button type="button" onClick={onClose} className="rounded-[10px] bg-[#00C06B] px-7 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">我知道了</button>
+      </div>
+    </div>
+  </div>
+);
 
 const CategorySortModal = ({
   rows,
@@ -1151,7 +1248,7 @@ const StorePickerModal = ({
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-6">
       <div className="w-full max-w-[1120px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
-          <div className="text-[28px] font-black text-[#1F2129]">请选择需要管理的门店</div>
+              <div className="text-[18px] font-semibold text-[#1F2129]">请选择需要管理的门店</div>
           {!disableCancel ? (
             <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]">
               <X size={22} />

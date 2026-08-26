@@ -2411,7 +2411,7 @@ export const WebProductLogPage: React.FC = () => {
   const renderHome = () => (
     <div className="space-y-6">
       <div className="rounded-2xl border border-[#E7ECF1] bg-white px-6 py-5 shadow-[0_6px_20px_rgba(15,23,42,0.04)]">
-        <div className="text-[22px] font-bold text-[#111827]">商品日志</div>
+        <div className="text-[18px] font-semibold text-[#111827]">商品日志</div>
         <div className="mt-2 text-[14px] text-[#667085]">按商品档案、商品运营、门店商品三大板块查看对应信息变动日志。</div>
       </div>
 
@@ -2546,7 +2546,7 @@ export const WebProductLogPage: React.FC = () => {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {currentDomain ? <span className="rounded-full bg-[#F3FCF7] px-2.5 py-1 text-[12px] font-semibold text-[#00A85D]">{currentDomain.name}</span> : null}
-            <span className="text-[22px] font-bold text-[#111827]">{config.name}</span>
+                      <span className="text-[18px] font-semibold text-[#111827]">{config.name}</span>
           </div>
         </div>
         <button
@@ -2610,7 +2610,7 @@ export const WebProductLogPage: React.FC = () => {
   );
 
   return (
-    <div className="flex-1 min-w-0 overflow-auto bg-[#F5F6FA] p-6">
+    <div className="pc-page min-w-0 flex-1 overflow-auto bg-[#F5F6FA] p-3">
       {activeConfig ? renderLogPage(activeConfig) : renderHome()}
 
       {selectedSnapshot?.record.snapshot ? (

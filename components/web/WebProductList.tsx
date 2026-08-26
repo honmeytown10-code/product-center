@@ -84,8 +84,9 @@ export const WebProductList: React.FC<{
   onImportRecordsClick?: () => void;
   onViewDetail?: (product: any) => void;
   onEditProduct?: (product: any) => void;
+  onSyncToChannelProducts?: (products: Product[]) => void;
   unifiedManagement?: boolean;
-}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, unifiedManagement = false }) => {
+}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, onSyncToChannelProducts, unifiedManagement = false }) => {
   const { products, categories, addProduct, updateProduct, toggleShelfStatus } = useProducts();
   const [activeTab, setActiveTab] = useState<ProductTab>('on_shelf');
   const [searchQuery, setSearchQuery] = useState('');
@@ -160,17 +161,9 @@ export const WebProductList: React.FC<{
     () => products.filter(product => selectedProductIds.includes(product.id)),
     [products, selectedProductIds]
   );
-  const hasComboSelection = selectedProducts.some(product => product.type === 'combo');
-
   const toolbarMoreActions = [
-    { label: unifiedManagement ? '批量修改商品' : '批量修改主档', enabled: selectedProductIds.length > 0 },
-    { label: unifiedManagement ? '批量导出商品' : '批量导出主档', enabled: selectedProductIds.length > 0 },
-    { label: '批量设置商品结构', enabled: selectedProductIds.length > 0 && !hasComboSelection },
-    { label: '批量同步门店', enabled: selectedProductIds.length > 0 },
-    { label: '批量门店销售设置', enabled: selectedProductIds.length > 0 },
-    { label: '批量打印设置', enabled: selectedProductIds.length > 0 && !hasComboSelection },
+    { label: '同步至渠道商品', enabled: selectedProductIds.length > 0 },
     { label: '批量增/换图片', enabled: products.length > 0 },
-    { label: '批量导出商品路径', enabled: selectedProductIds.length > 0 },
   ];
 
   const handleTabChange = (tab: ProductTab) => {
@@ -502,7 +495,9 @@ export const WebProductList: React.FC<{
                             action.enabled ? 'text-[#333] hover:bg-[#F7F8FA] hover:text-[#00C06B]' : 'cursor-not-allowed text-[#C0C4CC]'
                           }`}
                           onClick={() => {
-                            if (action.label === '批量增/换图片') {
+                            if (action.label === '同步至渠道商品') {
+                              onSyncToChannelProducts?.(selectedProducts);
+                            } else if (action.label === '批量增/换图片') {
                               setShowBatchImageModal(true);
                             } else {
                               showNotice(`${action.label}已进入批量处理流程`);

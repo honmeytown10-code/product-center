@@ -401,7 +401,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
     };
 
     return (
-        <div className="absolute inset-0 z-50 bg-[#F5F6FA] flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+    <div className="pc-page absolute inset-0 z-50 flex flex-col bg-[#F5F6FA] animate-in slide-in-from-bottom-4 duration-300">
             {/* Header */}
             <div className="h-14 bg-white border-b border-[#E8E8E8] flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
                 <div className="flex items-center">

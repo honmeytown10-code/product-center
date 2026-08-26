@@ -291,6 +291,8 @@ const RecipeList = ({ onViewDetail, onNavigate, onOpenBaseSettings, onOpenPolici
   const [pendingProductIds, setPendingProductIds] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<(typeof MOCK_RECIPE_LIST)[number] | null>(null);
   const [message, setMessage] = useState('');
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBulkExport, setShowBulkExport] = useState(false);
 
   const filteredRecipes = useMemo(() => recipes.filter(item => {
     const matchedName = !nameKeyword.trim() || item.name.toLowerCase().includes(nameKeyword.trim().toLowerCase());
@@ -327,6 +329,12 @@ const RecipeList = ({ onViewDetail, onNavigate, onOpenBaseSettings, onOpenPolici
           <input value={idKeyword} onChange={event => setIdKeyword(event.target.value)} className="w-48 rounded-lg border border-[#E8E8E8] px-3 py-2 text-sm focus:border-[#00C06B] focus:outline-none" placeholder="商品ID" />
         </div>
         <div className="relative flex space-x-2">
+          <button type="button" onClick={() => setShowBulkImport(true)} className="flex items-center rounded-lg border border-[#D9DEE7] bg-white px-4 py-2 text-sm font-medium text-[#4E5969] hover:border-[#8BD7AE] hover:text-[#008F4C]">
+            <Upload size={15} className="mr-1.5" />导入配方
+          </button>
+          <button type="button" onClick={() => setShowBulkExport(true)} className="flex items-center rounded-lg border border-[#D9DEE7] bg-white px-4 py-2 text-sm font-medium text-[#4E5969] hover:border-[#8BD7AE] hover:text-[#008F4C]">
+            <Download size={15} className="mr-1.5" />导出配方
+          </button>
           <button onClick={onOpenPolicies} className="flex items-center rounded-lg border border-[#D9DEE7] bg-white px-4 py-2 text-sm font-medium text-[#4E5969] hover:border-[#8BD7AE] hover:text-[#008F4C]">
             门店配方策略
           </button>
@@ -451,6 +459,171 @@ const RecipeList = ({ onViewDetail, onNavigate, onOpenBaseSettings, onOpenPolici
           </div>
         </div>
       )}
+
+      {showBulkImport && (
+        <BulkRecipeImportDialog
+          title="导入总部默认配方"
+          subtitle="一次导入多个商品的配方，原单商品导入入口仍可继续使用"
+          scopeText="当前品牌全部商品"
+          impactText="仅新增或覆盖文件中存在的配方，未出现在文件中的配方不会删除。"
+          onClose={() => setShowBulkImport(false)}
+          onComplete={() => setMessage('总部默认配方批量导入完成：成功 1,238 条，跳过 4 条')}
+        />
+      )}
+
+      {showBulkExport && (
+        <BulkRecipeExportDialog
+          title="导出总部默认配方"
+          scopeText="当前品牌"
+          totalCount={recipes.length}
+          filteredCount={filteredRecipes.length}
+          onClose={() => setShowBulkExport(false)}
+          onComplete={() => setMessage('总部默认配方导出任务已创建，可在下载中心查看进度')}
+        />
+      )}
+    </div>
+  );
+};
+
+type BulkRecipeImportDialogProps = {
+  title: string;
+  subtitle: string;
+  scopeText: string;
+  impactText: string;
+  onClose: () => void;
+  onComplete: () => void;
+};
+
+const BulkRecipeImportDialog = ({ title, subtitle, scopeText, impactText, onClose, onComplete }: BulkRecipeImportDialogProps) => {
+  const [fileName, setFileName] = useState('');
+  const [stage, setStage] = useState<'select' | 'validating' | 'validated' | 'importing' | 'done'>('select');
+
+  const downloadCsv = (fileName: string, rows: string[]) => {
+    const blob = new Blob([`\uFEFF${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const validateFile = () => {
+    setStage('validating');
+    window.setTimeout(() => setStage('validated'), 650);
+  };
+
+  const importRecipes = () => {
+    setStage('importing');
+    window.setTimeout(() => {
+      setStage('done');
+      onComplete();
+    }, 850);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-6" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="flex max-h-[82vh] w-[620px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-[#E8E8E8] px-6 py-5">
+          <div><h3 className="text-[17px] font-bold text-[#222]">{title}</h3><p className="mt-1 text-xs text-[#98A2B3]">{subtitle}</p></div>
+          <button type="button" onClick={onClose} className="rounded p-1 text-[#98A2B3] hover:bg-[#F5F5F5]" aria-label="关闭"><X size={19} /></button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {stage === 'done' ? (
+            <div className="py-7 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#E9F9F1] text-[#00A35B]"><CheckCircle2 size={27} /></div>
+              <div className="mt-4 text-base font-bold text-[#222]">批量导入完成</div>
+              <div className="mt-2 text-sm text-[#667085]">成功导入 1,238 条配方，4 条异常数据已跳过</div>
+              <button type="button" onClick={() => downloadCsv('配方导入错误明细.csv', ['行号,商品ID,错误原因', '25,1223580519924977664,规格组合不存在', '78,1053321487375503361,配料编码无效'])} className="mt-3 text-sm text-[#00A35B] hover:underline">下载错误明细</button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="rounded-md bg-[#F7F8FA] px-4 py-3 text-sm">
+                <span className="text-[#667085]">导入范围：</span><span className="font-medium text-[#1D2129]">{scopeText}</span>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between"><span className="text-sm font-medium text-[#333]">上传配方文件</span><button type="button" onClick={() => downloadCsv('商品配方批量导入模板.csv', ['商品ID,商品名称,规格组合,做法组合,加料组合,配方编码,配料编码,配料用量,单位', '示例ID,示例商品,大杯,少冰,不加料,RECIPE-001,MATERIAL-001,100,ml'])} className="text-sm text-[#00A35B] hover:underline">下载导入模板</button></div>
+                <label className="flex cursor-pointer flex-col items-center rounded-md border border-dashed border-[#C9D0D9] bg-[#FAFBFC] px-4 py-7 text-center hover:border-[#00B460]">
+                  <Upload size={24} className="text-[#00A35B]" />
+                  <span className="mt-2 text-sm text-[#4E5969]">选择 Excel 或 CSV 文件</span>
+                  <span className="mt-1 text-xs text-[#98A2B3]">单个文件不超过 10MB</span>
+                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={event => { setFileName(event.target.files?.[0]?.name || ''); setStage('select'); }} />
+                </label>
+                {fileName && <div className="mt-2 flex items-center justify-between rounded-md border border-[#CBEFDC] bg-[#F1FFF7] px-3 py-2 text-sm text-[#087A49]"><span className="truncate">{fileName}</span><button type="button" onClick={() => { setFileName(''); setStage('select'); }} aria-label="移除文件"><X size={15} /></button></div>}
+              </div>
+
+              <div className="rounded-md border border-[#F2D49B] bg-[#FFF9EB] px-4 py-3 text-xs leading-5 text-[#8A5B00]">{impactText} 系统将按商品ID及完整规格、做法、加料组合进行匹配，校验通过后才可确认导入。</div>
+
+              {(stage === 'validating' || stage === 'importing') && (
+                <div className="flex items-center justify-center gap-2 rounded-md border border-[#E8E8E8] py-6 text-sm text-[#667085]"><RefreshCw size={17} className="animate-spin text-[#00A35B]" />{stage === 'validating' ? '正在校验商品、组合和配料数据…' : '正在导入配方，请勿重复提交…'}</div>
+              )}
+
+              {stage === 'validated' && (
+                <div className="overflow-hidden rounded-md border border-[#E8E8E8]">
+                  <div className="border-b border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 text-sm font-medium text-[#333]">文件校验结果</div>
+                  <div className="grid grid-cols-4 divide-x divide-[#E8E8E8] px-2 py-4 text-center"><div><div className="text-lg font-bold text-[#222]">6</div><div className="mt-1 text-xs text-[#98A2B3]">匹配商品</div></div><div><div className="text-lg font-bold text-[#222]">1,242</div><div className="mt-1 text-xs text-[#98A2B3]">配方明细</div></div><div><div className="text-lg font-bold text-[#00A35B]">1,238</div><div className="mt-1 text-xs text-[#98A2B3]">校验通过</div></div><div><div className="text-lg font-bold text-[#D92D20]">4</div><div className="mt-1 text-xs text-[#98A2B3]">异常跳过</div></div></div>
+                  <div className="flex items-center justify-between border-t border-[#F0F0F0] px-4 py-3 text-xs text-[#667085]"><span>异常数据不会导入，不影响其他校验通过的数据</span><button type="button" onClick={() => downloadCsv('配方校验错误明细.csv', ['行号,商品ID,错误原因', '25,1223580519924977664,规格组合不存在', '78,1053321487375503361,配料编码无效'])} className="text-[#00A35B] hover:underline">下载错误明细</button></div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-[#E8E8E8] px-6 py-4">
+          {stage === 'done' ? <button type="button" onClick={onClose} className="rounded-md bg-[#00B460] px-5 py-2 text-sm font-medium text-white">完成</button> : <><button type="button" onClick={onClose} disabled={stage === 'validating' || stage === 'importing'} className="rounded-md border border-[#DDE2E8] px-5 py-2 text-sm text-[#4E5969] disabled:opacity-50">取消</button>{stage === 'validated' ? <button type="button" onClick={importRecipes} className="rounded-md bg-[#00B460] px-5 py-2 text-sm font-medium text-white">确认导入</button> : <button type="button" onClick={validateFile} disabled={!fileName || stage === 'validating' || stage === 'importing'} className="rounded-md bg-[#00B460] px-5 py-2 text-sm font-medium text-white disabled:opacity-40">开始校验</button>}</>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+type BulkRecipeExportDialogProps = {
+  title: string;
+  scopeText: string;
+  totalCount: number;
+  filteredCount: number;
+  onClose: () => void;
+  onComplete: () => void;
+};
+
+const BulkRecipeExportDialog = ({ title, scopeText, totalCount, filteredCount, onClose, onComplete }: BulkRecipeExportDialogProps) => {
+  const [scope, setScope] = useState<'all' | 'filtered'>('all');
+  const [stage, setStage] = useState<'select' | 'creating' | 'done'>('select');
+
+  const createTask = () => {
+    setStage('creating');
+    window.setTimeout(() => {
+      setStage('done');
+      onComplete();
+    }, 750);
+  };
+
+  const count = scope === 'all' ? totalCount : filteredCount;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-6" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="w-[540px] overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-[#E8E8E8] px-6 py-5"><div><h3 className="text-[17px] font-bold text-[#222]">{title}</h3><p className="mt-1 text-xs text-[#98A2B3]">按商品导出规格、做法、加料组合及配料用量明细</p></div><button type="button" onClick={onClose} className="rounded p-1 text-[#98A2B3] hover:bg-[#F5F5F5]" aria-label="关闭"><X size={19} /></button></div>
+        <div className="px-6 py-5">
+          {stage === 'done' ? (
+            <div className="py-5 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#E9F9F1] text-[#00A35B]"><CheckCircle2 size={27} /></div><div className="mt-4 text-base font-bold text-[#222]">导出任务已创建</div><div className="mt-2 text-sm text-[#667085]">系统正在生成 {count} 个商品的配方文件，完成后可在下载中心获取</div></div>
+          ) : stage === 'creating' ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#667085]"><RefreshCw size={18} className="animate-spin text-[#00A35B]" />正在创建导出任务…</div>
+          ) : (
+            <div>
+              <div className="mb-3 text-sm font-medium text-[#333]">导出范围</div>
+              <div className="space-y-2">
+                <label className={`flex cursor-pointer items-center justify-between rounded-md border px-4 py-3 ${scope === 'all' ? 'border-[#00B460] bg-[#F1FFF7]' : 'border-[#E5E7EB]'}`}><span><span className="block text-sm font-medium text-[#333]">全部配方商品</span><span className="mt-1 block text-xs text-[#98A2B3]">导出{scopeText}下全部 {totalCount} 个商品</span></span><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} className="h-4 w-4 accent-[#00B460]" /></label>
+                <label className={`flex cursor-pointer items-center justify-between rounded-md border px-4 py-3 ${scope === 'filtered' ? 'border-[#00B460] bg-[#F1FFF7]' : 'border-[#E5E7EB]'}`}><span><span className="block text-sm font-medium text-[#333]">当前筛选结果</span><span className="mt-1 block text-xs text-[#98A2B3]">按当前搜索条件导出 {filteredCount} 个商品</span></span><input type="radio" checked={scope === 'filtered'} onChange={() => setScope('filtered')} className="h-4 w-4 accent-[#00B460]" /></label>
+              </div>
+              <div className="mt-4 rounded-md bg-[#F7F8FA] px-4 py-3 text-xs leading-5 text-[#667085]">数据量较大时将通过异步任务生成文件，关闭弹窗不会中断任务。</div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-[#E8E8E8] px-6 py-4">{stage === 'done' ? <button type="button" onClick={onClose} className="rounded-md bg-[#00B460] px-5 py-2 text-sm font-medium text-white">完成</button> : <><button type="button" onClick={onClose} disabled={stage === 'creating'} className="rounded-md border border-[#DDE2E8] px-5 py-2 text-sm text-[#4E5969] disabled:opacity-50">取消</button><button type="button" onClick={createTask} disabled={stage === 'creating'} className="rounded-md bg-[#00B460] px-5 py-2 text-sm font-medium text-white disabled:opacity-50">创建导出任务</button></>}</div>
+      </div>
     </div>
   );
 };
@@ -849,13 +1022,19 @@ const PolicyDetail = ({ policy, onBack }: { policy: any, onBack: () => void }) =
 // 5. 策略配方商品管理页
 const PolicyProductManager = ({ policy, onBack, onConfigProduct }: { policy: any, onBack: () => void, onConfigProduct: (p: any) => void }) => {
   const { products: brandProducts } = useProducts();
-  const [strategyProducts, setStrategyProducts] = useState<any[]>(policy?.productCount > 0 ? [{ ...MOCK_RECIPE_LIST[0], snapshotTime: '2026-03-20 14:32', snapshotStatus: 'ready' }] : []);
+  const [strategyProducts, setStrategyProducts] = useState<any[]>(policy?.productCount > 0
+    ? MOCK_RECIPE_LIST.slice(0, Math.min(policy.productCount, MOCK_RECIPE_LIST.length)).map((product, index) => ({
+        ...product,
+        snapshotTime: `2026-03-${20 - index} 14:32`,
+        snapshotStatus: 'ready',
+      }))
+    : []);
   const [keyword, setKeyword] = useState('');
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [pendingProductIds, setPendingProductIds] = useState<string[]>([]);
   const [removeTarget, setRemoveTarget] = useState<any>(null);
-  const [showImport, setShowImport] = useState(false);
-  const [importFile, setImportFile] = useState('');
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBulkExport, setShowBulkExport] = useState(false);
   const [message, setMessage] = useState('');
 
   const filteredProducts = strategyProducts.filter(product => !keyword.trim() || product.name.toLowerCase().includes(keyword.trim().toLowerCase()) || product.id.includes(keyword.trim()));
@@ -887,7 +1066,11 @@ const PolicyProductManager = ({ policy, onBack, onConfigProduct }: { policy: any
                {policy?.name || '策略配方商品管理'} · 配方商品
             </h2>
          </div>
-         <div className="flex gap-3"><button type="button" onClick={() => { setImportFile(''); setShowImport(true); }} className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#555] hover:bg-[#FAFAFA]"><Upload size={15} className="mr-1 inline" />导入商品</button><button type="button" onClick={() => { setPendingProductIds([]); setShowProductSelector(true); }} className="flex items-center rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-bold text-white hover:bg-[#00A35B]"><Plus size={16} className="mr-1" />添加商品</button></div>
+         <div className="flex gap-3">
+           <button type="button" onClick={() => setShowBulkImport(true)} className="flex items-center rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#555] hover:bg-[#FAFAFA]"><Upload size={15} className="mr-1.5" />导入配方</button>
+           <button type="button" onClick={() => setShowBulkExport(true)} className="flex items-center rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#555] hover:bg-[#FAFAFA]"><Download size={15} className="mr-1.5" />导出配方</button>
+           <button type="button" onClick={() => { setPendingProductIds([]); setShowProductSelector(true); }} className="flex items-center rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-bold text-white hover:bg-[#00A35B]"><Plus size={16} className="mr-1" />添加商品</button>
+         </div>
        </div>
        {message && <div className="flex items-center justify-between border-b border-[#CBEFDC] bg-[#F1FFF7] px-6 py-2 text-sm text-[#087A49]"><span>{message}</span><button type="button" onClick={() => setMessage('')} className="rounded p-1 hover:bg-white/70" aria-label="关闭提示"><X size={14} /></button></div>}
        <div className="min-h-0 flex-1 p-4"><div className="flex h-full flex-col overflow-hidden rounded-lg border border-[#E8E8E8] bg-white shadow-sm">
@@ -900,7 +1083,27 @@ const PolicyProductManager = ({ policy, onBack, onConfigProduct }: { policy: any
 
        {removeTarget && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6"><div className="w-[470px] overflow-hidden rounded-lg bg-white shadow-xl"><div className="flex items-start gap-3 px-6 py-5"><div className="rounded-full bg-[#FFF1F0] p-2 text-[#D92D20]"><AlertTriangle size={18} /></div><div><div className="font-bold text-[#222]">移除策略配方商品</div><div className="mt-2 text-sm leading-6 text-[#666]">移除“{removeTarget.name}”后，策略适用门店将恢复使用总部当前默认配方；该商品的独立快照及已配置内容将删除。</div></div></div><div className="flex justify-end gap-3 border-t border-[#E8E8E8] px-6 py-4"><button type="button" onClick={() => setRemoveTarget(null)} className="rounded-lg border border-[#E8E8E8] px-4 py-2 text-sm text-[#666]">取消</button><button type="button" onClick={() => { setStrategyProducts(prev => prev.filter(item => item.id !== removeTarget.id)); setMessage(`已移除 ${removeTarget.name}，门店恢复使用总部默认配方`); setRemoveTarget(null); }} className="rounded-lg bg-[#D92D20] px-4 py-2 text-sm font-medium text-white">确认移除</button></div></div></div>}
 
-       {showImport && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"><div className="w-[500px] overflow-hidden rounded-lg bg-white shadow-xl"><div className="flex items-center justify-between border-b border-[#E8E8E8] px-5 py-4"><div><h3 className="font-bold text-[#333]">导入策略配方商品</h3><div className="mt-1 text-xs text-[#999]">文件校验通过后再生成独立配方快照</div></div><button type="button" onClick={() => setShowImport(false)} className="text-[#999]" aria-label="关闭"><X size={18} /></button></div><div className="p-5"><label className="flex cursor-pointer flex-col items-center rounded-lg border border-dashed border-[#CFCFCF] bg-[#FAFAFA] px-4 py-8"><Upload size={24} className="text-[#00A35B]" /><span className="mt-2 text-sm text-[#555]">选择 Excel 或 CSV 文件</span><input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={event => setImportFile(event.target.files?.[0]?.name || '')} /></label>{importFile && <div className="mt-3 rounded-lg bg-[#F1FFF7] px-3 py-2 text-sm text-[#087A49]">已选择：{importFile}</div>}</div><div className="flex justify-end gap-3 border-t border-[#E8E8E8] px-5 py-4"><button type="button" onClick={() => setShowImport(false)} className="rounded-lg border border-[#E8E8E8] px-4 py-2 text-sm text-[#666]">取消</button><button type="button" disabled={!importFile} onClick={() => { setShowImport(false); setMessage('导入文件校验完成，可继续生成商品配方快照'); }} className="rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-medium text-white disabled:opacity-40">开始校验</button></div></div></div>}
+       {showBulkImport && (
+         <BulkRecipeImportDialog
+           title={`导入“${policy?.name || '当前策略'}”配方`}
+           subtitle="一次导入当前门店配方策略下多个商品的差异配方"
+           scopeText={`${policy?.name || '当前策略'} · ${policy?.storeCount || 0} 家适用门店`}
+           impactText="仅修改当前策略的配方快照；适用门店存在对应商品时才会生效，文件中未出现的数据不会删除。"
+           onClose={() => setShowBulkImport(false)}
+           onComplete={() => setMessage('门店策略配方批量导入完成：成功 1,238 条，跳过 4 条')}
+         />
+       )}
+
+       {showBulkExport && (
+         <BulkRecipeExportDialog
+           title={`导出“${policy?.name || '当前策略'}”配方`}
+           scopeText="当前门店配方策略"
+           totalCount={strategyProducts.length}
+           filteredCount={filteredProducts.length}
+           onClose={() => setShowBulkExport(false)}
+           onComplete={() => setMessage('门店策略配方导出任务已创建，可在下载中心查看进度')}
+         />
+       )}
     </div>
   );
 };

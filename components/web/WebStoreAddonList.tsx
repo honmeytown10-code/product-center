@@ -862,7 +862,7 @@ export const WebStoreAddonList: React.FC = () => {
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45">
           <div className="w-[980px] rounded-2xl bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
             <div className="flex items-center justify-between px-7 py-6">
-              <div className="text-[24px] font-medium text-[#333]">批量改价</div>
+            <div className="text-[18px] font-semibold text-[#333]">批量改价</div>
               <button onClick={() => setBatchPriceDialog(null)} className="text-[#999] hover:text-[#333]">
                 <X size={24} />
               </button>
@@ -1111,7 +1111,7 @@ const AddonBatchShelfModal = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       <div className="w-[1020px] max-w-[calc(100vw-48px)] rounded-[18px] bg-white shadow-2xl">
         <div className="flex items-center justify-between px-8 pt-8">
-          <h3 className="text-[22px] font-bold text-[#333]">确认{action === 'on_shelf' ? '上架' : '下架'}加料吗?</h3>
+              <h3 className="text-[18px] font-semibold text-[#333]">确认{action === 'on_shelf' ? '上架' : '下架'}加料吗？</h3>
           <button onClick={onClose} className="text-[#999] transition-colors hover:text-[#333]">
             <X size={22} />
           </button>

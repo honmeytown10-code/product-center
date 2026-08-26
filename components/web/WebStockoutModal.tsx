@@ -109,7 +109,7 @@ export const WebStockoutModal: React.FC<{
       <div className={`max-h-[90vh] w-[980px] max-w-[calc(100vw-48px)] overflow-hidden rounded-[18px] bg-white shadow-2xl ${isMultiSpec ? 'w-[1260px]' : ''}`}>
         <div className="flex items-center justify-between px-8 pt-8">
           <div className="flex items-center gap-2">
-            <h3 className="text-[22px] font-bold text-[#333]">沽清</h3>
+        <h3 className="text-[18px] font-semibold text-[#333]">沽清设置</h3>
             <AlertCircle size={18} className="text-[#999]" />
           </div>
           <button onClick={onClose} className="text-[#999] transition-colors hover:text-[#333]">

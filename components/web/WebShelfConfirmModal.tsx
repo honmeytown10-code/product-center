@@ -148,7 +148,7 @@ export const WebShelfConfirmModal: React.FC<{
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       <div className="w-[1020px] max-w-[calc(100vw-48px)] rounded-[18px] bg-white shadow-2xl">
         <div className="flex items-center justify-between px-8 pt-8">
-          <h3 className="text-[22px] font-bold text-[#333]">{modalTitle}</h3>
+          <h3 className="text-[18px] font-semibold text-[#333]">{modalTitle}</h3>
           <button onClick={onClose} className="text-[#999] transition-colors hover:text-[#333]">
             <X size={22} />
           </button>

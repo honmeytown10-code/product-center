@@ -217,7 +217,7 @@ export const WebGeneralSettings: React.FC<Props> = ({
                                 <h5 className="text-[15px] font-bold text-gray-900">企迈数店 POS 商品沽清模式</h5>
                                 <p className="text-xs text-gray-400 mt-1">用于控制POS上商品沽清页面，商品按SPU或SKU模式展示、操作</p>
                             </div>
-                            <div className="flex items-center space-x-6 bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                            <div className="flex items-center space-x-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4">
                                 <label className="flex items-center cursor-pointer group" onClick={(e) => { 
                                     e.preventDefault(); 
                                     updateBrandConfig(activeBrandId, {...currentBrandConfig, posStockoutMode: 'spu'}); 
@@ -247,7 +247,7 @@ export const WebGeneralSettings: React.FC<Props> = ({
                                 <h5 className="text-[15px] font-bold text-gray-900">企迈数店 POS 已沽清列表设置</h5>
                                 <p className="text-xs text-gray-400 mt-1 leading-relaxed">用于控制POS上商品沽清页面，左侧已沽清列表数据展示规则，商品剩余份数小于设置的值，会在左侧已沽清列表展示，否则不展示</p>
                             </div>
-                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 shrink-0">
+                            <div className="flex shrink-0 items-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2">
                                 <span className="text-sm font-bold text-gray-600 mr-3">商品剩余份数小于</span>
                                 <input 
                                     type="number" 

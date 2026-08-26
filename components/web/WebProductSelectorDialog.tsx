@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 export type SelectableProduct = {
   id: string;
   name: string;
-  image: string;
+  image?: string;
   skuCode?: string;
   productCode?: string;
   category?: string;
@@ -28,6 +28,7 @@ type Props = {
   fixedType?: 'standard' | 'combo';
   disabledIds?: string[];
   disabledLabel?: string;
+  showSkuFields?: boolean;
 };
 
 const PAGE_SIZE = 10;
@@ -57,6 +58,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
   fixedType,
   disabledIds = [],
   disabledLabel,
+  showSkuFields = true,
 }) => {
   const [draftFilters, setDraftFilters] = useState({
     name: '',
@@ -94,11 +96,11 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
     const category = product.frontendCategory || product.category || '';
     return (!filters.name || product.name.toLowerCase().includes(filters.name.toLowerCase()))
       && (!filters.productId || product.id.includes(filters.productId))
-      && (!filters.skuCode || (product.skuCode || '').includes(filters.skuCode))
+      && (!showSkuFields || !filters.skuCode || (product.skuCode || '').includes(filters.skuCode))
       && (!filters.productCode || (product.productCode || '').includes(filters.productCode))
       && (filters.category === 'all' || category === filters.category)
       && (filters.type === 'all' || type === filters.type);
-  }), [filters, products]);
+  }), [filters, products, showSkuFields]);
 
   const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -153,10 +155,10 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
               <span className="mr-3 shrink-0 text-[#4E5969]">商品 ID</span>
               <input value={draftFilters.productId} onChange={event => setDraftFilters(prev => ({ ...prev, productId: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品 ID" />
             </label>
-            <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
+            {showSkuFields && <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">SKUID</span>
               <input value={draftFilters.skuCode} onChange={event => setDraftFilters(prev => ({ ...prev, skuCode: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入 SKUID" />
-            </label>
+            </label>}
             <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">商品标识</span>
               <input value={draftFilters.productCode} onChange={event => setDraftFilters(prev => ({ ...prev, productCode: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品标识" />
@@ -184,7 +186,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto px-5 pt-4">
-          <table className="w-full min-w-[1040px] table-fixed text-left text-[13px]">
+          <table className={`w-full table-fixed text-left text-[13px] ${showSkuFields ? 'min-w-[1040px]' : 'min-w-[880px]'}`}>
             <thead className="sticky top-0 z-10 bg-[#F2F3F5] text-[#4E5969]">
               <tr>
                 <th className="w-12 px-4 py-3"><input type="checkbox" checked={allPageSelected} onChange={togglePage} className="h-4 w-4 rounded border-gray-300 text-[#00B460]" /></th>
@@ -192,7 +194,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
                 <th className="w-[110px] px-4 py-3">商品类型</th>
                 <th className="w-[140px] px-4 py-3">前台分类</th>
                 <th className="w-[160px] px-4 py-3">商品标识</th>
-                <th className="w-[160px] px-4 py-3">SKUID</th>
+                {showSkuFields && <th className="w-[160px] px-4 py-3">SKUID</th>}
                 <th className="w-[100px] px-4 py-3">基础价格</th>
                 <th className="w-[90px] px-4 py-3">状态</th>
               </tr>
@@ -206,20 +208,20 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
                     <td className="px-4 py-3"><input type="checkbox" checked={selected} disabled={disabled} onChange={() => toggleProduct(product.id)} className="h-4 w-4 rounded border-gray-300 text-[#00B460] disabled:cursor-not-allowed disabled:opacity-40" /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <img src={product.image} alt="" className="h-10 w-10 shrink-0 border border-[#E5E6EB] object-cover" />
+                        {product.image ? <img src={product.image} alt="" className="h-10 w-10 shrink-0 border border-[#E5E6EB] object-cover" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#F2F4F7] text-[14px] font-semibold text-[#667085]">{product.name.slice(0, 1)}</span>}
                         <div className="min-w-0"><div className="flex items-center gap-2"><div className="truncate font-medium text-[#1D2129]">{product.name}</div>{disabled && disabledLabel ? <span className="shrink-0 rounded bg-[#EEF1F4] px-1.5 py-0.5 text-[11px] font-medium text-[#667085]">{disabledLabel}</span> : null}</div><div className="mt-1 text-[12px] text-[#86909C]">商品ID {product.id}</div></div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-[#4E5969]">{getTypeLabel(product.type)}</td>
                     <td className="px-4 py-3 text-[#4E5969]">{product.frontendCategory || product.category || '-'}</td>
                     <td className="px-4 py-3 text-[#4E5969]">{product.productCode || '-'}</td>
-                    <td className="px-4 py-3 text-[#4E5969]">{product.skuCode || '-'}</td>
+                    {showSkuFields && <td className="px-4 py-3 text-[#4E5969]">{product.skuCode || '-'}</td>}
                     <td className="px-4 py-3 text-[#1D2129]">¥{Number(product.price || 0).toFixed(2)}</td>
                     <td className="px-4 py-3 text-[#4E5969]">{getStatusLabel(product.status)}</td>
                   </tr>
                 );
               })}
-              {pageProducts.length === 0 ? <tr><td colSpan={8} className="py-16 text-center text-[#86909C]">没有符合条件的商品</td></tr> : null}
+              {pageProducts.length === 0 ? <tr><td colSpan={showSkuFields ? 8 : 7} className="py-16 text-center text-[#86909C]">没有符合条件的商品</td></tr> : null}
             </tbody>
           </table>
         </div>

@@ -6,6 +6,21 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--", "--port", "5173", "--strictPort"],
       "port": 5173
+    },
+    {
+      "name": "full-channel",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        ".codex_tmp/worktrees/full-channel",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5199",
+        "--strictPort"
+      ],
+      "port": 5199
     }
   ]
 }

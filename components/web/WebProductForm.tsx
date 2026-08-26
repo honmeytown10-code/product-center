@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Pencil, Settings, Printer, 
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
-  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search, LoaderCircle
+  CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronLeft, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search, LoaderCircle
 } from 'lucide-react';
 import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, OmnichannelChannelId, ThirdPartyChannelId, resolveChildRequiredConfigs } from '../../types';
 import { channelGroupIncludesMiniProgram } from '../../omnichannel';
@@ -259,13 +259,6 @@ type AddonGroupRule = AddonRuleConfig & {
     mode: AddonGroupMode;
     countMetric: AddonCountMetric;
 };
-type TaxRateOption = {
-    id: string;
-    categoryCode: string;
-    categoryName: string;
-    rate: string;
-    remark: string;
-};
 type TemplateTaskRecord = {
     id: string;
     type: TemplateTaskType;
@@ -277,11 +270,23 @@ type TemplateTaskRecord = {
 };
 type ComboOptionalItem = {
     id: string;
+    productId: string;
     name: string;
     spec: string;
+    skuCode: string;
+    frontendCategory: string;
     quantity: number;
     surcharge: number;
     isDefault: boolean;
+    channelEnabled?: boolean;
+};
+type ComboOptionalProductFilters = {
+    name: string;
+    barcode: string;
+    productFlag: string;
+    skuCode: string;
+    productId: string;
+    frontendCategory: string;
 };
 type ComboGroupCard = {
     id: string;
@@ -298,6 +303,7 @@ type ComboGroupCard = {
     saveAsFreeMatch?: boolean;
     remark?: string;
     affectedStoreCount?: number;
+    channelEnabled?: boolean;
 };
 type ComboOptionalGroupModalState = {
     mode: 'create' | 'edit';
@@ -328,15 +334,24 @@ const DEFAULT_TEMPLATE_OPTIONS: TemplateOption[] = [
     { id: 'template-5', name: '外卖爆品模板', desc: '适用于外卖菜单快速复用', channels: '外卖 / POS', saleType: '外卖', group: '外卖专区', type: '普通模板' },
 ];
 const COMBO_OPTIONAL_PRODUCT_LIBRARY: ComboOptionalItem[] = [
-    { id: 'combo-item-1', name: '香辣鸡腿堡', spec: '标准规格', quantity: 1, surcharge: 0, isDefault: true },
-    { id: 'combo-item-2', name: '新奥尔良鸡腿堡', spec: '标准规格', quantity: 1, surcharge: 2, isDefault: false },
-    { id: 'combo-item-3', name: '经典牛肉堡', spec: '标准规格', quantity: 1, surcharge: 4, isDefault: false },
-    { id: 'combo-item-4', name: '脆皮鸡翅', spec: '2只', quantity: 1, surcharge: 3, isDefault: false },
-    { id: 'combo-item-5', name: '藤椒鸡腿堡', spec: '标准规格', quantity: 1, surcharge: 2, isDefault: false },
-    { id: 'combo-item-6', name: '薯条', spec: '中份', quantity: 1, surcharge: 0, isDefault: false },
-    { id: 'combo-item-7', name: '香辣鸡米花', spec: '小份', quantity: 1, surcharge: 1, isDefault: false },
-    { id: 'combo-item-8', name: '冰柠可乐', spec: '中杯', quantity: 1, surcharge: 0, isDefault: false },
+    { id: 'combo-item-1', productId: '1293655926072582145', name: '香辣鸡腿堡', spec: '标准规格', skuCode: 'SKU-10001', frontendCategory: '主食', quantity: 1, surcharge: 0, isDefault: true },
+    { id: 'combo-item-2', productId: '1293655804269993984', name: '新奥尔良鸡腿堡', spec: '标准规格', skuCode: 'SKU-10002', frontendCategory: '主食', quantity: 1, surcharge: 2, isDefault: false },
+    { id: 'combo-item-3', productId: '1293521187567181824', name: '经典牛肉堡', spec: '标准规格', skuCode: 'SKU-10003', frontendCategory: '主食', quantity: 1, surcharge: 4, isDefault: false },
+    { id: 'combo-item-4', productId: '1293520168208703488', name: '脆皮鸡翅', spec: '2只', skuCode: 'SKU-10004', frontendCategory: '小吃', quantity: 1, surcharge: 3, isDefault: false },
+    { id: 'combo-item-5', productId: '1293572875820875776', name: '藤椒鸡腿堡', spec: '标准规格', skuCode: 'SKU-10005', frontendCategory: '主食', quantity: 1, surcharge: 2, isDefault: false },
+    { id: 'combo-item-6', productId: '1293506622283880448', name: '薯条', spec: '中份', skuCode: 'SKU-10006', frontendCategory: '小吃', quantity: 1, surcharge: 0, isDefault: false },
+    { id: 'combo-item-7', productId: '1293504293387069440', name: '香辣鸡米花', spec: '小份', skuCode: 'SKU-10007', frontendCategory: '小吃', quantity: 1, surcharge: 1, isDefault: false },
+    { id: 'combo-item-8', productId: '1293499835987996672', name: '冰柠可乐', spec: '中杯', skuCode: 'SKU-10008', frontendCategory: '饮品', quantity: 1, surcharge: 0, isDefault: false },
+    { id: 'combo-item-9', productId: '1293499835987996672', name: '冰柠可乐', spec: '大杯', skuCode: 'SKU-10009', frontendCategory: '饮品', quantity: 1, surcharge: 2, isDefault: false },
 ];
+const EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS: ComboOptionalProductFilters = {
+    name: '',
+    barcode: '',
+    productFlag: '',
+    skuCode: '',
+    productId: '',
+    frontendCategory: 'all',
+};
 
 const formatDateTime = (date: Date) => {
     const pad = (value: number) => `${value}`.padStart(2, '0');
@@ -448,6 +463,7 @@ const CHANNEL_READONLY_FIELD_IDS = new Set([
     'p_cat',
     'p_weight_flag',
     'p_unit',
+    's_tax_rate',
 ]);
 const CHANNEL_POS_ONLY_FIELD_IDS = new Set(['p_tare_weight']);
 const MASTER_SPEC_CHILD_IDS = new Set([
@@ -582,6 +598,19 @@ const COMBO_FALLBACK_FIELDS: CategoryFieldConfig[] = [
     { id: 'o_ingredients', isRequired: false },
 ];
 const WEIGHT_UNIT_OPTIONS = ['克', '千克', '斤', '两'] as const;
+type TaxCategoryOption = {
+    code: string;
+    name: string;
+    rate: string;
+    remark: string;
+};
+const TAX_CATEGORY_OPTIONS: TaxCategoryOption[] = [
+    { code: '1010101080000000000', name: '黑麦', rate: '1%', remark: '谷物及其制品' },
+    { code: '1010101060000000000', name: '大麦', rate: '3%', remark: '谷物及其制品' },
+    { code: '1010115013200000000', name: '石榴', rate: '13%', remark: '水果及坚果' },
+    { code: '1030201010000000000', name: '饮料', rate: '6%', remark: '非酒精饮料' },
+    { code: '1030301000000000000', name: '餐饮服务', rate: '6%', remark: '现场制售餐饮服务' },
+];
 const DEFAULT_FRONT_CATEGORY_TREE: CategoryTreeNode[] = [
     {
         id: 'front-cat-1',
@@ -749,15 +778,6 @@ const ADDON_LIBRARY = [
         ],
     },
 ] as const;
-const TAX_RATE_OPTIONS: TaxRateOption[] = [
-    {
-        id: 'tax-rate-catering-service',
-        categoryCode: '3070401000000000000',
-        categoryName: '餐饮服务',
-        rate: '13%',
-        remark: '',
-    },
-];
 const PREVIEW_FIELD_TITLES: Record<PreviewField, { title: string; desc: string }> = {
     default: { title: '商品展示效果', desc: '点击表单中的关键字段，可查看其在小程序端的展示位置。' },
     p_name: { title: '商品名称效果', desc: '用于突出商品标题，帮助用户快速识别商品。' },
@@ -1047,6 +1067,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [previewPreference, setPreviewPreference] = useState<PreviewDisplayPreference | null>(() => getStoredPreviewPreference(previewPreferenceKey));
     const [showPreviewPreferenceMenu, setShowPreviewPreferenceMenu] = useState(false);
     const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
+    const [showTaxCategoryModal, setShowTaxCategoryModal] = useState(false);
+    const [taxCategoryFilters, setTaxCategoryFilters] = useState({ name: '', code: '', rate: '', remark: '' });
     const [expandedMoreFields, setExpandedMoreFields] = useState<string[]>([]);
     const [expandedComboAdvancedFields, setExpandedComboAdvancedFields] = useState<string[]>([]);
     const [comboAdvancedExpandedAll, setComboAdvancedExpandedAll] = useState(false);
@@ -1080,18 +1102,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [colorPickerHexInput, setColorPickerHexInput] = useState('#F2F2F2');
     const [showMethodPickerModal, setShowMethodPickerModal] = useState(false);
     const [showAddonPickerModal, setShowAddonPickerModal] = useState(false);
-    const [showTaxRatePickerModal, setShowTaxRatePickerModal] = useState(false);
-    const [taxRateFilters, setTaxRateFilters] = useState({
-        categoryName: '',
-        categoryCode: '',
-        rate: '',
-        remark: '',
-    });
     const [showSpecPickerModal, setShowSpecPickerModal] = useState(false);
     const [disabledChannelSpecValues, setDisabledChannelSpecValues] = useState<string[]>(['12寸']);
     const [draftDisabledChannelSpecValues, setDraftDisabledChannelSpecValues] = useState<string[]>([]);
     const [showChannelSpecValueModal, setShowChannelSpecValueModal] = useState(false);
     const [pendingChannelSpecValueToggle, setPendingChannelSpecValueToggle] = useState<PendingChannelSpecValueToggle | null>(null);
+    const filteredTaxCategoryOptions = useMemo(() => TAX_CATEGORY_OPTIONS.filter(option => (
+        option.name.includes(taxCategoryFilters.name.trim())
+        && option.code.includes(taxCategoryFilters.code.trim())
+        && option.rate.includes(taxCategoryFilters.rate.trim())
+        && option.remark.includes(taxCategoryFilters.remark.trim())
+    )), [taxCategoryFilters]);
     const [activeSpecGroupId, setActiveSpecGroupId] = useState<string>(SPEC_LIBRARY[0].id);
     const [selectedSpecValuesByGroup, setSelectedSpecValuesByGroup] = useState<SpecSelectionMap>(() => (
         mode === 'create' ? {} : deriveSpecSelectionMap(['8寸', '10寸', '12寸'])
@@ -1110,34 +1131,63 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         isRequired: false,
     });
     const [addonGroupRules, setAddonGroupRules] = useState<Record<string, AddonGroupRule>>({});
-    const [comboGroupCards, setComboGroupCards] = useState<ComboGroupCard[]>(() => (
-        mode === 'create'
-            ? []
-            : [
-                { id: 'combo-fixed-1', type: 'fixed', title: '固定搭配', desc: '已添加 2 个固定商品' },
-                {
-                    id: 'combo-optional-1',
-                    type: 'optional',
-                    title: '主食任选',
-                    desc: '按种类选择 · 3 选 1',
-                    items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 3),
-                    requiredOptionCount: 1,
-                    minTotalQuantity: 1,
-                    maxTotalQuantity: 2,
-                    isRequired: true,
-                    configMode: 'pick',
-                    relativePrice: false,
-                    saveAsFreeMatch: false,
-                    remark: '套餐主食选择',
-                    affectedStoreCount: 18,
-                },
-            ]
-    ));
+    const [comboGroupCards, setComboGroupCards] = useState<ComboGroupCard[]>(() => {
+        if (mode === 'create') return [];
+
+        const inheritedGroups: ComboGroupCard[] = [
+            {
+                id: 'combo-fixed-1',
+                type: 'fixed',
+                title: '固定搭配',
+                desc: '已添加 2 个固定商品',
+                items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 2).map(item => ({
+                    ...item,
+                    channelEnabled: true,
+                })),
+            },
+            {
+                id: 'combo-optional-1',
+                type: 'optional',
+                title: '主食任选',
+                desc: '按种类选择 · 3 选 1',
+                items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(0, 3),
+                requiredOptionCount: 1,
+                minTotalQuantity: 1,
+                maxTotalQuantity: 2,
+                isRequired: true,
+                configMode: 'pick',
+                relativePrice: false,
+                saveAsFreeMatch: false,
+                remark: '套餐主食选择',
+                affectedStoreCount: 18,
+                channelEnabled: true,
+            },
+        ];
+
+        if (isChannelForm) {
+            inheritedGroups.push({
+                id: 'combo-free-1',
+                type: 'free',
+                title: '饮品随心配',
+                desc: '2 个可选商品 · 最多选 1 份',
+                items: COMBO_OPTIONAL_PRODUCT_LIBRARY.slice(7, 9),
+                channelEnabled: false,
+            });
+        }
+
+        return inheritedGroups;
+    });
     const [comboOptionalGroupModal, setComboOptionalGroupModal] = useState<ComboOptionalGroupModalState | null>(null);
     const [confirmingComboOptionalSave, setConfirmingComboOptionalSave] = useState(false);
     const [comboOptionalProductPickerOpen, setComboOptionalProductPickerOpen] = useState(false);
     const [comboOptionalProductPickerDraftIds, setComboOptionalProductPickerDraftIds] = useState<string[]>([]);
-    const [comboOptionalProductKeyword, setComboOptionalProductKeyword] = useState('');
+    const [comboOptionalProductDraftFilters, setComboOptionalProductDraftFilters] = useState<ComboOptionalProductFilters>({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+    const [comboOptionalProductFilters, setComboOptionalProductFilters] = useState<ComboOptionalProductFilters>({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+    const [comboOptionalProductPage, setComboOptionalProductPage] = useState(1);
+    const [comboOptionalBatchFilterOpen, setComboOptionalBatchFilterOpen] = useState(false);
+    const [comboOptionalBatchFilterInput, setComboOptionalBatchFilterInput] = useState('');
+    const [comboOptionalBatchProductIds, setComboOptionalBatchProductIds] = useState<string[]>([]);
+    const [comboOptionalBatchFilterError, setComboOptionalBatchFilterError] = useState('');
     const [attrGroupSortEnabled, setAttrGroupSortEnabled] = useState(false);
     const [attrPanelOrder, setAttrPanelOrder] = useState<string[]>(() => (
         mode === 'create'
@@ -4810,7 +4860,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const saleSettings = dynamicFormData.s_sale_settings || {};
         const takeoutRule = dynamicFormData.s_takeout_rule || '正常售卖';
         const taxRate = dynamicFormData.s_tax_rate || '';
-        const selectedTaxRate = TAX_RATE_OPTIONS.find(option => option.rate === taxRate);
+        const taxCategoryName = dynamicFormData.s_tax_category_name || '';
+        const taxCategoryCode = dynamicFormData.s_tax_category_code || '';
+        const taxReadonly = isChannelFieldReadonly('s_tax_rate');
         const thirdMiniProgramEnabled = !!dynamicFormData.s_jump_third_mini_program;
         const thirdMiniProgramPath = dynamicFormData.s_third_mini_program_path || '';
         const salesCommissionAmount = dynamicFormData.s_sales_commission_amount || '';
@@ -4995,41 +5047,57 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 {expandedSalesFields.includes('s_tax_rate') && isFieldEnabled('s_tax_rate') && (
                                     <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">税率</div>
-                                        <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
+                                        <div className="space-y-4 rounded-lg border border-[#EEF0F2] bg-[#FAFAFA] p-4">
                                             <div>
                                                 <div className="mb-2 text-sm font-bold text-[#1F2129]">选择税率</div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowTaxRatePickerModal(true)}
-                                                    className="inline-flex min-h-10 min-w-[110px] max-w-full items-center justify-between gap-3 rounded-md border border-[#DDE2E8] bg-white px-4 text-sm text-[#1F2129] hover:border-[#00B460] focus:outline-none focus:ring-2 focus:ring-[#00B460]/15"
-                                                >
-                                                    <span className={taxRate ? '' : 'text-[#98A2B3]'}>
-                                                        {selectedTaxRate ? `${selectedTaxRate.categoryName} · ${selectedTaxRate.rate}` : (taxRate || '请选择')}
-                                                    </span>
-                                                    <ChevronRight size={15} className="shrink-0 text-[#98A2B3]" />
-                                                </button>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {taxRate ? (
+                                                        <div className="inline-flex min-h-10 items-center rounded-md border border-[#DDE3E8] bg-white px-3 text-sm text-[#1F2129]">
+                                                            <span>{taxCategoryName || '已选税收分类'}（税率：{taxRate}）</span>
+                                                            <span className="ml-2 text-[#00A35B]">已选择</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-sm text-[#98A2B3]">暂未选择税收分类</span>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        disabled={taxReadonly}
+                                                        onClick={() => setShowTaxCategoryModal(true)}
+                                                        className="console-secondary-button disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {taxRate ? '重新选择' : '请选择'}
+                                                    </button>
+                                                    {taxCategoryCode && <span className="text-xs text-[#98A2B3]">税收分类编码：{taxCategoryCode}</span>}
+                                                </div>
                                             </div>
 
-                                            <div className="max-w-[770px]">
-                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
-                                                <input
-                                                    className="q-form-input"
-                                                    placeholder="请输入内容"
-                                                    value={invoiceItemName}
-                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
-                                                />
-                                                <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
-                                            </div>
+                                            {taxRate && (
+                                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                                    <div>
+                                                        <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
+                                                        <input
+                                                            className="q-form-input"
+                                                            placeholder="请输入内容"
+                                                            value={invoiceItemName}
+                                                            disabled={taxReadonly}
+                                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
+                                                        />
+                                                        <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
+                                                    </div>
 
-                                            <div className="max-w-[770px]">
-                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
-                                                <input
-                                                    className="q-form-input"
-                                                    placeholder="请输入内容"
-                                                    value={invoiceCustomUnit}
-                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
-                                                />
-                                            </div>
+                                                    <div>
+                                                        <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
+                                                        <input
+                                                            className="q-form-input"
+                                                            placeholder="请输入内容"
+                                                            value={invoiceCustomUnit}
+                                                            disabled={taxReadonly}
+                                                            onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {taxReadonly && <div className="text-xs text-[#98A2B3]">该字段由商品主档统一维护，可通过“从商品主档更新”同步最新设置。</div>}
                                         </div>
                                     </div>
                                 )}
@@ -6293,8 +6361,46 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             setComboOptionalProductPickerDraftIds(
                 comboOptionalGroupModal?.draft.items?.map(item => item.id) || []
             );
-            setComboOptionalProductKeyword('');
+            setComboOptionalProductDraftFilters({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+            setComboOptionalProductFilters({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+            setComboOptionalProductPage(1);
+            setComboOptionalBatchFilterOpen(false);
+            setComboOptionalBatchFilterInput('');
+            setComboOptionalBatchProductIds([]);
+            setComboOptionalBatchFilterError('');
             setComboOptionalProductPickerOpen(true);
+        };
+
+        const openOptionalBatchFilter = () => {
+            setComboOptionalBatchFilterInput(comboOptionalBatchProductIds.join('\n'));
+            setComboOptionalBatchFilterError('');
+            setComboOptionalBatchFilterOpen(true);
+        };
+
+        const parsedOptionalBatchTokens = comboOptionalBatchFilterInput
+            .split(/[\s,，;；]+/)
+            .map(value => value.trim())
+            .filter(Boolean);
+        const parsedOptionalBatchProductIds = Array.from(new Set(
+            parsedOptionalBatchTokens.filter(value => /^\d+$/.test(value))
+        ));
+        const invalidOptionalBatchTokenCount = parsedOptionalBatchTokens.length
+            - parsedOptionalBatchTokens.filter(value => /^\d+$/.test(value)).length;
+
+        const applyOptionalBatchFilter = () => {
+            if (parsedOptionalBatchProductIds.length === 0) {
+                setComboOptionalBatchFilterError('请输入至少 1 个有效的商品 ID');
+                return;
+            }
+            if (parsedOptionalBatchProductIds.length > 200) {
+                setComboOptionalBatchFilterError(`单次最多支持 200 个商品 ID，当前已识别 ${parsedOptionalBatchProductIds.length} 个`);
+                return;
+            }
+
+            setComboOptionalBatchProductIds(parsedOptionalBatchProductIds);
+            setComboOptionalProductPage(1);
+            setComboOptionalBatchFilterError('');
+            setComboOptionalBatchFilterOpen(false);
         };
 
         const confirmOptionalProductPicker = () => {
@@ -6333,7 +6439,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             setConfirmingComboOptionalSave(false);
             setComboOptionalProductPickerOpen(false);
             setComboOptionalProductPickerDraftIds([]);
-            setComboOptionalProductKeyword('');
+            setComboOptionalProductDraftFilters({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+            setComboOptionalProductFilters({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+            setComboOptionalProductPage(1);
+            setComboOptionalBatchFilterOpen(false);
+            setComboOptionalBatchFilterInput('');
+            setComboOptionalBatchProductIds([]);
+            setComboOptionalBatchFilterError('');
         };
 
         const buildOptionalGroupCard = (
@@ -6416,17 +6528,55 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             ));
         };
 
+        const toggleChannelComboGroup = (cardId: string) => {
+            setComboGroupCards(current => current.map(card => (
+                card.id === cardId
+                    ? { ...card, channelEnabled: card.channelEnabled === false }
+                    : card
+            )));
+        };
+
+        const toggleChannelFixedItem = (cardId: string, itemId: string) => {
+            setComboGroupCards(current => current.map(card => (
+                card.id === cardId
+                    ? {
+                        ...card,
+                        items: card.items?.map(item => (
+                            item.id === itemId
+                                ? { ...item, channelEnabled: item.channelEnabled === false }
+                                : item
+                        )),
+                    }
+                    : card
+            )));
+        };
+
         const optionalGroupDraft = comboOptionalGroupModal?.draft;
         const canSaveOptionalGroup = !!optionalGroupDraft?.title.trim()
             && (optionalGroupDraft.items?.length || 0) > 0;
         const isEditingLinkedOptionalGroup = comboOptionalGroupModal?.mode === 'edit'
             && (optionalGroupDraft?.affectedStoreCount || 0) > 0;
         const optionalProductPickerResults = COMBO_OPTIONAL_PRODUCT_LIBRARY.filter(product => {
-            const keyword = comboOptionalProductKeyword.trim().toLowerCase();
-            return !keyword
-                || product.name.toLowerCase().includes(keyword)
-                || product.spec.toLowerCase().includes(keyword);
+            const batchMatched = comboOptionalBatchProductIds.length === 0
+                || comboOptionalBatchProductIds.includes(product.productId);
+            return batchMatched
+                && (!comboOptionalProductFilters.name || product.name.toLowerCase().includes(comboOptionalProductFilters.name.toLowerCase()))
+                && (!comboOptionalProductFilters.barcode || '--'.includes(comboOptionalProductFilters.barcode))
+                && (!comboOptionalProductFilters.productFlag || '--'.includes(comboOptionalProductFilters.productFlag))
+                && (!comboOptionalProductFilters.skuCode || product.skuCode.toLowerCase().includes(comboOptionalProductFilters.skuCode.toLowerCase()))
+                && (!comboOptionalProductFilters.productId || product.productId.includes(comboOptionalProductFilters.productId))
+                && (comboOptionalProductFilters.frontendCategory === 'all' || product.frontendCategory === comboOptionalProductFilters.frontendCategory);
         });
+        const matchedOptionalBatchProductCount = new Set(
+            optionalProductPickerResults.map(product => product.productId)
+        ).size;
+        const optionalProductPageSize = 6;
+        const optionalProductPageCount = Math.max(1, Math.ceil(optionalProductPickerResults.length / optionalProductPageSize));
+        const currentOptionalProductPage = Math.min(comboOptionalProductPage, optionalProductPageCount);
+        const optionalProductPickerPageResults = optionalProductPickerResults.slice(
+            (currentOptionalProductPage - 1) * optionalProductPageSize,
+            currentOptionalProductPage * optionalProductPageSize
+        );
 
         return (
             <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
@@ -6467,87 +6617,149 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">套餐信息</div>
                         <div className="rounded-2xl bg-[#FAFAFA] p-4 space-y-4">
-                            <div className="flex flex-wrap gap-3">
-                                {comboButtons.map(button => (
-                                    <button
-                                        key={button.key}
-                                        type="button"
-                                        onClick={() => addComboCard(button.key)}
-                                        className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
-                                    >
-                                        <Plus size={15} className="mr-2" />
-                                        {button.label}
-                                    </button>
-                                ))}
-                            </div>
-                            {comboGroupCards.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                                    {comboGroupCards.map(card => (
-                                        <div
-                                            key={card.id}
-                                            className={`rounded-xl border border-gray-200 bg-white ${
-                                                card.type === 'optional' ? 'xl:col-span-2' : ''
-                                            }`}
+                            {isChannelForm ? (
+                                <div className="flex items-start gap-2.5 rounded-lg border border-[#B7E7D0] bg-[#F2FBF7] px-3.5 py-3 text-sm leading-5 text-[#32654E]">
+                                    <CircleAlert size={16} className="mt-0.5 shrink-0 text-[#00A35B]" />
+                                    <span>套餐结构继承商品主档。当前渠道仅可调整可售范围：固定搭配按子商品启停，可选分组和随心配按整组启停。</span>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-3">
+                                    {comboButtons.map(button => (
+                                        <button
+                                            key={button.key}
+                                            type="button"
+                                            onClick={() => addComboCard(button.key)}
+                                            className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors"
                                         >
-                                            <div className="flex items-start justify-between gap-4 px-4 py-3.5">
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <div className="text-sm font-bold text-[#1F2129]">{card.title}</div>
-                                                        <span className="rounded bg-[#F0FDF4] px-2 py-0.5 text-[11px] font-bold text-[#15803D]">
-                                                            {card.type === 'optional' ? '可选分组' : card.type === 'free' ? '随心配' : '固定搭配'}
-                                                        </span>
-                                                    </div>
-                                                    <div className="mt-1.5 text-xs text-gray-500">{card.desc}</div>
-                                                    {card.type === 'optional' ? (
-                                                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                                                            <span>{card.configMode === 'flexible' ? '按数量选择' : '按种类选择'}</span>
-                                                            {card.configMode === 'flexible' ? (
-                                                                <span>{card.isRequired === false ? '非必选' : '必选'}</span>
-                                                            ) : null}
-                                                            <span>{card.relativePrice ? '启用相对价' : '未启用相对价'}</span>
-                                                            {card.saveAsFreeMatch ? <span className="font-bold text-[#00A35B]">已保存为随心配</span> : null}
-                                                            <span>备注：{card.remark || '--'}</span>
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-1">
-                                                    {card.type === 'optional' ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openOptionalGroupEditor(card)}
-                                                            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
-                                                        >
-                                                            <Pencil size={13} />
-                                                            编辑
-                                                        </button>
-                                                    ) : null}
-                                                    <button
-                                                        type="button"
-                                                        title="删除分组"
-                                                        aria-label={`删除${card.title}`}
-                                                        onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            {card.type === 'optional' && (card.items?.length || 0) > 0 ? (
-                                                <div className="flex flex-wrap gap-2 border-t border-gray-100 bg-[#FCFCFD] px-4 py-3">
-                                                    {card.items?.map(item => (
-                                                        <span
-                                                            key={item.id}
-                                                            className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600"
-                                                        >
-                                                            {item.name}
-                                                            {item.surcharge > 0 ? ` +¥${item.surcharge}` : ''}
-                                                            {item.isDefault ? <span className="ml-1.5 text-[#00A35B]">默认</span> : null}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                        </div>
+                                            <Plus size={15} className="mr-2" />
+                                            {button.label}
+                                        </button>
                                     ))}
+                                </div>
+                            )}
+                            {comboGroupCards.length > 0 ? (
+                                <div className={`grid grid-cols-1 gap-3 ${isChannelForm ? '' : 'xl:grid-cols-2'}`}>
+                                    {comboGroupCards.map(card => {
+                                        const isFixedGroup = card.type === 'fixed' || card.type === 'fixed_multi';
+                                        const groupEnabled = card.channelEnabled !== false;
+                                        const enabledItemCount = card.items?.filter(item => item.channelEnabled !== false).length || 0;
+                                        const itemCount = card.items?.length || 0;
+
+                                        return (
+                                            <div
+                                                key={card.id}
+                                                className={`rounded-xl border bg-white transition-colors ${
+                                                    isChannelForm && !isFixedGroup && !groupEnabled
+                                                        ? 'border-gray-200 bg-[#FCFCFD]'
+                                                        : 'border-gray-200'
+                                                } ${!isChannelForm && card.type === 'optional' ? 'xl:col-span-2' : ''}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-4 px-4 py-3.5">
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <div className={`text-sm font-bold ${isChannelForm && !isFixedGroup && !groupEnabled ? 'text-gray-500' : 'text-[#1F2129]'}`}>{card.title}</div>
+                                                            <span className="rounded bg-[#F0FDF4] px-2 py-0.5 text-[11px] font-bold text-[#15803D]">
+                                                                {card.type === 'optional' ? '可选分组' : card.type === 'free' ? '随心配' : '固定搭配'}
+                                                            </span>
+                                                            {isChannelForm ? (
+                                                                <span className="text-[11px] text-gray-400">结构由商品主档维护</span>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="mt-1.5 text-xs text-gray-500">
+                                                            {isChannelForm && isFixedGroup
+                                                                ? `${enabledItemCount}/${itemCount} 个子商品已启用`
+                                                                : isChannelForm
+                                                                    ? `${groupEnabled ? '整组已启用' : '整组已禁用'} · ${itemCount} 个子商品`
+                                                                    : card.desc}
+                                                        </div>
+                                                        {card.type === 'optional' ? (
+                                                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                                                                <span>{card.configMode === 'flexible' ? '按数量选择' : '按种类选择'}</span>
+                                                                {card.configMode === 'flexible' ? (
+                                                                    <span>{card.isRequired === false ? '非必选' : '必选'}</span>
+                                                                ) : null}
+                                                                <span>{card.relativePrice ? '启用相对价' : '未启用相对价'}</span>
+                                                                {card.saveAsFreeMatch ? <span className="font-bold text-[#00A35B]">已保存为随心配</span> : null}
+                                                                <span>备注：{card.remark || '--'}</span>
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                    {isChannelForm ? (
+                                                        isFixedGroup ? (
+                                                            <span className="shrink-0 pt-1 text-xs text-gray-400">按子商品设置</span>
+                                                        ) : (
+                                                            <div className="flex shrink-0 items-center gap-2">
+                                                                <Switch active={groupEnabled} onClick={() => toggleChannelComboGroup(card.id)} />
+                                                                <span className={`min-w-[42px] text-xs ${groupEnabled ? 'text-[#008F4C]' : 'text-gray-400'}`}>
+                                                                    {groupEnabled ? '已启用' : '已禁用'}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    ) : (
+                                                        <div className="flex shrink-0 items-center gap-1">
+                                                            {card.type === 'optional' ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openOptionalGroupEditor(card)}
+                                                                    className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-[#00A35B] hover:bg-[#F0FDF4]"
+                                                                >
+                                                                    <Pencil size={13} />
+                                                                    编辑
+                                                                </button>
+                                                            ) : null}
+                                                            <button
+                                                                type="button"
+                                                                title="删除分组"
+                                                                aria-label={`删除${card.title}`}
+                                                                onClick={() => setComboGroupCards(prev => prev.filter(item => item.id !== card.id))}
+                                                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {isChannelForm && isFixedGroup && itemCount > 0 ? (
+                                                    <div className="divide-y divide-gray-100 border-t border-gray-100 bg-[#FCFCFD]">
+                                                        {card.items?.map(item => {
+                                                            const itemEnabled = item.channelEnabled !== false;
+                                                            return (
+                                                                <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3">
+                                                                    <div className="min-w-0">
+                                                                        <div className={`truncate text-sm font-medium ${itemEnabled ? 'text-[#1F2129]' : 'text-gray-400'}`}>{item.name}</div>
+                                                                        <div className="mt-1 text-xs text-gray-400">{item.spec} · 数量 {item.quantity}</div>
+                                                                    </div>
+                                                                    <div className="flex shrink-0 items-center gap-2">
+                                                                        <Switch active={itemEnabled} onClick={() => toggleChannelFixedItem(card.id, item.id)} />
+                                                                        <span className={`min-w-[42px] text-xs ${itemEnabled ? 'text-[#008F4C]' : 'text-gray-400'}`}>
+                                                                            {itemEnabled ? '已启用' : '已禁用'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : null}
+                                                {!isFixedGroup && itemCount > 0 ? (
+                                                    <div className={`flex flex-wrap gap-2 border-t border-gray-100 bg-[#FCFCFD] px-4 py-3 ${isChannelForm && !groupEnabled ? 'opacity-50' : ''}`}>
+                                                        {card.items?.map(item => (
+                                                            <span
+                                                                key={item.id}
+                                                                className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600"
+                                                            >
+                                                                {item.name}
+                                                                {item.surcharge > 0 ? ` +¥${item.surcharge}` : ''}
+                                                                {item.isDefault ? <span className="ml-1.5 text-[#00A35B]">默认</span> : null}
+                                                            </span>
+                                                        ))}
+                                                        {isChannelForm && !groupEnabled ? (
+                                                            <span className="self-center text-xs text-gray-500">当前渠道不展示该分组</span>
+                                                        ) : null}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-400">
@@ -6675,7 +6887,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         {comboOptionalGroupModal.mode === 'create' ? '添加可选分组' : '编辑可选分组'}
                                     </div>
                                     <div className="mt-1 text-xs text-gray-400">
-                                        配置分组商品和选择规则，保存后当前套餐将立即引用该分组。
+                                        {comboOptionalGroupModal.mode === 'create'
+                                            ? '配置分组商品和选择规则，保存后添加到当前套餐。'
+                                            : '配置分组商品和选择规则。'}
                                     </div>
                                 </div>
                                 <button
@@ -6690,13 +6904,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                             <div className="flex-1 overflow-y-auto px-6 py-5">
                                 {isEditingLinkedOptionalGroup ? (
-                                    <div className="mb-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                        <CircleAlert size={17} className="mt-0.5 shrink-0" />
-                                        <div>
-                                            <div className="font-bold">该分组已被 {optionalGroupDraft.affectedStoreCount} 家门店商品使用</div>
-                                            <div className="mt-1 text-xs leading-5">
-                                                直接保存会实时同步修改到这些门店；如只想调整当前套餐，请选择“另存为新分组”。
+                                    <div className="mb-5 flex items-start gap-3 rounded-lg border border-[#F2D38A] bg-[#FFF9EB] px-4 py-3 text-[#8A4B08]">
+                                        <CircleAlert size={16} className="mt-0.5 shrink-0" />
+                                        <div className="min-w-0 text-xs leading-5">
+                                            <div className="text-sm font-bold">该分组已被 {optionalGroupDraft.affectedStoreCount} 家门店商品使用</div>
+                                            <div className="mt-1">
+                                                保存修改会影响引用该分组的门店商品。新增商品仅在门店已有对应商品时生效；移除商品将直接生效。
                                             </div>
+                                            <div className="text-[#A15C12]">如不希望影响已有门店，请另存为新分组。</div>
                                         </div>
                                     </div>
                                 ) : null}
@@ -7004,9 +7219,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                             <div className="shrink-0 border-t border-gray-100 bg-white px-6 py-4">
                                 {confirmingComboOptionalSave && isEditingLinkedOptionalGroup ? (
-                                    <div className="mb-3 flex items-center justify-between gap-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                                    <div className="mb-3 flex items-center justify-between gap-4 rounded-lg border border-[#F2D38A] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8A4B08]">
                                         <span>
-                                            确认后将实时更新 {optionalGroupDraft.affectedStoreCount} 家门店正在使用的该分组，是否继续？
+                                            保存后将更新原分组，并影响已关联的门店商品。请确认是否继续。
                                         </span>
                                         <button
                                             type="button"
@@ -7022,7 +7237,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         {!canSaveOptionalGroup
                                             ? '请填写分组名称并至少选择 1 个商品'
                                             : comboOptionalGroupModal.mode === 'edit'
-                                                ? '另存为新分组不会影响原分组和已关联门店'
+                                                ? '另存为新分组不会影响原分组及已关联的门店商品'
                                                 : '保存后将添加到当前套餐'}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-3">
@@ -7054,15 +7269,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 saveOptionalGroup(false);
                                             }}
                                             className={`h-10 rounded-lg px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300 ${
-                                                confirmingComboOptionalSave ? 'bg-red-500 hover:bg-red-600' : 'bg-[#00C06B] hover:bg-[#00A35B]'
+                                                'bg-[#00C06B] hover:bg-[#00A35B]'
                                             }`}
                                         >
                                             {comboOptionalGroupModal.mode === 'create'
                                                 ? '保存'
                                                 : confirmingComboOptionalSave
-                                                    ? '确认保存并同步'
+                                                    ? '确认保存修改'
                                                     : isEditingLinkedOptionalGroup
-                                                        ? '保存并同步门店'
+                                                        ? '保存修改'
                                                         : '保存'}
                                         </button>
                                     </div>
@@ -7073,15 +7288,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 ) : null}
 
                 {comboOptionalProductPickerOpen && optionalGroupDraft ? (
-                    <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/45 p-6">
-                        <div className="flex max-h-[78vh] w-full max-w-[860px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-                            <div className="flex shrink-0 items-start justify-between border-b border-gray-100 px-6 py-4">
-                                <div>
-                                    <div className="text-lg font-bold text-[#1F2129]">选择分组商品</div>
-                                    <div className="mt-1 text-xs text-gray-400">
-                                        勾选需要加入“{optionalGroupDraft.title || '未命名分组'}”的商品，确认后可继续设置数量、加价和默认商品。
-                                    </div>
-                                </div>
+                    <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/45 p-5">
+                        <div className="flex h-[820px] w-[1540px] max-h-[calc(100vh-40px)] max-w-[calc(100vw-40px)] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+                            <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#E5E6EB] px-6">
+                                <div className="text-[18px] font-bold text-[#1D2129]">选择商品</div>
                                 <button
                                     type="button"
                                     aria-label="关闭商品选择"
@@ -7092,102 +7302,295 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 </button>
                             </div>
 
-                            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
-                                <div className="relative w-full max-w-[360px]">
-                                    <Search
-                                        size={17}
-                                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                    />
-                                    <input
-                                        value={comboOptionalProductKeyword}
-                                        onChange={event => setComboOptionalProductKeyword(event.target.value)}
-                                        className="q-form-input h-10 pl-9"
-                                        placeholder="搜索商品名称或规格"
-                                    />
+                            <div className="shrink-0 border-b border-[#E5E6EB] bg-[#F7F8FA] px-5 py-4">
+                                <div className="grid grid-cols-3 gap-3">
+                                    {([
+                                        ['name', '商品名称', '请输入商品名称'],
+                                        ['barcode', '商品条码', '请输入商品条码'],
+                                        ['productFlag', '商品标识', '请输入商品标识'],
+                                        ['skuCode', '商品规格码', '请输入商品规格码'],
+                                        ['productId', '商品 ID', '请输入商品 ID'],
+                                    ] as Array<[keyof ComboOptionalProductFilters, string, string]>).map(([key, label, placeholder]) => (
+                                        <label key={key} className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
+                                            <span className="mr-3 shrink-0 text-[#4E5969]">{label}</span>
+                                            <span className="mr-3 text-[#C9CDD4]">=</span>
+                                            <input
+                                                value={comboOptionalProductDraftFilters[key]}
+                                                onChange={event => setComboOptionalProductDraftFilters(current => ({ ...current, [key]: event.target.value }))}
+                                                className="min-w-0 flex-1 outline-none"
+                                                placeholder={placeholder}
+                                            />
+                                        </label>
+                                    ))}
+                                    <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
+                                        <span className="mr-3 shrink-0 text-[#4E5969]">前台分类</span>
+                                        <span className="mr-3 text-[#C9CDD4]">=</span>
+                                        <select
+                                            value={comboOptionalProductDraftFilters.frontendCategory}
+                                            onChange={event => setComboOptionalProductDraftFilters(current => ({ ...current, frontendCategory: event.target.value }))}
+                                            className="min-w-0 flex-1 bg-white outline-none"
+                                        >
+                                            <option value="all">请选择前台分类</option>
+                                            <option value="主食">主食</option>
+                                            <option value="小吃">小吃</option>
+                                            <option value="饮品">饮品</option>
+                                        </select>
+                                    </label>
                                 </div>
-                                <div className="shrink-0 text-sm text-gray-500">
-                                    已选 <span className="font-bold text-[#00A35B]">{comboOptionalProductPickerDraftIds.length}</span> 个商品
+                                <div className="mt-3 flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setComboOptionalProductFilters({ ...comboOptionalProductDraftFilters });
+                                            setComboOptionalProductPage(1);
+                                        }}
+                                        className="h-9 bg-[#00B460] px-5 text-[13px] font-medium text-white hover:bg-[#009A52]"
+                                    >
+                                        查询
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setComboOptionalProductDraftFilters({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+                                            setComboOptionalProductFilters({ ...EMPTY_COMBO_OPTIONAL_PRODUCT_FILTERS });
+                                            setComboOptionalProductPage(1);
+                                        }}
+                                        className="h-9 border border-[#E5E6EB] bg-white px-5 text-[13px] text-[#4E5969]"
+                                    >
+                                        重置
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto px-6 py-4">
-                                <div className="overflow-hidden rounded-lg border border-gray-200">
-                                    <div className="grid grid-cols-[46px_minmax(240px,1fr)_180px] items-center bg-[#F7F8FA] px-4 py-3 text-xs font-bold text-gray-500">
-                                        <input
-                                            type="checkbox"
-                                            aria-label="全选当前搜索结果"
-                                            checked={optionalProductPickerResults.length > 0 && optionalProductPickerResults.every(product => (
-                                                comboOptionalProductPickerDraftIds.includes(product.id)
-                                            ))}
-                                            onChange={event => {
-                                                const resultIds = optionalProductPickerResults.map(product => product.id);
-                                                setComboOptionalProductPickerDraftIds(current => (
-                                                    event.target.checked
-                                                        ? Array.from(new Set([...current, ...resultIds]))
-                                                        : current.filter(id => !resultIds.includes(id))
-                                                ));
-                                            }}
-                                            className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
-                                        />
-                                        <span>商品</span>
-                                        <span>商品规格</span>
-                                    </div>
-                                    {optionalProductPickerResults.length > 0 ? (
-                                        optionalProductPickerResults.map(product => {
-                                            const selected = comboOptionalProductPickerDraftIds.includes(product.id);
-                                            return (
-                                                <label
-                                                    key={product.id}
-                                                    className={`grid min-h-[64px] cursor-pointer grid-cols-[46px_minmax(240px,1fr)_180px] items-center border-t border-gray-100 px-4 py-2.5 text-sm ${
-                                                        selected ? 'bg-[#F3FBF7]' : 'bg-white hover:bg-gray-50'
-                                                    }`}
-                                                >
+                            <div className="flex min-h-0 flex-1 flex-col px-5 pt-4">
+                                <div className="mb-3 flex h-10 shrink-0 items-center justify-end gap-3">
+                                    {comboOptionalBatchProductIds.length > 0 ? (
+                                        <span className="text-[12px] text-[#86909C]">
+                                            已按 {comboOptionalBatchProductIds.length} 个商品 ID 筛选，命中 {matchedOptionalBatchProductCount} 个商品、{optionalProductPickerResults.length} 条规格
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setComboOptionalBatchProductIds([]);
+                                                    setComboOptionalBatchFilterInput('');
+                                                    setComboOptionalProductPage(1);
+                                                }}
+                                                className="ml-2 text-[#00B460] hover:underline"
+                                            >
+                                                清除
+                                            </button>
+                                        </span>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        onClick={openOptionalBatchFilter}
+                                        className="h-9 border border-[#E5E6EB] bg-white px-4 text-[13px] text-[#4E5969] hover:border-[#00B460] hover:text-[#00B460]"
+                                    >
+                                        批量商品 ID 筛选
+                                    </button>
+                                </div>
+                                <div className="min-h-0 flex-1 overflow-auto border border-[#E5E6EB]">
+                                    <table className="w-full min-w-[1400px] table-fixed text-left text-[13px]">
+                                        <thead className="sticky top-0 z-10 bg-[#F2F3F5] text-[#4E5969]">
+                                            <tr>
+                                                <th className="w-12 px-4 py-3">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selected}
-                                                        onChange={event => setComboOptionalProductPickerDraftIds(current => (
-                                                            event.target.checked
-                                                                ? [...current, product.id]
-                                                                : current.filter(id => id !== product.id)
-                                                        ))}
-                                                        className="h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
+                                                        aria-label="全选当前页"
+                                                        checked={optionalProductPickerPageResults.length > 0 && optionalProductPickerPageResults.every(product => comboOptionalProductPickerDraftIds.includes(product.id))}
+                                                        onChange={event => {
+                                                            const pageIds = optionalProductPickerPageResults.map(product => product.id);
+                                                            setComboOptionalProductPickerDraftIds(current => (
+                                                                event.target.checked
+                                                                    ? Array.from(new Set([...current, ...pageIds]))
+                                                                    : current.filter(id => !pageIds.includes(id))
+                                                            ));
+                                                        }}
+                                                        className="h-4 w-4 rounded border-gray-300 text-[#00B460]"
                                                     />
-                                                    <div className="min-w-0">
-                                                        <div className="truncate font-bold text-[#1F2129]">{product.name}</div>
-                                                        <div className="mt-1 text-xs text-gray-400">商品 ID：{product.id}</div>
-                                                    </div>
-                                                    <span className="text-gray-600">{product.spec}</span>
-                                                </label>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="flex min-h-[180px] items-center justify-center text-sm text-gray-400">
-                                            未找到匹配的商品
-                                        </div>
-                                    )}
+                                                </th>
+                                                <th className="w-[260px] px-4 py-3">商品名称</th>
+                                                <th className="w-[110px] px-4 py-3">商品类型</th>
+                                                <th className="w-[140px] px-4 py-3">前台分类</th>
+                                                <th className="w-[120px] px-4 py-3">规格</th>
+                                                <th className="w-[130px] px-4 py-3">商品标识</th>
+                                                <th className="w-[130px] px-4 py-3">商品条码</th>
+                                                <th className="w-[150px] px-4 py-3">商品规格码</th>
+                                                <th className="w-[100px] px-4 py-3">数据来源</th>
+                                                <th className="w-[100px] px-4 py-3">备注</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {optionalProductPickerPageResults.map(product => {
+                                                const selected = comboOptionalProductPickerDraftIds.includes(product.id);
+                                                return (
+                                                    <tr key={product.id} className={`border-b border-[#F0F0F0] ${selected ? 'bg-[#F0FBF5]' : 'bg-white hover:bg-[#FAFBFC]'}`}>
+                                                        <td className="px-4 py-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selected}
+                                                                onChange={event => setComboOptionalProductPickerDraftIds(current => (
+                                                                    event.target.checked
+                                                                        ? [...current, product.id]
+                                                                        : current.filter(id => id !== product.id)
+                                                                ))}
+                                                                className="h-4 w-4 rounded border-gray-300 text-[#00B460]"
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-[#E5E6EB] bg-[#F7F8FA] text-[#86909C]">
+                                                                    <CupSoda size={18} />
+                                                                </span>
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate font-medium text-[#1D2129]">{product.name}</div>
+                                                                    <div className="mt-1 text-[12px] text-[#86909C]">{product.productId}</div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">标准商品</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">{product.frontendCategory}</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">{product.spec}</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">--</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">--</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">{product.skuCode}</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">品牌</td>
+                                                        <td className="px-4 py-3 text-[#4E5969]">--</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {optionalProductPickerPageResults.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={10} className="py-16 text-center text-[#86909C]">
+                                                        {comboOptionalBatchProductIds.length > 0 ? '未找到这些商品 ID 对应的商品规格' : '没有符合条件的商品'}
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
-                            <div className="flex shrink-0 items-center justify-between border-t border-gray-100 bg-white px-6 py-4">
-                                <span className="text-xs text-gray-400">
-                                    取消不会改变当前分组内已添加的商品
-                                </span>
-                                <div className="flex items-center gap-3">
+                            <div className="flex h-[68px] shrink-0 items-center justify-between border-t border-[#E5E6EB] bg-white px-6">
+                                <div className="text-[13px] text-[#4E5969]">
+                                    已选择 <span className="font-bold text-[#F53F3F]">{comboOptionalProductPickerDraftIds.length}</span> 个商品 / 最多可选择 <span className="font-bold text-[#F53F3F]">100</span> 个商品
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2 text-[13px] text-[#4E5969]">
+                                        <span>共 {optionalProductPickerResults.length} 条</span>
+                                        <button
+                                            type="button"
+                                            aria-label="上一页"
+                                            disabled={currentOptionalProductPage <= 1}
+                                            onClick={() => setComboOptionalProductPage(current => Math.max(1, current - 1))}
+                                            className="flex h-8 w-8 items-center justify-center border border-[#E5E6EB] disabled:text-[#C9CDD4]"
+                                        >
+                                            <ChevronLeft size={15} />
+                                        </button>
+                                        <span>{currentOptionalProductPage} / {optionalProductPageCount}</span>
+                                        <button
+                                            type="button"
+                                            aria-label="下一页"
+                                            disabled={currentOptionalProductPage >= optionalProductPageCount}
+                                            onClick={() => setComboOptionalProductPage(current => Math.min(optionalProductPageCount, current + 1))}
+                                            className="flex h-8 w-8 items-center justify-center border border-[#E5E6EB] disabled:text-[#C9CDD4]"
+                                        >
+                                            <ChevronRight size={15} />
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setComboOptionalProductPickerDraftIds([])}
+                                        className="h-9 border border-[#E5E6EB] bg-white px-5 text-[13px] text-[#4E5969]"
+                                    >
+                                        清空选择
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => setComboOptionalProductPickerOpen(false)}
-                                        className="h-10 rounded-lg border border-gray-200 px-5 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                                        className="h-9 border border-[#E5E6EB] bg-white px-5 text-[13px] font-medium text-[#4E5969]"
                                     >
                                         取消
                                     </button>
                                     <button
                                         type="button"
                                         onClick={confirmOptionalProductPicker}
-                                        className="h-10 rounded-lg bg-[#00C06B] px-5 text-sm font-bold text-white hover:bg-[#00A35B]"
+                                        className="h-9 bg-[#00B460] px-6 text-[13px] font-medium text-white hover:bg-[#009A52]"
                                     >
-                                        确定（{comboOptionalProductPickerDraftIds.length}）
+                                        确定
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+
+                {comboOptionalBatchFilterOpen ? (
+                    <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/45 p-6">
+                        <div className="w-full max-w-[640px] overflow-hidden rounded-xl bg-white shadow-2xl">
+                            <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+                                <div>
+                                    <div className="flex flex-wrap items-baseline gap-2">
+                                        <h3 className="text-lg font-bold text-[#1F2129]">批量商品 ID 筛选</h3>
+                                        <span className="text-xs text-gray-400">单次最多 200 个商品</span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-400">命中商品后，将展示其下全部可选规格供勾选。</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    aria-label="关闭批量商品 ID 筛选"
+                                    onClick={() => setComboOptionalBatchFilterOpen(false)}
+                                    className="inline-flex h-8 w-8 items-center justify-center text-[#86909C] hover:text-[#4E5969]"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="space-y-3 px-6 py-5">
+                                <div className="relative">
+                                    <textarea
+                                        value={comboOptionalBatchFilterInput}
+                                        onChange={event => {
+                                            setComboOptionalBatchFilterInput(event.target.value);
+                                            setComboOptionalBatchFilterError('');
+                                        }}
+                                        rows={8}
+                                        autoFocus
+                                        className={`w-full resize-none rounded-lg border bg-white px-3 py-3 pr-20 text-sm leading-6 text-[#1F2129] outline-none transition-colors ${
+                                            comboOptionalBatchFilterError
+                                                ? 'border-red-400 focus:border-red-500'
+                                                : 'border-gray-200 focus:border-[#00C06B]'
+                                        }`}
+                                        placeholder={'请输入商品 ID，每行一个，例如：\n1293655926072582145\n1293499835987996672'}
+                                    />
+                                    <span className={`absolute bottom-3 right-3 text-xs ${
+                                        parsedOptionalBatchProductIds.length > 200 ? 'text-red-500' : 'text-gray-400'
+                                    }`}>
+                                        {parsedOptionalBatchProductIds.length}/200
+                                    </span>
+                                </div>
+                                <div className="flex min-h-5 flex-wrap items-start justify-between gap-2 text-xs">
+                                    <span className={comboOptionalBatchFilterError ? 'text-red-500' : 'text-gray-400'}>
+                                        {comboOptionalBatchFilterError || '支持换行、空格或逗号分隔，自动去重并忽略非数字内容。'}
+                                    </span>
+                                    {invalidOptionalBatchTokenCount > 0 ? (
+                                        <span className="shrink-0 text-amber-600">将忽略 {invalidOptionalBatchTokenCount} 项无效内容</span>
+                                    ) : null}
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setComboOptionalBatchFilterOpen(false)}
+                                    className="h-10 rounded-lg border border-gray-200 px-5 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={applyOptionalBatchFilter}
+                                    className="h-10 rounded-lg bg-[#00C06B] px-5 text-sm font-bold text-white hover:bg-[#00A35B]"
+                                >
+                                    确定筛选
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -7835,118 +8238,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <button type="button" onClick={confirmMethodPicker} className="px-5 py-2 rounded-lg bg-[#00C06B] text-sm font-bold text-white hover:bg-[#00A35B]">
                             确定
                         </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderTaxRatePickerModal = () => {
-        if (!showTaxRatePickerModal) return null;
-        const normalizedRate = taxRateFilters.rate.trim().replace(/%$/, '');
-        const filteredOptions = TAX_RATE_OPTIONS.filter(option => (
-            option.categoryName.includes(taxRateFilters.categoryName.trim())
-            && option.categoryCode.includes(taxRateFilters.categoryCode.trim())
-            && option.rate.replace(/%$/, '').includes(normalizedRate)
-            && option.remark.includes(taxRateFilters.remark.trim())
-        ));
-        const selectedRate = dynamicFormData.s_tax_rate || '';
-        const clearFilters = () => setTaxRateFilters({ categoryName: '', categoryCode: '', rate: '', remark: '' });
-
-        return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="选择税率">
-                <div className="flex max-h-[88vh] min-h-[560px] w-full max-w-[1120px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
-                    <div className="flex shrink-0 items-center justify-between border-b border-[#E8E8E8] px-6 py-4">
-                        <h3 className="text-lg font-semibold text-[#1F2129]">选择税率</h3>
-                        <button type="button" onClick={() => setShowTaxRatePickerModal(false)} aria-label="关闭税率选择弹窗" className="rounded p-1.5 text-[#98A2B3] hover:bg-[#F5F6F7] hover:text-[#4E5969]">
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    <div className="shrink-0 bg-[#F7F8FA] px-6 py-4">
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-                            <input
-                                value={taxRateFilters.categoryName}
-                                onChange={event => setTaxRateFilters(prev => ({ ...prev, categoryName: event.target.value }))}
-                                placeholder="请输入税收分类名称"
-                                aria-label="税收分类名称"
-                                className="h-10 rounded-md border border-[#DDE2E8] bg-white px-3 text-sm outline-none placeholder:text-[#C0C4CC] focus:border-[#00B460]"
-                            />
-                            <input
-                                value={taxRateFilters.categoryCode}
-                                onChange={event => setTaxRateFilters(prev => ({ ...prev, categoryCode: event.target.value }))}
-                                placeholder="请输入税收分类编码"
-                                aria-label="税收分类编码"
-                                className="h-10 rounded-md border border-[#DDE2E8] bg-white px-3 text-sm outline-none placeholder:text-[#C0C4CC] focus:border-[#00B460]"
-                            />
-                            <input
-                                value={taxRateFilters.rate}
-                                onChange={event => setTaxRateFilters(prev => ({ ...prev, rate: event.target.value }))}
-                                placeholder="请输入税率"
-                                aria-label="税率"
-                                className="h-10 rounded-md border border-[#DDE2E8] bg-white px-3 text-sm outline-none placeholder:text-[#C0C4CC] focus:border-[#00B460]"
-                            />
-                            <input
-                                value={taxRateFilters.remark}
-                                onChange={event => setTaxRateFilters(prev => ({ ...prev, remark: event.target.value }))}
-                                placeholder="请输入备注"
-                                aria-label="备注"
-                                className="h-10 rounded-md border border-[#DDE2E8] bg-white px-3 text-sm outline-none placeholder:text-[#C0C4CC] focus:border-[#00B460]"
-                            />
-                            <button type="button" onClick={clearFilters} className="h-10 whitespace-nowrap px-1 text-sm font-medium text-[#00A35B] hover:text-[#008F4C]">清空搜索条件</button>
-                        </div>
-                    </div>
-
-                    <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
-                        <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-                            <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]">
-                                <tr className="border-b border-[#E5E7EB]">
-                                    <th className="w-[260px] px-4 py-3 font-semibold">税收分类编码</th>
-                                    <th className="w-[220px] px-4 py-3 font-semibold">税收分类名称</th>
-                                    <th className="w-[130px] px-4 py-3 font-semibold">税率</th>
-                                    <th className="px-4 py-3 font-semibold">备注</th>
-                                    <th className="w-[100px] px-4 py-3 font-semibold">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredOptions.map(option => {
-                                    const selected = selectedRate === option.rate;
-                                    return (
-                                        <tr key={option.id} className="border-b border-[#EEF0F2] text-[#4E5969] hover:bg-[#FAFCFB]">
-                                            <td className="px-4 py-4 font-mono">{option.categoryCode}</td>
-                                            <td className="px-4 py-4">{option.categoryName}</td>
-                                            <td className="px-4 py-4">{option.rate}</td>
-                                            <td className="px-4 py-4">{option.remark || '--'}</td>
-                                            <td className="px-4 py-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setDynamicFormData(prev => ({ ...prev, s_tax_rate: option.rate }));
-                                                        setShowTaxRatePickerModal(false);
-                                                    }}
-                                                    className={`font-medium ${selected ? 'text-[#667085]' : 'text-[#00A35B] hover:text-[#008F4C]'}`}
-                                                >
-                                                    {selected ? '已选择' : '选择'}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                        {filteredOptions.length === 0 && (
-                            <div className="flex min-h-[260px] flex-col items-center justify-center text-sm text-[#98A2B3]">
-                                <span>未找到符合条件的税率</span>
-                                <button type="button" onClick={clearFilters} className="mt-3 font-medium text-[#00A35B]">清空搜索条件</button>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex shrink-0 items-center justify-center gap-3 border-t border-[#E8E8E8] px-6 py-3 text-sm text-[#667085]">
-                        <button type="button" disabled aria-label="上一页" className="h-8 w-8 cursor-not-allowed rounded bg-[#F5F6F7] text-[#C0C4CC]">‹</button>
-                        <span className="inline-flex h-8 min-w-8 items-center justify-center rounded bg-[#00B460] px-2 font-medium text-white">1</span>
-                        <button type="button" disabled aria-label="下一页" className="h-8 w-8 cursor-not-allowed rounded bg-[#F5F6F7] text-[#C0C4CC]">›</button>
-                        <span className="ml-3">共 {filteredOptions.length} 条</span>
                     </div>
                 </div>
             </div>
@@ -9613,10 +9904,86 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     onSelect={handleCategorySelect}
                 />
             )}
+            {showTaxCategoryModal && (
+                <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/45 p-6" role="dialog" aria-modal="true" aria-label="选择税率">
+                    <div className="flex max-h-[82vh] w-full max-w-[1000px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+                        <header className="flex items-center justify-between border-b border-[#E8E8E8] px-6 py-5">
+                            <div>
+                                <h3 className="text-lg font-black text-[#1F2129]">选择税率</h3>
+                                <p className="mt-1 text-xs text-[#667085]">选择税收分类后，系统同时带回税收分类编码与对应税率。</p>
+                            </div>
+                            <button type="button" onClick={() => setShowTaxCategoryModal(false)} className="rounded-md p-1.5 text-[#98A2B3] hover:bg-[#F5F6F8]" aria-label="关闭选择税率"><X size={20} /></button>
+                        </header>
+
+                        <div className="min-h-0 flex-1 overflow-auto p-6">
+                            <div className="grid grid-cols-4 gap-3 rounded-lg bg-[#F7F8FA] p-4">
+                                <input className="q-form-input bg-white" value={taxCategoryFilters.name} onChange={e => setTaxCategoryFilters(current => ({ ...current, name: e.target.value }))} placeholder="请输入税收分类名称" />
+                                <input className="q-form-input bg-white" value={taxCategoryFilters.code} onChange={e => setTaxCategoryFilters(current => ({ ...current, code: e.target.value }))} placeholder="请输入税收分类编码" />
+                                <input className="q-form-input bg-white" value={taxCategoryFilters.rate} onChange={e => setTaxCategoryFilters(current => ({ ...current, rate: e.target.value }))} placeholder="请输入税率" />
+                                <div className="flex items-center gap-2">
+                                    <input className="q-form-input min-w-0 flex-1 bg-white" value={taxCategoryFilters.remark} onChange={e => setTaxCategoryFilters(current => ({ ...current, remark: e.target.value }))} placeholder="请输入备注" />
+                                    <button type="button" onClick={() => setTaxCategoryFilters({ name: '', code: '', rate: '', remark: '' })} className="shrink-0 text-sm font-medium text-[#00A35B]">清空</button>
+                                </div>
+                            </div>
+
+                            <div className="mt-5 overflow-hidden rounded-lg border border-[#E5E7EB]">
+                                <table className="w-full table-fixed text-left text-sm">
+                                    <thead className="bg-[#F7F8FA] text-[#475467]">
+                                        <tr>
+                                            <th className="w-[250px] px-5 py-3 font-bold">税收分类编码</th>
+                                            <th className="w-[180px] px-5 py-3 font-bold">税收分类名称</th>
+                                            <th className="w-[110px] px-5 py-3 font-bold">税率</th>
+                                            <th className="px-5 py-3 font-bold">备注</th>
+                                            <th className="w-[100px] px-5 py-3 font-bold">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredTaxCategoryOptions.map(option => {
+                                            const selected = option.code === (dynamicFormData.s_tax_category_code || '');
+                                            return (
+                                                <tr key={option.code} className="border-t border-[#EEF0F2] hover:bg-[#FAFBFC]">
+                                                    <td className="px-5 py-3 text-[#475467]">{option.code}</td>
+                                                    <td className="px-5 py-3 font-medium text-[#1F2129]">{option.name}</td>
+                                                    <td className="px-5 py-3 text-[#1F2129]">{option.rate}</td>
+                                                    <td className="px-5 py-3 text-[#667085]">{option.remark || '—'}</td>
+                                                    <td className="px-5 py-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setDynamicFormData(prev => ({
+                                                                    ...prev,
+                                                                    s_tax_rate: option.rate,
+                                                                    s_tax_category_code: option.code,
+                                                                    s_tax_category_name: option.name,
+                                                                }));
+                                                                setShowTaxCategoryModal(false);
+                                                            }}
+                                                            className={`font-medium ${selected ? 'text-[#98A2B3]' : 'text-[#00A35B] hover:text-[#008F4C]'}`}
+                                                        >
+                                                            {selected ? '已选择' : '选择'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {filteredTaxCategoryOptions.length === 0 && (
+                                            <tr><td colSpan={5} className="px-5 py-16 text-center text-sm text-[#98A2B3]">没有符合当前条件的税收分类</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <footer className="flex items-center justify-between border-t border-[#E8E8E8] px-6 py-4">
+                            <span className="text-xs text-[#98A2B3]">共 {filteredTaxCategoryOptions.length} 条</span>
+                            <button type="button" onClick={() => setShowTaxCategoryModal(false)} className="console-secondary-button">取消</button>
+                        </footer>
+                    </div>
+                </div>
+            )}
             {renderSpecPickerModal()}
             {renderMethodPickerModal()}
             {renderAddonPickerModal()}
-            {renderTaxRatePickerModal()}
             {isStoreForm && storeSaveStage && (
                 <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-6">
                     <div className="flex max-h-[82vh] w-full max-w-[760px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">

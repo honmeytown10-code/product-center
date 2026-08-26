@@ -20,7 +20,7 @@ import {
   Tags,
 } from 'lucide-react';
 import { useProducts } from '../context';
-import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, OmnichannelChannelId, resolveChildRequiredConfigs, ThirdPartyChannelId } from '../types';
+import { Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, OmnichannelChannelId, Product, resolveChildRequiredConfigs, ThirdPartyChannelId } from '../types';
 import { SidebarItem } from './web/WebCommon';
 import { WebProductList } from './web/WebProductList';
 import { WebStoreProductList } from './web/WebStoreProductList'; // Imported new component
@@ -46,9 +46,17 @@ import { WebProductAttributeManager } from './web/WebProductAttributeManager';
 import { WebPriceSystemList } from './web/WebPriceSystemList';
 import { WebProductTemplateManager } from './web/WebProductTemplateManager';
 import { WebSalesScopeManager } from './web/WebSalesScopeManager';
+import { WebBuffetMenuManager } from './web/WebBuffetMenuManager';
 import { WebProductLogPage } from './web/WebProductLogPage';
 import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
 import { WebChannelProductLibrary } from './web/WebChannelProductLibrary';
+import {
+  WebMasterChannelSyncDialog,
+  type MasterChannelSyncDialogContext,
+  type MasterChannelSyncFieldId,
+  type MasterChannelSyncSubmitPayload,
+} from './web/WebMasterChannelSyncDialog';
+import type { MasterChannelSyncRecord } from './web/WebPublishRecords';
 import { WebChannelOverrideSettings } from './web/WebChannelOverrideSettings';
 import { WebOmnichannelSettings } from './web/WebOmnichannelSettings';
 import {
@@ -74,6 +82,98 @@ import { WebGeneralSettings } from './web/WebGeneralSettings'; // Import new com
 export interface WebCategory extends Category {
   classification: 'standard' | 'combo';
 }
+
+const getSyncFormData = (product: Product) => (
+  (product as Product & { formData?: Record<string, unknown> }).formData || {}
+);
+
+const getChangedMasterChannelFields = (previous: Product | undefined, next: Product): MasterChannelSyncFieldId[] => {
+  if (!previous) return ['name', 'frontendCategory', 'price', 'mainImage', 'productType', 'productCategory', 'backendCategory', 'mnemonicCode', 'weightFlag', 'unit', 'specs', 'methods', 'addons', 'tax'];
+  const previousFormData = getSyncFormData(previous);
+  const nextFormData = getSyncFormData(next);
+  const changed: MasterChannelSyncFieldId[] = [];
+  if (previous.name !== next.name) changed.push('name');
+  if (JSON.stringify(previousFormData.p_front_cat ?? previous.category) !== JSON.stringify(nextFormData.p_front_cat ?? next.category)) changed.push('frontendCategory');
+  if (previous.price !== next.price || JSON.stringify(previous.specs) !== JSON.stringify(next.specs)) changed.push('price');
+  if (previous.image !== next.image) changed.push('mainImage');
+  if (previous.type !== next.type || previous.isCombo !== next.isCombo) changed.push('productType');
+  if (previous.category !== next.category || previousFormData.p_cat !== nextFormData.p_cat) changed.push('productCategory');
+  if (previousFormData.p_back_cat !== nextFormData.p_back_cat) changed.push('backendCategory');
+  if (previousFormData.p_code !== nextFormData.p_code) changed.push('mnemonicCode');
+  if (previousFormData.p_weight_flag !== nextFormData.p_weight_flag) changed.push('weightFlag');
+  if (previousFormData.p_unit !== nextFormData.p_unit) changed.push('unit');
+  if (JSON.stringify(previous.specs) !== JSON.stringify(next.specs) || previousFormData.s_specs !== nextFormData.s_specs) changed.push('specs');
+  if (previousFormData.m_methods !== nextFormData.m_methods) changed.push('methods');
+  if (previousFormData.a_addons !== nextFormData.a_addons) changed.push('addons');
+  if (
+    previousFormData.s_tax_rate !== nextFormData.s_tax_rate
+    || previousFormData.s_tax_category_code !== nextFormData.s_tax_category_code
+    || previousFormData.s_tax_category_name !== nextFormData.s_tax_category_name
+    || previousFormData.s_invoice_item_name !== nextFormData.s_invoice_item_name
+    || previousFormData.s_invoice_custom_unit !== nextFormData.s_invoice_custom_unit
+  ) changed.push('tax');
+  return changed;
+};
+
+const applyMasterFieldsToChannelProduct = (
+  master: Product,
+  current: Record<string, any>,
+  fieldIds: MasterChannelSyncFieldId[],
+) => {
+  const masterFormData = getSyncFormData(master);
+  const next: Record<string, any> = {
+    ...current,
+    id: master.id,
+    formData: { ...(current.formData || {}) },
+  };
+  if (fieldIds.includes('name')) {
+    next.name = master.name;
+    next.formData.p_name = master.name;
+  }
+  if (fieldIds.includes('frontendCategory')) {
+    next.formData.p_front_cat = masterFormData.p_front_cat || [master.category];
+  }
+  if (fieldIds.includes('price')) {
+    next.price = master.price;
+    next.formData.s_price = masterFormData.s_price || String(master.price);
+  }
+  if (fieldIds.includes('mainImage')) {
+    next.image = master.image;
+    next.formData.p_img = masterFormData.p_img || master.image;
+  }
+  if (fieldIds.includes('productType')) {
+    next.type = master.type;
+    next.isCombo = master.isCombo;
+  }
+  if (fieldIds.includes('productCategory')) {
+    next.category = master.category;
+    next.formData.p_cat = masterFormData.p_cat;
+  }
+  if (fieldIds.includes('backendCategory')) next.formData.p_back_cat = masterFormData.p_back_cat;
+  if (fieldIds.includes('mnemonicCode')) next.formData.p_code = masterFormData.p_code;
+  if (fieldIds.includes('weightFlag')) next.formData.p_weight_flag = masterFormData.p_weight_flag;
+  if (fieldIds.includes('unit') && masterFormData.p_unit !== undefined) next.formData.p_unit = masterFormData.p_unit;
+  if (fieldIds.includes('specs')) {
+    const currentSpecs = Array.isArray(current.specs) ? current.specs : [];
+    next.specs = fieldIds.includes('price')
+      ? master.specs
+      : master.specs?.map(masterSpec => {
+          const channelSpec = currentSpecs.find((spec: { name?: string }) => spec.name === masterSpec.name);
+          return channelSpec?.price === undefined ? masterSpec : { ...masterSpec, price: channelSpec.price };
+        });
+    next.formData.s_specs = masterFormData.s_specs;
+  }
+  if (fieldIds.includes('methods')) next.formData.m_methods = masterFormData.m_methods;
+  if (fieldIds.includes('addons')) next.formData.a_addons = masterFormData.a_addons;
+  if (fieldIds.includes('tax')) {
+    next.formData.s_tax_rate = masterFormData.s_tax_rate;
+    next.formData.s_tax_category_code = masterFormData.s_tax_category_code;
+    next.formData.s_tax_category_name = masterFormData.s_tax_category_name;
+    next.formData.s_invoice_item_name = masterFormData.s_invoice_item_name;
+    next.formData.s_invoice_custom_unit = masterFormData.s_invoice_custom_unit;
+  }
+  return next;
+};
 
 type StoreProductManagePreset = {
   keyword?: string;
@@ -338,10 +438,15 @@ export const WebAdmin: React.FC = () => {
     () => getEffectiveChannelGroups(omnichannelConfig)[0],
     [omnichannelConfig]
   );
+  const masterChannelSyncCatalogs = useMemo(() => getEffectiveChannelGroups(omnichannelConfig).map(group => ({
+    id: group.id,
+    name: group.name,
+    channelNames: group.channels.map(channelId => getOmnichannelChannel(channelId).name),
+  })), [omnichannelConfig]);
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>('store');
-  const [activeMenu, setActiveMenu] = useState('product_list');
+  const [activeMenu, setActiveMenu] = useState('buffet_menu');
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -370,6 +475,8 @@ export const WebAdmin: React.FC = () => {
   const [channelCommonFieldConfigs, setChannelCommonFieldConfigs] = useState<CommonFieldConfigs>(() => buildInitialCommonFieldConfigs(INITIAL_WEB_CATEGORIES));
   const [channelEditableFieldIds, setChannelEditableFieldIds] = useState<string[]>(['p_name']);
   const [channelProductOverrides, setChannelProductOverrides] = useState<Record<string, any>>({});
+  const [masterChannelSyncDialogContext, setMasterChannelSyncDialogContext] = useState<MasterChannelSyncDialogContext | null>(null);
+  const [masterChannelSyncRecords, setMasterChannelSyncRecords] = useState<MasterChannelSyncRecord[]>([]);
   const [commonFieldSettingsContext, setCommonFieldSettingsContext] = useState<{
     type: 'standard' | 'combo';
     categoryId: string | null;
@@ -393,6 +500,46 @@ export const WebAdmin: React.FC = () => {
     })),
   }));
   const [storeBadgeOptions, setStoreBadgeOptions] = useState<BadgeOptionConfig[]>(() => DEFAULT_BADGE_OPTIONS.map(option => ({ ...option })));
+
+  const handleMasterChannelSyncSubmit = (payload: MasterChannelSyncSubmitPayload) => {
+    if (!masterChannelSyncDialogContext) return;
+    const selectedMasters = masterChannelSyncDialogContext.products.filter(product => payload.productIds.includes(product.id));
+    setChannelProductOverrides(current => {
+      const next = { ...current };
+      payload.catalogIds.forEach(catalogId => {
+        selectedMasters.forEach(master => {
+          const key = `${catalogId}:${master.id}`;
+          next[key] = applyMasterFieldsToChannelProduct(master, next[key] || {}, payload.fieldIds);
+        });
+      });
+      return next;
+    });
+
+    const selectedCatalogNames = masterChannelSyncCatalogs
+      .filter(catalog => payload.catalogIds.includes(catalog.id))
+      .map(catalog => catalog.name);
+    const firstProduct = selectedMasters[0];
+    const title = selectedMasters.length === 1
+      ? `${firstProduct?.name || '商品'}主档资料更新`
+      : `批量同步 ${selectedMasters.length} 个商品主档资料`;
+    setMasterChannelSyncRecords(current => [{
+      id: `MC${Date.now()}`,
+      title,
+      sourceName: selectedMasters.length === 1 ? firstProduct?.name || '商品主档' : `已选 ${selectedMasters.length} 个商品主档`,
+      catalogNames: selectedCatalogNames,
+      fieldNames: payload.fieldNames,
+      productCount: selectedMasters.length,
+      createdAt: new Date().toLocaleString('sv-SE', { hour12: false }),
+    }, ...current]);
+  };
+
+  const openMasterChannelSyncRecords = () => {
+    setMasterChannelSyncDialogContext(null);
+    setProductSyncInitialTab('records');
+    setCreationContext(null);
+    setDetailContext(null);
+    setActiveMenu('product_sync');
+  };
 
   // Category Manager State
   const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
@@ -543,7 +690,7 @@ export const WebAdmin: React.FC = () => {
       'recipe_default', 'recipe_legacy', 'recipe_new', 'addon_group',
     ];
     const operationMenus = [
-      'product_sync', 'product_template', 'sales_scope', 'price_systems',
+      'product_sync', 'product_template', 'sales_scope', 'buffet_menu', 'price_systems',
       'attribute_mutex_rules', 'required_product_policy', 'product_recommendation', 'product_mapping',
     ];
     const targetGroup = libraryMenus.includes(activeMenu)
@@ -740,7 +887,23 @@ export const WebAdmin: React.FC = () => {
                        return;
                      }
                      if (action === 'edit' && draft.id) {
+                       const previousMaster = products.find(product => product.id === draft.id);
+                       const nextMaster = {
+                         ...previousMaster,
+                         ...draft,
+                         id: draft.id,
+                         status: previousMaster?.status || 'on_shelf',
+                         stockStatus: previousMaster?.stockStatus || 'available',
+                       } as Product;
                        updateProduct(draft.id, draft);
+                       if (masterChannelSyncCatalogs.length > 0) {
+                         setMasterChannelSyncDialogContext({
+                           entry: 'after-save',
+                           products: [nextMaster],
+                           catalogs: masterChannelSyncCatalogs,
+                           changedFieldIds: getChangedMasterChannelFields(previousMaster, nextMaster),
+                         });
+                       }
                        return;
                      }
                      if (action === 'create') {
@@ -1060,7 +1223,7 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'product_sync') {
-          return <WebProductSync initialTab={productSyncInitialTab} />;
+          return <WebProductSync initialTab={productSyncInitialTab} masterChannelSyncRecords={masterChannelSyncRecords} />;
       }
 
       if (activeMenu === 'product_mapping') {
@@ -1088,6 +1251,10 @@ export const WebAdmin: React.FC = () => {
 
       if (activeMenu === 'sales_scope') {
           return <WebSalesScopeManager />;
+      }
+
+      if (activeMenu === 'buffet_menu') {
+          return <WebBuffetMenuManager />;
       }
 
       if (activeMenu === 'channel_product_library') {
@@ -1170,6 +1337,15 @@ export const WebAdmin: React.FC = () => {
                   formScope: 'master',
                 });
               }}
+              onSyncFromMaster={({ products: selectedChannelProducts, catalogId, catalogName, channelNames }) => {
+                const masterProducts = selectedChannelProducts.map(product => products.find(item => item.id === product.id) || product);
+                setMasterChannelSyncDialogContext({
+                  entry: 'channel-list',
+                  products: masterProducts,
+                  catalogs: [{ id: catalogId, name: catalogName, channelNames }],
+                  lockedCatalogId: catalogId,
+                });
+              }}
             />
           );
       }
@@ -1200,6 +1376,13 @@ export const WebAdmin: React.FC = () => {
                 product: p,
                 scope: 'brand',
                 formScope: 'master',
+              });
+            }}
+            onSyncToChannelProducts={(selectedProducts) => {
+              setMasterChannelSyncDialogContext({
+                entry: 'master-list',
+                products: selectedProducts,
+                catalogs: masterChannelSyncCatalogs,
               });
             }}
             unifiedManagement={false}
@@ -1251,7 +1434,7 @@ export const WebAdmin: React.FC = () => {
     }
 
     if ([
-      'sales_scope', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy',
+      'sales_scope', 'buffet_menu', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy',
     ].includes(activeMenu)) {
       ariaLabel = '销售规则';
       tabs = [
@@ -1285,6 +1468,12 @@ export const WebAdmin: React.FC = () => {
             setRequiredPolicyEditorContext(null);
             setActiveMenu('required_product_policy');
           },
+        },
+        {
+          key: 'buffet-menu',
+          label: '自助餐菜单',
+          active: activeMenu === 'buffet_menu',
+          onClick: () => setActiveMenu('buffet_menu'),
         },
       ];
     }
@@ -1336,7 +1525,7 @@ export const WebAdmin: React.FC = () => {
 
     return (
       <div className="flex h-[48px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-6" role="tablist" aria-label={ariaLabel}>
-        <div className="flex h-full min-w-0 items-stretch gap-8 overflow-x-auto no-scrollbar">
+        <div className="flex h-full min-w-0 items-stretch gap-6 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (
             <button
               key={tab.key}
@@ -1364,9 +1553,9 @@ export const WebAdmin: React.FC = () => {
       {/* Header */}
       <header className="z-40 flex h-[52px] shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-4">
         <div className="flex items-center space-x-4">
-          <div className="flex items-center text-[#333] font-bold text-[16px] cursor-pointer hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors">
+          <button type="button" className="flex items-center text-[#333] font-semibold text-[15px] hover:bg-gray-50 px-3 py-1.5 rounded-md transition-colors">
              槐店王婆 <ChevronDown size={14} className="ml-2 text-[#999]"/>
-          </div>
+          </button>
           <div className="h-5 w-px bg-gray-200"></div>
           <nav className="flex space-x-2 text-[#666] font-medium text-[13px]">
             <button
@@ -1397,7 +1586,7 @@ export const WebAdmin: React.FC = () => {
         <div className="flex items-center space-x-6 text-[13px]">
            <div className="relative">
               <Search size={14} className="absolute left-3 top-2 text-[#AAA]"/>
-              <input className="bg-[#F2F3F5] border-none rounded-full pl-9 pr-12 py-1.5 w-[240px] transition-all focus:bg-white focus:ring-2 focus:ring-[#00C06B]/20 focus:outline-none" placeholder="搜索功能导航、帮助文档..."/>
+              <input className="h-8 w-[280px] rounded-md border border-transparent bg-[#F2F3F5] pl-9 pr-12 text-[13px] transition-all focus:bg-white focus:outline-none" placeholder="搜索功能导航、帮助文档"/>
               <span className="absolute right-3 top-2 text-[#AAA] text-xs scale-90 bg-white px-1 rounded border border-gray-200">Ctrl+K</span>
            </div>
            <button className="bg-[#5C6BF0] text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-[#4B5AE0] flex items-center">
@@ -1420,7 +1609,11 @@ export const WebAdmin: React.FC = () => {
         
         {/* Sidebar */}
         {activeTopNav === 'brand' ? (
-        <aside className="w-[200px] bg-[#F7F8FA] border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30">
+        <aside
+          className="pc-sidebar-scroll w-[200px] bg-[#F7F8FA] border-r border-[#E8E8E8] flex flex-col pt-2 overflow-y-auto no-scrollbar shrink-0 z-30"
+          tabIndex={0}
+          aria-label="品牌管理菜单"
+        >
            <div className="px-3 py-2">
               <div className="flex items-center rounded-xl bg-white px-3 py-3 shadow-sm border border-[#EEF0F3]">
                  <Box size={18} className="mr-2 text-[#00C06B]"/>
@@ -1564,7 +1757,7 @@ export const WebAdmin: React.FC = () => {
            <SidebarItem
              label="销售规则"
              icon={<SlidersHorizontal size={17} />}
-             active={['sales_scope', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy'].includes(activeMenu)}
+             active={['sales_scope', 'buffet_menu', 'product_template', 'price_systems', 'attribute_mutex_rules', 'required_product_policy'].includes(activeMenu)}
              onClick={() => { setActiveMenu('sales_scope'); setCreationContext(null); }}
            />
            <SidebarItem
@@ -1649,6 +1842,14 @@ export const WebAdmin: React.FC = () => {
             });
             setCategorySelectContext(null);
           }}
+        />
+      )}
+      {masterChannelSyncDialogContext && (
+        <WebMasterChannelSyncDialog
+          context={masterChannelSyncDialogContext}
+          onClose={() => setMasterChannelSyncDialogContext(null)}
+          onSubmit={handleMasterChannelSyncSubmit}
+          onOpenRecords={openMasterChannelSyncRecords}
         />
       )}
       {showProductMenuGuide && (

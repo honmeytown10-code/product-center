@@ -32,7 +32,7 @@ export type MasterChannelSyncSubmitPayload = {
 };
 
 export type MasterChannelSyncDialogContext = {
-  entry: 'after-save' | 'master-list' | 'channel-list';
+  entry: 'after-create' | 'after-save' | 'master-list' | 'channel-list';
   products: Product[];
   catalogs: MasterChannelSyncCatalog[];
   lockedCatalogId?: string;
@@ -103,25 +103,33 @@ export const WebMasterChannelSyncDialog: React.FC<{
   onSubmit: (payload: MasterChannelSyncSubmitPayload) => void;
   onOpenRecords: () => void;
 }> = ({ context, onClose, onSubmit, onOpenRecords }) => {
+  const isDirectAction = context.entry === 'after-create' || context.entry === 'after-save';
+  const isAddAction = context.entry === 'after-create';
   const defaultFieldIds = useMemo(() => FIELD_DEFINITIONS.filter(field => field.defaultSelected).map(field => field.id), []);
   const availableCatalogIds = context.catalogs.map(catalog => catalog.id);
-  const initialCatalogIds = context.lockedCatalogId ? [context.lockedCatalogId] : availableCatalogIds;
+  const initialCatalogIds = context.lockedCatalogId
+    ? [context.lockedCatalogId]
+    : isDirectAction
+      ? []
+      : availableCatalogIds;
   const [selectedFieldIds, setSelectedFieldIds] = useState<MasterChannelSyncFieldId[]>(defaultFieldIds);
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>(initialCatalogIds);
   const [showLockedFieldDetails, setShowLockedFieldDetails] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const title = context.entry === 'after-save'
-    ? '商品主档已保存'
+  const title = context.entry === 'after-create'
+    ? '添加商品至渠道商品库'
+    : context.entry === 'after-save'
+    ? '更新渠道商品'
     : context.entry === 'channel-list'
       ? '从商品主档更新'
       : '同步至渠道商品';
   const selectedFields = FIELD_DEFINITIONS.filter(field => selectedFieldIds.includes(field.id));
   const lockedFields = FIELD_DEFINITIONS.filter(field => field.selectionMode === 'locked');
   const optionalFields = FIELD_DEFINITIONS.filter(field => field.selectionMode === 'optional');
-  const selectedOptionalFields = FIELD_DEFINITIONS.filter(field => field.selectionMode === 'optional' && selectedFieldIds.includes(field.id));
+  const selectedOptionalFields = optionalFields.filter(field => selectedFieldIds.includes(field.id));
   const selectedCatalogs = context.catalogs.filter(catalog => selectedCatalogIds.includes(catalog.id));
-  const canSubmit = selectedFieldIds.length > 0 && selectedCatalogIds.length > 0;
+  const canSubmit = selectedCatalogIds.length > 0 && (isAddAction || selectedFieldIds.length > 0);
   const firstProduct = context.products[0];
 
   const toggleField = (fieldId: MasterChannelSyncFieldId) => {
@@ -161,18 +169,26 @@ export const WebMasterChannelSyncDialog: React.FC<{
 
   if (submitted) {
     return (
-      <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="更新任务已创建">
+      <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label={isDirectAction ? '渠道商品处理完成' : '更新任务已创建'}>
         <div className="w-[520px] rounded-lg bg-white p-8 text-center shadow-2xl">
           <CheckCircle2 size={42} className="mx-auto text-[#00B460]" />
-          <h2 className="mt-4 text-xl font-bold text-[#1D2129]">更新任务已创建</h2>
+          <h2 className="mt-4 text-xl font-bold text-[#1D2129]">
+            {isDirectAction ? (isAddAction ? '已添加至渠道商品库' : '渠道商品已更新') : '更新任务已创建'}
+          </h2>
           <p className="mx-auto mt-2 max-w-[400px] text-sm leading-6 text-[#667085]">
-            将为 {context.products.length} 个商品更新 {selectedFields.length} 个字段，涉及 {selectedCatalogs.length} 个渠道商品库。任务在后台执行，可继续处理其他商品。
+            {isDirectAction
+              ? isAddAction
+                ? `已按商品主档当前资料，在 ${selectedCatalogs.length} 个渠道商品库中创建渠道商品。`
+                : `已将所选 ${selectedFields.length} 个属性更新至 ${selectedCatalogs.length} 个渠道商品库，不会直接下发门店或更新模板。`
+              : `将为 ${context.products.length} 个商品更新 ${selectedFields.length} 个字段，涉及 ${selectedCatalogs.length} 个渠道商品库。任务在后台执行，可继续处理其他商品。`}
           </p>
           <div className="mt-6 flex justify-center gap-3">
             <button type="button" onClick={onClose} className="console-secondary-button">完成</button>
-            <button type="button" onClick={onOpenRecords} className="console-primary-button">
-              查看同步记录 <ChevronRight size={15} />
-            </button>
+            {!isDirectAction && (
+              <button type="button" onClick={onOpenRecords} className="console-primary-button">
+                查看同步记录 <ChevronRight size={15} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -181,13 +197,15 @@ export const WebMasterChannelSyncDialog: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="flex max-h-[88vh] w-[1080px] max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+      <div className={`flex max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${isAddAction ? 'max-h-[82vh] w-[760px]' : 'max-h-[88vh] w-[1080px]'}`}>
         <header className="flex shrink-0 items-start justify-between border-b border-[#E8E8E8] px-6 py-5">
           <div>
             <h2 className="text-lg font-bold text-[#1D2129]">{title}</h2>
             <p className="mt-1 text-sm text-[#667085]">
-              {context.entry === 'after-save'
-                ? '主档保存已完成，可选择将本次资料更新到渠道商品；暂不处理不会影响已保存的主档。'
+              {context.entry === 'after-create'
+                ? '主档已经创建成功。选择目标渠道商品库后，将按主档当前资料直接创建渠道商品；暂不添加不会影响主档。'
+                : context.entry === 'after-save'
+                ? '主档保存已完成。选择需要更新的属性和目标商品库后直接生效；暂不处理不会影响已保存的主档。'
                 : context.entry === 'channel-list'
                   ? `选择需要从主档更新到“${context.catalogs[0]?.name || '当前商品库'}”的字段。`
                   : '选择需要同步的字段和渠道商品库，系统将生成后台更新任务。'}
@@ -196,8 +214,8 @@ export const WebMasterChannelSyncDialog: React.FC<{
           <button type="button" onClick={onClose} className="rounded p-1 text-[#667085] hover:bg-[#F2F3F5]" aria-label="关闭"><X size={20} /></button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
-          <section className="rounded-lg border border-[#E5E7EB] bg-[#FAFBFC] px-4 py-3">
+        <div className={`min-h-0 flex-1 overflow-auto px-6 ${isAddAction ? 'py-4' : 'py-5'}`}>
+          <section className={`rounded-lg border border-[#E5E7EB] px-4 py-3 ${isAddAction ? 'bg-white' : 'bg-[#FAFBFC]'}`}>
             <div className="flex items-center gap-3">
               {firstProduct?.image && <img src={firstProduct.image} alt="" className="h-11 w-11 rounded border border-[#E5E7EB] object-cover" />}
               <div className="min-w-0 flex-1">
@@ -208,23 +226,23 @@ export const WebMasterChannelSyncDialog: React.FC<{
             </div>
           </section>
 
-          <div className="mt-5 grid min-h-0 grid-cols-[minmax(0,1fr)_350px] items-start gap-5">
-            <section className="min-w-0">
+          <div className={`grid min-h-0 items-start gap-5 ${isAddAction ? 'mt-4 grid-cols-1' : 'mt-5 grid-cols-[minmax(0,1fr)_350px]'}`}>
+            {!isAddAction && <section className="min-w-0">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-[#1D2129]">1. 确认更新字段</h3>
-                  <p className="mt-1 text-xs text-[#667085]">固定字段必定同步；渠道可维护字段可按本次需要选择。</p>
+                  <h3 className="font-bold text-[#1D2129]">1. 选择更新属性</h3>
+                  <p className="mt-1 text-xs text-[#667085]">勾选本次需要从商品主档更新到渠道商品的属性。</p>
                 </div>
                 <span className="shrink-0 rounded bg-[#EAF8F1] px-2.5 py-1 text-xs font-medium text-[#008F4C]">共更新 {selectedFields.length} 项</span>
               </div>
 
-              <div className="rounded-lg border border-[#CDEBDB] bg-[#F5FCF8] px-4 py-3">
+              {lockedFields.length > 0 && <div className="rounded-lg border border-[#CDEBDB] bg-[#F5FCF8] px-4 py-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-bold text-[#1D2129]">
                       <LockKeyhole size={15} className="text-[#00A85A]" />固定同步 {lockedFields.length} 项
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-[#667085]">这些字段由商品主档统一控制，创建任务时自动更新且不可取消。</p>
+                    <p className="mt-1 text-xs leading-5 text-[#667085]">这些字段由商品主档统一控制，本次更新时自动同步且不可取消。</p>
                   </div>
                   <button type="button" onClick={() => setShowLockedFieldDetails(value => !value)} className="shrink-0 text-xs font-medium text-[#008F4C] hover:underline">
                     {showLockedFieldDetails ? '收起明细' : '查看明细'}
@@ -244,11 +262,11 @@ export const WebMasterChannelSyncDialog: React.FC<{
                     ))}
                   </div>
                 )}
-              </div>
+              </div>}
 
-              <div className="mt-4">
+              <div className={lockedFields.length > 0 ? 'mt-4' : ''}>
                 <div className="mb-2 flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-[#1D2129]">可选择更新</h4>
+                  <h4 className="text-sm font-bold text-[#1D2129]">{isDirectAction ? '可更新属性' : '可选择更新'}</h4>
                   <span className="text-xs text-[#667085]">已选 {selectedOptionalFields.length}/{optionalFields.length} 项</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -276,14 +294,14 @@ export const WebMasterChannelSyncDialog: React.FC<{
 
               <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#D9EAFB] bg-[#F5FAFF] px-4 py-3 text-xs leading-5 text-[#476582]">
                 <Info size={15} className="mt-0.5 shrink-0" />
-                <span>只更新渠道商品库资料，不会直接发布到门店或三方平台。未勾选的渠道可维护字段保留原值。</span>
+                <span>只更新所选渠道商品库中的渠道商品资料，不会直接下发门店、更新模板或发布到三方平台；未勾选属性保留原值。</span>
               </div>
-            </section>
+            </section>}
 
-            <aside className="sticky top-0 rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+            <aside className={`rounded-lg border border-[#E5E7EB] p-4 ${isAddAction ? 'w-full bg-[#FAFBFC]' : 'sticky top-0 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)]'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-[#1D2129]">2. {context.lockedCatalogId ? '确认当前商品库' : '选择渠道商品库'}</h3>
+                  <h3 className="font-bold text-[#1D2129]">{isAddAction ? '' : '2. '}{context.lockedCatalogId ? '确认当前商品库' : '选择渠道商品库'}</h3>
                   <p className="mt-1 text-xs leading-5 text-[#98A2B3]">仅展示当前账号有数据权限的商品库。</p>
                 </div>
                 {!context.lockedCatalogId && context.catalogs.length > 1 && (
@@ -294,11 +312,11 @@ export const WebMasterChannelSyncDialog: React.FC<{
                 )}
               </div>
 
-              <div className="mt-3 space-y-2">
+              <div className={isAddAction ? 'mt-3 grid grid-cols-2 gap-3' : 'mt-3 space-y-2'}>
                 {context.catalogs.map(catalog => {
                   const checked = selectedCatalogIds.includes(catalog.id);
                   return (
-                    <label key={catalog.id} className={`flex min-h-[68px] items-start gap-3 rounded-lg border px-3 py-3 ${context.lockedCatalogId ? 'cursor-default' : 'cursor-pointer'} ${checked ? 'border-[#00B460] bg-[#F3FBF7]' : 'border-[#E5E7EB] bg-white hover:border-[#B7E7CF]'}`}>
+                    <label key={catalog.id} className={`flex items-start gap-3 rounded-lg border px-3 py-3 ${isAddAction ? 'min-h-[78px]' : 'min-h-[68px]'} ${context.lockedCatalogId ? 'cursor-default' : 'cursor-pointer'} ${checked ? 'border-[#00B460] bg-[#F3FBF7]' : 'border-[#E5E7EB] bg-white hover:border-[#B7E7CF]'}`}>
                       <input type="checkbox" checked={checked} disabled={Boolean(context.lockedCatalogId)} onChange={() => toggleCatalog(catalog.id)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 accent-[#00B460] disabled:opacity-100" />
                       <div className="min-w-0">
                         <div className="font-bold text-[#1D2129]">{catalog.name}</div>
@@ -311,24 +329,38 @@ export const WebMasterChannelSyncDialog: React.FC<{
 
               {selectedCatalogIds.length === 0 && <div className="mt-2 text-xs font-medium text-[#D92D20]">请至少选择一个渠道商品库</div>}
 
-              <div className="mt-4 rounded-lg bg-[#F7F8FA] px-3.5 py-3">
-                <div className="text-sm font-bold text-[#1D2129]">本次更新范围</div>
-                <dl className="mt-2 space-y-2 text-xs">
-                  <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">商品主档</dt><dd className="font-medium text-[#1D2129]">{context.products.length} 个</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">渠道商品库</dt><dd className="font-medium text-[#1D2129]">{selectedCatalogIds.length} 个</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">固定同步</dt><dd className="font-medium text-[#1D2129]">{lockedFields.length} 项</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">可选更新</dt><dd className="font-medium text-[#1D2129]">{selectedOptionalFields.length} 项</dd></div>
-                </dl>
-              </div>
+              {isAddAction ? (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#D9EADF] bg-white px-4 py-3 text-sm">
+                  <div className="text-[#667085]">已选择 <span className="font-bold text-[#00A35B]">{selectedCatalogIds.length}</span> 个渠道商品库</div>
+                  <div className="text-xs text-[#667085]">按商品主档当前资料创建，不直接下发门店</div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg bg-[#F7F8FA] px-3.5 py-3">
+                  <div className="text-sm font-bold text-[#1D2129]">本次更新范围</div>
+                  <dl className="mt-2 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">商品主档</dt><dd className="font-medium text-[#1D2129]">{context.products.length} 个</dd></div>
+                    <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">渠道商品库</dt><dd className="font-medium text-[#1D2129]">{selectedCatalogIds.length} 个</dd></div>
+                    <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">固定同步</dt><dd className="font-medium text-[#1D2129]">{lockedFields.length} 项</dd></div>
+                    <div className="flex items-center justify-between gap-3"><dt className="text-[#667085]">可选更新</dt><dd className="font-medium text-[#1D2129]">{selectedOptionalFields.length} 项</dd></div>
+                  </dl>
+                </div>
+              )}
             </aside>
           </div>
         </div>
 
         <footer className="flex shrink-0 items-center justify-between border-t border-[#E8E8E8] px-6 py-4">
-          <div className="flex items-center gap-2 text-xs text-[#98A2B3]"><RefreshCw size={13} />提交后可在“发布中心—同步记录”查看进度与失败原因</div>
+          <div className="flex items-center gap-2 text-xs text-[#98A2B3]">
+            <RefreshCw size={13} />
+            {isDirectAction
+              ? (isAddAction ? '确认后立即创建渠道商品，不生成后台任务' : '确认后立即更新渠道商品，不生成后台任务')
+              : '提交后可在“发布中心—同步记录”查看进度与失败原因'}
+          </div>
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="console-secondary-button">{context.entry === 'after-save' ? '稍后处理' : '取消'}</button>
-            <button type="button" disabled={!canSubmit} onClick={submit} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-40">创建更新任务</button>
+            <button type="button" onClick={onClose} className="console-secondary-button">{isDirectAction ? '暂不处理' : '取消'}</button>
+            <button type="button" disabled={!canSubmit} onClick={submit} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-40">
+              {isDirectAction ? (isAddAction ? '确认添加' : '立即更新') : '创建更新任务'}
+            </button>
           </div>
         </footer>
       </div>

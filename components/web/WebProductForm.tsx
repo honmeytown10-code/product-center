@@ -11,6 +11,17 @@ import { Switch, SectionHeader, FormRow } from './WebCommon';
 import { WebCategorySelectModal } from './WebModals';
 import { WebThirdPartyChannelFields } from './WebThirdPartyChannelFields';
 
+type ProductSaveDraft = {
+    id: string;
+    name: string;
+    price: number;
+    category: string;
+    image: string;
+    skuCode: string;
+    type: 'standard' | 'combo';
+    formData?: Record<string, any>;
+};
+
 interface WebProductFormProps {
     type: 'standard' | 'combo';
     category: Category;
@@ -42,17 +53,8 @@ interface WebProductFormProps {
         currentChannelIds: string[];
         activeChannelId: string;
     };
-    onProductSaved?: (product: {
-        id?: string;
-        name: string;
-        price: number;
-        category: string;
-        image: string;
-        skuCode: string;
-        type: 'standard' | 'combo';
-        formData?: Record<string, any>;
-    }, action: 'create' | 'edit') => void;
-    onOpenChannelCatalog?: () => void;
+    onProductSaved?: (product: ProductSaveDraft, action: 'create' | 'edit') => void;
+    onOpenChannelCatalog?: (action: 'add' | 'update', product: ProductSaveDraft) => void;
 }
 
 const DEFAULT_RESET_FIELD_IDS = new Set(['p_weight_flag', 'st_member']);
@@ -439,8 +441,7 @@ const MASTER_FIELD_IDS = new Set([
     'm_methods',
     'a_addons',
     'c_groups',
-    'o_invoice',
-    'o_tax_category',
+    's_tax_rate',
 ]);
 const UNIFIED_CHANNEL_BASIC_FIELD_IDS = new Set([
     'p_alias',
@@ -482,7 +483,18 @@ const CHANNEL_SPEC_HIDDEN_CHILD_IDS = new Set([
     's_spec_code',
 ]);
 const MASTER_METHOD_CHILD_IDS = new Set(['m_method_name', 'm_method_code', 'm_method_remark']);
-const MASTER_ADDON_CHILD_IDS = new Set(['a_addon_name', 'a_addon_code']);
+const MASTER_ADDON_CHILD_IDS = new Set([
+    'a_rule_scope',
+    'a_rule_unlimited',
+    'a_rule_limit',
+    'a_rule_required',
+    'a_addon_name',
+    'a_addon_code',
+    'a_addon_limit',
+    'a_addon_price',
+    'a_addon_spec_price',
+    'a_empty_tip',
+]);
 const CHANNEL_OPTIONS: Array<{ key: ChannelKey; label: string; icon: React.ReactNode }> = [
     { key: 'pos', label: 'POS收银', icon: <Printer size={16} /> },
     { key: 'mini_dine', label: '小程序堂食', icon: <CupSoda size={16} /> },
@@ -1215,6 +1227,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [draftSaved, setDraftSaved] = useState(false);
     const [hasSavedProduct, setHasSavedProduct] = useState(mode === 'edit');
     const [successMode, setSuccessMode] = useState<'create' | 'edit'>(mode === 'edit' ? 'edit' : 'create');
+    const [savedProductId] = useState(() => String(initialProduct?.id || `product-${Date.now()}`));
+    const [savedProductForChannelAction, setSavedProductForChannelAction] = useState<ProductSaveDraft | null>(null);
     const [selectedSuccessAction, setSelectedSuccessAction] = useState<'sync' | 'template' | 'detail' | null>(null);
     const [uniformPrepRule, setUniformPrepRule] = useState<PrepRule>(() => createDefaultPrepRule({ duration: '30', unit: '分钟', window: 'same_day' }));
     const [uniformStockRules, setUniformStockRules] = useState<{ inStock: PrepRule; nonStock: PrepRule }>(() => ({
@@ -1305,6 +1319,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const configMap = new Map<string, CategoryFieldConfig>();
         sourceConfigs.forEach(config => {
             if (isComboProduct && config.id === 'a_addons') return;
+            if ((isMasterForm || isUnifiedForm) && ['o_invoice', 'o_tax_category'].includes(config.id)) return;
             configMap.set(config.id, config);
         });
         if (isComboProduct) {
@@ -1314,7 +1329,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 }
             });
         }
-        const scopeFieldIds = isMasterForm
+        const scopeFieldIds = isMasterForm || isUnifiedForm
             ? Array.from(MASTER_FIELD_IDS)
             : isChannelForm
             ? Array.from(CHANNEL_READONLY_FIELD_IDS)
@@ -1325,14 +1340,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             }
         });
         return Array.from(configMap.values());
-    }, [currentCategory, isChannelForm, isComboProduct, isMasterForm]);
+    }, [currentCategory, isChannelForm, isComboProduct, isMasterForm, isUnifiedForm]);
     const currentCategoryFieldIds = useMemo(() => currentFieldConfigs.map(field => field.id), [currentFieldConfigs]);
     const currentCategoryFieldIdSet = useMemo(() => new Set(currentCategoryFieldIds), [currentCategoryFieldIds]);
     const currentFieldConfigMap = useMemo(() => new Map(currentFieldConfigs.map(field => [field.id, field])), [currentFieldConfigs]);
     const commonFieldConfigKey = getCommonFieldConfigKey(type, currentCategory.id);
     const commonFieldConfigList = useMemo(() => (commonFieldConfigs[commonFieldConfigKey] || []).filter(item => currentCategoryFieldIdSet.has(item.id)), [commonFieldConfigKey, commonFieldConfigs, currentCategoryFieldIdSet]);
     const resolvedCommonFieldConfigList = useMemo(() => {
-        const scopeVisibleIds = isMasterForm
+        const scopeVisibleIds = isMasterForm || isUnifiedForm
             ? Array.from(MASTER_FIELD_IDS).filter(id => currentCategoryFieldIdSet.has(id))
             : isChannelForm
             ? Array.from(CHANNEL_READONLY_FIELD_IDS).filter(id => currentCategoryFieldIdSet.has(id))
@@ -1393,7 +1408,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 displayMode: 'collapsed' as const,
             })),
         ];
-    }, [commonFieldConfigList, currentCategoryFieldIdSet, currentCategoryFieldIds, currentFieldConfigMap, currentFieldConfigs, isChannelForm, isMasterForm]);
+    }, [commonFieldConfigList, currentCategoryFieldIdSet, currentCategoryFieldIds, currentFieldConfigMap, currentFieldConfigs, isChannelForm, isMasterForm, isUnifiedForm]);
     const resolvedCommonFieldConfigMap = useMemo(() => new Map(resolvedCommonFieldConfigList.map(item => [item.id, item])), [resolvedCommonFieldConfigList]);
     const configuredCommonFieldIds = useMemo(
         () => resolvedCommonFieldConfigList.filter(item => (item.displayMode ?? 'visible') !== 'hidden').map(item => item.id),
@@ -1487,8 +1502,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         [collapsedCommonFieldIdSet]
     );
     const salesCollapsedFieldMappings = useMemo(
-        () => SALES_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
-        [collapsedCommonFieldIdSet]
+        () => SALES_MORE_FIELD_MAPPINGS.filter(item => (
+            collapsedCommonFieldIdSet.has(item.id)
+            && !((isMasterForm || isUnifiedForm) && item.id === 's_tax_rate')
+        )),
+        [collapsedCommonFieldIdSet, isMasterForm, isUnifiedForm]
     );
     const otherCollapsedFieldMappings = useMemo(
         () => OTHER_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
@@ -2329,8 +2347,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 },
             }
             : dynamicFormData;
-        onProductSaved?.({
-            id: initialProduct?.id,
+        const savedProduct: ProductSaveDraft = {
+            id: savedProductId,
             name: String(
                 isUnifiedForm
                     ? masterProductName
@@ -2350,7 +2368,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             skuCode: String(initialProduct?.skuCode || `${Date.now()}`.slice(-8)),
             type,
             formData: inheritedChannelFormData,
-        }, nextSuccessMode);
+        };
+        onProductSaved?.(savedProduct, nextSuccessMode);
+        setSavedProductForChannelAction(savedProduct);
         setSuccessMode(nextSuccessMode);
         setHasSavedProduct(true);
         if (showSuccessPage) setPageView('success');
@@ -4994,7 +5014,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 )}
 
                 <div className="pt-1 space-y-2">
-                    {expandedSalesFields.length > 0 && (
+                    {(expandedSalesFields.length > 0 || (isFieldEnabled('s_tax_rate') && (isMasterForm || isUnifiedForm))) && (
                         <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
                                 {expandedSalesFields.includes('s_sale_settings') && isFieldEnabled('s_sale_settings') && (
                                     <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
@@ -5044,56 +5064,45 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                     </div>
                                 )}
-                                {expandedSalesFields.includes('s_tax_rate') && isFieldEnabled('s_tax_rate') && (
+                                {isFieldEnabled('s_tax_rate') && (isMasterForm || isUnifiedForm || expandedSalesFields.includes('s_tax_rate')) && (
                                     <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">税率</div>
-                                        <div className="space-y-4 rounded-lg border border-[#EEF0F2] bg-[#FAFAFA] p-4">
+                                        <div className="space-y-5 rounded-lg bg-[#F7F8FA] p-4">
                                             <div>
                                                 <div className="mb-2 text-sm font-bold text-[#1F2129]">选择税率</div>
-                                                <div className="flex flex-wrap items-center gap-3">
-                                                    {taxRate ? (
-                                                        <div className="inline-flex min-h-10 items-center rounded-md border border-[#DDE3E8] bg-white px-3 text-sm text-[#1F2129]">
-                                                            <span>{taxCategoryName || '已选税收分类'}（税率：{taxRate}）</span>
-                                                            <span className="ml-2 text-[#00A35B]">已选择</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm text-[#98A2B3]">暂未选择税收分类</span>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        disabled={taxReadonly}
-                                                        onClick={() => setShowTaxCategoryModal(true)}
-                                                        className="console-secondary-button disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {taxRate ? '重新选择' : '请选择'}
-                                                    </button>
-                                                    {taxCategoryCode && <span className="text-xs text-[#98A2B3]">税收分类编码：{taxCategoryCode}</span>}
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    disabled={taxReadonly}
+                                                    onClick={() => setShowTaxCategoryModal(true)}
+                                                    className="inline-flex min-h-10 min-w-[110px] items-center justify-between gap-4 rounded-md border border-[#D5D9DE] bg-white px-4 text-sm text-[#1F2129] transition-colors hover:border-[#00B460] disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    <span>{taxRate ? `${taxCategoryName || '已选税收分类'} · ${taxRate}` : '请选择'}</span>
+                                                    <ChevronRight size={15} className="text-[#98A2B3]" />
+                                                </button>
+                                                {taxCategoryCode && <div className="mt-2 text-xs text-[#98A2B3]">税收分类编码：{taxCategoryCode}</div>}
                                             </div>
 
-                                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                                <div>
-                                                    <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
-                                                    <input
-                                                        className="q-form-input"
-                                                        placeholder="请输入内容"
-                                                        value={invoiceItemName}
-                                                        disabled={taxReadonly}
-                                                        onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
-                                                    />
-                                                    <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
-                                                </div>
+                                            <div className="max-w-[770px]">
+                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">开票项目名称</div>
+                                                <input
+                                                    className="q-form-input"
+                                                    placeholder="请输入内容"
+                                                    value={invoiceItemName}
+                                                    disabled={taxReadonly}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_item_name: e.target.value }))}
+                                                />
+                                                <div className="mt-2 text-xs text-gray-400">用户端开票时展示</div>
+                                            </div>
 
-                                                <div>
-                                                    <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
-                                                    <input
-                                                        className="q-form-input"
-                                                        placeholder="请输入内容"
-                                                        value={invoiceCustomUnit}
-                                                        disabled={taxReadonly}
-                                                        onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
-                                                    />
-                                                </div>
+                                            <div className="max-w-[770px]">
+                                                <div className="mb-2 text-sm font-bold text-[#1F2129]">自定义开票单位</div>
+                                                <input
+                                                    className="q-form-input"
+                                                    placeholder="请输入内容"
+                                                    value={invoiceCustomUnit}
+                                                    disabled={taxReadonly}
+                                                    onChange={e => setDynamicFormData(prev => ({ ...prev, s_invoice_custom_unit: e.target.value }))}
+                                                />
                                             </div>
                                             {taxReadonly && <div className="text-xs text-[#98A2B3]">该字段由商品主档统一维护，可通过“从商品主档更新”同步最新设置。</div>}
                                         </div>
@@ -7861,27 +7870,24 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             {selectedAddonCount > 0 && (
                                 <>
                                     {!isChannelForm && (showAddonRuleScope || showAddonRuleUnlimited || showAddonRuleLimit || showAddonRuleRequired) && (
-                                        <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
-                                            {showAddonRuleScope && (
-                                                <div className="flex flex-wrap items-center gap-4">
-                                                    <label htmlFor="addon-rule-scope" className="text-sm font-bold text-[#1F2129]">加料配置：</label>
-                                                    <select
-                                                        id="addon-rule-scope"
-                                                        value={addonScope}
-                                                        onChange={event => changeAddonScope(event.target.value as AddonScope)}
-                                                        className="h-10 min-w-[260px] rounded-md border border-[#DDE2E8] bg-white px-3 text-sm text-[#1F2129] outline-none focus:border-[#00B460]"
-                                                    >
-                                                        <option value="total">限制所有加料购买总量</option>
-                                                        <option value="type">按加料类型限制购买数</option>
-                                                    </select>
-                                                </div>
-                                            )}
-                                            {addonScope === 'total' && (
-                                                <div className="border-t border-gray-200 pt-4">
-                                                    <div className="mb-3 text-xs text-gray-500">下方所有加料共用一套购买数量规则。</div>
-                                                    {renderRuleInputs(addonTotalRule, patch => setAddonTotalRule(prev => ({ ...prev, ...patch })), 'addon-total-rule')}
-                                                </div>
-                                            )}
+                                        <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4">
+                                            <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+                                                {showAddonRuleScope && (
+                                                    <>
+                                                        <label htmlFor="addon-rule-scope" className="text-sm font-bold text-[#1F2129]">加料配置：</label>
+                                                        <select
+                                                            id="addon-rule-scope"
+                                                            value={addonScope}
+                                                            onChange={event => changeAddonScope(event.target.value as AddonScope)}
+                                                            className="h-10 min-w-[260px] rounded-md border border-[#DDE2E8] bg-white px-3 text-sm text-[#1F2129] outline-none focus:border-[#00B460]"
+                                                        >
+                                                            <option value="total">限制所有加料购买总量</option>
+                                                            <option value="type">按加料类型限制购买数</option>
+                                                        </select>
+                                                    </>
+                                                )}
+                                                {addonScope === 'total' && renderRuleInputs(addonTotalRule, patch => setAddonTotalRule(prev => ({ ...prev, ...patch })), 'addon-total-rule')}
+                                            </div>
                                         </div>
                                     )}
                                     <div className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4 space-y-4">
@@ -9516,64 +9522,92 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                         <div className="mt-4 text-[20px] font-bold text-[#1F2129]">
                                             {isChannelForm
-                                                ? '渠道商品资料已保存'
+                                                ? (successMode === 'edit' ? '渠道商品资料已更新' : '渠道商品已创建')
                                                 : isUnifiedForm
-                                                    ? (successMode === 'edit' ? '商品已更新' : '商品已创建')
+                                                    ? (successMode === 'edit' ? '商品与渠道商品已更新' : '商品与渠道商品已创建')
                                                     : successMode === 'edit'
                                                         ? '商品主档已更新'
                                                         : '商品主档已创建'}
                                         </div>
-                                         <div className="mt-3 text-sm text-gray-500">
-                                             {isChannelForm
-                                                 ? `已保存至${channelContext?.catalogName || '渠道商品库'}，可继续加入模板或发布至门店渠道。`
-                                                 : isUnifiedForm
-                                                 ? `主档资料与渠道商品资料已一次保存，并已加入${channelContext?.catalogName || '当前渠道商品库'}；当前尚未发布。`
-                                                 : successMode === 'edit'
-                                                 ? '商品主档修改已保存。渠道商品仍保留自己的销售属性，可进入渠道商品库确认继承变化后再发布。'
-                                                 : '商品主档已创建，系统已自动在品牌默认商品库生成对应渠道商品。渠道商品当前未发布，可继续维护销售属性和适用渠道。'}
-                                         </div>
-                                         {successMode === 'create' && isMasterForm && (
-                                             <div className="mt-5 flex items-start border border-[#C9EFD8] bg-[#F2FCF6] px-4 py-3">
-                                                 <CheckCircle2 size={17} className="mr-2 mt-0.5 shrink-0 text-[#00A35B]" />
-                                                 <div><div className="text-sm font-black text-[#087443]">已自动加入品牌默认商品库</div><div className="mt-1 text-xs leading-5 text-[#4D7C62]">自动加入不等于发布或上架；名称、图片、售价、适用渠道及平台专属属性需在渠道商品库确认。</div></div>
-                                             </div>
-                                         )}
-                                         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                             <button
-                                                 type="button"
-                                                onClick={() => (isUnifiedForm || successMode === 'edit')
-                                                    ? handleSuccessAction('sync')
-                                                    : onOpenChannelCatalog?.()}
-                                                 className="rounded-lg border border-[#BBF7D0] bg-[#F7FFF9] p-5 text-left hover:border-[#00C06B] hover:bg-[#F0FDF4] transition-colors"
-                                             >
+                                        <div className="mt-3 text-sm text-gray-500">
+                                            {isMasterForm
+                                                ? successMode === 'edit'
+                                                    ? '商品主档修改已保存。本次保存不会自动更新渠道商品，可在下方选择属性和目标商品库后立即更新。'
+                                                    : '商品主档已创建。本次创建不会自动加入渠道商品库，可在下方选择是否添加。'
+                                                : isUnifiedForm
+                                                    ? successMode === 'edit'
+                                                        ? `主档资料与${channelContext?.catalogName || '当前渠道商品库'}中的渠道商品资料已保存，可选择将主档属性立即更新到其他渠道商品库，也可同步至门店或更新模板。`
+                                                        : `主档与渠道商品已一次创建，并已自动加入${channelContext?.catalogName || '当前渠道商品库'}，无需再次添加；当前尚未发布。`
+                                                    : successMode === 'edit'
+                                                        ? `已保存至${channelContext?.catalogName || '渠道商品库'}，可选择是否同步至门店或更新模板。`
+                                                        : `渠道商品已保存至${channelContext?.catalogName || '渠道商品库'}，无需再次添加至当前商品库。`}
+                                        </div>
+
+                                        {(isMasterForm || (isUnifiedForm && successMode === 'edit')) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!savedProductForChannelAction) return;
+                                                    onOpenChannelCatalog?.(successMode === 'edit' ? 'update' : 'add', savedProductForChannelAction);
+                                                }}
+                                                disabled={!savedProductForChannelAction}
+                                                className="mt-6 w-full rounded-lg border border-[#BBF7D0] bg-[#F7FFF9] p-5 text-left transition-colors hover:border-[#00C06B] hover:bg-[#F0FDF4]"
+                                            >
                                                 <div className="flex items-center justify-between gap-4">
-                                                    <div className="inline-flex items-center rounded-full bg-[#00C06B] px-3 py-1 text-xs font-black text-white">推荐</div>
+                                                    <div className="inline-flex items-center rounded-full border border-[#C9EFD8] bg-white px-3 py-1 text-xs font-bold text-[#087443]">可选后续操作</div>
                                                     <Send size={18} className="text-[#00A35B]" />
                                                 </div>
-                                                 <div className="mt-4 text-base font-bold text-[#1F2129]">{isChannelForm || isUnifiedForm || successMode === 'edit' ? '下发更新到门店' : '维护渠道销售属性'}</div>
-                                                 <div className="mt-1.5 text-sm text-gray-500">{isChannelForm || isUnifiedForm || successMode === 'edit' ? '确认本次商品改动后，创建发布任务并同步至适用门店渠道。' : '进入品牌默认商品库，确认渠道名称、售价、图片、适用渠道和平台属性。'}</div>
-                                                 <div className="mt-4 inline-flex items-center rounded-md bg-[#00C06B] px-4 py-2 text-sm font-bold text-white">
-                                                     {isUnifiedForm || successMode === 'edit' ? '立即下发更新' : '进入渠道商品库'}
+                                                <div className="mt-4 text-base font-bold text-[#1F2129]">
+                                                    {successMode === 'edit' ? '更新渠道商品' : '添加商品至渠道商品'}
+                                                </div>
+                                                <div className="mt-1.5 text-sm text-gray-500">
+                                                    {successMode === 'edit'
+                                                        ? '选择需要从主档更新的属性和目标渠道商品库，确认后立即完成；不操作不会覆盖渠道独立资料。'
+                                                        : '选择需要加入的目标渠道商品库，确认后立即创建对应渠道商品；可暂不添加，不影响商品主档创建结果。'}
+                                                </div>
+                                                <div className="mt-4 inline-flex items-center rounded-md bg-[#00C06B] px-4 py-2 text-sm font-bold text-white">
+                                                    {successMode === 'edit' ? '选择属性和商品库' : '选择目标商品库'}
                                                     <ArrowRight size={16} className="ml-2" />
                                                 </div>
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSuccessAction('template')}
-                                                className="rounded-lg border border-gray-200 bg-[#FAFAFA] p-5 text-left hover:border-[#00C06B] hover:bg-white transition-colors"
-                                            >
-                                                <div className="flex items-center justify-between gap-4">
-                                                    <div className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-black text-gray-500 border border-gray-200">备选方式</div>
-                                                    <ClipboardList size={18} className="text-[#00A35B]" />
-                                                </div>
-                                                <div className="mt-4 text-base font-bold text-[#1F2129]">{successMode === 'edit' ? '更新模板商品' : '加入商品模板'}</div>
-                                                <div className="mt-1.5 text-sm text-gray-500">{successMode === 'edit' ? '适合通过模板管理门店商品，且此次改动需要更新模板商品。' : '适合同一商品在不同门店做差异化配置，可基于模板统一维护门店属性。'}</div>
-                                                <div className="mt-4 inline-flex items-center text-sm font-bold text-[#00A35B]">
-                                                    {successMode === 'edit' ? '选择模板并更新' : '选择模板并加入'}
-                                                    <ArrowRight size={16} className="ml-1" />
-                                                </div>
-                                            </button>
-                                        </div>
+                                        )}
+
+                                        {successMode === 'edit' && (isChannelForm || isUnifiedForm) && (
+                                            <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSuccessAction('sync')}
+                                                    className="rounded-lg border border-[#BBF7D0] bg-[#F7FFF9] p-5 text-left transition-colors hover:border-[#00C06B] hover:bg-[#F0FDF4]"
+                                                >
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="inline-flex items-center rounded-full border border-[#C9EFD8] bg-white px-3 py-1 text-xs font-bold text-[#087443]">可选后续操作</div>
+                                                        <Send size={18} className="text-[#00A35B]" />
+                                                    </div>
+                                                    <div className="mt-4 text-base font-bold text-[#1F2129]">同步至门店</div>
+                                                    <div className="mt-1.5 text-sm text-gray-500">进入同步至门店流程，选择目标门店、渠道和需要覆盖的经营属性。</div>
+                                                    <div className="mt-4 inline-flex items-center rounded-md bg-[#00C06B] px-4 py-2 text-sm font-bold text-white">
+                                                        前往同步至门店
+                                                        <ArrowRight size={16} className="ml-2" />
+                                                    </div>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSuccessAction('template')}
+                                                    className="rounded-lg border border-gray-200 bg-[#FAFAFA] p-5 text-left transition-colors hover:border-[#00C06B] hover:bg-white"
+                                                >
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold text-gray-500">可选后续操作</div>
+                                                        <ClipboardList size={18} className="text-[#00A35B]" />
+                                                    </div>
+                                                    <div className="mt-4 text-base font-bold text-[#1F2129]">更新商品模板</div>
+                                                    <div className="mt-1.5 text-sm text-gray-500">进入模板更新流程，选择关联模板和本次需要更新的商品属性。</div>
+                                                    <div className="mt-4 inline-flex items-center text-sm font-bold text-[#00A35B]">
+                                                        前往更新模板
+                                                        <ArrowRight size={16} className="ml-1" />
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className={`grid grid-cols-1 gap-3 ${successMode === 'edit' ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
@@ -9937,7 +9971,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     </thead>
                                     <tbody>
                                         {filteredTaxCategoryOptions.map(option => {
-                                            const selected = option.code === taxCategoryCode;
+                                            const selected = option.code === (dynamicFormData.s_tax_category_code || '');
                                             return (
                                                 <tr key={option.code} className="border-t border-[#EEF0F2] hover:bg-[#FAFBFC]">
                                                     <td className="px-5 py-3 text-[#475467]">{option.code}</td>

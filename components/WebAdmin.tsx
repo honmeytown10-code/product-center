@@ -87,34 +87,6 @@ const getSyncFormData = (product: Product) => (
   (product as Product & { formData?: Record<string, unknown> }).formData || {}
 );
 
-const getChangedMasterChannelFields = (previous: Product | undefined, next: Product): MasterChannelSyncFieldId[] => {
-  if (!previous) return ['name', 'frontendCategory', 'price', 'mainImage', 'productType', 'productCategory', 'backendCategory', 'mnemonicCode', 'weightFlag', 'unit', 'specs', 'methods', 'addons', 'tax'];
-  const previousFormData = getSyncFormData(previous);
-  const nextFormData = getSyncFormData(next);
-  const changed: MasterChannelSyncFieldId[] = [];
-  if (previous.name !== next.name) changed.push('name');
-  if (JSON.stringify(previousFormData.p_front_cat ?? previous.category) !== JSON.stringify(nextFormData.p_front_cat ?? next.category)) changed.push('frontendCategory');
-  if (previous.price !== next.price || JSON.stringify(previous.specs) !== JSON.stringify(next.specs)) changed.push('price');
-  if (previous.image !== next.image) changed.push('mainImage');
-  if (previous.type !== next.type || previous.isCombo !== next.isCombo) changed.push('productType');
-  if (previous.category !== next.category || previousFormData.p_cat !== nextFormData.p_cat) changed.push('productCategory');
-  if (previousFormData.p_back_cat !== nextFormData.p_back_cat) changed.push('backendCategory');
-  if (previousFormData.p_code !== nextFormData.p_code) changed.push('mnemonicCode');
-  if (previousFormData.p_weight_flag !== nextFormData.p_weight_flag) changed.push('weightFlag');
-  if (previousFormData.p_unit !== nextFormData.p_unit) changed.push('unit');
-  if (JSON.stringify(previous.specs) !== JSON.stringify(next.specs) || previousFormData.s_specs !== nextFormData.s_specs) changed.push('specs');
-  if (previousFormData.m_methods !== nextFormData.m_methods) changed.push('methods');
-  if (previousFormData.a_addons !== nextFormData.a_addons) changed.push('addons');
-  if (
-    previousFormData.s_tax_rate !== nextFormData.s_tax_rate
-    || previousFormData.s_tax_category_code !== nextFormData.s_tax_category_code
-    || previousFormData.s_tax_category_name !== nextFormData.s_tax_category_name
-    || previousFormData.s_invoice_item_name !== nextFormData.s_invoice_item_name
-    || previousFormData.s_invoice_custom_unit !== nextFormData.s_invoice_custom_unit
-  ) changed.push('tax');
-  return changed;
-};
-
 const applyMasterFieldsToChannelProduct = (
   master: Product,
   current: Record<string, any>,
@@ -515,6 +487,10 @@ export const WebAdmin: React.FC = () => {
       return next;
     });
 
+    if (masterChannelSyncDialogContext.entry === 'after-create' || masterChannelSyncDialogContext.entry === 'after-save') {
+      return;
+    }
+
     const selectedCatalogNames = masterChannelSyncCatalogs
       .filter(catalog => payload.catalogIds.includes(catalog.id))
       .map(catalog => catalog.name);
@@ -811,7 +787,8 @@ export const WebAdmin: React.FC = () => {
               : undefined
           );
           return (
-              <WebProductForm 
+              <WebProductForm
+                  key={`${effectiveFormScope}:${creationContext.mode || 'create'}:${creationContext.product?.id || 'new'}:${creationContext.category?.id || 'uncategorized'}`}
                   type={creationContext.type} 
                   category={creationContext.category} 
                   categories={webCategories.filter(cat => cat.classification === creationContext.type)}
@@ -885,40 +862,28 @@ export const WebAdmin: React.FC = () => {
                           },
                         }));
                        return;
-                     }
-                     if (action === 'edit' && draft.id) {
-                       const previousMaster = products.find(product => product.id === draft.id);
-                       const nextMaster = {
-                         ...previousMaster,
-                         ...draft,
-                         id: draft.id,
-                         status: previousMaster?.status || 'on_shelf',
-                         stockStatus: previousMaster?.stockStatus || 'available',
-                       } as Product;
-                       updateProduct(draft.id, draft);
-                       if (masterChannelSyncCatalogs.length > 0) {
-                         setMasterChannelSyncDialogContext({
-                           entry: 'after-save',
-                           products: [nextMaster],
-                           catalogs: masterChannelSyncCatalogs,
-                           changedFieldIds: getChangedMasterChannelFields(previousMaster, nextMaster),
-                         });
-                       }
-                       return;
-                     }
-                     if (action === 'create') {
-                       addProduct({
-                         ...draft,
-                         id: `product-${Date.now()}`,
-                         status: 'draft',
-                         stockStatus: 'available',
-                       });
-                     }
-                   }}
-                   onOpenChannelCatalog={() => {
-                     setCreationContext(null);
-                     setActiveMenu('channel_product_library');
-                   }}
+                      }
+                      if (action === 'edit' && draft.id) {
+                        updateProduct(draft.id, draft);
+                        return;
+                      }
+                      if (action === 'create') {
+                        addProduct({
+                          ...draft,
+                          id: draft.id,
+                          status: 'draft',
+                          stockStatus: 'available',
+                        });
+                      }
+                    }}
+                    onOpenChannelCatalog={(action, product) => {
+                      const currentMaster = products.find(item => item.id === product.id);
+                      setMasterChannelSyncDialogContext({
+                        entry: action === 'add' ? 'after-create' : 'after-save',
+                        products: [{ ...currentMaster, ...product } as Product],
+                        catalogs: masterChannelSyncCatalogs,
+                      });
+                    }}
                    onOpenCommonFieldSettings={(type, categoryId) => {
                       setCommonFieldSettingsContext({
                         type,

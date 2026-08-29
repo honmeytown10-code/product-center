@@ -3146,13 +3146,20 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <div className="text-lg font-black text-[#1F2129]">商品属性排序</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-lg font-black text-[#1F2129]">渠道商品属性排序</div>
+                            {isChannelForm && (
+                                <span className="rounded-md border border-[#B7E8CF] bg-[#EFFAF4] px-2 py-0.5 text-xs font-bold text-[#008F4C]">
+                                    {channelContext?.catalogName || '当前渠道商品库'}
+                                </span>
+                            )}
+                        </div>
                         <div className="mt-1 text-sm text-gray-400">
-                            标<span className="mx-1 inline-block h-3 w-3 rounded-sm bg-[#00C06B]" />为默认属性值；规格需设置一个默认值，加料支持设置多个默认值
+                            拖拽调整当前渠道的属性组及属性值展示顺序；标<span className="mx-1 inline-block h-3 w-3 rounded-sm bg-[#00C06B]" />为默认属性值，仅影响当前渠道商品
                         </div>
                     </div>
                     <div className="relative flex items-center gap-3">
-                        <span className="text-sm font-bold text-[#1F2129]">自定义属性组排序</span>
+                        <span className="text-sm font-bold text-[#1F2129]">自定义渠道排序</span>
                         <button
                             type="button"
                             onClick={() => setShowAttrSortTip(prev => !prev)}
@@ -3163,7 +3170,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <Switch active={attrGroupSortEnabled} onClick={() => setAttrGroupSortEnabled(prev => !prev)} />
                         {showAttrSortTip && (
                             <div className="absolute right-0 top-full mt-2 w-[260px] rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs leading-5 text-gray-500 shadow-lg">
-                                开启后可在下方统一调整属性组顺序
+                                开启后可调整当前渠道的属性组顺序，不会修改商品主档或其他渠道
                             </div>
                         )}
                     </div>
@@ -6786,7 +6793,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     </div>
                 )}
 
-                {!isMasterForm && (specDisplayMode === 'multi' || methodConfigRows.length > 0) && (
+                {isChannelForm && (specDisplayMode === 'multi' || methodConfigRows.length > 0) && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">属性排序</div>
                         <div>{renderAttributeSortPanel()}</div>
@@ -7869,8 +7876,21 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             )}
                             {selectedAddonCount > 0 && (
                                 <>
-                                    {!isChannelForm && (showAddonRuleScope || showAddonRuleUnlimited || showAddonRuleLimit || showAddonRuleRequired) && (
-                                        <div className="rounded-xl border border-gray-200 bg-[#FAFAFA] p-4">
+                                    {(showAddonRuleScope || showAddonRuleUnlimited || showAddonRuleLimit || showAddonRuleRequired) && (
+                                        <div className="space-y-4 rounded-xl border border-gray-200 bg-[#FAFAFA] p-4">
+                                            {isChannelForm && (
+                                                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-3">
+                                                    <div>
+                                                        <div className="text-sm font-bold text-[#1F2129]">当前渠道加料销售规则</div>
+                                                        <div className="mt-1 text-xs leading-5 text-gray-400">
+                                                            加料结构继承商品主档；此处仅调整当前渠道的购买范围与数量规则，不回写主档或其他渠道。
+                                                        </div>
+                                                    </div>
+                                                    <span className="rounded-md border border-[#B7E8CF] bg-[#EFFAF4] px-2.5 py-1 text-xs font-bold text-[#008F4C]">
+                                                        {channelContext?.catalogName || '当前渠道商品库'}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
                                                 {showAddonRuleScope && (
                                                     <>
@@ -7988,7 +8008,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                                 {renderSectionCollapsedEntry(collapsedAttrModuleMappings)}
 
-                {!isChannelForm && showAttrSort && (specDisplayMode === 'multi' || selectedMethodCount > 0 || (!isComboProduct && selectedAddonCount > 0)) && (
+                {isChannelForm && showAttrSort && (specDisplayMode === 'multi' || selectedMethodCount > 0 || (!isComboProduct && selectedAddonCount > 0)) && (
                     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 items-start">
                         <div className="pt-2 text-sm font-bold text-[#1F2129]">属性排序</div>
                         <div>{renderAttributeSortPanel()}</div>

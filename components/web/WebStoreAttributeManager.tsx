@@ -38,12 +38,14 @@ type BadgeEditorState = {
 
 export const WebStoreAttributeManager: React.FC<{
   initialTab?: StoreAttributeTab;
+  showTabs?: boolean;
   groupedTagOptions: Record<GroupedTagFieldId, GroupedTagGroup[]>;
   badgeOptions: BadgeOptionConfig[];
   onGroupedTagOptionsChange: (value: Record<GroupedTagFieldId, GroupedTagGroup[]>) => void;
   onBadgeOptionsChange: (value: BadgeOptionConfig[]) => void;
 }> = ({
   initialTab = 'addon',
+  showTabs = true,
   groupedTagOptions,
   badgeOptions,
   onGroupedTagOptionsChange,
@@ -456,27 +458,29 @@ export const WebStoreAttributeManager: React.FC<{
 
   return (
     <div className="pc-page flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
-      <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5">
-        <div role="tablist" className="flex h-12 gap-6 overflow-x-auto no-scrollbar">
-          {tabs.map(tab => (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'border-[#00C06B] text-[#00C06B]'
-                  : 'border-transparent text-[#666] hover:text-[#333]'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
+      {showTabs && (
+        <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5">
+          <div role="tablist" className="flex h-12 gap-6 overflow-x-auto no-scrollbar">
+            {tabs.map(tab => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex shrink-0 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'border-[#00C06B] text-[#00C06B]'
+                    : 'border-transparent text-[#666] hover:text-[#333]'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'addon' && <WebStoreAddonList />}

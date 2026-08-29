@@ -699,8 +699,8 @@ export const WebAdmin: React.FC = () => {
     },
     {
       step: '2/2',
-      title: '【门店做法】菜单搬家',
-      desc: '【门店做法】迁移至【门店商品属性】菜单',
+      title: '【门店分类与属性】入口升级',
+      desc: '门店分类、门店加料和门店做法统一进入【门店分类与属性】',
       cardPosition: 'left-[164px] top-[286px]',
       highlightPosition: 'left-[12px] top-[332px] h-[78px] w-[176px]',
     },
@@ -1004,6 +1004,7 @@ export const WebAdmin: React.FC = () => {
           return (
             <WebStoreAttributeManager
               initialTab="addon"
+              showTabs={false}
               groupedTagOptions={storeGroupedTagOptions}
               badgeOptions={storeBadgeOptions}
               onGroupedTagOptionsChange={setStoreGroupedTagOptions}
@@ -1016,6 +1017,7 @@ export const WebAdmin: React.FC = () => {
           return (
             <WebStoreAttributeManager
               initialTab="method"
+              showTabs={false}
               groupedTagOptions={storeGroupedTagOptions}
               badgeOptions={storeBadgeOptions}
               onGroupedTagOptionsChange={setStoreGroupedTagOptions}
@@ -1028,6 +1030,7 @@ export const WebAdmin: React.FC = () => {
           return (
             <WebStoreAttributeManager
               initialTab="addon"
+              showTabs={false}
               groupedTagOptions={storeGroupedTagOptions}
               badgeOptions={storeBadgeOptions}
               onGroupedTagOptionsChange={setStoreGroupedTagOptions}
@@ -1443,22 +1446,37 @@ export const WebAdmin: React.FC = () => {
       ];
     }
 
-    const storeMenus = [
-      'store_product_list', 'store_category_list',
-      'store_attribute_list', 'store_addon_list', 'store_method_list', 'store_region_list',
-    ];
-    if (storeMenus.includes(activeMenu)) {
+    const storeProductMenus = ['store_product_list', 'store_product_coverage', 'store_region_list'];
+    if (storeProductMenus.includes(activeMenu)) {
       ariaLabel = '门店商品';
       tabs = [
         {
           key: 'store-products',
           label: '门店渠道商品',
-          active: activeMenu === 'store_product_list',
+          active: ['store_product_list', 'store_product_coverage'].includes(activeMenu),
           onClick: () => {
             setStoreProductManagePreset(null);
             setActiveMenu('store_product_list');
           },
         },
+        {
+          key: 'store-region',
+          label: '门店区域',
+          active: activeMenu === 'store_region_list',
+          onClick: () => {
+            setStoreRegionEditorContext(null);
+            setActiveMenu('store_region_list');
+          },
+        },
+      ];
+    }
+
+    const storeCategoryAttributeMenus = [
+      'store_category_list', 'store_attribute_list', 'store_addon_list', 'store_method_list',
+    ];
+    if (storeCategoryAttributeMenus.includes(activeMenu)) {
+      ariaLabel = '门店分类与属性';
+      tabs = [
         {
           key: 'store-category',
           label: '门店分类',
@@ -1469,19 +1487,16 @@ export const WebAdmin: React.FC = () => {
           },
         },
         {
-          key: 'store-attribute',
-          label: '门店属性',
-          active: ['store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu),
-          onClick: () => setActiveMenu('store_attribute_list'),
+          key: 'store-addon',
+          label: '门店加料',
+          active: ['store_attribute_list', 'store_addon_list'].includes(activeMenu),
+          onClick: () => setActiveMenu('store_addon_list'),
         },
         {
-          key: 'store-region',
-          label: '门店区域',
-          active: activeMenu === 'store_region_list',
-          onClick: () => {
-            setStoreRegionEditorContext(null);
-            setActiveMenu('store_region_list');
-          },
+          key: 'store-method',
+          label: '门店做法',
+          active: activeMenu === 'store_method_list',
+          onClick: () => setActiveMenu('store_method_list'),
         },
       ];
     }
@@ -1747,19 +1762,29 @@ export const WebAdmin: React.FC = () => {
                onClick={() => { setActiveMenu('product_mapping'); setCreationContext(null); }}
              />
            )}
-           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">门店执行</div>
+           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">门店经营</div>
            <SidebarItem
              label="门店商品"
              icon={<ShoppingBag size={17} />}
-             active={['store_product_list', 'store_product_coverage', 'store_category_list', 'store_attribute_list', 'store_addon_list', 'store_method_list', 'store_region_list'].includes(activeMenu)}
+             active={['store_product_list', 'store_product_coverage', 'store_region_list'].includes(activeMenu)}
              onClick={() => {
                setActiveMenu('store_product_list');
                setStoreProductManagePreset(null);
                setCreationContext(null);
              }}
            />
+           <SidebarItem
+             label="门店分类与属性"
+             icon={<Tags size={17} />}
+             active={['store_category_list', 'store_attribute_list', 'store_addon_list', 'store_method_list'].includes(activeMenu)}
+             onClick={() => {
+               setStoreCategoryReturnMenu('store_product_list');
+               setActiveMenu('store_category_list');
+               setCreationContext(null);
+             }}
+           />
 
-           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">配置</div>
+           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">商品设置</div>
            <SidebarItem
              label="商品设置"
              icon={<Settings size={17} />}

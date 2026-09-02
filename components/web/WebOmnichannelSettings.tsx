@@ -2,11 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Check,
   CheckCircle2,
   ExternalLink,
+  GripVertical,
   Loader2,
   Pencil,
   Plus,
@@ -172,7 +175,11 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [primaryGroupId, setPrimaryGroupId] = useState<string>(() => getOmnichannelConfig(currentBrandConfig).channelGroups[0]?.id || '');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sortGroups, setSortGroups] = useState<OmnichannelChannelGroup[]>([]);
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
+  // 主商品库是模式迁移时的独立选择，不能由商品库展示顺序隐式推导。
+  const [primaryGroupId, setPrimaryGroupId] = useState('');
   const [migrationConfirmed, setMigrationConfirmed] = useState(false);
   const [migrationTask, setMigrationTask] = useState<MigrationTask | null>(null);
 
@@ -337,6 +344,20 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
           items.push({ level: 'info', title: '商品库改名', detail: `「${group.name}」改为「${stillThere.name}」。` });
         }
       });
+
+      const baselineExistingOrder = baseline.channelGroups
+        .filter(group => draft.channelGroups.some(item => item.id === group.id))
+        .map(group => group.id);
+      const draftExistingOrder = draft.channelGroups
+        .filter(group => baseline.channelGroups.some(item => item.id === group.id))
+        .map(group => group.id);
+      if (baselineExistingOrder.join(',') !== draftExistingOrder.join(',')) {
+        items.push({
+          level: 'info',
+          title: '调整渠道商品库展示顺序',
+          detail: `展示顺序调整为：${draft.channelGroups.map(group => group.name).join(' → ')}。仅影响商品库页签、选择器和默认打开顺序，不改变渠道归属、商品数据、权限或同步优先级。`,
+        });
+      }
     }
 
     const mappingVisible = (config: OmnichannelBrandConfig) => (
@@ -379,9 +400,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
   const selectCollaborationMode = (mode: OmnichannelBrandConfig['collaborationMode']) => {
     if (migrationRunning) return;
     if (draft.collaborationMode === mode) return;
-    if (mode === 'unified' && !primaryGroupId) {
-      setPrimaryGroupId(baseline.channelGroups[0]?.id || draft.channelGroups[0]?.id || '');
-    }
+    setPrimaryGroupId('');
     setMigrationConfirmed(false);
     setDraft({
       ...draft,
@@ -452,6 +471,49 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
     setDeletingGroupId(null);
   };
 
+  const openGroupSort = () => {
+    setSortGroups(draft.channelGroups.map(group => ({ ...group, channels: [...group.channels] })));
+    setDraggingGroupId(null);
+    setSortOpen(true);
+  };
+
+  const moveSortGroup = (groupId: string, offset: -1 | 1) => {
+    setSortGroups(current => {
+      const currentIndex = current.findIndex(group => group.id === groupId);
+      const nextIndex = currentIndex + offset;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+      return next;
+    });
+  };
+
+  const dropSortGroup = (targetGroupId: string) => {
+    if (!draggingGroupId || draggingGroupId === targetGroupId) {
+      setDraggingGroupId(null);
+      return;
+    }
+    setSortGroups(current => {
+      const sourceIndex = current.findIndex(group => group.id === draggingGroupId);
+      const targetIndex = current.findIndex(group => group.id === targetGroupId);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
+      const [moving] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moving);
+      return next;
+    });
+    setDraggingGroupId(null);
+  };
+
+  const confirmGroupSort = () => {
+    setDraft(prev => ({
+      ...prev,
+      channelGroups: sortGroups.map(group => ({ ...group, channels: [...group.channels] })),
+    }));
+    setDraggingGroupId(null);
+    setSortOpen(false);
+  };
+
   const requestSave = () => {
     if (migrationRunning) return;
     setShowValidation(true);
@@ -465,8 +527,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
     setImpactOpen(false);
     const next = cloneConfig(draft);
     if (collaborationModeChanged) {
-      const primaryGroup = baseline.channelGroups.find(group => group.id === primaryGroupId)
-        || baseline.channelGroups[0];
+      const primaryGroup = baseline.channelGroups.find(group => group.id === primaryGroupId);
       setMigrationTask({
         id: `MIG${Date.now().toString().slice(-10)}`,
         status: 'running',
@@ -644,7 +705,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
             <div className="flex items-center gap-3 border-b border-[#F0F1F2] px-5 py-4">
               <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#1D2129] text-[12px] font-bold text-white">3</span>
               <div><h2 className="text-[15px] font-bold text-[#1D2129]">确认每个渠道的商品来源</h2><p className="mt-0.5 text-[12px] text-[#86909C]">{divided ? `${catalogChannels.length} 个渠道需要从所属渠道商品库下发企迈侧门店商品。` : `${catalogChannels.length} 个渠道统一使用品牌默认商品库。`}</p></div>
-              {divided && <button type="button" onClick={addGroup} className="ml-auto inline-flex h-8 items-center rounded-md border border-[#E5E6EB] px-3 text-[12px] text-[#1D2129]"><Plus size={13} className="mr-1" />新建商品库</button>}
+              {divided && <div className="ml-auto flex items-center gap-2">{draft.channelGroups.length > 1 && <button type="button" onClick={openGroupSort} className="inline-flex h-8 items-center rounded-md border border-[#E5E6EB] bg-white px-3 text-[12px] text-[#4E5969] hover:border-[#C9CDD4]"><GripVertical size={13} className="mr-1" />调整顺序</button>}<button type="button" onClick={addGroup} className="inline-flex h-8 items-center rounded-md border border-[#E5E6EB] bg-white px-3 text-[12px] text-[#1D2129] hover:border-[#C9CDD4]"><Plus size={13} className="mr-1" />新建商品库</button></div>}
             </div>
 
             {divided ? (
@@ -660,6 +721,61 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
           </fieldset>
         </div>
       </main>
+
+      {/* ===== 渠道商品库展示顺序 ===== */}
+      {sortOpen && (
+        <div className="fixed inset-0 z-[330] flex items-center justify-center bg-[#1D2129]/55 px-6">
+          <div className="flex max-h-[calc(100vh-96px)] w-[600px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
+              <div>
+                <h3 className="text-[18px] font-bold text-[#1D2129]">调整渠道商品库展示顺序</h3>
+                <p className="mt-1 text-[12px] leading-5 text-[#86909C]">拖动商品库，或使用上下按钮调整；保存策略后，所有商品库页签和选择器将按此顺序展示。</p>
+              </div>
+              <button type="button" onClick={() => { setSortOpen(false); setDraggingGroupId(null); }} className="flex h-8 w-8 items-center justify-center rounded-md text-[#4E5969] hover:bg-[#F2F3F5]" title="关闭排序弹窗">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <div className="mb-3 rounded-md border border-[#DDEFE5] bg-[#F6FCF9] px-3 py-2 text-[12px] leading-5 text-[#4E5969]">
+                排在首位的有权商品库会作为相关页面首次进入时的默认展示范围；这不代表主商品库或同步优先级。
+              </div>
+              <div className="space-y-2">
+                {sortGroups.map((group, index) => (
+                  <div
+                    key={group.id}
+                    draggable
+                    onDragStart={() => setDraggingGroupId(group.id)}
+                    onDragEnd={() => setDraggingGroupId(null)}
+                    onDragOver={event => event.preventDefault()}
+                    onDrop={() => dropSortGroup(group.id)}
+                    className={`flex items-center gap-3 rounded-md border px-3 py-3 transition-colors ${draggingGroupId === group.id ? 'border-[#8BD7AE] bg-[#F2FFF8] opacity-70' : 'border-[#E5E6EB] bg-white hover:border-[#C9CDD4]'}`}
+                  >
+                    <span className="cursor-grab text-[#A9AEB8] active:cursor-grabbing" title="拖动调整顺序"><GripVertical size={17} /></span>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F2F3F5] text-[11px] font-semibold text-[#4E5969]">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold text-[#1D2129]">{group.name}</div>
+                      <div className="mt-1 truncate text-[11px] text-[#86909C]">{group.channels.length > 0 ? `${group.channels.length} 个渠道 · ${group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}` : '暂未关联渠道'}</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button type="button" disabled={index === 0} onClick={() => moveSortGroup(group.id, -1)} className="flex h-8 w-8 items-center justify-center rounded-md border border-[#E5E6EB] text-[#4E5969] hover:border-[#C9CDD4] disabled:cursor-not-allowed disabled:bg-[#F7F8FA] disabled:text-[#C9CDD4]" title="上移"><ArrowUp size={14} /></button>
+                      <button type="button" disabled={index === sortGroups.length - 1} onClick={() => moveSortGroup(group.id, 1)} className="flex h-8 w-8 items-center justify-center rounded-md border border-[#E5E6EB] text-[#4E5969] hover:border-[#C9CDD4] disabled:cursor-not-allowed disabled:bg-[#F7F8FA] disabled:text-[#C9CDD4]" title="下移"><ArrowDown size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
+              <span className="text-[12px] text-[#86909C]">仅调整展示顺序，不迁移商品、不改变渠道归属或权限。</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setSortOpen(false); setDraggingGroupId(null); }} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px] text-[#4E5969] hover:border-[#86909C]">取消</button>
+                <button type="button" onClick={confirmGroupSort} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-semibold text-white hover:bg-[#009F55]">确认顺序</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== 保存前影响确认 ===== */}
       {impactOpen && (

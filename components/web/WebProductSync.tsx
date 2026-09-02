@@ -13,7 +13,7 @@ import {
     shouldShowChannelCatalog,
 } from '../../omnichannel';
 import type { OmnichannelChannelId } from '../../types';
-import { WebPublishRecords } from './WebPublishRecords';
+import { WebPublishRecords, type MasterChannelSyncRecord } from './WebPublishRecords';
 import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
 type ProductCategoryConfig = {
@@ -216,7 +216,10 @@ const getChangedFields = (product: EditableProduct) => {
     return changed;
 };
 
-export const WebProductSync: React.FC<{ initialTab?: 'publish' | 'records' }> = ({ initialTab = 'publish' }) => {
+export const WebProductSync: React.FC<{
+    initialTab?: 'publish' | 'records';
+    masterChannelSyncRecords?: MasterChannelSyncRecord[];
+}> = ({ initialTab = 'publish', masterChannelSyncRecords = [] }) => {
     const { activeBrandId, brandConfigs } = useProducts();
     const omnichannelConfig = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
     const channelCatalogGroups = getEffectiveChannelGroups(omnichannelConfig);
@@ -1414,7 +1417,7 @@ export const WebProductSync: React.FC<{ initialTab?: 'publish' | 'records' }> = 
 
             {/* Main Content Area */}
             {pageTab === 'records' ? (
-                <WebPublishRecords />
+                <WebPublishRecords masterChannelSyncRecords={masterChannelSyncRecords} />
             ) : step === 0 ? (
                 renderToolsMenu()
             ) : (

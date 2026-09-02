@@ -38,12 +38,14 @@ type BadgeEditorState = {
 
 export const WebStoreAttributeManager: React.FC<{
   initialTab?: StoreAttributeTab;
+  showTabs?: boolean;
   groupedTagOptions: Record<GroupedTagFieldId, GroupedTagGroup[]>;
   badgeOptions: BadgeOptionConfig[];
   onGroupedTagOptionsChange: (value: Record<GroupedTagFieldId, GroupedTagGroup[]>) => void;
   onBadgeOptionsChange: (value: BadgeOptionConfig[]) => void;
 }> = ({
   initialTab = 'addon',
+  showTabs = true,
   groupedTagOptions,
   badgeOptions,
   onGroupedTagOptionsChange,
@@ -58,9 +60,9 @@ export const WebStoreAttributeManager: React.FC<{
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  const tabs: Array<{ id: StoreAttributeTab; label: string; desc: string; icon: React.ReactNode }> = [
-    { id: 'addon', label: '加料', desc: '管理门店加料价格、库存与投放状态', icon: <Blend size={16} /> },
-    { id: 'method', label: '做法', desc: '管理门店做法启用状态与关联商品', icon: <ChefHat size={16} /> },
+  const tabs: Array<{ id: StoreAttributeTab; label: string; icon: React.ReactNode }> = [
+    { id: 'addon', label: '加料', icon: <Blend size={16} /> },
+    { id: 'method', label: '做法', icon: <ChefHat size={16} /> },
   ];
 
   const descTagGroups = groupedTagOptions.p_desc_tags || [];
@@ -456,33 +458,29 @@ export const WebStoreAttributeManager: React.FC<{
 
   return (
     <div className="pc-page flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
-      <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5 pt-4">
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <div className="text-[18px] font-semibold text-[#333]">门店商品属性</div>
-            <div className="mt-1 text-[12px] text-[#999]">{tabs.find(tab => tab.id === activeTab)?.desc}</div>
+      {showTabs && (
+        <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5">
+          <div role="tablist" className="flex h-12 gap-6 overflow-x-auto no-scrollbar">
+            {tabs.map(tab => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex shrink-0 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'border-[#00C06B] text-[#00C06B]'
+                    : 'border-transparent text-[#666] hover:text-[#333]'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
           </div>
         </div>
-        <div role="tablist" className="mt-3 flex h-10 gap-6 overflow-x-auto no-scrollbar">
-          {tabs.map(tab => (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-1 text-[13px] font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'border-[#00C06B] text-[#00C06B]'
-                  : 'border-transparent text-[#666] hover:text-[#333]'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'addon' && <WebStoreAddonList />}

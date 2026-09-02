@@ -260,8 +260,8 @@ export const PosMethodView: React.FC = () => {
                 <th className="min-w-[120px] border-y border-gray-100 px-4 py-4">温馨提示</th>
                 <th className="min-w-[120px] border-y border-gray-100 px-4 py-4">做法值多选</th>
                 <th className="min-w-[110px] border-y border-gray-100 px-4 py-4">做法选项</th>
-                <th className="min-w-[140px] border-y border-gray-100 px-4 py-4 text-center">是否启用</th>
-                <th className="sticky right-0 z-20 min-w-[160px] border-y border-gray-100 bg-[#F7F8FA] px-4 py-4 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.24)]">操作</th>
+                <th className="sticky right-[160px] z-20 w-[140px] min-w-[140px] border-y border-gray-100 bg-[#F7F8FA] px-4 py-4 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.24)]">是否启用</th>
+                <th className="sticky right-0 z-20 w-[160px] min-w-[160px] border-y border-gray-100 bg-[#F7F8FA] px-4 py-4 text-right">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
@@ -281,12 +281,12 @@ export const PosMethodView: React.FC = () => {
                     <td className="px-4 py-4 text-[15px] text-gray-500">{row.prompt || '-'}</td>
                     <td className="px-4 py-4 text-[15px] text-gray-700">{row.multiValue ? '已开启' : '已关闭'}</td>
                     <td className="px-4 py-4 text-[15px] text-gray-700">{row.optionType}</td>
-                    <td className="px-4 py-4">
+                    <td className="sticky right-[160px] z-10 w-[140px] min-w-[140px] bg-white px-4 py-4 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.24)] group-hover:bg-[#FCFFFD]">
                       <div className="flex items-center justify-center">
                         <ToggleSwitch checked={row.enabled} onChange={checkedState => updateEnabled([row.id], checkedState)} />
                       </div>
                     </td>
-                    <td className="sticky right-0 z-10 bg-white px-4 py-4 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.24)] group-hover:bg-[#FCFFFD]">
+                    <td className="sticky right-0 z-10 w-[160px] min-w-[160px] bg-white px-4 py-4 text-right group-hover:bg-[#FCFFFD]">
                       <button className="text-[15px] font-medium text-[#00C06B] hover:text-[#00A35B]">
                         查看关联商品
                       </button>

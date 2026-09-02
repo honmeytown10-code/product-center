@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Activity,
   AlertCircle,
   ArrowRightLeft,
   Building2,
   Check,
   ChevronDown,
+  ClipboardList,
   Copy,
   Link2,
   Plus,
@@ -19,8 +21,10 @@ import {
 import { useProducts } from '../../context';
 import { THIRD_PARTY_CHANNELS } from '../../omnichannel';
 import type { Product, ThirdPartyChannelId } from '../../types';
+import { WebProductMappingTasks } from './WebProductMappingTasks';
+import { WebTakeawayMappingDiagnosis } from './WebTakeawayMappingDiagnosis';
 
-type MappingView = 'store' | 'brand' | 'special';
+type MappingView = 'store' | 'brand' | 'diagnosis' | 'tasks' | 'special';
 type MappingStatus = 'unmapped' | 'mapped' | 'conflict' | 'invalid';
 type MappingBasis = 'qimai_publish' | 'qimai_sku_id' | 'merchant_product_code' | 'manual_binding' | '--';
 type BrandApplyStatus = 'ready' | 'partial' | 'conflict' | 'applied';
@@ -227,6 +231,8 @@ const storeStatusTabs: Array<{ id: 'all' | MappingStatus; label: string }> = [
 const viewTabs: Array<{ id: MappingView; label: string; icon: React.ElementType }> = [
   { id: 'store', label: '门店商品映射', icon: Store },
   { id: 'brand', label: '品牌批量映射', icon: Building2 },
+  { id: 'diagnosis', label: '外卖映射诊断', icon: Activity },
+  { id: 'tasks', label: '商品管理任务', icon: ClipboardList },
   { id: 'special', label: '特殊映射配置', icon: Settings2 },
 ];
 
@@ -1045,6 +1051,8 @@ export const WebProductMapping: React.FC = () => {
         )}
         {activeView === 'store' && renderStoreMapping()}
         {activeView === 'brand' && renderBrandMapping()}
+        {activeView === 'diagnosis' && <WebTakeawayMappingDiagnosis />}
+        {activeView === 'tasks' && <WebProductMappingTasks />}
         {activeView === 'special' && renderSpecialMapping()}
       </main>
 

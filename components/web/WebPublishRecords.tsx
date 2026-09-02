@@ -54,6 +54,16 @@ type PublishBatch = {
   tasks: PublishTask[];
 };
 
+export type MasterChannelSyncRecord = {
+  id: string;
+  title: string;
+  sourceName: string;
+  catalogNames: string[];
+  fieldNames: string[];
+  productCount: number;
+  createdAt: string;
+};
+
 const batches: PublishBatch[] = [
   {
     recordType: 'store_publish',
@@ -405,12 +415,46 @@ const StatusTag: React.FC<{ status: BatchStatus | TaskStatus }> = ({ status }) =
   </span>
 );
 
-export const WebPublishRecords: React.FC = () => {
+export const WebPublishRecords: React.FC<{ masterChannelSyncRecords?: MasterChannelSyncRecord[] }> = ({ masterChannelSyncRecords = [] }) => {
+  const allBatches = useMemo<PublishBatch[]>(() => {
+    const masterChannelBatches = masterChannelSyncRecords.map(record => ({
+      id: record.id,
+      title: record.title,
+      action: '更新渠道商品资料',
+      sourceType: '商品主档',
+      sourceName: record.sourceName,
+      snapshot: `字段快照：${record.fieldNames.join('、')}`,
+      channels: record.catalogNames,
+      storeScope: `${record.catalogNames.length} 个渠道商品库`,
+      storeCount: 0,
+      productCount: record.productCount,
+      skuCount: record.productCount,
+      status: 'running' as BatchStatus,
+      createdAt: record.createdAt,
+      creator: '企迈静静',
+      tasks: [{
+        id: `TASK-${record.id}`,
+        type: 'qimai' as TaskType,
+        target: '渠道商品库资料',
+        channels: record.catalogNames,
+        status: 'running' as TaskStatus,
+        progress: 36,
+        productCount: record.productCount,
+        skuCount: record.productCount,
+        storeCount: 0,
+        successCount: 0,
+        failedCount: 0,
+        waitingCount: record.productCount * Math.max(record.catalogNames.length, 1),
+        startedAt: record.createdAt,
+      }],
+    }));
+    return [...masterChannelBatches, ...batches];
+  }, [masterChannelSyncRecords]);
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<'all' | BatchStatus>('all');
   const [channel, setChannel] = useState('all');
   const [recordType, setRecordType] = useState<'all' | RecordType>('all');
-  const [expandedIds, setExpandedIds] = useState<string[]>([batches[0].id]);
+  const [expandedIds, setExpandedIds] = useState<string[]>([masterChannelSyncRecords[0]?.id || batches[0].id]);
   const [detailBatch, setDetailBatch] = useState<PublishBatch | null>(null);
   const [notice, setNotice] = useState('');
 
@@ -420,13 +464,13 @@ export const WebPublishRecords: React.FC = () => {
   };
 
   const channels = useMemo(
-    () => Array.from(new Set(batches.flatMap(batch => batch.channels))),
-    [],
+    () => Array.from(new Set(allBatches.flatMap(batch => batch.channels))),
+    [allBatches],
   );
 
   const filteredBatches = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
-    return batches.filter(batch => {
+    return allBatches.filter(batch => {
       const matchesKeyword = !normalizedKeyword
         || [batch.id, batch.title, batch.sourceName, batch.creator].some(value => value.toLowerCase().includes(normalizedKeyword));
       const matchesStatus = status === 'all' || batch.status === status;
@@ -434,7 +478,7 @@ export const WebPublishRecords: React.FC = () => {
       const matchesRecordType = recordType === 'all' || batch.recordType === recordType;
       return matchesKeyword && matchesStatus && matchesChannel && matchesRecordType;
     });
-  }, [channel, keyword, recordType, status]);
+  }, [allBatches, channel, keyword, recordType, status]);
 
   const toggleBatch = (batchId: string) => {
     setExpandedIds(current => (
@@ -449,7 +493,7 @@ export const WebPublishRecords: React.FC = () => {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <span className="text-sm font-bold text-[#333]">任务明细</span>
-          <span className="ml-2 text-xs text-[#999]">{batch.storeCount > 0 ? '企迈侧渠道合并执行，三方平台按平台拆分任务' : '品牌级平台对象独立执行，不包含门店范围'}</span>
+          <span className="ml-2 text-xs text-[#999]">{batch.storeCount > 0 ? '企迈侧渠道合并执行，三方平台按平台拆分任务' : batch.action === '更新渠道商品资料' ? '按渠道商品库执行，失败项可单独重试' : '品牌级平台对象独立执行，不包含门店范围'}</span>
         </div>
         <span className="text-xs text-[#999]">来源快照：{batch.snapshot}</span>
       </div>
@@ -460,7 +504,7 @@ export const WebPublishRecords: React.FC = () => {
               <th className="w-[150px] px-4 font-medium">任务编号</th>
               <th className="w-[160px] px-4 font-medium">执行目标</th>
               <th className="px-4 font-medium">渠道范围</th>
-              <th className="w-[130px] px-4 font-medium">对象范围</th>
+              <th className="w-[110px] px-4 font-medium">对象规模</th>
               <th className="w-[160px] px-4 font-medium">执行结果</th>
               <th className="w-[150px] px-4 font-medium">开始 / 完成</th>
               <th className="w-[120px] px-4 font-medium">操作</th>
@@ -486,6 +530,8 @@ export const WebPublishRecords: React.FC = () => {
                     <><div>{task.productCount} 个加料品</div><div className="mt-1 text-[#999]">品牌级</div></>
                   ) : batch.recordType === 'douyin_standard' ? (
                     <><div>{task.productCount} 个标品</div><div className="mt-1 text-[#999]">{task.skuCount} 个 SKU · 品牌级</div></>
+                  ) : batch.action === '更新渠道商品资料' ? (
+                    <><div>{task.productCount} 个商品</div><div className="mt-1 text-[#999]">{batch.channels.length} 个商品库</div></>
                   ) : (
                     <><div>{task.storeCount} 家门店</div><div className="mt-1 text-[#999]">{task.skuCount} 个 SKU</div></>
                   )}
@@ -552,7 +598,7 @@ export const WebPublishRecords: React.FC = () => {
             <option value="all">全部渠道</option>
             {channels.map(item => <option key={item} value={item}>{item}</option>)}
           </select>
-          <button type="button" onClick={() => showNotice(`已查询到 ${filteredBatches.length} 条同步记录`)} className="h-9 rounded bg-[#00B460] px-5 text-sm font-medium text-white hover:bg-[#009E55]">查询</button>
+          <button type="button" onClick={() => showNotice(`已查询到 ${filteredBatches.length} 个同步批次`)} className="h-9 rounded bg-[#00B460] px-5 text-sm font-medium text-white hover:bg-[#009E55]">查询</button>
           <button
             type="button"
             onClick={() => {
@@ -574,9 +620,9 @@ export const WebPublishRecords: React.FC = () => {
             <thead className="h-11 bg-[#F5F6F8] text-[#666]">
               <tr>
                 <th className="w-10 px-3" />
-                <th className="w-[215px] px-3 font-medium">任务记录</th>
+                <th className="w-[215px] px-3 font-medium">同步批次</th>
                 <th className="w-[170px] px-3 font-medium">数据来源</th>
-                <th className="px-3 font-medium">同步范围</th>
+                <th className="px-3 font-medium">执行范围</th>
                 <th className="w-[130px] px-3 font-medium">对象规模</th>
                 <th className="w-[105px] px-3 font-medium">状态</th>
                 <th className="w-[150px] px-3 font-medium">创建信息</th>
@@ -608,7 +654,7 @@ export const WebPublishRecords: React.FC = () => {
                         <div className="flex flex-wrap gap-1">
                           {batch.channels.map(item => <span key={item} className="rounded border border-[#E4E7EB] px-1.5 py-0.5 text-xs">{item}</span>)}
                         </div>
-                        <div className="mt-2 text-xs text-[#999]">{batch.storeCount > 0 ? `${batch.storeScope} · ${batch.storeCount} 家门店` : batch.storeScope}</div>
+                        <div className="mt-2 text-xs text-[#999]">{batch.storeScope}{batch.storeCount > 0 ? ` · ${batch.storeCount} 家门店` : ''}</div>
                       </td>
                       <td className="px-3 py-4">
                         <div>{batch.productCount} 个{batch.recordType === 'douyin_addon' ? '加料品' : batch.recordType === 'douyin_standard' ? '标品' : '商品'}</div>
@@ -645,7 +691,7 @@ export const WebPublishRecords: React.FC = () => {
             </div>
           )}
           <div className="flex h-12 items-center justify-between border-t border-[#E8E8E8] px-4 text-sm text-[#777]">
-            <span>共 {filteredBatches.length} 条同步记录</span>
+            <span>共 {filteredBatches.length} 个同步批次</span>
             <div className="flex items-center gap-2">
               <button type="button" disabled aria-label="上一页" className="h-8 w-8 cursor-not-allowed rounded border border-[#E1E4E8] text-[#AAA]">‹</button>
               <button type="button" disabled aria-current="page" className="h-8 w-8 rounded border border-[#00B460] bg-[#EAF8F1] font-medium text-[#008F4C]">1</button>
@@ -660,18 +706,18 @@ export const WebPublishRecords: React.FC = () => {
           <div className="flex max-h-[88vh] w-[1120px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#E8E8E8] px-5">
               <div>
-                <span className="font-bold text-[#222]">同步任务详情</span>
+                <span className="font-bold text-[#222]">同步批次详情</span>
                 <span className="ml-3 text-sm text-[#999]">{detailBatch.id}</span>
               </div>
               <button type="button" onClick={() => setDetailBatch(null)} className="rounded p-1 text-[#777] hover:bg-[#F2F3F5]" aria-label="关闭"><X size={20} /></button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-5">
               <div className="grid grid-cols-4 gap-x-6 gap-y-4 rounded border border-[#E8E8E8] bg-[#FAFBFC] p-4 text-sm">
-                <div><div className="text-xs text-[#999]">发布动作</div><div className="mt-1 font-medium text-[#333]">{detailBatch.action}</div></div>
+                <div><div className="text-xs text-[#999]">同步动作</div><div className="mt-1 font-medium text-[#333]">{detailBatch.action}</div></div>
                 <div><div className="text-xs text-[#999]">数据来源</div><div className="mt-1 font-medium text-[#333]">{detailBatch.sourceType} · {detailBatch.sourceName}</div></div>
                 <div><div className="text-xs text-[#999]">冻结快照</div><div className="mt-1 font-medium text-[#333]">{detailBatch.snapshot}</div></div>
                 <div><div className="text-xs text-[#999]">批次状态</div><div className="mt-1"><StatusTag status={detailBatch.status} /></div></div>
-                <div><div className="text-xs text-[#999]">同步范围</div><div className="mt-1 font-medium text-[#333]">{detailBatch.storeCount > 0 ? `${detailBatch.storeScope} · ${detailBatch.storeCount} 家` : detailBatch.storeScope}</div></div>
+                <div><div className="text-xs text-[#999]">执行范围</div><div className="mt-1 font-medium text-[#333]">{detailBatch.storeScope}{detailBatch.storeCount > 0 ? ` · ${detailBatch.storeCount} 家` : ''}</div></div>
                 <div><div className="text-xs text-[#999]">对象范围</div><div className="mt-1 font-medium text-[#333]">{detailBatch.productCount} 个{detailBatch.recordType === 'douyin_addon' ? '加料品' : detailBatch.recordType === 'douyin_standard' ? '标品' : '商品'}{detailBatch.skuCount > 0 ? ` · ${detailBatch.skuCount} 个 SKU` : ''}</div></div>
                 <div><div className="text-xs text-[#999]">创建时间</div><div className="mt-1 font-medium text-[#333]">{detailBatch.createdAt}</div></div>
                 <div><div className="text-xs text-[#999]">操作人</div><div className="mt-1 font-medium text-[#333]">{detailBatch.creator}</div></div>

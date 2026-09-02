@@ -4,7 +4,7 @@ import { Printer, Coffee, ShoppingBag, Store, LayoutGrid, Link2Off, Lock } from 
 
 // --- Constants ---
 
-export type ChannelTabType = 'pos' | 'mini_dine' | 'mini_pickup' | 'mini_take' | 'meituan' | 'taobao';
+export type ChannelTabType = 'pos' | 'mini_dine' | 'mini_pickup' | 'mini_take' | 'meituan' | 'taobao' | 'meituan_dine' | 'douyin_dine';
 export type ChannelType = 'all' | ChannelTabType;
 
 export const CHANNEL_TABS: { id: ChannelTabType; label: string; icon: React.ReactNode }[] = [
@@ -13,7 +13,9 @@ export const CHANNEL_TABS: { id: ChannelTabType; label: string; icon: React.Reac
    { id: 'mini_pickup', label: '小程序自提', icon: <ShoppingBag size={14} className="mr-1"/> },
    { id: 'mini_take', label: '小程序外卖', icon: <ShoppingBag size={14} className="mr-1"/> },
    { id: 'meituan', label: '美团外卖', icon: <Store size={14} className="mr-1"/> },
-   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={14} className="mr-1"/> }
+   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={14} className="mr-1"/> },
+   { id: 'meituan_dine', label: '美团在线点', icon: <Store size={14} className="mr-1"/> },
+   { id: 'douyin_dine', label: '抖音在线点', icon: <Store size={14} className="mr-1"/> }
 ];
 
 export const FILTER_CHANNEL_OPTIONS: { id: ChannelType; label: string; shortLabel: string; icon?: React.ReactNode }[] = [
@@ -23,7 +25,9 @@ export const FILTER_CHANNEL_OPTIONS: { id: ChannelType; label: string; shortLabe
    { id: 'mini_pickup', label: '小程序自提', shortLabel: '自提', icon: <ShoppingBag size={14}/> },
    { id: 'mini_take', label: '小程序外卖', shortLabel: '外卖', icon: <ShoppingBag size={14}/> },
    { id: 'meituan', label: '美团外卖', shortLabel: '美团', icon: <Store size={14}/> },
-   { id: 'taobao', label: '淘宝闪购', shortLabel: '淘宝闪购', icon: <ShoppingBag size={14}/> }
+   { id: 'taobao', label: '淘宝闪购', shortLabel: '淘宝闪购', icon: <ShoppingBag size={14}/> },
+   { id: 'meituan_dine', label: '美团在线点', shortLabel: '美团在线点', icon: <Store size={14}/> },
+   { id: 'douyin_dine', label: '抖音在线点', shortLabel: '抖音在线点', icon: <Store size={14}/> }
 ];
 
 export const SHELF_VIEW_TABS: { id: ChannelType; label: string; icon: React.ReactNode }[] = [

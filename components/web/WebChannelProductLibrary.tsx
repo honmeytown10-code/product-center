@@ -26,8 +26,21 @@ import {
 import type { OmnichannelChannelId, Product, ThirdPartyChannelId } from '../../types';
 import { WebProductSelectorDialog } from './WebProductSelectorDialog';
 
-type PlatformStatus = 'not_synced' | 'reviewing' | 'approved' | 'rejected';
+type PlatformStatus = 'not_synced' | 'initial_reviewing' | 'initial_rejected' | 'effective' | 'update_reviewing' | 'update_rejected';
 type DouyinProductView = 'all' | 'douyin';
+
+type PlatformAuditRecord = {
+  id: string;
+  version: number;
+  submitType: 'initial' | 'update';
+  status: 'reviewing' | 'approved' | 'rejected';
+  submittedAt: string;
+  completedAt?: string;
+  operator: string;
+  changedFields: string[];
+  rejectReason?: string;
+  effective: boolean;
+};
 
 const DEFAULT_FILTERS = {
   productId: '',
@@ -62,17 +75,104 @@ const getSaleStatus = (product: Product) => {
   if (product.status === 'off_shelf') {
     return { label: '停售', className: 'border-gray-200 bg-gray-50 text-gray-500' };
   }
-  if (product.status === 'draft') {
-    return { label: '草稿', className: 'border-amber-200 bg-amber-50 text-amber-700' };
-  }
   return { label: '可售', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
 };
 
-const STATUS_META: Record<PlatformStatus, { label: string; className: string }> = {
-  not_synced: { label: '未同步', className: 'border-gray-200 bg-white text-gray-500' },
-  reviewing: { label: '审核中', className: 'border-blue-200 bg-blue-50 text-blue-700' },
-  approved: { label: '审核通过', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-  rejected: { label: '审核失败', className: 'border-red-200 bg-red-50 text-red-700' },
+const STATUS_META: Record<PlatformStatus, {
+  filterLabel: string;
+  primaryLabel: string;
+  primaryClassName: string;
+  changeLabel?: string;
+  changeClassName?: string;
+}> = {
+  not_synced: {
+    filterLabel: '未同步',
+    primaryLabel: '未同步',
+    primaryClassName: 'border-gray-200 bg-white text-gray-500',
+  },
+  initial_reviewing: {
+    filterLabel: '首次审核中',
+    primaryLabel: '未生效',
+    primaryClassName: 'border-gray-200 bg-gray-50 text-gray-600',
+    changeLabel: '首次审核中',
+    changeClassName: 'text-blue-600',
+  },
+  initial_rejected: {
+    filterLabel: '首次审核失败',
+    primaryLabel: '未生效',
+    primaryClassName: 'border-gray-200 bg-gray-50 text-gray-600',
+    changeLabel: '首次审核失败',
+    changeClassName: 'text-red-600',
+  },
+  effective: {
+    filterLabel: '已生效',
+    primaryLabel: '已生效',
+    primaryClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  update_reviewing: {
+    filterLabel: '更新审核中',
+    primaryLabel: '已生效',
+    primaryClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    changeLabel: '更新审核中',
+    changeClassName: 'text-blue-600',
+  },
+  update_rejected: {
+    filterLabel: '更新审核失败',
+    primaryLabel: '已生效',
+    primaryClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    changeLabel: '更新审核失败',
+    changeClassName: 'text-red-600',
+  },
+};
+
+const isPlatformReviewing = (status: PlatformStatus | null) => (
+  status === 'initial_reviewing' || status === 'update_reviewing'
+);
+
+const hasEffectivePlatformVersion = (status: PlatformStatus | null) => (
+  status === 'effective' || status === 'update_reviewing' || status === 'update_rejected'
+);
+
+const createDefaultAuditRecords = (productId: string, status: PlatformStatus): PlatformAuditRecord[] => {
+  const approvedRecord: PlatformAuditRecord = {
+    id: `${productId}-v1`,
+    version: 1,
+    submitType: 'initial',
+    status: 'approved',
+    submittedAt: '2026-08-16 10:24',
+    completedAt: '2026-08-16 11:08',
+    operator: '张晓明',
+    changedFields: ['商品名称', '商品主图', '抖音商品分类', '规格信息'],
+    effective: true,
+  };
+  if (status === 'not_synced') return [];
+  if (status === 'initial_reviewing') {
+    return [{ ...approvedRecord, status: 'reviewing', completedAt: undefined, effective: false }];
+  }
+  if (status === 'initial_rejected') {
+    return [{
+      ...approvedRecord,
+      status: 'rejected',
+      completedAt: '2026-08-16 11:02',
+      rejectReason: '商品图片包含平台不支持的营销文字，请修改后重新提交。',
+      effective: false,
+    }];
+  }
+  if (status === 'effective') return [approvedRecord];
+
+  const updateRecord: PlatformAuditRecord = {
+    id: `${productId}-v2`,
+    version: 2,
+    submitType: 'update',
+    status: status === 'update_reviewing' ? 'reviewing' : 'rejected',
+    submittedAt: '2026-08-19 15:22',
+    completedAt: status === 'update_rejected' ? '2026-08-19 16:10' : undefined,
+    operator: '李强',
+    changedFields: ['商品名称', '商品主图', '商品描述'],
+    rejectReason: status === 'update_rejected' ? '商品描述中包含绝对化宣传用语，当前生效版本未受影响。' : undefined,
+    effective: false,
+  };
+  return [updateRecord, approvedRecord];
 };
 
 const getDouyinCategory = (product: Product) => {
@@ -177,6 +277,8 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     )))
   ));
   const [platformStatuses, setPlatformStatuses] = useState<Record<string, PlatformStatus>>({});
+  const [platformAuditOverrides, setPlatformAuditOverrides] = useState<Record<string, PlatformAuditRecord[]>>({});
+  const [auditProductId, setAuditProductId] = useState<string | null>(null);
   const [douyinProductView, setDouyinProductView] = useState<DouyinProductView>('all');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [syncDialogProductIds, setSyncDialogProductIds] = useState<string[]>([]);
@@ -310,8 +412,14 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const thirdPartyChannelIds = activeGroup?.channels.filter(isThirdPartyChannelId) || [];
 
   const getDefaultPlatformStatus = (productId: string): PlatformStatus => {
+    const representativeStatuses: Record<string, PlatformStatus> = {
+      '2': 'effective',
+      '3': 'update_reviewing',
+      '10': 'update_rejected',
+    };
+    if (representativeStatuses[productId]) return representativeStatuses[productId];
     const productIndex = Math.max(products.findIndex(product => product.id === productId), 0);
-    return (['approved', 'not_synced', 'reviewing', 'rejected'] as PlatformStatus[])[productIndex % 4];
+    return (['not_synced', 'initial_reviewing', 'initial_rejected', 'effective', 'update_reviewing', 'update_rejected'] as PlatformStatus[])[productIndex % 6];
   };
 
   const getPlatformStatus = (productId: string) => (
@@ -319,6 +427,31 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       ? platformStatuses[getStatusKey(activeGroup.id, productId, reviewChannel.id)] || getDefaultPlatformStatus(productId)
       : null
   );
+
+  const getPlatformAuditRecords = (productId: string) => {
+    if (!reviewChannel) return [];
+    const key = getStatusKey(activeGroup.id, productId, reviewChannel.id);
+    return platformAuditOverrides[key]
+      || createDefaultAuditRecords(productId, getPlatformStatus(productId) as PlatformStatus);
+  };
+
+  const renderPlatformStatus = (productId: string) => {
+    const status = getPlatformStatus(productId) as PlatformStatus;
+    const meta = STATUS_META[status];
+    const hasRecords = getPlatformAuditRecords(productId).length > 0;
+    return (
+      <button
+        type="button"
+        onClick={() => hasRecords && setAuditProductId(productId)}
+        className={`text-left ${hasRecords ? 'cursor-pointer' : 'cursor-default'}`}
+        title={hasRecords ? '查看平台审核记录' : '尚未提交平台审核'}
+      >
+        <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.primaryClassName}`}>{meta.primaryLabel}</span>
+        {meta.changeLabel && <div className={`mt-1.5 text-[11px] font-medium leading-4 ${meta.changeClassName}`}>{meta.changeLabel}</div>}
+        {(status === 'initial_rejected' || status === 'update_rejected') && <div className="mt-1 text-[10px] leading-4 text-red-500">点击查看失败原因</div>}
+      </button>
+    );
+  };
 
   const activeDouyinProductIds = reviewChannel
     ? activeProductIds.filter(productId => getPlatformStatus(productId) !== 'not_synced')
@@ -329,17 +462,9 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     && (appliedFilters.platformStatus === 'all' || getPlatformStatus(product.id) === appliedFilters.platformStatus)
   ));
 
-  const platformStatusCounts = reviewChannel
-    ? activeProductIds.reduce<Record<PlatformStatus, number>>((counts, productId) => {
-        const status = getPlatformStatus(productId) as PlatformStatus;
-        counts[status] += 1;
-        return counts;
-      }, { not_synced: 0, reviewing: 0, approved: 0, rejected: 0 })
-    : null;
-
   const openDouyinSyncDialog = (productIds: string[]) => {
     if (!reviewChannel || productIds.length === 0) return;
-    const syncableProductIds = productIds.filter(productId => getPlatformStatus(productId) !== 'reviewing');
+    const syncableProductIds = productIds.filter(productId => !isPlatformReviewing(getPlatformStatus(productId) as PlatformStatus));
     if (syncableProductIds.length === 0) {
       setOperationMessage('所选商品均在审核中，暂时不能重复同步。');
       return;
@@ -350,11 +475,36 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   const confirmDouyinSync = () => {
     if (!reviewChannel) return;
+    const submittedAt = '2026-08-20 14:30';
+    setPlatformAuditOverrides(prev => {
+      const next = { ...prev };
+      syncDialogProductIds.forEach(productId => {
+        const key = getStatusKey(activeGroup.id, productId, reviewChannel.id);
+        const currentStatus = getPlatformStatus(productId) as PlatformStatus;
+        const existingRecords = prev[key] || createDefaultAuditRecords(productId, currentStatus);
+        const nextVersion = Math.max(0, ...existingRecords.map(record => record.version)) + 1;
+        next[key] = [{
+          id: `${productId}-v${nextVersion}`,
+          version: nextVersion,
+          submitType: hasEffectivePlatformVersion(currentStatus) ? 'update' : 'initial',
+          status: 'reviewing',
+          submittedAt,
+          operator: '企迈静静',
+          changedFields: hasEffectivePlatformVersion(currentStatus)
+            ? ['商品名称', '商品主图', '商品描述']
+            : ['商品名称', '商品主图', '抖音商品分类', '规格信息'],
+          effective: false,
+        }, ...existingRecords];
+      });
+      return next;
+    });
     setPlatformStatuses(prev => ({
       ...prev,
       ...Object.fromEntries(syncDialogProductIds.map(productId => [
         getStatusKey(activeGroup.id, productId, reviewChannel.id),
-        'reviewing' as PlatformStatus,
+        (hasEffectivePlatformVersion(getPlatformStatus(productId) as PlatformStatus)
+          ? 'update_reviewing'
+          : 'initial_reviewing') as PlatformStatus,
       ])),
     }));
     setShowDouyinSyncDialog(false);
@@ -631,9 +781,11 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                 >
                   <option value="all">全部状态</option>
                   <option value="not_synced">未同步</option>
-                  <option value="reviewing">审核中</option>
-                  <option value="approved">审核通过</option>
-                  <option value="rejected">审核失败</option>
+                  <option value="initial_reviewing">首次审核中</option>
+                  <option value="initial_rejected">首次审核失败</option>
+                  <option value="effective">已生效</option>
+                  <option value="update_reviewing">更新审核中</option>
+                  <option value="update_rejected">更新审核失败</option>
                 </select>
               </label>
             )}
@@ -642,25 +794,6 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               <button type="button" onClick={() => setAppliedFilters(draftFilters)} className="console-primary-button">查询</button>
             </div>
           </div>
-          {reviewChannel && platformStatusCounts && (
-            <div className="flex items-center gap-2 border-t border-[#EEF0F2] bg-white px-4 py-2">
-              <span className="mr-1 text-xs text-[#86909C]">抖音标品状态</span>
-              {(['not_synced', 'reviewing', 'approved', 'rejected'] as PlatformStatus[]).map(status => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => {
-                    const next = draftFilters.platformStatus === status ? 'all' : status;
-                    setDraftFilters(prev => ({ ...prev, platformStatus: next }));
-                    setAppliedFilters(prev => ({ ...prev, platformStatus: next }));
-                  }}
-                  className={`rounded-full border px-3 py-1 text-xs ${appliedFilters.platformStatus === status ? STATUS_META[status].className : 'border-[#E5E6EB] bg-white text-[#4E5969] hover:border-[#B9DDCA]'}`}
-                >
-                  {STATUS_META[status].label} {platformStatusCounts[status]}
-                </button>
-              ))}
-            </div>
-          )}
         </section>
 
         <section className="console-panel flex min-h-0 min-w-0 flex-1 flex-col">
@@ -683,11 +816,11 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => openDouyinSyncDialog(selectedProductIds)}
-                    disabled={selectedProductIds.length === 0 || selectedProductIds.every(id => getPlatformStatus(id) === 'reviewing')}
+                    disabled={selectedProductIds.length === 0 || selectedProductIds.every(id => isPlatformReviewing(getPlatformStatus(id) as PlatformStatus))}
                     className="console-primary-button disabled:cursor-not-allowed disabled:opacity-45"
                     title={selectedProductIds.length ? '创建或更新已选商品的抖音标品' : '请先勾选需要同步的商品'}
                   >
-                    <Send size={15} />同步抖音在线点{selectedProductIds.length ? `（${selectedProductIds.filter(id => getPlatformStatus(id) !== 'reviewing').length}）` : ''}
+                    <Send size={15} />同步抖音在线点{selectedProductIds.length ? `（${selectedProductIds.filter(id => !isPlatformReviewing(getPlatformStatus(id) as PlatformStatus)).length}）` : ''}
                   </button>
                 </>
               )}
@@ -804,7 +937,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     <>
                       <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">抖音标品 ID</th>
                       <th className="w-[230px] border-b border-[#E8E8E8] px-4 py-3">抖音商品分类</th>
-                      <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">审核状态</th>
+                      <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">平台状态</th>
                       <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">最近同步</th>
                     </>
                   ) : (
@@ -813,7 +946,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                       <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">前台分类</th>
                       <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">基础价格</th>
                       <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-3">售卖状态</th>
-                      {reviewChannel && <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">抖音标品状态</th>}
+                      {reviewChannel && <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">抖音平台状态</th>}
                       <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-3">更新时间</th>
                     </>
                   )}
@@ -843,11 +976,10 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     </td>
                     {reviewChannel && douyinProductView === 'douyin' ? (() => {
                       const status = getPlatformStatus(product.id) as PlatformStatus;
-                      const meta = STATUS_META[status];
                       return <>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4"><div className="font-medium text-[#1D2129]">{getDouyinProductId(product.id)}</div><div className="mt-1 text-xs text-[#98A2B3]">品牌级标品</div></td>
+                        <td className="border-b border-[#F0F0F0] px-4 py-4">{hasEffectivePlatformVersion(status) ? <><div className="font-medium text-[#1D2129]">{getDouyinProductId(product.id)}</div><div className="mt-1 text-xs text-[#98A2B3]">当前生效版本 V1</div></> : <><div className="font-medium text-[#86909C]">--</div><div className="mt-1 text-xs text-[#98A2B3]">尚无生效版本</div></>}</td>
                         <td className="border-b border-[#F0F0F0] px-4 py-4 text-[#4E5969]">{getDouyinCategory(product)}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.className}`}>{meta.label}</span>{status === 'rejected' && <div className="mt-1.5 text-[10px] leading-4 text-red-500">商品图片包含平台不支持的营销文字</div>}</td>
+                        <td className="border-b border-[#F0F0F0] px-4 py-4">{renderPlatformStatus(product.id)}</td>
                         <td className="border-b border-[#F0F0F0] px-4 py-4"><div className="text-xs text-[#4E5969]">2026-08-19 15:{20 + index}</div><div className="mt-1 text-[11px] text-[#98A2B3]">企迈 → 抖音</div></td>
                       </>;
                     })() : (
@@ -856,7 +988,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                         <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getFrontendCategoryName(product)}</td>
                         <td className="border-b border-[#F0F0F0] px-4 py-4 font-medium text-gray-700">¥{Number(product.price || 0).toFixed(2)}</td>
                         <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${getSaleStatus(product).className}`}>{getSaleStatus(product).label}</span></td>
-                        {reviewChannel && (() => { const status = getPlatformStatus(product.id) as PlatformStatus; const meta = STATUS_META[status]; return <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.className}`}>{meta.label}</span>{status === 'rejected' && <div className="mt-1.5 text-[10px] leading-4 text-red-500">商品图片包含平台不支持的营销文字</div>}</td>; })()}
+                        {reviewChannel && <td className="border-b border-[#F0F0F0] px-4 py-4">{renderPlatformStatus(product.id)}</td>}
                         <td className="border-b border-[#F0F0F0] px-4 py-4 text-xs text-gray-500">2026-07-15 10:{20 + index}</td>
                       </>
                     )}
@@ -865,9 +997,9 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                         <button type="button" onClick={() => editChannelProduct(product)} className="text-[#00A35B] hover:text-[#008F53]">{reviewChannel && douyinProductView === 'douyin' ? '维护抖音资料' : '维护渠道资料'}</button>
                         {canCreateMasterFromCatalog && douyinProductView === 'all' && <button type="button" onClick={() => editMasterProduct(product)} className="text-[#245B8A] hover:text-[#17476F]" title="进入独立的商品主档编辑页；正式产品还需校验商品主档编辑权限">编辑商品主档</button>}
                         {reviewChannel && getPlatformStatus(product.id) === 'not_synced' && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-[#008F4C]"><Send size={12} className="mr-1" />同步至抖音</button>}
-                        {reviewChannel && getPlatformStatus(product.id) === 'approved' && douyinProductView === 'douyin' && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-[#008F4C]"><RefreshCw size={12} className="mr-1" />同步更新</button>}
-                        {reviewChannel && getPlatformStatus(product.id) === 'rejected' && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-red-600"><RefreshCw size={12} className="mr-1" />重新同步</button>}
-                        {reviewChannel && douyinProductView === 'douyin' && <button type="button" onClick={onOpenSyncRecords} className="text-[#245B8A]">同步记录</button>}
+                        {reviewChannel && getPlatformStatus(product.id) === 'effective' && douyinProductView === 'douyin' && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-[#008F4C]"><RefreshCw size={12} className="mr-1" />同步更新</button>}
+                        {reviewChannel && (getPlatformStatus(product.id) === 'initial_rejected' || getPlatformStatus(product.id) === 'update_rejected') && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-red-600"><RefreshCw size={12} className="mr-1" />重新同步</button>}
+                        {reviewChannel && douyinProductView === 'douyin' && getPlatformStatus(product.id) !== 'not_synced' && <button type="button" onClick={() => setAuditProductId(product.id)} className="text-[#245B8A]">审核记录</button>}
                         {!unifiedCatalog && douyinProductView === 'all' && <button type="button" onClick={() => removeProductFromGroup(product.id)} className="flex items-center text-gray-400 hover:text-red-500"><Trash2 size={12} className="mr-1" />移出</button>}
                       </div>
                     </td>
@@ -898,7 +1030,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                 <div><div className="text-xs text-[#86909C]">目标平台</div><div className="mt-1 font-bold text-[#1D2129]">抖音在线点</div></div>
               </div>
               <div className="rounded-md border border-[#B8DBFF] bg-[#F2F8FF] px-4 py-3 text-[12px] leading-5 text-[#245B8A]">
-                系统将按商品当前资料创建或更新抖音标品并提交平台审核。加料关联在品牌级标品同步时不处理，后续下发门店点单品时再同步关联关系。
+                系统将按商品当前资料创建或更新抖音标品并提交平台审核。已生效标品提交更新后，当前版本继续生效，新版本审核通过后才会替换。加料关联在品牌级标品同步时不处理，后续下发门店点单品时再同步关联关系。
               </div>
               <div className="flex max-h-[180px] flex-wrap gap-2 overflow-y-auto">
                 {syncDialogProductIds.map(productId => {
@@ -917,6 +1049,96 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
           </div>
         </div>
       )}
+
+      {auditProductId && reviewChannel && (() => {
+        const product = effectiveProducts.find(item => item.id === auditProductId);
+        if (!product) return null;
+        const status = getPlatformStatus(product.id) as PlatformStatus;
+        const meta = STATUS_META[status];
+        const records = getPlatformAuditRecords(product.id);
+        const auditStatusMeta: Record<PlatformAuditRecord['status'], { label: string; className: string }> = {
+          reviewing: { label: '审核中', className: 'border-blue-200 bg-blue-50 text-blue-600' },
+          approved: { label: '审核通过', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+          rejected: { label: '审核失败', className: 'border-red-200 bg-red-50 text-red-600' },
+        };
+        return (
+          <div className="absolute inset-0 z-[60] flex bg-black/30" role="dialog" aria-modal="true" aria-label={`${product.name}平台审核记录`}>
+            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setAuditProductId(null)} aria-label="关闭审核记录" />
+            <aside className="relative ml-auto flex h-full w-[720px] flex-col bg-white shadow-2xl">
+              <div className="flex shrink-0 items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
+                <div>
+                  <div className="text-[18px] font-bold text-[#1D2129]">抖音平台审核记录</div>
+                  <div className="mt-1 text-[12px] text-[#86909C]">查看首次提交与后续更新的独立审核结果。</div>
+                </div>
+                <button type="button" onClick={() => setAuditProductId(null)} title="关闭"><X size={18} className="text-[#667085]" /></button>
+              </div>
+
+              <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="flex items-center gap-3 rounded-lg border border-[#E5E6EB] bg-[#F7F8FA] p-4">
+                  <img src={product.image} alt="" className="h-12 w-12 shrink-0 rounded border border-[#E5E6EB] object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-bold text-[#1D2129]">{product.name}</div>
+                    <div className="mt-1 text-xs text-[#86909C]">渠道商品 ID {product.id} · 抖音标品 {hasEffectivePlatformVersion(status) ? getDouyinProductId(product.id) : '--'}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-[#E5E6EB] p-4">
+                    <div className="text-xs text-[#86909C]">当前平台版本</div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.primaryClassName}`}>{meta.primaryLabel}</span>
+                      <span className="text-sm font-bold text-[#1D2129]">{hasEffectivePlatformVersion(status) ? 'V1' : '暂无生效版本'}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[#E5E6EB] p-4">
+                    <div className="text-xs text-[#86909C]">本次资料更新</div>
+                    <div className={`mt-2 text-sm font-bold ${meta.changeClassName || 'text-[#4E5969]'}`}>{meta.changeLabel || '无待审核更新'}</div>
+                    {hasEffectivePlatformVersion(status) && meta.changeLabel && <div className="mt-1 text-[11px] text-[#86909C]">审核期间 V1 继续生效</div>}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="font-bold text-[#1D2129]">审核记录</div>
+                  <div className="text-xs text-[#86909C]">共 {records.length} 次提交</div>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {records.map(record => {
+                    const recordStatus = auditStatusMeta[record.status];
+                    return (
+                      <div key={record.id} className="rounded-lg border border-[#E5E6EB] p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[#1D2129]">V{record.version}</span>
+                              <span className="text-xs text-[#4E5969]">{record.submitType === 'initial' ? '首次提交' : '资料更新'}</span>
+                              {record.effective && <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">当前生效版本</span>}
+                            </div>
+                            <div className="mt-1 text-[11px] text-[#86909C]">提交 {record.submittedAt} · {record.operator}</div>
+                          </div>
+                          <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${recordStatus.className}`}>{recordStatus.label}</span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {record.changedFields.map(field => <span key={field} className="rounded border border-[#E5E6EB] bg-[#F7F8FA] px-2 py-1 text-[11px] text-[#4E5969]">{field}</span>)}
+                        </div>
+                        {record.completedAt && <div className="mt-3 text-[11px] text-[#86909C]">平台返回 {record.completedAt}</div>}
+                        {record.rejectReason && <div className="mt-3 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-600"><span className="font-bold">失败原因：</span>{record.rejectReason}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
+                <div className="text-[11px] text-[#86909C]">审核结果以抖音平台回调为准；同步执行明细仍在发布中心查看。</div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={onOpenSyncRecords} className="console-secondary-button">查看同步记录</button>
+                  <button type="button" onClick={() => setAuditProductId(null)} className="console-primary-button">关闭</button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        );
+      })()}
 
       <WebProductSelectorDialog
         open={showProductScopeEditor}

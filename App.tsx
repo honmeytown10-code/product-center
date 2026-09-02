@@ -83,7 +83,7 @@ const App: React.FC = () => {
                    <span className="text-xs font-bold ml-2">10:54</span>
                    <div className="flex space-x-1"><div className="w-4 h-2.5 bg-black rounded-[1px]"></div></div>
                 </div>
-                <div className="h-[calc(100%-44px)]">
+                <div className="app-mobile-scroll-scope h-[calc(100%-44px)] overflow-hidden">
                     <MobileApp />
                 </div>
                 <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-gray-900 rounded-full z-50"></div>

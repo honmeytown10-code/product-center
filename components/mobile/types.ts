@@ -1,7 +1,7 @@
 
 import React from 'react';
 
-export type ChannelType = 'all' | 'mini' | 'meituan' | 'taobao' | 'pos';
+export type ChannelType = 'all' | 'mini' | 'meituan' | 'taobao' | 'meituan_dine' | 'douyin_dine' | 'pos';
 
 export interface LocalCategory {
   id: string;

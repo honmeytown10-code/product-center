@@ -120,7 +120,6 @@ type DouyinAddonStatus = 'not_synced' | 'syncing' | 'synced' | 'failed';
 type DouyinAddonRecord = {
   id: string;
   name: string;
-  source: 'master' | 'platform';
   masterAddonId?: string;
   douyinCategory: string;
   addonType: string;
@@ -526,13 +525,14 @@ const MASTER_ADDON_OPTIONS = [
   { id: 'master-addon-3', name: '西柚粒', type: '水果加料', price: 2, relatedCount: 8 },
   { id: 'master-addon-4', name: '燕麦奶', type: '乳品替换', price: 3, relatedCount: 12 },
   { id: 'master-addon-5', name: '浓缩咖啡液', type: '咖啡加料', price: 2, relatedCount: 6 },
+  { id: 'master-addon-6', name: '爆爆珠', type: '小料', price: 2, relatedCount: 4 },
 ];
 
 const INITIAL_DOUYIN_ADDONS: DouyinAddonRecord[] = [
-  { id: 'dy-addon-1', name: '椰果', source: 'master', masterAddonId: 'master-addon-1', douyinCategory: '饮品 / 其他饮品', addonType: '小料', price: 1, status: 'synced', platformId: '1866969794974746', updatedAt: '2026-08-19 14:09' },
-  { id: 'dy-addon-2', name: '珍珠', source: 'master', masterAddonId: 'master-addon-2', douyinCategory: '饮品 / 奶茶', addonType: '小料', price: 1, status: 'syncing', updatedAt: '2026-08-19 15:26' },
-  { id: 'dy-addon-3', name: '西柚粒', source: 'master', masterAddonId: 'master-addon-3', douyinCategory: '饮品 / 果茶', addonType: '水果加料', price: 2, status: 'failed', updatedAt: '2026-08-18 18:42' },
-  { id: 'dy-addon-4', name: '爆爆珠', source: 'platform', douyinCategory: '饮品 / 其他饮品', addonType: '小料', price: 2, status: 'not_synced', updatedAt: '2026-08-19 16:08' },
+  { id: 'dy-addon-1', name: '椰果', masterAddonId: 'master-addon-1', douyinCategory: '饮品 / 其他饮品', addonType: '小料', price: 1, status: 'synced', platformId: '1866969794974746', updatedAt: '2026-08-19 14:09' },
+  { id: 'dy-addon-2', name: '珍珠', masterAddonId: 'master-addon-2', douyinCategory: '饮品 / 奶茶', addonType: '小料', price: 1, status: 'syncing', updatedAt: '2026-08-19 15:26' },
+  { id: 'dy-addon-3', name: '西柚粒', masterAddonId: 'master-addon-3', douyinCategory: '饮品 / 果茶', addonType: '水果加料', price: 2, status: 'failed', updatedAt: '2026-08-18 18:42' },
+  { id: 'dy-addon-4', name: '爆爆珠', masterAddonId: 'master-addon-6', douyinCategory: '饮品 / 其他饮品', addonType: '小料', price: 2, status: 'not_synced', updatedAt: '2026-08-19 16:08' },
 ];
 
 const tabs: Array<{ id: AttributeTab; label: string; icon: React.ReactNode }> = [
@@ -655,7 +655,6 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
       const additions = selectedOptions.filter(option => !existingMasterIds.has(option.id)).map((option, index) => ({
         id: `dy-addon-master-${Date.now()}-${index}`,
         name: option.name,
-        source: 'master' as const,
         masterAddonId: option.id,
         douyinCategory: douyinAddonEditor.categories[option.id],
         addonType: option.type,
@@ -675,7 +674,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
     const addition: DouyinAddonRecord = {
       id: douyinAddonEditor.recordId || `dy-addon-platform-${Date.now()}`,
       name: douyinAddonEditor.name.trim(),
-      source: 'platform',
+      masterAddonId: douyinAddons.find(item => item.id === douyinAddonEditor.recordId)?.masterAddonId || `master-addon-created-${Date.now()}`,
       douyinCategory: douyinAddonEditor.category,
       addonType: douyinAddonEditor.addonType,
       price: Number(douyinAddonEditor.price),
@@ -684,13 +683,13 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
     };
     setDouyinAddons(current => douyinAddonEditor.recordId
       ? current.map(item => item.id === douyinAddonEditor.recordId
-        ? { ...item, ...addition, source: item.source, masterAddonId: item.masterAddonId }
+        ? { ...item, ...addition, masterAddonId: item.masterAddonId }
         : item)
       : [...current, addition]);
     setDouyinAddonEditor(null);
     showActionNotice(syncAfterSave
-      ? `${douyinAddonEditor.recordId ? '已保存' : '已创建'}加料品并提交抖音同步任务`
-      : `${douyinAddonEditor.recordId ? '已保存抖音加料资料' : '已创建平台加料品，状态为待同步'}`);
+      ? `${douyinAddonEditor.recordId ? '已保存' : '已创建品牌'}加料并提交抖音同步任务`
+      : `${douyinAddonEditor.recordId ? '已保存抖音加料资料' : '已创建品牌加料并加入抖音加料品，状态为待同步'}`);
   };
 
   const syncSelectedDouyinAddons = () => {
@@ -1359,7 +1358,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                         {showDouyinAddonCreateMenu && (
                           <div className="absolute right-0 top-[42px] z-50 w-[260px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 text-left shadow-xl">
                             <button type="button" onClick={() => { setShowDouyinAddonCreateMenu(false); setDouyinAddonEditor({ mode: 'master', selectedIds: [], categories: {} }); }} className="block w-full px-4 py-3 hover:bg-[#F7F8FA]"><strong className="block text-sm text-[#1D2129]">从主档加料添加</strong><span className="mt-1 block text-xs text-[#86909C]">复用主档名称、类型与价格，补充抖音商品分类</span></button>
-                            <button type="button" onClick={() => { setShowDouyinAddonCreateMenu(false); setDouyinAddonEditor({ mode: 'platform', name: '', category: '', addonType: '', price: '0' }); }} className="block w-full border-t border-[#F0F1F2] px-4 py-3 hover:bg-[#F7F8FA]"><strong className="block text-sm text-[#1D2129]">直接创建平台加料品</strong><span className="mt-1 block text-xs text-[#86909C]">只填写抖音需要的精简资料，不生成主档加料</span></button>
+                            <button type="button" onClick={() => { setShowDouyinAddonCreateMenu(false); setDouyinAddonEditor({ mode: 'platform', name: '', category: '', addonType: '', price: '0' }); }} className="block w-full border-t border-[#F0F1F2] px-4 py-3 hover:bg-[#F7F8FA]"><strong className="block text-sm text-[#1D2129]">新建品牌加料</strong><span className="mt-1 block text-xs text-[#86909C]">填写精简资料，同时新增主档加料并加入抖音加料品</span></button>
                           </div>
                         )}
                       </div>
@@ -1571,9 +1570,9 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
             </div>
           )}
           {douyinAddonEditor?.mode === 'platform' && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="直接创建抖音加料品">
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="新建品牌加料并加入抖音加料品">
               <div className="w-[660px] overflow-hidden rounded-lg bg-white shadow-2xl">
-                <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5"><div><div className="text-lg font-bold text-[#1D2129]">{douyinAddonEditor.recordId ? '维护抖音加料资料' : '直接创建抖音加料品'}</div><div className="mt-1 text-xs text-[#86909C]">{douyinAddonEditor.recordId ? '只修改当前抖音平台扩展资料，不回写主档加料。' : '适用于只在抖音使用的加料品，不创建完整主档加料。'}</div></div><button type="button" onClick={() => setDouyinAddonEditor(null)} aria-label="关闭" className="text-xl text-[#667085]">×</button></div>
+                <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5"><div><div className="text-lg font-bold text-[#1D2129]">{douyinAddonEditor.recordId ? '维护抖音加料资料' : '新建品牌加料'}</div><div className="mt-1 text-xs text-[#86909C]">{douyinAddonEditor.recordId ? '维护当前加料的抖音平台扩展资料；名称、类型与价格同时属于品牌主档加料。' : '填写精简资料后，同时新增品牌主档加料并加入抖音在线点加料品列表。'}</div></div><button type="button" onClick={() => setDouyinAddonEditor(null)} aria-label="关闭" className="text-xl text-[#667085]">×</button></div>
                 <div className="space-y-5 p-6">
                   <label className="block"><span className="mb-2 block text-sm font-medium text-[#1D2129]">加料品名称 <b className="text-[#F53F3F]">*</b></span><input value={douyinAddonEditor.name} onChange={event => setDouyinAddonEditor(current => current?.mode === 'platform' ? { ...current, name: event.target.value } : current)} maxLength={20} placeholder="请输入加料品名称" className="h-10 w-full rounded-md border border-[#D9DDE7] px-3 outline-none focus:border-[#00C06B]" /></label>
                   <div className="grid grid-cols-2 gap-4">
@@ -2921,7 +2920,6 @@ const DouyinAddonTable = ({
         <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]"><tr>
           <th className="w-12 border-b border-[#E8E8E8] px-4 py-4"><input type="checkbox" checked={allSelected} onChange={event => onSelectedIdsChange(event.target.checked ? records.map(record => record.id) : [])} aria-label="全选抖音加料品" /></th>
           <th className="w-[250px] border-b border-[#E8E8E8] px-4 py-4">加料名称</th>
-          <th className="w-[130px] border-b border-[#E8E8E8] px-4 py-4">来源</th>
           <th className="w-[150px] border-b border-[#E8E8E8] px-4 py-4">加料类型</th>
           <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">抖音商品分类</th>
           <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-4">实付价</th>
@@ -2935,7 +2933,6 @@ const DouyinAddonTable = ({
             return <tr key={record.id} className="border-b border-[#F0F1F2] hover:bg-[#FCFFFD]">
               <td className="px-4 py-4"><input type="checkbox" checked={selectedIds.includes(record.id)} onChange={event => onSelectedIdsChange(event.target.checked ? [...selectedIds, record.id] : selectedIds.filter(id => id !== record.id))} aria-label={`选择${record.name}`} /></td>
               <td className="px-4 py-4"><div className="font-medium text-[#1D2129]">{record.name}</div><div className="mt-1 text-xs text-[#98A2B3]">{record.platformId ? `抖音商品ID ${record.platformId}` : '尚未生成抖音商品ID'}</div></td>
-              <td className="px-4 py-4"><span className={`rounded px-2 py-1 text-xs ${record.source === 'master' ? 'bg-[#E8F7EF] text-[#008F4C]' : 'bg-[#F2F3F5] text-[#667085]'}`}>{record.source === 'master' ? '来自主档加料' : '平台直接创建'}</span></td>
               <td className="px-4 py-4 text-[#4E5969]">{record.addonType}</td>
               <td className="px-4 py-4 text-[#4E5969]">{record.douyinCategory}</td>
               <td className="px-4 py-4">¥{record.price.toFixed(2)}</td>

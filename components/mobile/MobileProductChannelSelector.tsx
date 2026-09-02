@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Check, Smartphone, Store, ShoppingBag, Printer, LayoutGrid, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Check, Smartphone, Store, ShoppingBag, Printer, LayoutGrid, CheckCircle2, UtensilsCrossed } from 'lucide-react';
 
 interface Props {
   selectedChannels: string[];
@@ -14,6 +14,8 @@ const CHANNEL_OPTIONS = [
   { id: 'pos', label: 'POS收银', icon: <Printer size={18}/>, color: 'text-blue-600', bg: 'bg-blue-50' },
   { id: 'meituan', label: '美团外卖', icon: <Store size={18}/>, color: 'text-yellow-600', bg: 'bg-yellow-50' },
   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={18}/>, color: 'text-orange-600', bg: 'bg-orange-50' },
+  { id: 'meituan_dine', label: '美团在线点', icon: <UtensilsCrossed size={18}/>, color: 'text-amber-600', bg: 'bg-amber-50' },
+  { id: 'douyin_dine', label: '抖音在线点', icon: <UtensilsCrossed size={18}/>, color: 'text-cyan-600', bg: 'bg-cyan-50' },
 ];
 
 export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels, onBack, onSave, helperText, onBeforeChannelToggle }) => {
@@ -128,7 +130,7 @@ export const MobileProductChannelSelector: React.FC<Props> = ({ selectedChannels
              <LayoutGrid size={16} />
           </div>
           <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
-            开启渠道后，该商品将在所选渠道的前台菜单中同步展示。小程序渠道下，您需要至少选择一种售卖类型（堂食或外卖）。
+            开启渠道后，该商品将在所选渠道售卖。企迈管理的美团在线点、抖音在线点操作会同时调用平台；平台失败时保留本地结果并生成可重试记录。
           </p>
         </div>
       </div>

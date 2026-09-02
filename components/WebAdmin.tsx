@@ -685,6 +685,7 @@ export const WebAdmin: React.FC = () => {
                   channelEditableFieldIds={channelEditableFieldIds}
                   groupedTagOptions={creationContext.scope === 'store' ? storeGroupedTagOptions : undefined}
                   badgeOptions={creationContext.scope === 'store' ? storeBadgeOptions : undefined}
+                  thirdPartyManagementModes={omnichannelConfig.thirdPartyStrategies}
                   onGroupedTagOptionsChange={creationContext.scope === 'store' ? setStoreGroupedTagOptions : undefined}
                   onBadgeOptionsChange={creationContext.scope === 'store' ? setStoreBadgeOptions : undefined}
                    thirdPartyChannelAttributeIds={creationContext.channelAttributeIds || (

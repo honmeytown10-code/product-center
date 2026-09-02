@@ -5,6 +5,8 @@ export type ShelfChannelId =
   | 'mini_dine'
   | 'mini_take'
   | 'meituan'
+  | 'meituan_dine'
+  | 'douyin'
   | 'meituan_tuangou'
   | 'taobao'
   | 'eleme'
@@ -32,6 +34,16 @@ const CHANNEL_META: Record<ShelfChannelId, {
     label: '美团外卖',
     icon: <UtensilsCrossed size={16} strokeWidth={2.2} />,
     activeClass: 'bg-[#FCE9B9] text-[#EAB308]',
+  },
+  meituan_dine: {
+    label: '美团在线点',
+    icon: <span className="text-[11px] font-black leading-none">美</span>,
+    activeClass: 'bg-[#FFE66B] text-[#3D3D3D]',
+  },
+  douyin: {
+    label: '抖音在线点',
+    icon: <span className="text-[11px] font-black leading-none">抖</span>,
+    activeClass: 'bg-[#DDFBFA] text-[#00A6A6]',
   },
   meituan_tuangou: {
     label: '美团团购',
@@ -208,13 +220,13 @@ export const WebShelfConfirmModal: React.FC<{
               {isAllMode && isShelvesUnited ? (
                 <>
                   上下架状态为全渠道统一，上下架时会将所有渠道{entityLabel}
-                  上下架 <span className="text-[#FF2D20]">状态会同步到美饿平台</span>
+                上下架 <span className="text-[#FF2D20]">状态会同步到由企迈管理的三方平台</span>
                 </>
               ) : isShelvesUnited ? (
                 <>
                   {singleAction === 'on_shelf' ? '上架' : '下架'}状态为全渠道统一，
                   {singleAction === 'on_shelf' ? '上架' : '下架'}时会将所有渠道{entityLabel}
-                  {singleAction === 'on_shelf' ? '上架' : '下架'} <span className="text-[#FF2D20]">状态会同步到美饿平台</span>
+                {singleAction === 'on_shelf' ? '上架' : '下架'} <span className="text-[#FF2D20]">状态会同步到由企迈管理的三方平台</span>
                 </>
               ) : (
                 <>

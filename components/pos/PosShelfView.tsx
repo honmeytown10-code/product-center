@@ -7,23 +7,25 @@ import { ShelfActionDialog, ShelfManagementModal } from './PosModals';
 
 const MOCK_SHELF_CATEGORIES = ["全部", "加料", "后台分类展示合集", "大雪花分类--小程序", "仅小程序分类", "测试分类A", "测试分类B"];
 const RAW_SHELF_ITEMS = [
-    { id: 'g1', name: '1121beta多规格商品-1', status: 'on_shelf' },
-    { id: 'g2', name: '测试归档标品', status: 'on_shelf' },
-    { id: 'g3', name: '新建电商商城1', status: 'on_shelf' },
-    { id: 'g4', name: '大雪花', status: 'on_shelf' },
-    { id: 'g5', name: '测试归档', status: 'off_shelf' },
-    { id: 'g6', name: '1', status: 'on_shelf' },
-    { id: 'g7', name: '1027标品-02', status: 'on_shelf' },
-    { id: 'g8', name: '1110商品', status: 'on_shelf' },
-    { id: 'g9', name: '新建电商商城商品2', status: 'on_shelf' },
-    { id: 'g10', name: '0827beta单规格套餐-4', status: 'on_shelf' },
+    { id: 'g1', name: '1121beta多规格商品-1', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'g2', name: '测试归档标品', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'g3', name: '新建电商商城1', status: 'on_shelf', category: '仅小程序分类' },
+    { id: 'g4', name: '大雪花', status: 'on_shelf', category: '大雪花分类--小程序' },
+    { id: 'g5', name: '测试归档', status: 'off_shelf', category: '测试分类A' },
+    { id: 'g6', name: '1', status: 'on_shelf', category: '测试分类B' },
+    { id: 'g7', name: '1027标品-02', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'g8', name: '1110商品', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'g9', name: '新建电商商城商品2', status: 'on_shelf', category: '仅小程序分类' },
+    { id: 'g10', name: '0827beta单规格套餐-4', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'addon-1', name: '燕麦奶', status: 'on_shelf', category: '加料' },
+    { id: 'addon-2', name: '椰果', status: 'off_shelf', category: '加料' },
     // Added more off-shelf items for list population
-    { id: 'g11', name: '已下架-红烧排骨', status: 'off_shelf' },
-    { id: 'g12', name: '已下架-清蒸鲈鱼', status: 'off_shelf' },
-    { id: 'g13', name: '已下架-麻婆豆腐', status: 'off_shelf' },
-    { id: 'g14', name: '已下架-宫保鸡丁', status: 'off_shelf' },
-    { id: 'g15', name: '已下架-回锅肉', status: 'off_shelf' },
-    { id: 'g16', name: '已下架-番茄炒蛋', status: 'off_shelf' },
+    { id: 'g11', name: '已下架-红烧排骨', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g12', name: '已下架-清蒸鲈鱼', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g13', name: '已下架-麻婆豆腐', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g14', name: '已下架-宫保鸡丁', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g15', name: '已下架-回锅肉', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g16', name: '已下架-番茄炒蛋', status: 'off_shelf', category: '后台分类展示合集' },
 ];
 
 // Enrich mock data to have channel specific statuses for testing
@@ -35,7 +37,9 @@ const INITIAL_SHELF_ITEMS = RAW_SHELF_ITEMS.map(item => ({
         mini_take: item.status,
         mini_pickup: item.status, // Included new channel
         meituan: Math.random() > 0.8 ? 'unmapped' : item.status, // Random unmapped for realism
-        taobao: Math.random() > 0.8 ? 'unmapped' : item.status
+        taobao: Math.random() > 0.8 ? 'unmapped' : item.status,
+        meituan_dine: item.status,
+        douyin_dine: item.status
     }
 }));
 
@@ -69,19 +73,23 @@ export const PosShelfView: React.FC<{showImage: boolean}> = ({ showImage }) => {
 
   // The POS shelf view always operates on ALL channels now, eliminating the top channel filter.
   const getActiveChannels = () => {
-      return ['pos', 'mini_dine', 'mini_take', 'mini_pickup', 'meituan', 'taobao'];
+      return ['pos', 'mini_dine', 'mini_take', 'mini_pickup', 'meituan', 'taobao', 'meituan_dine', 'douyin_dine'];
   };
 
   const displayShelfItems = useMemo(() => {
-      return shelfItems.filter(i => i.name.includes(searchQuery));
-  }, [shelfItems, searchQuery]);
+      return shelfItems.filter(i => {
+          const matchesSearch = i.name.includes(searchQuery);
+          const matchesCategory = shelfCategory === '全部' || i.category === shelfCategory;
+          return matchesSearch && matchesCategory;
+      });
+  }, [shelfItems, searchQuery, shelfCategory]);
 
   const offShelfList = useMemo(() => {
       return shelfItems.filter(i => {
           if (isShelvesUnited) {
               return i.status === 'off_shelf';
           } else {
-              const channels = ['pos', 'mini_dine', 'mini_take', 'mini_pickup', 'meituan', 'taobao'] as const;
+              const channels = ['pos', 'mini_dine', 'mini_take', 'mini_pickup', 'meituan', 'taobao', 'meituan_dine', 'douyin_dine'] as const;
               // If ANY channel is off_shelf, it might need attention, or if ALL mapped are off_shelf.
               // Let's assume if any mapped channel is off_shelf, we show it in the off-shelf list for management
               return channels.some(ch => i.channels[ch as ChannelTabType] === 'off_shelf');

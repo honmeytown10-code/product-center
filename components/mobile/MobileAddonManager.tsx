@@ -43,26 +43,26 @@ interface Props {
 const MOCK_ADDONS: LocalAddon[] = [
   { 
     id: 'a1', name: '珍珠', category: '小料', price: '2.00', stockType: 'unlimited', stock: 9999, status: 'on_shelf', stockStatus: 'available',
-    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'on_shelf', jingdong: 'on_shelf' } as any,
+    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'on_shelf', meituan_dine: 'on_shelf', douyin_dine: 'on_shelf' } as any,
     isIndependent: false
   },
   { 
     id: 'a2', name: '椰果', category: '小料', price: '2.00', stockType: 'unlimited', stock: 9999, status: 'on_shelf', stockStatus: 'available',
-    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'off_shelf', taobao: 'on_shelf', jingdong: 'on_shelf' } as any
+    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'off_shelf', taobao: 'on_shelf', meituan_dine: 'on_shelf', douyin_dine: 'on_shelf' } as any
   },
   { 
     id: 'a3', name: '奥利奥碎', category: '小料', price: '3.00', stockType: 'custom', stock: 50, status: 'on_shelf', stockStatus: 'available',
-    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'off_shelf', jingdong: 'unmapped' } as any,
-    channelStocks: { all: 50, mini: 20, pos: 30, meituan: 0, taobao: 0 } as any
+    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'off_shelf', meituan_dine: 'on_shelf', douyin_dine: 'on_shelf' } as any,
+    channelStocks: { all: 50, mini: 20, pos: 30, meituan: 0, taobao: 0, meituan_dine: 20, douyin_dine: 20 } as any
   },
   { 
     id: 'a4', name: '芝士奶盖', category: '奶盖', price: '5.00', stockType: 'custom', stock: 0, status: 'on_shelf', stockStatus: 'sold_out',
-    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'on_shelf', jingdong: 'on_shelf' } as any,
-    channelStocks: { all: 0, mini: 0, pos: 0, meituan: 0, taobao: 0 } as any
+    channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'on_shelf', meituan_dine: 'off_shelf', douyin_dine: 'off_shelf' } as any,
+    channelStocks: { all: 0, mini: 0, pos: 0, meituan: 0, taobao: 0, meituan_dine: 0, douyin_dine: 0 } as any
   },
   { 
     id: 'a5', name: '换燕麦奶', category: '基底', price: '4.00', stockType: 'unlimited', stock: 9999, status: 'off_shelf', stockStatus: 'available',
-    channels: { all: 'off_shelf', mini: 'off_shelf', pos: 'off_shelf', meituan: 'off_shelf', taobao: 'off_shelf', jingdong: 'off_shelf' } as any
+    channels: { all: 'off_shelf', mini: 'off_shelf', pos: 'off_shelf', meituan: 'off_shelf', taobao: 'off_shelf', meituan_dine: 'off_shelf', douyin_dine: 'off_shelf' } as any
   },
 ];
 
@@ -73,6 +73,8 @@ const ALL_CHANNELS_DEF: { id: ChannelType; label: string; icon: React.ReactNode;
   { id: 'mini', label: '小程序', icon: <Smartphone size={14}/>, color: 'text-green-600' },
   { id: 'meituan', label: '美团外卖', icon: <Store size={14}/>, color: 'text-yellow-600' },
   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={14}/>, color: 'text-orange-600' },
+  { id: 'meituan_dine', label: '美团在线点', icon: <Store size={14}/>, color: 'text-amber-600' },
+  { id: 'douyin_dine', label: '抖音在线点', icon: <Store size={14}/>, color: 'text-cyan-600' },
   { id: 'pos', label: 'POS收银', icon: <Printer size={14}/>, color: 'text-blue-600' },
 ];
 
@@ -201,6 +203,12 @@ export const MobileAddonManager: React.FC<Props> = ({ onBack, onNavigate, isStoc
             </div>
         </div>
 
+        {activeChannel === 'meituan_dine' && (
+            <div className="mx-4 mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-4 text-amber-700">
+                美团在线点加料支持上架、下架，不支持沽清或恢复库存。
+            </div>
+        )}
+
         {/* Main Content with Sidebar */}
         <div className="flex-1 flex overflow-hidden">
             {/* Category Sidebar */}
@@ -309,9 +317,9 @@ export const MobileAddonManager: React.FC<Props> = ({ onBack, onNavigate, isStoc
                                             {isOnShelf ? '下架' : '上架'}
                                         </button>
                                     )}
-                                    <button onClick={(e) => { e.stopPropagation(); setClearanceItem(addon); }} className="flex-1 bg-[#00C06B] text-white py-2 rounded-lg text-xs font-bold active:bg-[#00A35B] shadow-sm shadow-green-100">
+                                    {activeChannel !== 'meituan_dine' && <button onClick={(e) => { e.stopPropagation(); setClearanceItem(addon); }} className="flex-1 bg-[#00C06B] text-white py-2 rounded-lg text-xs font-bold active:bg-[#00A35B] shadow-sm shadow-green-100">
                                         沽清
-                                    </button>
+                                    </button>}
                                 </div>
                             )}
                         </div>
@@ -334,8 +342,8 @@ export const MobileAddonManager: React.FC<Props> = ({ onBack, onNavigate, isStoc
                 <div className="grid grid-cols-4 gap-2">
                     <BatchBtn icon={<ArrowUp size={16}/>} label="上架" onClick={() => handleBatchAction('on')} />
                     <BatchBtn icon={<ArrowDown size={16}/>} label="下架" onClick={() => handleBatchAction('off')} />
-                    <BatchBtn icon={<Ban size={16}/>} label="沽清" onClick={() => handleBatchAction('sold_out')} danger />
-                    <BatchBtn icon={<RefreshCw size={16}/>} label="取消沽清" onClick={() => handleBatchAction('restore')} />
+                    <BatchBtn icon={<Ban size={16}/>} label="沽清" onClick={() => handleBatchAction('sold_out')} danger disabled={activeChannel === 'meituan_dine'} />
+                    <BatchBtn icon={<RefreshCw size={16}/>} label="取消沽清" onClick={() => handleBatchAction('restore')} disabled={activeChannel === 'meituan_dine'} />
                 </div>
                 <button onClick={() => setIsBatchMode(false)} className="w-full mt-3 py-3.5 bg-gray-100 text-gray-600 font-bold rounded-xl text-sm">取消批量</button>
             </div>
@@ -381,8 +389,8 @@ export const MobileAddonManager: React.FC<Props> = ({ onBack, onNavigate, isStoc
   );
 };
 
-const BatchBtn = ({ icon, label, onClick, danger }: { icon: React.ReactNode, label: string, onClick: () => void, danger?: boolean }) => (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-all active:scale-95 ${danger ? 'bg-red-50 border-red-100 text-red-500' : 'bg-white border-gray-200 text-gray-700'}`}>
+const BatchBtn = ({ icon, label, onClick, danger, disabled }: { icon: React.ReactNode, label: string, onClick: () => void, danger?: boolean, disabled?: boolean }) => (
+    <button disabled={disabled} onClick={onClick} className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-all active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-300 ${danger ? 'bg-red-50 border-red-100 text-red-500' : 'bg-white border-gray-200 text-gray-700'}`}>
         <div className="mb-1">{icon}</div>
         <span className="text-[11px] font-bold">{label}</span>
     </button>
@@ -522,7 +530,8 @@ const ClearanceModal = ({ item, onClose, activeChannel, isStockShared }: { item:
 
                 <div>
                     <div className="flex justify-between items-center mb-2"><label className="text-xs font-black text-gray-400 uppercase tracking-widest">生效渠道</label></div>
-                    <div className="flex flex-wrap gap-2">{ALL_CHANNELS_DEF.filter(c => c.id !== 'all').map(ch => (<button key={ch.id} onClick={() => toggleChannelSelection(ch.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center cursor-pointer active:scale-95 ${selectedChannels.includes(ch.id) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-400'}`}>{ch.label}</button>))}</div>
+                    <div className="flex flex-wrap gap-2">{ALL_CHANNELS_DEF.filter(c => c.id !== 'all' && c.id !== 'meituan_dine').map(ch => (<button key={ch.id} onClick={() => toggleChannelSelection(ch.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center cursor-pointer active:scale-95 ${selectedChannels.includes(ch.id) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-400'}`}>{ch.label}</button>))}</div>
+                    {selectedChannels.includes('douyin_dine') && <div className="mt-3 rounded-lg border border-cyan-100 bg-cyan-50 px-3 py-2 text-[10px] font-bold leading-4 text-cyan-700">抖音库存归零同步售罄，恢复库存且本地上架时同步启售。</div>}
                 </div>
             </div>
             <div className="grid grid-cols-4 bg-gray-50 border-t border-gray-100 shrink-0 select-none">
@@ -544,7 +553,7 @@ const AddonForm = ({ initialItem, onBack, onSave }: { initialItem?: LocalAddon |
     const [form, setForm] = useState<Partial<LocalAddon> & { selectedChannels: string[] }>(() => {
         const base = initialItem || {
             name: '', category: '小料', price: '', stockType: 'unlimited', stock: 9999,
-            channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'on_shelf' } as any
+            channels: { all: 'on_shelf', mini: 'on_shelf', pos: 'on_shelf', meituan: 'on_shelf', taobao: 'on_shelf', meituan_dine: 'on_shelf', douyin_dine: 'on_shelf' } as any
         };
         const selectedChannels = initialItem 
           ? Object.keys(initialItem.channels).filter(k => initialItem.channels[k as ChannelType] !== 'unmapped' && k !== 'all')
@@ -564,6 +573,8 @@ const AddonForm = ({ initialItem, onBack, onSave }: { initialItem?: LocalAddon |
             pos: form.selectedChannels.includes('pos') ? 'on_shelf' : 'unmapped',
             meituan: form.selectedChannels.includes('meituan') ? 'on_shelf' : 'unmapped',
             taobao: form.selectedChannels.includes('taobao') ? 'on_shelf' : 'unmapped',
+            meituan_dine: form.selectedChannels.includes('meituan_dine') ? 'on_shelf' : 'unmapped',
+            douyin_dine: form.selectedChannels.includes('douyin_dine') ? 'on_shelf' : 'unmapped',
         } as any;
 
         const addonToSave = {

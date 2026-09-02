@@ -30,6 +30,8 @@ const ALL_CHANNELS_DEF: { id: ChannelType; label: string; icon: React.ReactNode;
   { id: 'mini', label: '小程序', icon: <Smartphone size={14}/>, color: 'text-green-600' },
   { id: 'meituan', label: '美团外卖', icon: <Store size={14}/>, color: 'text-yellow-600' },
   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={14}/>, color: 'text-orange-600' },
+  { id: 'meituan_dine', label: '美团在线点', icon: <Store size={14}/>, color: 'text-amber-600' },
+  { id: 'douyin_dine', label: '抖音在线点', icon: <Store size={14}/>, color: 'text-cyan-600' },
   { id: 'pos', label: 'POS收银', icon: <Printer size={14}/>, color: 'text-blue-600' },
 ];
 
@@ -131,7 +133,7 @@ export const MobileProductList: React.FC<Props> = ({
     };
 
     const getAggregatedShelfStatus = (productId: string, globalStatus: string): 'all_on' | 'all_off' | 'mixed' => {
-        const channels: ChannelType[] = ['mini', 'meituan', 'taobao', 'pos'];
+        const channels: ChannelType[] = ['mini', 'meituan', 'taobao', 'meituan_dine', 'douyin_dine', 'pos'];
         const statuses = channels.map(c => getProductChannelStatus(productId, c, globalStatus));
         const validStatuses = statuses.filter(s => s !== 'unmapped');
         if (validStatuses.length === 0) return 'all_off'; 

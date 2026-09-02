@@ -72,6 +72,25 @@ button:disabled {
   background: rgba(0, 180, 96, 0.16);
 }
 
+/* App 原型保留触控/滚轮滚动，仅隐藏设备内所有页面的可见滚动条。 */
+.app-mobile-scroll-scope,
+.app-mobile-scroll-scope * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.app-mobile-scroll-scope::-webkit-scrollbar,
+.app-mobile-scroll-scope *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.app-mobile-scroll-scope::-webkit-scrollbar-corner,
+.app-mobile-scroll-scope *::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
 /* Console 2.0 prototype baseline */
 .console-shell {
   color: var(--console-color-text);

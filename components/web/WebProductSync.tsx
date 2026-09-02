@@ -106,12 +106,12 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
     },
     {
         id: '3',
-        name: '柠檬茶',
+        name: '双人下午茶套餐',
         code: '1246829509485641731',
-        type: '标准商品',
-        image: '',
-        price: 16,
-        salesMode: '仅套餐售卖',
+        type: '套餐商品',
+        image: 'https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&q=80&w=100',
+        price: 58,
+        salesMode: '正常售卖',
         timeSale: {
             enabled: true,
             startDate: '2026-04-14',
@@ -121,10 +121,10 @@ const INITIAL_SYNC_PRODUCTS: EditableProduct[] = [
             endTime: '21:00',
         },
         specs: [
-            { id: 'spec_5', name: '统', price: 16 },
+            { id: 'spec_5', name: '双人套餐', price: 58 },
         ],
         categories: [
-            { id: 'cate_5', name: '咖啡-邵亮测试', categorySort: 4, productSort: 1 },
+            { id: 'cate_5', name: '超值儿童餐', categorySort: 2, productSort: 4 },
         ],
     },
 ];
@@ -293,6 +293,10 @@ export const WebProductSync: React.FC<{ initialTab?: 'publish' | 'records' }> = 
             ? selectedSyncProducts.filter(product => !String(product.image || '').trim())
             : []
     ), [selectedPublishChannelIds, selectedSyncProducts]);
+    const includesMeituanDine = operationMode === 'sync' && selectedPublishChannelIds.includes('meituan_dine');
+    const qimaiManagesMeituanDine = omnichannelConfig.thirdPartyStrategies.meituan_dine === 'qimai';
+    const meituanMissingBrandProducts = selectedSyncProducts.filter(product => ['2', '3'].includes(product.id));
+    const meituanComboProducts = selectedSyncProducts.filter(product => product.type.includes('套餐'));
 
     const categoryList = useMemo(() => {
         const map = new Map<string, { name: string; categorySort: number; productCount: number }>();
@@ -1284,6 +1288,37 @@ export const WebProductSync: React.FC<{ initialTab?: 'publish' | 'records' }> = 
                         </div>
                     </div> : <div className="mb-6 flex items-start"><span className="w-24 text-sm text-gray-500">修改内容</span><div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div></div>}
 
+                    {includesMeituanDine && (
+                        <div className="mb-7 overflow-hidden rounded-lg border border-[#DDE5EC] bg-white">
+                            <div className="flex items-start justify-between gap-4 border-b border-[#E8ECEF] bg-[#F7FAF8] px-4 py-3.5">
+                                <div>
+                                    <div className="text-sm font-black text-[#1F2129]">美团在线点任务编排</div>
+                                    <div className="mt-1 text-xs leading-5 text-[#667085]">页面只确认商品、门店和渠道；系统自动处理平台品牌商品依赖。</div>
+                                </div>
+                                <span className={`shrink-0 rounded px-2.5 py-1 text-[11px] font-bold ${qimaiManagesMeituanDine ? 'bg-[#EAF8F1] text-[#087443]' : 'bg-[#F2F4F7] text-[#667085]'}`}>
+                                    {qimaiManagesMeituanDine ? '企迈管理平台商品' : '平台自行管理商品'}
+                                </span>
+                            </div>
+                            <div className="grid gap-0 md:grid-cols-3">
+                                {[
+                                    ['1', '补齐平台品牌商品', meituanMissingBrandProducts.length > 0 ? `${meituanMissingBrandProducts.length} 个商品尚未创建，将自动创建` : '所选商品均已具备平台品牌商品'],
+                                    ['2', '更新企迈门店商品', syncSource === 'template' ? '模板仅更新门店商品，不直接改品牌商品' : '按本次门店范围创建或更新'],
+                                    ['3', '同步美团门店商品', qimaiManagesMeituanDine ? '企迈门店商品成功后执行平台子任务' : '不创建平台商品同步任务'],
+                                ].map(([index, title, desc]) => (
+                                    <div key={index} className="border-b border-[#EEF0F2] px-4 py-4 md:border-b-0 md:border-r last:border-r-0">
+                                        <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00B865] text-[11px] text-white">{index}</span>{title}</div>
+                                        <div className="mt-2 text-xs leading-5 text-[#667085]">{desc}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {meituanComboProducts.length > 0 && (
+                                <div className="border-t border-[#E8ECEF] bg-[#FFF9EB] px-4 py-3 text-xs leading-5 text-[#8A5A00]">
+                                    已选 {meituanComboProducts.length} 个套餐。下发前将校验套餐分组、子商品和选购规则；不兼容时仅阻断对应美团平台子任务，企迈门店商品仍按现有逻辑处理。
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="flex items-center mb-8">
                         <span className="w-24 text-gray-500 text-sm">同步时间</span>
                         <div className="flex space-x-6 text-sm">
@@ -1337,7 +1372,9 @@ export const WebProductSync: React.FC<{ initialTab?: 'publish' | 'records' }> = 
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">{operationMode === 'sync' ? '同步任务已提交' : '批量修改任务已提交'}</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
-                请在发布记录中查看任务执行进度和各范围处理结果。
+                {includesMeituanDine && qimaiManagesMeituanDine
+                    ? '系统将依次补齐美团品牌商品、更新企迈门店商品并同步美团门店商品；请在发布记录中查看子任务结果。'
+                    : '请在发布记录中查看任务执行进度和各范围处理结果。'}
             </p>
             <div className="flex space-x-4">
                 <button onClick={() => setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors">返回工具页</button>

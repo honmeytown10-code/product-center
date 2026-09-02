@@ -7,6 +7,8 @@ import { CATEGORIES } from '../../types';
 import { ClearanceSettingsModal } from './PosModals';
 
 const MOCK_DISPLAY_PRODUCTS = [
+  { id: 'addon-1', name: '燕麦奶', price: 2.00, spec: '加料', stock: 56, status: 'normal', tags: [{ text: '加料', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal', meituan_dine: 'normal', douyin_dine: 'normal' }, channelStocks: { pos: 56, mini_dine: 56, mini_take: 56, mini_pickup: 56, meituan: 56, taobao: 56, meituan_dine: 56, douyin_dine: 56 } },
+  { id: 'addon-2', name: '椰果', price: 1.00, spec: '加料', stock: 0, status: 'sold_out', tags: [{ text: '加料', color: 'green' }], channels: { pos: 'sold_out', mini_dine: 'sold_out', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out', meituan_dine: 'sold_out', douyin_dine: 'sold_out' }, channelStocks: { pos: 0, mini_dine: 0, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0, meituan_dine: 0, douyin_dine: 0 }, channelTypes: { pos: '当日', mini_dine: '当日', mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日', meituan_dine: '当日', douyin_dine: '当日' } },
   { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '套餐', stock: 80, status: 'normal', tags: [{ text: '套餐', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 80, mini_dine: 80, mini_take: 80, mini_pickup: 80, meituan: 80, taobao: 80 } },
   { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '称重', stock: 1200, status: 'normal', tags: [{ text: '称重', color: 'blue' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 1200, mini_dine: 1200, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, channelTypes: { mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日' } },
   { id: 'p3', name: '生椰拿铁', price: 18.00, spec: '多规格', stock: 15, status: 'sold_out', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 15, mini_dine: 15, mini_take: 0, mini_pickup: 15, meituan: 0, taobao: 5 }, hasMultipleSpecs: true, specs: [{id: 's1', name: '大杯', stock: 10}, {id: 's2', name: '中杯', stock: 5}, {id: 's3', name: '小杯', stock: 0}], channelTypes: { mini_take: '当日', meituan: '长期' } },
@@ -167,6 +169,8 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
   }, [searchQuery, posStockoutMode, selectedCategory]);
 
   const handleItemClick = (item: any) => {
+    const meituanAddonUnsupported = item.id.startsWith('addon-') && !isStockShared && activeChannelTab === 'meituan_dine';
+    if (meituanAddonUnsupported) return;
     if (isBatchMode) {
       const newSet = new Set(selectedIds);
       if (newSet.has(item.id)) newSet.delete(item.id);
@@ -179,6 +183,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
   };
 
   const renderProductClearanceCard = (item: any, isSelected: boolean) => {
+     const meituanAddonUnsupported = item.id.startsWith('addon-') && !isStockShared && activeChannelTab === 'meituan_dine';
      let isOverallSoldOut = false;
      let isPartialSoldOut = false;
      
@@ -188,7 +193,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
      if (!isStockShared) {
          // Single channel view ONLY
          const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
-         displayStock = item.channelStocks?.[currentTab] ?? 0;
+         displayStock = item.channelStocks?.[currentTab] ?? item.stock;
          
          // If displayStock is a number and is 0, it is overall sold out FOR THIS CHANNEL/GROUP
          if (typeof displayStock === 'number' && displayStock <= 0) {
@@ -213,7 +218,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
 
      // Grid View
      return (
-        <div key={item.id} onClick={() => handleItemClick(item)} className={`relative bg-white rounded-xl shadow-sm cursor-pointer transition-all border flex flex-col ${showImage ? 'p-3' : 'p-4'} ${showImage ? 'h-[100px]' : 'h-[140px]'} group hover:shadow-md overflow-hidden ${isBatchMode && isSelected ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100 hover:border-[#00C06B]/30'}`}>
+        <div key={item.id} onClick={() => handleItemClick(item)} className={`relative bg-white rounded-xl shadow-sm transition-all border flex flex-col ${showImage ? 'p-3' : 'p-4'} ${showImage ? 'h-[100px]' : 'h-[140px]'} group overflow-hidden ${meituanAddonUnsupported ? 'cursor-not-allowed border-amber-100 bg-amber-50/40 opacity-75' : 'cursor-pointer hover:shadow-md'} ${isBatchMode && isSelected ? 'border-[#00C06B] bg-[#00C06B]/5' : meituanAddonUnsupported ? '' : 'border-gray-100 hover:border-[#00C06B]/30'}`}>
            {isOverallSoldOut && !isBatchMode && <div className="absolute inset-0 bg-white/60 z-10 pointer-events-none transition-opacity"></div>}
            
            <div className="flex h-full relative z-0">
@@ -257,6 +262,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
            </div>
            
            {isOverallSoldOut && <div className="absolute right-4 bottom-8 transform rotate-[-12deg] pointer-events-none z-20"><div className="border-[3px] border-red-500 text-red-500 rounded-lg px-3 py-1 text-lg font-black bg-white/90 shadow-sm backdrop-blur-[1px]">已售罄</div></div>}
+           {meituanAddonUnsupported && <div className="absolute bottom-2 left-3 right-3 z-20 rounded-md bg-amber-100 px-2 py-1 text-center text-[10px] font-bold text-amber-700">美团在线点加料不支持沽清</div>}
            
            {/* Adjusted Partial Sold Out Badge Position */}
            {isPartialSoldOut && !isBatchMode && (
@@ -273,6 +279,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                </div>
            )}
         </div>
+
      );
   };
 
@@ -323,6 +330,11 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                 </div>
             </div>
         </div>
+        {!isStockShared && activeChannelTab === 'meituan_dine' && (
+            <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs font-bold text-amber-700">
+                美团在线点商品可正常沽清；加料仅支持在上下架页面操作，当前页不提供加料沽清。
+            </div>
+        )}
         
         <div className="flex-1 flex overflow-hidden">
             {/* Left Panel: Today's Stockout / Low Stock Warnings */}
@@ -614,7 +626,7 @@ export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) =
                            setIsBatchMode(false);
                        }
                    }}
-                   activeChannel="all"
+                   activeChannel={(isStockShared ? 'all' : activeChannelTab) as ChannelType}
                 />
             )}
         </div>

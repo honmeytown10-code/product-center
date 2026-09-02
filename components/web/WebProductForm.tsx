@@ -5,7 +5,7 @@ import {
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
   CheckCircle2, CircleAlert, Send, ClipboardList, ArrowRight, Tags, ChefHat, ChevronLeft, ChevronDown, ChevronUp, GripVertical, X, CircleHelp, Trash2, Search, LoaderCircle
 } from 'lucide-react';
-import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, OmnichannelChannelId, ThirdPartyChannelId, resolveChildRequiredConfigs } from '../../types';
+import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, OmnichannelChannelId, ThirdPartyChannelId, ThirdPartyManagementMode, resolveChildRequiredConfigs } from '../../types';
 import { channelGroupIncludesMiniProgram } from '../../omnichannel';
 import { Switch, SectionHeader, FormRow } from './WebCommon';
 import { WebCategorySelectModal } from './WebModals';
@@ -28,6 +28,7 @@ interface WebProductFormProps {
     onGroupedTagOptionsChange?: (value: Record<GroupedTagFieldId, GroupedTagGroup[]>) => void;
     onBadgeOptionsChange?: (value: BadgeOptionConfig[]) => void;
     thirdPartyChannelAttributeIds?: ThirdPartyChannelId[];
+    thirdPartyManagementModes?: Partial<Record<ThirdPartyChannelId, ThirdPartyManagementMode>>;
     formScope?: 'master' | 'channel' | 'unified' | 'store';
     channelContext?: {
         catalogName: string;
@@ -958,6 +959,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     onGroupedTagOptionsChange,
     onBadgeOptionsChange,
     thirdPartyChannelAttributeIds = [],
+    thirdPartyManagementModes = {},
     formScope = 'store',
     channelContext,
     storeContext,
@@ -1037,6 +1039,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         (total, item) => total + item.missingChildren.length,
         0,
     );
+    const syncsMeituanDineToPlatform = selectedStoreChannelIds.includes('meituan_dine')
+        && thirdPartyManagementModes.meituan_dine === 'qimai';
+    const meituanBrandProductMissing = syncsMeituanDineToPlatform
+        && Boolean(initialProduct?.meituanBrandProductMissing ?? isComboProduct);
     const [currentCategory, setCurrentCategory] = useState(category);
     const isBuffetTicketCategory = currentCategory.businessType === 'buffet_ticket';
     const [prepEnabled, setPrepEnabled] = useState(true);
@@ -9769,10 +9775,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             <div>
                                 <h3 className="text-lg font-black text-[#1F2129]">
                                     {storeSaveStage === 'saving'
-                                        ? '正在保存门店商品'
+                                        ? (syncsMeituanDineToPlatform ? '正在保存并创建美团同步任务' : '正在保存门店商品')
                                         : storeSaveStage === 'result'
-                                            ? '门店商品保存完成'
-                                            : '确认保存门店商品'}
+                                            ? (syncsMeituanDineToPlatform ? '门店商品已保存，美团任务已提交' : '门店商品保存完成')
+                                            : (syncsMeituanDineToPlatform ? '确认保存并同步美团在线点' : '确认保存门店商品')}
                                 </h3>
                                 <p className="mt-1 text-xs text-[#667085]">
                                     {storeContext?.storeName || '当前门店'} · {initialProduct?.name || (isComboProduct ? '套餐商品' : '商品')}
@@ -9794,8 +9800,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             {storeSaveStage === 'saving' ? (
                                 <div className="flex min-h-[280px] flex-col items-center justify-center text-center">
                                     <LoaderCircle size={36} className="animate-spin text-[#00B865]" />
-                                    <div className="mt-4 text-base font-black text-[#1F2129]">正在实时更新 {selectedStoreChannelIds.length} 个渠道</div>
-                                    <div className="mt-2 text-sm text-[#667085]">请勿关闭页面，全部渠道保存完成后将直接反馈结果。</div>
+                                    <div className="mt-4 text-base font-black text-[#1F2129]">正在更新 {selectedStoreChannelIds.length} 个渠道</div>
+                                    <div className="mt-2 text-sm text-[#667085]">{syncsMeituanDineToPlatform ? '门店商品保存成功后将创建美团在线点异步子任务。' : '请勿关闭页面，全部渠道保存完成后将直接反馈结果。'}</div>
                                 </div>
                             ) : (
                                 <>
@@ -9859,6 +9865,21 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         </div>
                                     )}
 
+                                    {storeSaveStage === 'confirm' && syncsMeituanDineToPlatform && (
+                                        <div className="mb-4 overflow-hidden rounded-md border border-[#B7E7CB] bg-[#F7FCF9]">
+                                            <div className="flex items-center justify-between border-b border-[#DDEFE5] px-4 py-3">
+                                                <div className="text-sm font-black text-[#087443]">美团在线点平台任务</div>
+                                                <span className="rounded bg-white px-2 py-1 text-[11px] font-bold text-[#087443]">异步执行</span>
+                                            </div>
+                                            <div className="space-y-2 px-4 py-3 text-xs leading-5 text-[#475467]">
+                                                {meituanBrandProductMissing && <div>1. 当前品牌商品尚未创建，系统将先根据渠道商品自动创建美团品牌商品。</div>}
+                                                <div>{meituanBrandProductMissing ? '2' : '1'}. 保存当前门店的美团在线点渠道商品。</div>
+                                                <div>{meituanBrandProductMissing ? '3' : '2'}. 创建或更新平台门店商品；可在发布中心查看结果并重试失败项。</div>
+                                                {isComboProduct && <div className="mt-2 border-t border-[#DDEFE5] pt-2 text-[#8A5A00]">套餐将先校验分组、子商品及选购规则；不兼容时不影响企迈门店商品保存，只阻断平台子任务。</div>}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className={`flex items-start gap-3 rounded-md border px-4 py-3 ${
                                         storeSaveStage === 'result'
                                             ? 'border-[#B7E7CB] bg-[#F0FBF5]'
@@ -9872,12 +9893,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <div>
                                             <div className="text-sm font-black text-[#1F2129]">
                                                 {storeSaveStage === 'result'
-                                                    ? `已成功更新 ${selectedStoreChannelIds.length} 个渠道`
+                                                    ? (syncsMeituanDineToPlatform ? `已更新 ${selectedStoreChannelIds.length} 个渠道，并创建美团平台任务` : `已成功更新 ${selectedStoreChannelIds.length} 个渠道`)
                                                     : `本次修改将作用于 ${selectedStoreChannelIds.length} 个渠道`}
                                             </div>
                                             <div className="mt-1 text-xs leading-5 text-[#667085]">
                                                 {storeSaveStage === 'result'
-                                                    ? '所选渠道均已实时保存完成，本次修改已生效。'
+                                                    ? (syncsMeituanDineToPlatform ? '企迈门店商品已保存；美团在线点处理进度请前往发布中心查看。' : '所选渠道均已实时保存完成，本次修改已生效。')
                                                     : storeMissingChildCount > 0
                                                         ? '缺失的套餐子商品将继承门店商品资料并默认上架；每个渠道内先补齐子商品，成功后再更新套餐结构。'
                                                         : '确认后将实时更新所选渠道，全部保存完成后再返回结果。'}
@@ -9897,7 +9918,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {storeSaveStage !== 'saving' && (
                             <div className="flex items-center justify-between border-t border-[#E8E8E8] bg-white px-6 py-4">
                                 <div className="text-xs text-[#98A2B3]">
-                                    {storeSaveStage === 'result' ? '本次保存已完成' : '保存时将实时更新所选渠道'}
+                                    {storeSaveStage === 'result' ? '本次保存已完成' : (syncsMeituanDineToPlatform ? '平台同步失败不回滚企迈门店商品' : '保存时将实时更新所选渠道')}
                                 </div>
                                 <div className="flex gap-3">
                                     {storeSaveStage === 'confirm' ? (
@@ -9909,7 +9930,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 disabled={selectedStoreChannelIds.length === 0}
                                                 className="rounded-md bg-[#00B865] px-5 py-2 text-sm font-bold text-white hover:bg-[#009F57] disabled:cursor-not-allowed disabled:bg-[#B7E7CB]"
                                             >
-                                                确认保存
+                                                {syncsMeituanDineToPlatform ? '确认保存并同步' : '确认保存'}
                                             </button>
                                         </>
                                     ) : (

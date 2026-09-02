@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Blend, ChefHat, Lock, Plus, Search, Tag, Tags, X } from 'lucide-react';
+import { Blend, ChefHat, Lock, Plus, Search, X } from 'lucide-react';
 import { WebStoreAddonList } from './WebStoreAddonList';
 import { PosMethodView } from '../pos/PosMethodView';
 import { BadgeOptionConfig, GroupedTagFieldId, GroupedTagGroup, TagStyleType } from './WebProductForm';
@@ -61,8 +61,6 @@ export const WebStoreAttributeManager: React.FC<{
   const tabs: Array<{ id: StoreAttributeTab; label: string; desc: string; icon: React.ReactNode }> = [
     { id: 'addon', label: '加料', desc: '管理门店加料价格、库存与投放状态', icon: <Blend size={16} /> },
     { id: 'method', label: '做法', desc: '管理门店做法启用状态与关联商品', icon: <ChefHat size={16} /> },
-    { id: 'label', label: '描述标签', desc: '维护门店商品描述标签组与标签，总部下发数据只读', icon: <Tags size={16} /> },
-    { id: 'badge', label: '角标', desc: '维护商品角标与默认有效期，总部下发数据只读', icon: <Tag size={16} /> },
   ];
 
   const descTagGroups = groupedTagOptions.p_desc_tags || [];

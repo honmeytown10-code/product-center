@@ -186,7 +186,7 @@ export const MobileApp: React.FC = () => {
   };
 
   const renderDashboard = () => (
-    <div className="flex-1 bg-[#F5F7FA] overflow-y-auto pb-24 no-scrollbar">
+    <div className="flex-1 min-h-0 bg-[#F5F7FA] overflow-y-auto pb-24 no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
        
        {/* Dashboard Header */}
        <div className="bg-white px-5 pt-4 pb-6 rounded-b-[32px] shadow-sm mb-5 relative z-10">
@@ -443,7 +443,7 @@ export const MobileApp: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full bg-[#F5F6FA] flex flex-col font-sans text-gray-800 relative">
+    <div className="w-full h-full min-h-0 overflow-hidden bg-[#F5F6FA] flex flex-col font-sans text-gray-800 relative no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Content Render */}
       {renderContent()}
 

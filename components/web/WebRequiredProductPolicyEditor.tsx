@@ -209,9 +209,14 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                         {requiredRows.map(row => (
                           <tr key={row.id} className="border-t border-[#EEF1F4] align-top">
                             <td className="px-4 py-4 font-medium">{row.name}</td>
-                            <td className="px-4 py-4"><div className="space-y-4"><CheckOption checked={row.dineInEnabled} onClick={() => updateRow(row.id, current => ({ ...current, dineInEnabled: !current.dineInEnabled }))} label="堂食" /><CheckOption checked={row.takeawayEnabled} onClick={() => updateRow(row.id, current => ({ ...current, takeawayEnabled: !current.takeawayEnabled }))} label="外卖" /></div></td>
                             <td className="px-4 py-3">
-                              <div className="space-y-2">
+                              <div className="grid grid-rows-2 gap-2">
+                                <div className="flex h-10 items-center"><CheckOption checked={row.dineInEnabled} onClick={() => updateRow(row.id, current => ({ ...current, dineInEnabled: !current.dineInEnabled }))} label="堂食" /></div>
+                                <div className="flex h-10 items-center"><CheckOption checked={row.takeawayEnabled} onClick={() => updateRow(row.id, current => ({ ...current, takeawayEnabled: !current.takeawayEnabled }))} label="外卖" /></div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="grid grid-rows-2 gap-2">
                                 <QuantitySetting label="堂食" active={row.dineInEnabled} mode={row.dineInQuantityMode} count={row.dineInCount} onModeChange={next => updateRow(row.id, current => ({ ...current, dineInQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, dineInCount: Math.max(1, current.dineInCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, dineInCount: current.dineInCount + 1 }))} />
                                 <QuantitySetting label="外卖" active={row.takeawayEnabled} mode={row.takeawayQuantityMode} count={row.takeawayCount} onModeChange={next => updateRow(row.id, current => ({ ...current, takeawayQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: Math.max(1, current.takeawayCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: current.takeawayCount + 1 }))} />
                               </div>
@@ -302,7 +307,7 @@ const ChoiceCard = ({ selected, title, description, onClick, disabled = false }:
 );
 
 const QuantitySetting = ({ label, active, mode, count, onModeChange, onDecrease, onIncrease }: { label: string; active: boolean; mode: QuantityMode; count: number; onModeChange: (mode: QuantityMode) => void; onDecrease: () => void; onIncrease: () => void }) => (
-  <div className={`flex min-h-9 items-center gap-5 rounded-md bg-[#FAFBFC] px-3 py-1.5 ${active ? '' : 'opacity-45'}`}><span className="w-10 shrink-0 text-xs font-medium text-[#667085]">{label}</span><RadioOption checked={mode === 'fixed'} onClick={() => active && onModeChange('fixed')} label="固定数量" /><div className={`inline-flex h-8 items-center overflow-hidden rounded-md border border-[#DDE2E8] bg-white ${mode !== 'fixed' || !active ? 'invisible' : ''}`}><button type="button" onClick={onDecrease} disabled={!active} className="h-8 w-8 border-r border-[#E5E9EF] text-[#667085] hover:bg-[#F7F8FA]">−</button><div className="w-10 text-center text-sm">{count}</div><button type="button" onClick={onIncrease} disabled={!active} className="h-8 w-8 border-l border-[#E5E9EF] text-[#667085] hover:bg-[#F7F8FA]">＋</button></div><RadioOption checked={mode === 'diners'} onClick={() => active && onModeChange('diners')} label="与用餐人数相同" /></div>
+  <div className={`flex h-10 items-center gap-5 rounded-md bg-[#FAFBFC] px-3 ${active ? '' : 'opacity-45'}`}><span className="w-10 shrink-0 text-xs font-medium text-[#667085]">{label}</span><RadioOption checked={mode === 'fixed'} onClick={() => active && onModeChange('fixed')} label="固定数量" /><div className={`inline-flex h-8 items-center overflow-hidden rounded-md border border-[#DDE2E8] bg-white ${mode !== 'fixed' || !active ? 'invisible' : ''}`}><button type="button" onClick={onDecrease} disabled={!active} className="h-8 w-8 border-r border-[#E5E9EF] text-[#667085] hover:bg-[#F7F8FA]">−</button><div className="w-10 text-center text-sm">{count}</div><button type="button" onClick={onIncrease} disabled={!active} className="h-8 w-8 border-l border-[#E5E9EF] text-[#667085] hover:bg-[#F7F8FA]">＋</button></div><RadioOption checked={mode === 'diners'} onClick={() => active && onModeChange('diners')} label="与用餐人数相同" /></div>
 );
 
 const SwitchSetting = ({ title, description, checked, onChange }: { title: string; description: string; checked: boolean; onChange: () => void }) => (

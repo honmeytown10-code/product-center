@@ -418,7 +418,9 @@ export const WebAdmin: React.FC = () => {
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>('store');
-  const [activeMenu, setActiveMenu] = useState('buffet_menu');
+  const [activeMenu, setActiveMenu] = useState(() => (
+    new URLSearchParams(window.location.search).get('menu') || 'buffet_menu'
+  ));
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -438,7 +440,11 @@ export const WebAdmin: React.FC = () => {
   const [creationContext, setCreationContext] = useState<CreationContext | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
   const [storeCategoryReturnMenu, setStoreCategoryReturnMenu] = useState('store_product_list');
-  const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(null);
+  const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(() => (
+    new URLSearchParams(window.location.search).get('action') === 'create'
+      ? { mode: 'create' }
+      : null
+  ));
   const [storeRegionEditorContext, setStoreRegionEditorContext] = useState<any>(null);
   const [attributeMutexEditorContext, setAttributeMutexEditorContext] = useState<{ mode: 'create' | 'edit'; rule?: any } | null>(null);
   const [showProductMenuGuide, setShowProductMenuGuide] = useState(false);

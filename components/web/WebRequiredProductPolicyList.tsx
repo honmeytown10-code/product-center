@@ -164,7 +164,7 @@ export const WebRequiredProductPolicyList: React.FC<{
       </div></div>}
 
       {exceptionOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[680px] rounded-lg bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4"><div><h3 className="font-semibold">特例设置</h3><p className="mt-1 text-[12px] text-[#667085]">订单内商品全部属于特例商品时，不校验必选商品与分类必选。</p></div><button onClick={() => setExceptionOpen(false)} aria-label="关闭特例设置"><X size={20} className="text-[#667085]" /></button></div>
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4"><div><h3 className="font-semibold">特例设置</h3><p className="mt-1 text-[12px] text-[#667085]">订单内商品全部属于特例商品时，仅跳过必选商品方案校验；分类必选独立执行，不受影响。</p></div><button onClick={() => setExceptionOpen(false)} aria-label="关闭特例设置"><X size={20} className="text-[#667085]" /></button></div>
         <div className="space-y-4 p-5 text-[13px]">
           <div className="flex items-center justify-between"><div><div className="font-medium text-[#344054]">特例商品</div><div className="mt-1 text-[12px] text-[#98A2B3]">品牌统一维护，POS 与小程序直接读取。</div></div><button onClick={() => { setExceptionSelectorDraftIds(exceptionDraftIds); setExceptionSelectorOpen(true); }} className="inline-flex h-9 items-center rounded-md border border-[#00B460] px-4 font-medium text-[#008F4C]"><Plus size={15} className="mr-1.5" />选择商品</button></div>
           <div className="overflow-hidden rounded-md border border-[#E5E7EB]"><div className="grid grid-cols-[1fr_170px_90px] bg-[#F7F8FA] px-4 py-3 font-medium text-[#4E5969]"><span>商品名称</span><span>前台分类</span><span>操作</span></div>{exceptionDraftIds.map(productId => {
@@ -179,7 +179,7 @@ export const WebRequiredProductPolicyList: React.FC<{
       <WebProductSelectorDialog
         open={exceptionSelectorOpen}
         title="选择特例商品"
-        description="从品牌商品库选择商品；订单内商品全部属于特例商品时，跳过必选校验。"
+        description="从品牌商品库选择商品；订单内商品全部属于特例商品时，仅跳过必选商品方案校验。"
         products={EXCEPTION_PRODUCT_OPTIONS}
         selectedIds={exceptionSelectorDraftIds}
         onSelectedIdsChange={setExceptionSelectorDraftIds}

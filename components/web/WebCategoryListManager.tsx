@@ -1,5 +1,5 @@
 ﻿﻿﻿﻿﻿﻿import React, { useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, ChevronDown, ChevronRight, Eye, GripVertical, Info, ListFilter, Minus, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, GripVertical, Info, ListFilter, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 
 type DisplayCategory = {
   id: string;
@@ -20,6 +20,7 @@ type DisplayCategory = {
   children?: DisplayCategory[];
   sourceType: 'brand' | 'store';
   sourceName: string;
+  storeImpact?: StoreCategoryImpact;
 };
 
 type LinkedProduct = {
@@ -28,6 +29,23 @@ type LinkedProduct = {
   type: '商城商品' | '标准商品' | '套餐商品' | '加料商品';
   imageText?: string;
   categoryCount?: number;
+  storeCount?: number;
+};
+
+type StoreCategoryImpact = {
+  storeCount: number;
+  storeProductRelationCount: number;
+  associations: StoreCategoryAssociation[];
+};
+
+type StoreCategoryAssociation = {
+  id: string;
+  storeName: string;
+  storeCode: string;
+  channelName: string;
+  categoryName: string;
+  productCount: number;
+  productNames: string[];
 };
 
 type LinkProductCandidate = LinkedProduct & {
@@ -84,6 +102,9 @@ type BackendCategory = {
 };
 
 type SortSyncMode = 'immediate' | 'manual' | 'scheduled';
+type UnlinkSyncMode = 'headquarters_only' | 'sync_stores';
+type DeleteCategoryMode = 'blocked' | 'direct' | 'range' | 'store_linked';
+type DeleteCategoryScope = 'headquarters_only' | 'headquarters_and_stores';
 type CategoryColumnKey = 'sort' | 'icon' | 'name' | 'alias' | 'code' | 'tag' | 'requiredGroup' | 'displaySettings' | 'linkedProducts' | 'remark' | 'source';
 
 const MOCK_DATA: DisplayCategory[] = [
@@ -117,8 +138,8 @@ const MOCK_DATA: DisplayCategory[] = [
         remark: '',
         productCount: 5,
         linkedProducts: [
-          { id: 'p-101', name: '子测试商品A', type: '标准商品', categoryCount: 2 },
-          { id: 'p-102', name: '子测试加料', type: '加料商品', categoryCount: 1 },
+          { id: 'p-101', name: '子测试商品A', type: '标准商品', categoryCount: 2, storeCount: 36 },
+          { id: 'p-102', name: '子测试加料', type: '加料商品', categoryCount: 1, storeCount: 28 },
         ],
         parentId: '1',
         sourceType: 'brand',
@@ -126,9 +147,9 @@ const MOCK_DATA: DisplayCategory[] = [
       },
     ],
     linkedProducts: [
-      { id: 'p-001', name: '招牌测试套餐', type: '套餐商品', categoryCount: 2 },
-      { id: 'p-002', name: '测试标准商品', type: '标准商品', categoryCount: 1 },
-      { id: 'p-003', name: '测试商城商品', type: '商城商品', categoryCount: 3 },
+      { id: 'p-001', name: '招牌测试套餐', type: '套餐商品', categoryCount: 2, storeCount: 48 },
+      { id: 'p-002', name: '测试标准商品', type: '标准商品', categoryCount: 1, storeCount: 42 },
+      { id: 'p-003', name: '测试商城商品', type: '商城商品', categoryCount: 3, storeCount: 18 },
     ],
     sourceType: 'brand',
     sourceName: '品牌',
@@ -148,8 +169,8 @@ const MOCK_DATA: DisplayCategory[] = [
     remark: '套餐类统一归档',
     productCount: 12,
     linkedProducts: [
-      { id: 'p-011', name: '双人精品套餐', type: '套餐商品', categoryCount: 1 },
-      { id: 'p-012', name: '商城精品套餐', type: '商城商品', categoryCount: 2 },
+      { id: 'p-011', name: '双人精品套餐', type: '套餐商品', categoryCount: 1, storeCount: 52 },
+      { id: 'p-012', name: '商城精品套餐', type: '商城商品', categoryCount: 2, storeCount: 31 },
     ],
     sourceType: 'brand',
     sourceName: '品牌',
@@ -169,54 +190,86 @@ const MOCK_DATA: DisplayCategory[] = [
     remark: '生日蛋糕单独展示',
     productCount: 8,
     linkedProducts: [
-      { id: 'p-021', name: '芒果蛋糕', type: '标准商品', categoryCount: 1 },
-      { id: 'p-022', name: '草莓蛋糕', type: '商城商品', categoryCount: 2 },
+      { id: 'p-021', name: '芒果蛋糕', type: '标准商品', categoryCount: 1, storeCount: 16 },
+      { id: 'p-022', name: '草莓蛋糕', type: '商城商品', categoryCount: 2, storeCount: 12 },
     ],
     sourceType: 'brand',
     sourceName: '品牌',
   },
   {
     id: '4',
-    name: '0318分类',
-    alias: '',
-    code: '0318',
+    name: '七夕活动专区',
+    alias: '七夕限定',
+    code: 'qixi-event',
     sort: 4,
-    iconText: '03',
+    iconText: '七',
     tag: '活动',
     requiredGroup: false,
     displaySettings: ['微信小程序', '企迈POS', '企迈H5', '抖音小程序'],
     saleScopes: ['堂食', '外带', '外卖'],
     saleTypes: ['到店', '外送'],
-    remark: '0318活动期间专用分类',
-    productCount: 45,
-    linkedProducts: [
-      { id: 'p-031', name: '活动套餐', type: '套餐商品' },
-      { id: 'p-032', name: '活动加料', type: '加料商品' },
-      { id: 'p-033', name: '活动单品', type: '标准商品' },
-    ],
-    sourceType: 'store',
-    sourceName: '南山万象店',
+    remark: '活动结束后统一清理',
+    productCount: 0,
+    linkedProducts: [],
+    sourceType: 'brand',
+    sourceName: '品牌',
+    storeImpact: {
+      storeCount: 86,
+      storeProductRelationCount: 0,
+      associations: [],
+    },
   },
   {
     id: '5',
-    name: '酒水',
-    alias: '清爽饮品',
-    code: 'drink',
+    name: '618活动分组',
+    alias: '618促销',
+    code: '618-event',
     sort: 5,
-    iconText: '饮',
-    tag: '',
+    iconText: '61',
+    tag: '活动',
     requiredGroup: false,
     displaySettings: ['微信小程序', '企迈POS'],
+    saleScopes: ['堂食', '外带'],
+    saleTypes: ['到店', '外送'],
+    remark: '部分门店商品仅关联当前分类',
+    productCount: 0,
+    linkedProducts: [],
+    sourceType: 'brand',
+    sourceName: '品牌',
+    storeImpact: {
+      storeCount: 52,
+      storeProductRelationCount: 268,
+      associations: [
+        { id: 'assoc-1', storeName: '南山万象店', storeCode: '870525145', channelName: '小程序-堂食', categoryName: '618活动分组', productCount: 86, productNames: ['招牌珍珠奶茶', '经典柠檬茶', '双人分享套餐'] },
+        { id: 'assoc-2', storeName: '南山万象店', storeCode: '870525145', channelName: '小程序-外卖', categoryName: '618活动分组', productCount: 64, productNames: ['招牌珍珠奶茶', '鲜果茶系列'] },
+        { id: 'assoc-3', storeName: '福田卓悦店', storeCode: '39914002', channelName: 'POS', categoryName: '618活动分组', productCount: 48, productNames: ['经典美式', '厚乳拿铁'] },
+        { id: 'assoc-4', storeName: '宝安壹方城店', storeCode: '80193701', channelName: '美团-外卖', categoryName: '618活动分组', productCount: 42, productNames: ['外卖单人套餐', '夏日果茶'] },
+        { id: 'assoc-5', storeName: '龙华红山店', storeCode: '39792129', channelName: '淘宝闪购', categoryName: '618活动分组', productCount: 28, productNames: ['夜宵组合', '加料椰果'] },
+      ],
+    },
+  },
+  {
+    id: '6',
+    name: '新品预热',
+    alias: '',
+    code: 'new-preview',
+    sort: 6,
+    iconText: '新',
+    tag: '新品',
+    requiredGroup: false,
+    displaySettings: ['微信小程序'],
     saleScopes: ['堂食'],
     saleTypes: ['到店'],
-    remark: '仅堂食场景展示',
-    productCount: 20,
-    linkedProducts: [
-      { id: 'p-041', name: '冰美式', type: '标准商品' },
-      { id: 'p-042', name: '门店酒水组合', type: '商城商品' },
-    ],
-    sourceType: 'store',
-    sourceName: '福田卓悦店',
+    remark: '尚未下发至门店',
+    productCount: 0,
+    linkedProducts: [],
+    sourceType: 'brand',
+    sourceName: '品牌',
+    storeImpact: {
+      storeCount: 0,
+      storeProductRelationCount: 0,
+      associations: [],
+    },
   },
 ];
 
@@ -571,12 +624,20 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
   const [showCategoryDispatchModal, setShowCategoryDispatchModal] = useState(false);
   const [categoryDispatchMode, setCategoryDispatchMode] = useState<SortSyncMode>('immediate');
   const [productViewer, setProductViewer] = useState<{ categoryName: string; products: LinkedProduct[] } | null>(null);
-  const [deleteDialog, setDeleteDialog] = useState<{ mode: 'confirm' | 'blocked'; categoryId: string; categoryName: string; isChild: boolean } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    mode: DeleteCategoryMode;
+    categoryId: string;
+    categoryName: string;
+    isChild: boolean;
+    headquartersProductCount: number;
+    impact: StoreCategoryImpact;
+  } | null>(null);
   const [linkedProductKeyword, setLinkedProductKeyword] = useState('');
   const [linkDialog, setLinkDialog] = useState<{ source: 'frontend' | 'backend'; categoryId: string; categoryName: string; selectedIds: string[] } | null>(null);
-  const [unlinkDialog, setUnlinkDialog] = useState<{ source: 'frontend' | 'backend'; categoryId: string; categoryName: string; products: LinkedProduct[]; selectedIds: string[]; keyword: string } | null>(null);
-  const [unlinkResultDialog, setUnlinkResultDialog] = useState<{ source: 'frontend' | 'backend'; categoryId: string; categoryName: string; removed: LinkedProduct[]; blocked: LinkedProduct[] } | null>(null);
+  const [unlinkDialog, setUnlinkDialog] = useState<{ source: 'frontend' | 'backend'; categoryId: string; categoryName: string; products: LinkedProduct[]; selectedIds: string[]; keyword: string; syncMode: UnlinkSyncMode } | null>(null);
+  const [unlinkResultDialog, setUnlinkResultDialog] = useState<{ source: 'frontend' | 'backend'; categoryId: string; categoryName: string; removed: LinkedProduct[]; blocked: LinkedProduct[]; syncMode: UnlinkSyncMode; affectedStoreCount: number } | null>(null);
   const [productCategoryEditor, setProductCategoryEditor] = useState<{ source: 'frontend' | 'backend'; product: LinkedProduct; selectedCategoryIds: string[] } | null>(null);
+  const [operationNotice, setOperationNotice] = useState<string | null>(null);
   const [formState, setFormState] = useState<CategoryFormState>(createRootDraft(MOCK_DATA.length + 1));
   const [backendEditor, setBackendEditor] = useState<{
     mode: 'create' | 'edit';
@@ -959,18 +1020,41 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
     );
   };
 
-  const hasLinkedProductsRecursive = (category: DisplayCategory) => {
-    if (category.linkedProducts?.length) return true;
-    return (category.children || []).some(child => hasLinkedProductsRecursive(child));
-  };
+  const getLinkedProductCountRecursive = (category: DisplayCategory): number =>
+    category.linkedProducts.length
+    + (category.children || []).reduce((total, child) => total + getLinkedProductCountRecursive(child), 0);
+
+  const getStoreImpactRecursive = (category: DisplayCategory): StoreCategoryImpact =>
+    (category.children || []).reduce<StoreCategoryImpact>((total, child) => {
+      const childImpact = getStoreImpactRecursive(child);
+      return {
+        storeCount: Math.max(total.storeCount, childImpact.storeCount),
+        storeProductRelationCount: total.storeProductRelationCount + childImpact.storeProductRelationCount,
+        associations: [...total.associations, ...childImpact.associations],
+      };
+    }, {
+      storeCount: category.storeImpact?.storeCount || 0,
+      storeProductRelationCount: category.storeImpact?.storeProductRelationCount || 0,
+      associations: category.storeImpact?.associations || [],
+    });
 
   const handleDeleteCategory = (category: DisplayCategory) => {
-    const blocked = hasLinkedProductsRecursive(category);
+    const headquartersProductCount = getLinkedProductCountRecursive(category);
+    const impact = getStoreImpactRecursive(category);
+    const mode: DeleteCategoryMode = headquartersProductCount > 0
+      ? 'blocked'
+      : impact.storeCount === 0
+        ? 'direct'
+        : impact.storeProductRelationCount > 0
+          ? 'store_linked'
+          : 'range';
     setDeleteDialog({
-      mode: blocked ? 'blocked' : 'confirm',
+      mode,
       categoryId: category.id,
       categoryName: category.name,
       isChild: Boolean(category.parentId),
+      headquartersProductCount,
+      impact,
     });
   };
 
@@ -1040,6 +1124,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       products: category.linkedProducts || [],
       selectedIds: [],
       keyword: '',
+      syncMode: 'headquarters_only',
     });
   };
 
@@ -1051,6 +1136,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       products: category.linkedProducts || [],
       selectedIds: [],
       keyword: '',
+      syncMode: 'headquarters_only',
     });
   };
 
@@ -1060,6 +1146,9 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
     const selectedProducts = unlinkDialog.products.filter(product => unlinkDialog.selectedIds.includes(product.id));
     const blocked = selectedProducts.filter(product => (product.categoryCount || 1) <= 1);
     const removed = selectedProducts.filter(product => (product.categoryCount || 1) > 1);
+    const affectedStoreCount = unlinkDialog.syncMode === 'sync_stores'
+      ? Math.max(0, ...removed.map(product => product.storeCount || 0))
+      : 0;
 
     if (removed.length) {
       const updater = (currentProducts: LinkedProduct[]) => currentProducts.filter(product => !removed.some(item => item.id === product.id));
@@ -1077,11 +1166,13 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       categoryName: unlinkDialog.categoryName,
       removed,
       blocked,
+      syncMode: unlinkDialog.syncMode,
+      affectedStoreCount,
     });
   };
 
   const handleSaveProductCategoryEditor = () => {
-    if (!productCategoryEditor) return;
+    if (!productCategoryEditor || productCategoryEditor.selectedCategoryIds.length === 0) return;
 
     const selectedIds = new Set(productCategoryEditor.selectedCategoryIds);
     const targetProduct = productCategoryEditor.product;
@@ -1163,8 +1254,8 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
     setUnlinkResultDialog(null);
   };
 
-  const confirmDeleteCategory = () => {
-    if (!deleteDialog || deleteDialog.mode !== 'confirm') return;
+  const confirmDeleteCategory = (scope: DeleteCategoryScope) => {
+    if (!deleteDialog || deleteDialog.mode === 'blocked') return;
 
     if (deleteDialog.isChild) {
       setCategories(prev =>
@@ -1179,6 +1270,12 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       setCategories(prev => sortCategories(prev.filter(item => item.id !== deleteDialog.categoryId)));
     }
 
+    const notice = deleteDialog.impact.storeCount > 0 && scope === 'headquarters_only'
+      ? `已删除总部分类，${deleteDialog.impact.storeCount} 家门店中的对应分类及商品关联保持不变`
+      : deleteDialog.impact.storeCount > 0
+        ? `已删除总部分类，并同步清理 ${deleteDialog.impact.storeCount} 家门店中的对应分类`
+        : `已删除分类“${deleteDialog.categoryName}”`;
+    setOperationNotice(notice);
     setDeleteDialog(null);
   };
 
@@ -1687,6 +1784,13 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
 
   return (
     <div className="m-4 flex flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+      {operationNotice && (
+        <div className="fixed right-6 top-20 z-[120] flex max-w-[460px] items-start gap-3 rounded-lg border border-[#B7E7CD] bg-white px-4 py-3 text-sm text-[#087A49] shadow-[0_12px_32px_rgba(15,23,42,0.16)]">
+          <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
+          <span className="leading-6">{operationNotice}</span>
+          <button type="button" onClick={() => setOperationNotice(null)} className="ml-2 rounded p-0.5 text-[#7AA98F] hover:bg-[#F3FCF7]" aria-label="关闭提示"><X size={15} /></button>
+        </div>
+      )}
       {scope === 'all' && (
         <div className="flex space-x-8 border-b border-gray-100 px-6 py-4">
           <button onClick={() => setActiveTab('frontend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'frontend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>前台分类</button>
@@ -1920,12 +2024,15 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
       )}
       {unlinkDialog && (
         <UnlinkProductsModal
+          source={unlinkDialog.source}
           categoryName={unlinkDialog.categoryName}
           products={unlinkDialog.products}
           keyword={unlinkDialog.keyword}
           selectedIds={unlinkDialog.selectedIds}
+          syncMode={unlinkDialog.syncMode}
           onChangeKeyword={keyword => setUnlinkDialog(prev => (prev ? { ...prev, keyword } : prev))}
           onChangeSelectedIds={selectedIds => setUnlinkDialog(prev => (prev ? { ...prev, selectedIds } : prev))}
+          onChangeSyncMode={syncMode => setUnlinkDialog(prev => (prev ? { ...prev, syncMode } : prev))}
           onCancel={() => setUnlinkDialog(null)}
           onConfirm={handleConfirmUnlinkDialog}
         />
@@ -1937,6 +2044,8 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
           categoryName={unlinkResultDialog.categoryName}
           removed={unlinkResultDialog.removed}
           blocked={unlinkResultDialog.blocked}
+          syncMode={unlinkResultDialog.syncMode}
+          affectedStoreCount={unlinkResultDialog.affectedStoreCount}
           onClose={() => setUnlinkResultDialog(null)}
           onEditProduct={product => {
             const selectedCategoryIds = [unlinkResultDialog.categoryId];
@@ -1958,6 +2067,8 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
         <DeleteCategoryModal
           mode={deleteDialog.mode}
           categoryName={deleteDialog.categoryName}
+          headquartersProductCount={deleteDialog.headquartersProductCount}
+          impact={deleteDialog.impact}
           onCancel={() => setDeleteDialog(null)}
           onConfirm={confirmDeleteCategory}
         />
@@ -2412,27 +2523,36 @@ const LinkProductsModal = ({
 };
 
 const UnlinkProductsModal = ({
+  source,
   categoryName,
   products,
   keyword,
   selectedIds,
+  syncMode,
   onChangeKeyword,
   onChangeSelectedIds,
+  onChangeSyncMode,
   onCancel,
   onConfirm,
 }: {
+  source: 'frontend' | 'backend';
   categoryName: string;
   products: LinkedProduct[];
   keyword: string;
   selectedIds: string[];
+  syncMode: UnlinkSyncMode;
   onChangeKeyword: (keyword: string) => void;
   onChangeSelectedIds: (selectedIds: string[]) => void;
+  onChangeSyncMode: (syncMode: UnlinkSyncMode) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) => {
   const selectedIdSet = new Set(selectedIds);
   const filteredProducts = products.filter(product => product.name.toLowerCase().includes(keyword.trim().toLowerCase()));
-  const allChecked = filteredProducts.length > 0 && filteredProducts.every(product => selectedIdSet.has(product.id));
+  const removableProducts = filteredProducts.filter(product => (product.categoryCount || 1) > 1);
+  const selectedRemovableProducts = products.filter(product => selectedIdSet.has(product.id) && (product.categoryCount || 1) > 1);
+  const affectedStoreCount = Math.max(0, ...selectedRemovableProducts.map(product => product.storeCount || 0));
+  const allChecked = removableProducts.length > 0 && removableProducts.every(product => selectedIdSet.has(product.id));
 
   return (
     <div className="fixed inset-0 z-[98] flex items-center justify-center bg-black/35 px-6">
@@ -2465,41 +2585,66 @@ const UnlinkProductsModal = ({
               <input
                 type="checkbox"
                 checked={allChecked}
-                onChange={e => onChangeSelectedIds(e.target.checked ? Array.from(new Set([...selectedIds, ...filteredProducts.map(product => product.id)])) : selectedIds.filter(id => !filteredProducts.some(product => product.id === id)))}
+                disabled={removableProducts.length === 0}
+                onChange={e => onChangeSelectedIds(e.target.checked ? Array.from(new Set([...selectedIds, ...removableProducts.map(product => product.id)])) : selectedIds.filter(id => !removableProducts.some(product => product.id === id)))}
                 className="h-4 w-4 rounded border border-[#D9DDE7] text-[#00C06B] focus:ring-[#00C06B]"
               />
-              全选当前结果
+              全选可解除商品
             </label>
             <div className="text-sm text-[#98A2B3]">若商品仅关联当前分类，则不支持解除</div>
           </div>
           <div className="max-h-[420px] overflow-y-auto rounded-xl border border-[#EEF1F5] no-scrollbar">
-            {filteredProducts.map(product => (
-              <label key={product.id} className="flex items-center gap-4 border-t border-[#EEF1F5] px-4 py-4 first:border-t-0">
+            {filteredProducts.map(product => {
+              const isOnlyCategory = (product.categoryCount || 1) <= 1;
+              return (
+              <label key={product.id} className={`flex items-center gap-4 border-t border-[#EEF1F5] px-4 py-4 first:border-t-0 ${isOnlyCategory ? 'cursor-not-allowed bg-[#FAFBFC]' : 'cursor-pointer hover:bg-[#FAFCFB]'}`}>
                 <input
                   type="checkbox"
                   checked={selectedIdSet.has(product.id)}
+                  disabled={isOnlyCategory}
                   onChange={e => {
                     if (e.target.checked) onChangeSelectedIds([...selectedIds, product.id]);
                     else onChangeSelectedIds(selectedIds.filter(id => id !== product.id));
                   }}
-                  className="h-4 w-4 rounded border border-[#D9DDE7] text-[#00C06B] focus:ring-[#00C06B]"
+                  className="h-4 w-4 rounded border border-[#D9DDE7] text-[#00C06B] focus:ring-[#00C06B] disabled:cursor-not-allowed"
                 />
                 <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[linear-gradient(135deg,#DDF5E6,#CFF3DB)] text-sm font-bold text-[#00A35B]">
                   {product.imageText || product.name.slice(0, 2)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-[#1F2129]">{product.name}</div>
-                  <div className="mt-1 text-xs text-[#98A2B3]">{(product.categoryCount || 1) <= 1 ? '当前为唯一关联分类' : `已关联 ${(product.categoryCount || 1)} 个分类`}</div>
+                  <div className={`mt-1 text-xs ${isOnlyCategory ? 'text-[#D97706]' : 'text-[#98A2B3]'}`}>{isOnlyCategory ? '当前为唯一关联分类，不可解除' : `已关联 ${(product.categoryCount || 1)} 个分类`}</div>
                 </div>
                 <div className="text-sm text-[#5B6475]">{product.type}</div>
               </label>
-            ))}
+            );})}
             {!filteredProducts.length && <div className="px-4 py-12 text-center text-sm text-[#98A2B3]">暂无匹配商品</div>}
           </div>
+          {source === 'frontend' && (
+            <div className="mt-5">
+              <div className="mb-3 text-sm font-bold text-[#1F2129]">门店生效方式</div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className={`cursor-pointer rounded-lg border px-4 py-3 ${syncMode === 'headquarters_only' ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#E5E7EB] bg-white'}`}>
+                  <div className="flex items-center gap-3">
+                    <input type="radio" checked={syncMode === 'headquarters_only'} onChange={() => onChangeSyncMode('headquarters_only')} className="h-4 w-4 accent-[#00C06B]" />
+                    <span className="text-sm font-bold text-[#1F2129]">仅解除总部关联</span>
+                  </div>
+                  <div className="mt-2 pl-7 text-xs leading-5 text-[#7B8494]">门店当前分类关系保持不变，后续随商品下发更新。</div>
+                </label>
+                <label className={`cursor-pointer rounded-lg border px-4 py-3 ${syncMode === 'sync_stores' ? 'border-[#00C06B] bg-[#F3FCF7]' : 'border-[#E5E7EB] bg-white'}`}>
+                  <div className="flex items-center gap-3">
+                    <input type="radio" checked={syncMode === 'sync_stores'} onChange={() => onChangeSyncMode('sync_stores')} className="h-4 w-4 accent-[#00C06B]" />
+                    <span className="text-sm font-bold text-[#1F2129]">同步解除门店关联</span>
+                  </div>
+                  <div className="mt-2 pl-7 text-xs leading-5 text-[#7B8494]">{selectedRemovableProducts.length ? `预计影响 ${affectedStoreCount} 家门店，以实际校验结果为准。` : '选择商品后展示预计影响门店。'}</div>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-8 py-5">
           <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]">取消</button>
-          <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white">确定</button>
+          <button disabled={selectedRemovableProducts.length === 0} onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#C9CDD4]">确定</button>
         </div>
       </div>
     </div>
@@ -2512,6 +2657,8 @@ const UnlinkResultModal = ({
   categoryName,
   removed,
   blocked,
+  syncMode,
+  affectedStoreCount,
   onClose,
   onEditProduct,
 }: {
@@ -2520,10 +2667,15 @@ const UnlinkResultModal = ({
   categoryName: string;
   removed: LinkedProduct[];
   blocked: LinkedProduct[];
+  syncMode: UnlinkSyncMode;
+  affectedStoreCount: number;
   onClose: () => void;
   onEditProduct: (product: LinkedProduct) => void;
 }) => {
   const removedLabel = removed.length === 1 ? `${removed[0].name}已解除关联` : `${removed.length} 个商品已解除关联`;
+  const syncResultLabel = syncMode === 'sync_stores'
+    ? `，并同步解除 ${affectedStoreCount} 家门店中的对应分类关系`
+    : '，门店当前分类关系保持不变，后续随商品下发更新';
 
   return (
     <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/35 px-6">
@@ -2537,7 +2689,7 @@ const UnlinkResultModal = ({
         </div>
         <div className="space-y-5 px-8 py-6">
           {removed.length > 0 && (
-            <div className="rounded-xl bg-[#F3FCF7] px-4 py-4 text-sm text-[#00A35B]">{removedLabel}</div>
+            <div className="rounded-xl bg-[#F3FCF7] px-4 py-4 text-sm leading-6 text-[#00A35B]">{removedLabel}{source === 'frontend' ? syncResultLabel : ''}</div>
           )}
           {blocked.length > 0 && (
             <div className="rounded-xl bg-[#FFF7E8] px-4 py-4 text-sm text-[#D97706]">
@@ -2587,6 +2739,7 @@ const ProductCategoryEditorModal = ({
   onConfirm: () => void;
 }) => {
   const selectedIdSet = new Set(selectedCategoryIds);
+  const hasSelectedCategory = selectedCategoryIds.length > 0;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-6">
@@ -2599,6 +2752,9 @@ const ProductCategoryEditorModal = ({
           <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
         </div>
         <div className="max-h-[460px] overflow-y-auto px-8 py-6 no-scrollbar">
+          <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${hasSelectedCategory ? 'bg-[#F7F8FA] text-[#667085]' : 'border border-[#F7D6A7] bg-[#FFF8EC] text-[#B25E09]'}`}>
+            {hasSelectedCategory ? `已关联 ${selectedCategoryIds.length} 个分类` : '商品至少需要关联一个分类，请先选择其他分类后再保存。'}
+          </div>
           <div className="space-y-3">
             {options.map(option => (
               <label key={option.id} className="flex items-start gap-3 rounded-xl border border-[#EEF1F5] px-4 py-4">
@@ -2621,7 +2777,7 @@ const ProductCategoryEditorModal = ({
         </div>
         <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-8 py-5">
           <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]">取消</button>
-          <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white">保存</button>
+          <button disabled={!hasSelectedCategory} onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#C9CDD4]">保存</button>
         </div>
       </div>
     </div>
@@ -2631,33 +2787,336 @@ const ProductCategoryEditorModal = ({
 const DeleteCategoryModal = ({
   mode,
   categoryName,
+  headquartersProductCount,
+  impact,
   onCancel,
   onConfirm,
 }: {
-  mode: 'confirm' | 'blocked';
+  mode: DeleteCategoryMode;
   categoryName: string;
+  headquartersProductCount: number;
+  impact: StoreCategoryImpact;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (scope: DeleteCategoryScope) => void;
 }) => {
+  const [showAssociationDetails, setShowAssociationDetails] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<DeleteCategoryScope>('headquarters_only');
   const isBlocked = mode === 'blocked';
+  const hasStoreImpact = impact.storeCount > 0;
+  const hasStoreProductRelations = impact.storeProductRelationCount > 0;
+  const canDeleteStoreCategories = mode === 'range';
 
   return (
     <div className="fixed inset-0 z-[98] flex items-center justify-center bg-black/35 px-6">
-      <div className="w-full max-w-[520px] rounded-[20px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <div className="w-full max-w-[760px] overflow-hidden rounded-xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
-          <div className="text-[20px] font-black text-[#1F2129]">{isBlocked ? '无法删除' : '删除分类'}</div>
+          <div>
+            <div className="text-[20px] font-black text-[#1F2129]">{isBlocked ? '暂时无法删除分类' : '删除总部分类'}</div>
+            <div className="mt-1 text-sm text-[#98A2B3]">前台分类：{categoryName}</div>
+          </div>
           <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
         </div>
-        <div className="px-8 py-8">
-          <div className={`rounded-xl px-4 py-4 text-sm ${isBlocked ? 'bg-[#FFF7E8] text-[#D97706]' : 'bg-[#F8FAFB] text-[#5B6475]'}`}>
-            {isBlocked ? '分类已被商品关联使用,请移除后重试' : `确认删除分类“${categoryName}”吗？删除后不可恢复。`}
-          </div>
+        <div className="space-y-5 px-8 py-6">
+          {isBlocked ? (
+            <>
+              <div className="rounded-lg border border-[#F7D6A7] bg-[#FFF8EC] px-4 py-4 text-sm leading-6 text-[#B25E09]">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                  <div>
+                    {headquartersProductCount > 0 && <div className="font-bold">该分类仍关联 {headquartersProductCount} 个总部商品，暂不可删除</div>}
+                    <div className="mt-1 text-[#8C6B45]">请先解除总部商品关联后再删除分类。</div>
+                  </div>
+                </div>
+              </div>
+              {hasStoreImpact && (
+                <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-[#E5E7EB]">
+                  <div className="border-r border-[#E5E7EB] px-5 py-4">
+                    <div className="text-xs text-[#86909C]">影响门店</div>
+                    <div className="mt-2 text-xl font-black text-[#1F2129]">{impact.storeCount} <span className="text-sm font-medium">家</span></div>
+                  </div>
+                  <div className="px-5 py-4">
+                    <div className="text-xs text-[#86909C]">门店商品关联</div>
+                    <div className="mt-2 flex items-center gap-3">
+                      <span className="text-xl font-black text-[#D97706]">{impact.storeProductRelationCount} <span className="text-sm font-medium">条</span></span>
+                      {hasStoreProductRelations && (
+                        <button onClick={() => setShowAssociationDetails(true)} className="text-sm font-bold text-[#00A35B] hover:underline">
+                          查看关联明细
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {hasStoreImpact ? (
+                <>
+                  <div className="text-sm leading-6 text-[#4E5969]">请选择本次删除范围。仅删除总部分类时，门店现有分类及商品关联保持不变。</div>
+                  <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-[#E5E7EB]">
+                    <div className="border-r border-[#E5E7EB] px-5 py-4">
+                      <div className="text-xs text-[#86909C]">影响门店</div>
+                      <div className="mt-2 text-xl font-black text-[#1F2129]">{impact.storeCount} <span className="text-sm font-medium">家</span></div>
+                    </div>
+                    <div className="px-5 py-4">
+                      <div className="text-xs text-[#86909C]">门店商品关联</div>
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className={`text-xl font-black ${hasStoreProductRelations ? 'text-[#D97706]' : 'text-[#087A49]'}`}>
+                          {impact.storeProductRelationCount} <span className="text-sm font-medium">条</span>
+                        </span>
+                        {hasStoreProductRelations && (
+                          <button onClick={() => setShowAssociationDetails(true)} className="text-sm font-bold text-[#00A35B] hover:underline">
+                            查看关联明细
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-3 text-sm font-bold text-[#1F2129]">删除范围</div>
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteScope('headquarters_only')}
+                        className={`flex w-full items-start gap-3 rounded-lg border px-4 py-4 text-left ${deleteScope === 'headquarters_only' ? 'border-[#00C06B] bg-[#F0FBF6]' : 'border-[#E5E7EB] bg-white'}`}
+                      >
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${deleteScope === 'headquarters_only' ? 'border-[#00C06B]' : 'border-[#C9CDD4]'}`}>
+                          {deleteScope === 'headquarters_only' && <span className="h-2.5 w-2.5 rounded-full bg-[#00C06B]" />}
+                        </span>
+                        <span>
+                          <span className="block text-sm font-bold text-[#1F2129]">仅删除总部分类</span>
+                          <span className="mt-1 block text-sm text-[#667085]">门店现有分类及商品关联保持不变。</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canDeleteStoreCategories}
+                        onClick={() => canDeleteStoreCategories && setDeleteScope('headquarters_and_stores')}
+                        className={`flex w-full items-start gap-3 rounded-lg border px-4 py-4 text-left ${
+                          !canDeleteStoreCategories
+                            ? 'cursor-not-allowed border-[#E5E7EB] bg-[#F7F8FA]'
+                            : deleteScope === 'headquarters_and_stores'
+                              ? 'border-[#00C06B] bg-[#F0FBF6]'
+                              : 'border-[#E5E7EB] bg-white'
+                        }`}
+                      >
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${deleteScope === 'headquarters_and_stores' ? 'border-[#00C06B]' : 'border-[#C9CDD4]'}`}>
+                          {deleteScope === 'headquarters_and_stores' && <span className="h-2.5 w-2.5 rounded-full bg-[#00C06B]" />}
+                        </span>
+                        <span>
+                          <span className={`block text-sm font-bold ${canDeleteStoreCategories ? 'text-[#1F2129]' : 'text-[#98A2B3]'}`}>同步删除总部及门店分类</span>
+                          <span className={`mt-1 block text-sm ${canDeleteStoreCategories ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                            {canDeleteStoreCategories
+                              ? `同步清理 ${impact.storeCount} 家门店中的对应分类。`
+                              : '门店分类仍关联商品，暂不可同步删除。'}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {hasStoreProductRelations && (
+                    <div className="flex items-start gap-3 rounded-lg border border-[#F7D6A7] bg-[#FFF8EC] px-4 py-3 text-sm leading-6 text-[#B25E09]">
+                      <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                      <span>如需同步删除门店分类，请先解除上述门店商品关联。</span>
+                    </div>
+                  )}
+
+                </>
+              ) : (
+                <>
+                  <div className="text-sm leading-6 text-[#4E5969]">删除后，该总部分类将被永久移除，操作不可恢复。</div>
+                  <div className="rounded-lg bg-[#F7F8FA] px-4 py-3 text-sm text-[#667085]">该分类尚未下发至门店，可直接删除。</div>
+                </>
+              )}
+            </>
+          )}
         </div>
         <div className="flex items-center justify-end gap-3 border-t border-[#EEF1F5] px-8 py-5">
           <button onClick={onCancel} className="rounded-[10px] border border-[#D9DDE7] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]">{isBlocked ? '我知道了' : '取消'}</button>
-          {!isBlocked && (
-            <button onClick={onConfirm} className="rounded-[10px] bg-[#FF4D4F] px-6 py-2.5 text-sm font-bold text-white">删除</button>
-          )}
+          {!isBlocked && <button onClick={() => onConfirm(deleteScope)} className="rounded-[10px] bg-[#FF4D4F] px-6 py-2.5 text-sm font-bold text-white">确认删除</button>}
+        </div>
+      </div>
+      {showAssociationDetails && hasStoreProductRelations && (
+        <StoreCategoryAssociationDrawer
+          categoryName={categoryName}
+          impact={impact}
+          onClose={() => setShowAssociationDetails(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+type StoreAssociationProductRow = {
+  id: string;
+  storeName: string;
+  storeCode: string;
+  channelName: string;
+  productName: string;
+  productId: string;
+  productType: '标准商品' | '套餐商品';
+  saleStatus: '已上架' | '已下架';
+};
+
+const ASSOCIATION_PRODUCT_NAMES = [
+  '招牌珍珠奶茶', '经典柠檬茶', '双人分享套餐', '鲜果茶系列', '经典美式',
+  '厚乳拿铁', '外卖单人套餐', '夏日果茶', '夜宵组合', '加料椰果',
+  '杨枝甘露', '芝士葡萄', '茉莉奶绿', '生椰拿铁', '芋泥波波奶茶',
+];
+
+const StoreCategoryAssociationDrawer = ({
+  categoryName,
+  impact,
+  onClose,
+}: {
+  categoryName: string;
+  impact: StoreCategoryImpact;
+  onClose: () => void;
+}) => {
+  const [keyword, setKeyword] = useState('');
+  const [channelName, setChannelName] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  const rows = useMemo<StoreAssociationProductRow[]>(() => impact.associations.flatMap((association, associationIndex) =>
+    Array.from({ length: association.productCount }, (_, productIndex) => {
+      const productName = association.productNames[productIndex]
+        || ASSOCIATION_PRODUCT_NAMES[(associationIndex * 3 + productIndex) % ASSOCIATION_PRODUCT_NAMES.length];
+      const productType = /套餐|组合|分享/.test(productName) ? '套餐商品' : '标准商品';
+      const serial = `${associationIndex + 1}${String(productIndex + 1).padStart(4, '0')}`;
+      return {
+        id: `${association.id}-${productIndex}`,
+        storeName: association.storeName,
+        storeCode: association.storeCode,
+        channelName: association.channelName,
+        productName,
+        productId: `129365592607${serial}`,
+        productType,
+        saleStatus: productIndex % 13 === 0 ? '已下架' : '已上架',
+      };
+    })
+  ), [impact.associations]);
+
+  const channelOptions = useMemo(
+    () => Array.from(new Set(impact.associations.map(item => item.channelName))),
+    [impact.associations]
+  );
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const filteredRows = rows.filter(row => {
+    const matchesChannel = !channelName || row.channelName === channelName;
+    const matchesKeyword = !normalizedKeyword || [
+      row.storeName,
+      row.storeCode,
+      row.productName,
+      row.productId,
+    ].some(value => value.toLowerCase().includes(normalizedKeyword));
+    return matchesChannel && matchesKeyword;
+  });
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/20">
+      <div className="absolute inset-y-0 right-0 flex w-[min(1080px,calc(100vw-80px))] flex-col bg-white shadow-[-20px_0_60px_rgba(15,23,42,0.18)]">
+        <div className="flex h-[76px] shrink-0 items-center justify-between border-b border-[#EEF1F5] px-7">
+          <div>
+            <div className="text-[20px] font-black text-[#1F2129]">门店商品关联明细</div>
+            <div className="mt-1 text-sm text-[#86909C]">前台分类：{categoryName}</div>
+          </div>
+          <button onClick={onClose} className="rounded-md p-2 text-[#9AA3B2] hover:bg-[#F7F8FA] hover:text-[#5B6475]" aria-label="关闭关联明细">
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="shrink-0 border-b border-[#EEF1F5] px-7 py-5">
+          <div className="mb-4 flex items-center gap-6 text-sm text-[#4E5969]">
+            <span>影响门店 <strong className="ml-1 text-[#1F2129]">{impact.storeCount}</strong> 家</span>
+            <span>商品关联 <strong className="ml-1 text-[#D97706]">{impact.storeProductRelationCount}</strong> 条</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative w-[410px]">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              <input
+                value={keyword}
+                onChange={event => {
+                  setKeyword(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="搜索门店名称/编码、商品名称/ID"
+                className="h-10 w-full rounded-md border border-[#D9DDE7] pl-10 pr-3 text-sm text-[#1F2129] outline-none placeholder:text-[#B8C0CC] focus:border-[#00C06B]"
+              />
+            </div>
+            <div className="relative w-[210px]">
+              <select
+                value={channelName}
+                onChange={event => {
+                  setChannelName(event.target.value);
+                  setPage(1);
+                }}
+                className="h-10 w-full appearance-none rounded-md border border-[#D9DDE7] bg-white px-3 pr-9 text-sm text-[#4E5969] outline-none focus:border-[#00C06B]"
+              >
+                <option value="">全部渠道</option>
+                {channelOptions.map(option => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <ChevronDown size={17} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+            </div>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto px-7 py-5">
+          <div className="min-w-[900px] overflow-hidden rounded-lg border border-[#E5E7EB]">
+            <div className="sticky top-0 z-10 grid grid-cols-[190px_140px_minmax(320px,1fr)_120px_100px] items-center bg-[#F5F6F8] px-4 py-3 text-sm font-bold text-[#4E5969]">
+              <span>门店</span><span>渠道</span><span>商品信息</span><span>商品类型</span><span>状态</span>
+            </div>
+            {pageRows.map(row => (
+              <div key={row.id} className="grid min-h-[68px] grid-cols-[190px_140px_minmax(320px,1fr)_120px_100px] items-center border-t border-[#EEF1F5] px-4 py-3 text-sm text-[#4E5969]">
+                <div className="min-w-0 pr-4">
+                  <div className="truncate font-medium text-[#1F2129]" title={row.storeName}>{row.storeName}</div>
+                  <div className="mt-1 text-xs text-[#98A2B3]">{row.storeCode}</div>
+                </div>
+                <div className="pr-4">{row.channelName}</div>
+                <div className="min-w-0 pr-4">
+                  <div className="truncate font-medium text-[#1F2129]" title={row.productName}>{row.productName}</div>
+                  <div className="mt-1 text-xs text-[#98A2B3]">商品ID：{row.productId}</div>
+                </div>
+                <div>{row.productType}</div>
+                <div className={`flex items-center gap-1.5 ${row.saleStatus === '已上架' ? 'text-[#00A35B]' : 'text-[#86909C]'}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${row.saleStatus === '已上架' ? 'bg-[#00C06B]' : 'bg-[#C9CDD4]'}`} />
+                  {row.saleStatus}
+                </div>
+              </div>
+            ))}
+            {pageRows.length === 0 && (
+              <div className="flex h-[240px] items-center justify-center text-sm text-[#98A2B3]">未找到符合条件的关联商品</div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex h-[68px] shrink-0 items-center justify-between border-t border-[#EEF1F5] px-7">
+          <span className="text-sm text-[#86909C]">共 {filteredRows.length} 条</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(value => Math.max(1, value - 1))}
+              disabled={currentPage === 1}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-[#D9DDE7] text-[#667085] disabled:cursor-not-allowed disabled:text-[#C9CDD4]"
+              aria-label="上一页"
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <span className="min-w-[76px] text-center text-sm text-[#4E5969]">{currentPage} / {pageCount}</span>
+            <button
+              onClick={() => setPage(value => Math.min(pageCount, value + 1))}
+              disabled={currentPage === pageCount}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-[#D9DDE7] text-[#667085] disabled:cursor-not-allowed disabled:text-[#C9CDD4]"
+              aria-label="下一页"
+            >
+              <ChevronRight size={17} />
+            </button>
+            <button onClick={onClose} className="ml-3 rounded-md border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#4E5969]">关闭</button>
+          </div>
         </div>
       </div>
     </div>

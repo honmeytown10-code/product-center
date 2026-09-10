@@ -16,20 +16,12 @@ type FieldDefinition = {
 const CHANNEL_FIELDS: Partial<Record<ThirdPartyChannelId, FieldDefinition[]>> = {
   douyin: [
     {
-      id: 'douyinStandardCategory',
-      label: '抖音标品类目',
+      id: 'douyinCategory',
+      label: '抖音商品类目',
       type: 'select',
       required: true,
       options: ['美食 / 饮品 / 奶茶', '美食 / 饮品 / 果茶', '美食 / 小吃甜品 / 烘焙甜品'],
-      description: '创建或更新抖音标品时使用，选项来自平台当前有效类目能力。',
-    },
-    {
-      id: 'douyinOrderCategory',
-      label: '抖音点单品三级类目',
-      type: 'select',
-      required: true,
-      options: ['美食 / 饮品 / 奶茶', '美食 / 饮品 / 果茶', '美食 / 小吃甜品 / 烘焙甜品'],
-      description: '创建门店点单品时使用，需与标品类目兼容。',
+      description: '标品与点单品共用一次选择；同步时系统分别映射到平台标品类目和点单品三级类目。',
     },
     {
       id: 'settleType',
@@ -58,8 +50,7 @@ const CHANNEL_FIELDS: Partial<Record<ThirdPartyChannelId, FieldDefinition[]>> = 
 
 const CHANNEL_INITIAL_VALUES: Partial<Record<ThirdPartyChannelId, Record<string, string | boolean | string[]>>> = {
   douyin: {
-    douyinStandardCategory: '美食 / 饮品 / 奶茶',
-    douyinOrderCategory: '美食 / 饮品 / 奶茶',
+    douyinCategory: '美食 / 饮品 / 奶茶',
     settleType: '总部收款',
   },
   meituan_dine: {},

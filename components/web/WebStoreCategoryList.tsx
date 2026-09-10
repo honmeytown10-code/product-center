@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronDown, ArrowUpDown, ChevronLeft,
-  ChevronRight, GripVertical, CheckCircle2, X, Circle, Plus, Minus
+  ChevronRight, GripVertical, CheckCircle2, X, Circle, Plus, Minus, AlertCircle, Trash2
 } from 'lucide-react';
 
 type StoreCategoryRecord = {
@@ -21,11 +21,24 @@ type StoreCategoryRecord = {
   requiredGroup: boolean;
   displayChannels: string[];
   limitTop: boolean;
+  sourceType?: 'brand' | 'store';
+  linkedProductCount?: number;
 };
 
 type StoreCategoryListRow = StoreCategoryRecord & {
   sourceIds: string[];
   channelIds: string[];
+};
+
+type StoreCategoryDeleteTarget = {
+  row: StoreCategoryListRow;
+  childCount: number;
+  isAllChannels: boolean;
+  channelImpacts: Array<{
+    channelId: string;
+    channelName: string;
+    linkedProductCount: number;
+  }>;
 };
 
 type StoreCategoryEditorDraft = Omit<StoreCategoryListRow, 'channelId'> & {
@@ -59,6 +72,15 @@ type CategorySortDraftRow = {
   code: string;
   name: string;
   sortIndex: number;
+};
+
+type StoreCategoryCreateDraft = {
+  level: 1 | 2;
+  parentCode: string;
+  name: string;
+  alias: string;
+  code: string;
+  channelIds: string[];
 };
 
 type StoreOption = {
@@ -105,15 +127,28 @@ const DEFAULT_CHANNELS = [
 ];
 
 const MOCK_STORE_CATEGORIES: StoreCategoryRecord[] = [
-  { id: 'c-001', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', alias: '现萃好茶', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
-  { id: 'c-002', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', alias: '现萃好茶', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-001', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', alias: '现萃好茶', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 12 },
+  { id: 'c-002', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 1, iconText: '奶', name: '奶茶系列', alias: '现萃好茶', code: 'milk-tea', tag: '热销', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'douyin_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 10 },
   { id: 'c-001-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', alias: '经典回味', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
   { id: 'c-001-2', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 1, iconText: '子', name: '经典奶茶', alias: '经典回味', code: 'milk-tea-classic', tag: '招牌', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false },
   { id: 'c-001-3', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', alias: '鲜果轻乳', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
   { id: 'c-001-4', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'milk-tea', parentName: '奶茶系列', sortIndex: 2, iconText: '子', name: '鲜果奶茶', alias: '鲜果轻乳', code: 'milk-tea-fruit', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
-  { id: 'c-003', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 2, iconText: '果', name: '果茶系列', alias: '新鲜果香', code: 'fruit-tea', tag: '推荐', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: true },
+  { id: 'c-003', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 2, iconText: '果', name: '果茶系列', alias: '新鲜果香', code: 'fruit-tea', tag: '推荐', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: true, sourceType: 'store', linkedProductCount: 0 },
   { id: 'c-003-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 2, parentCode: 'fruit-tea', parentName: '果茶系列', sortIndex: 1, iconText: '子', name: '鲜柠果茶', alias: '鲜柠清爽', code: 'fruit-tea-lemon', tag: '', requiredGroup: false, displayChannels: ['wechat_mini'], limitTop: false },
-  { id: 'c-004', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 3, iconText: '咖', name: '咖啡系列', alias: '每日现磨', code: 'coffee', tag: '新品', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false },
+  { id: 'c-004', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 3, iconText: '咖', name: '咖啡系列', alias: '每日现磨', code: 'coffee', tag: '新品', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-008-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 4, iconText: '季', name: '季节限定', alias: '当季推荐', code: 'seasonal', tag: '限定', requiredGroup: false, displayChannels: ['wechat_mini', 'douyin_mini', 'qimai_app'], limitTop: true, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-008-2', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 4, iconText: '季', name: '季节限定', alias: '当季推荐', code: 'seasonal', tag: '限定', requiredGroup: false, displayChannels: ['wechat_mini', 'douyin_mini', 'qimai_app'], limitTop: true, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-008-3', storeId: 's1', storeName: '南山万象店', channelId: 'meituan', level: 1, sortIndex: 4, iconText: '季', name: '季节限定', alias: '当季推荐', code: 'seasonal', tag: '限定', requiredGroup: false, displayChannels: ['wechat_mini', 'douyin_mini', 'qimai_app'], limitTop: true, sourceType: 'brand', linkedProductCount: 6 },
+  { id: 'c-008-4', storeId: 's1', storeName: '南山万象店', channelId: 'taobao', level: 1, sortIndex: 4, iconText: '季', name: '季节限定', alias: '当季推荐', code: 'seasonal', tag: '限定', requiredGroup: false, displayChannels: ['wechat_mini', 'douyin_mini', 'qimai_app'], limitTop: true, sourceType: 'brand', linkedProductCount: 3 },
+  { id: 'c-008-5', storeId: 's1', storeName: '南山万象店', channelId: 'pos', level: 1, sortIndex: 4, iconText: '季', name: '季节限定', alias: '当季推荐', code: 'seasonal', tag: '限定', requiredGroup: false, displayChannels: ['wechat_mini', 'douyin_mini', 'qimai_app'], limitTop: true, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-009-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 5, iconText: '轻', name: '轻食系列', alias: '轻盈一餐', code: 'light-meal', tag: '轻食', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-009-2', storeId: 's1', storeName: '南山万象店', channelId: 'mini_take', level: 1, sortIndex: 5, iconText: '轻', name: '轻食系列', alias: '轻盈一餐', code: 'light-meal', tag: '轻食', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-009-3', storeId: 's1', storeName: '南山万象店', channelId: 'meituan', level: 1, sortIndex: 5, iconText: '轻', name: '轻食系列', alias: '轻盈一餐', code: 'light-meal', tag: '轻食', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-009-4', storeId: 's1', storeName: '南山万象店', channelId: 'taobao', level: 1, sortIndex: 5, iconText: '轻', name: '轻食系列', alias: '轻盈一餐', code: 'light-meal', tag: '轻食', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-009-5', storeId: 's1', storeName: '南山万象店', channelId: 'pos', level: 1, sortIndex: 5, iconText: '轻', name: '轻食系列', alias: '轻盈一餐', code: 'light-meal', tag: '轻食', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-010', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 1, sortIndex: 6, iconText: '甜', name: '甜品系列', alias: '餐后甜点', code: 'dessert-s1', tag: '甜品', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 0 },
+  { id: 'c-010-1', storeId: 's1', storeName: '南山万象店', channelId: 'mini_dine', level: 2, parentCode: 'dessert-s1', parentName: '甜品系列', sortIndex: 1, iconText: '子', name: '烘焙点心', alias: '每日烘焙', code: 'dessert-bakery', tag: '', requiredGroup: false, displayChannels: ['wechat_mini', 'qimai_app'], limitTop: false, sourceType: 'brand', linkedProductCount: 4 },
+  { id: 'c-011', storeId: 's1', storeName: '南山万象店', channelId: 'pos', level: 1, sortIndex: 7, iconText: '专', name: '门店专属', alias: '本店特色', code: 'store-special', tag: '门店', requiredGroup: false, displayChannels: ['qimai_app'], limitTop: false, sourceType: 'store', linkedProductCount: 0 },
   { id: 'c-005', storeId: 's2', storeName: '福田卓悦店', channelId: 'pos', level: 1, sortIndex: 1, iconText: '甜', name: '甜品系列', alias: '今日甜点', code: 'dessert', tag: '甜品', requiredGroup: false, displayChannels: ['qimai_app'], limitTop: false },
   { id: 'c-006', storeId: 's3', storeName: '宝安壹方城店', channelId: 'meituan', level: 1, sortIndex: 1, iconText: '早', name: '早餐系列', alias: '元气早餐', code: 'breakfast', tag: '早餐', requiredGroup: false, displayChannels: ['wechat_mini', 'alipay_mini'], limitTop: false },
   { id: 'c-007', storeId: 's4', storeName: '龙华红山店', channelId: 'taobao', level: 1, sortIndex: 1, iconText: '夜', name: '夜宵系列', alias: '深夜食堂', code: 'supper', tag: '夜宵', requiredGroup: true, displayChannels: ['wechat_mini', 'qimai_h5'], limitTop: false },
@@ -150,6 +185,8 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
   const [categories, setCategories] = useState(MOCK_STORE_CATEGORIES);
   const [editingCategory, setEditingCategory] = useState<StoreCategoryEditorDraft | null>(null);
   const [editingSecondCategory, setEditingSecondCategory] = useState<SecondaryCategoryEditorDraft | null>(null);
+  const [createDraft, setCreateDraft] = useState<StoreCategoryCreateDraft | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StoreCategoryDeleteTarget | null>(null);
   const [showAliasExample, setShowAliasExample] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
   const [sortDraftRows, setSortDraftRows] = useState<CategorySortDraftRow[]>([]);
@@ -207,6 +244,8 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
           existing.channelIds = Array.from(new Set([...existing.channelIds, item.channelId]));
           existing.displayChannels = Array.from(new Set([...existing.displayChannels, ...item.displayChannels]));
           existing.sortIndex = Math.min(existing.sortIndex, item.sortIndex);
+          existing.linkedProductCount = (existing.linkedProductCount || 0) + (item.linkedProductCount || 0);
+          if (existing.sourceType !== item.sourceType) existing.sourceType = 'store';
           return;
         }
         grouped.set(key, {
@@ -452,6 +491,77 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
       return;
     }
     setShowStorePicker(false);
+  };
+
+  const openCreateDialog = () => {
+    if (!currentStore) return;
+    const defaultChannelIds = activeTabId === 'all' ? ['mini_dine'] : [activeTabId];
+    setCreateDraft({ level: 1, parentCode: '', name: '', alias: '', code: '', channelIds: defaultChannelIds });
+  };
+
+  const openDeleteDialog = (row: StoreCategoryListRow) => {
+    const sourceIdSet = new Set(row.sourceIds);
+    const channelImpacts = categories
+      .filter(item => sourceIdSet.has(item.id))
+      .map(item => ({
+        channelId: item.channelId,
+        channelName: CHANNEL_DEFS[item.channelId]?.label || item.channelId,
+        linkedProductCount: item.linkedProductCount || 0,
+      }))
+      .sort((a, b) => DEFAULT_CHANNELS.findIndex(channel => channel.id === a.channelId) - DEFAULT_CHANNELS.findIndex(channel => channel.id === b.channelId));
+
+    setDeleteTarget({
+      row,
+      childCount: row.level === 1 ? (childCountByParent.get(row.code) || 0) : 0,
+      isAllChannels: activeTabId === 'all',
+      channelImpacts,
+    });
+  };
+
+  const saveCreatedCategory = () => {
+    if (!createDraft || !currentStore || !createDraft.name.trim() || !createDraft.code.trim() || createDraft.channelIds.length === 0) return;
+    if (createDraft.level === 2 && !createDraft.parentCode) return;
+
+    const parent = scopedCategories.find(item => item.level === 1 && item.code === createDraft.parentCode);
+    const baseId = `store-${Date.now()}`;
+    const nextSort = Math.max(0, ...scopedCategories.filter(item => item.level === createDraft.level && item.parentCode === (createDraft.level === 2 ? createDraft.parentCode : undefined)).map(item => item.sortIndex)) + 1;
+    const additions: StoreCategoryRecord[] = createDraft.channelIds.map((channelId, index) => ({
+      id: `${baseId}-${index}`,
+      storeId: currentStore.id,
+      storeName: currentStore.name,
+      channelId,
+      level: createDraft.level,
+      parentCode: createDraft.level === 2 ? createDraft.parentCode : undefined,
+      parentName: createDraft.level === 2 ? parent?.name : undefined,
+      sortIndex: nextSort,
+      iconText: createDraft.level === 1 ? createDraft.name.trim().slice(0, 1) : '子',
+      name: createDraft.name.trim(),
+      alias: createDraft.alias.trim(),
+      code: createDraft.code.trim(),
+      tag: '',
+      requiredGroup: false,
+      displayChannels: channelId === 'pos' ? ['qimai_app'] : ['wechat_mini'],
+      limitTop: false,
+      sourceType: 'store',
+      linkedProductCount: 0,
+    }));
+    setCategories(prev => [...prev, ...additions]);
+    setCreateDraft(null);
+    setNotification({ type: 'success', message: `已新增门店分类“${createDraft.name.trim()}”` });
+  };
+
+  const confirmDeleteCategory = () => {
+    if (!deleteTarget) return;
+    if ((deleteTarget.row.linkedProductCount || 0) > 0 || deleteTarget.childCount > 0) return;
+    const targetIds = new Set(deleteTarget.row.sourceIds);
+    setCategories(prev => prev.filter(item => !targetIds.has(item.id)));
+    setNotification({
+      type: 'success',
+      message: deleteTarget.isAllChannels
+        ? `已删除“${deleteTarget.row.name}”在全部渠道下的门店分类`
+        : `已删除门店分类“${deleteTarget.row.name}”`,
+    });
+    setDeleteTarget(null);
   };
 
   const renderNotification = () => (
@@ -814,6 +924,12 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
             >
               <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
             </button>
+            <button
+              onClick={openCreateDialog}
+              className="flex items-center rounded bg-[#00C06B] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#00A35B]"
+            >
+              <Plus size={14} className="mr-1.5" /> 新增分类
+            </button>
           </div>
         </div>
 
@@ -828,7 +944,8 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-28">分类标签</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-36">是否必选分组</th>
                 <th className="py-3 px-4 border-b border-[#E8E8E8] w-44">展示渠道</th>
-                <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-32 text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
+                <th className="py-3 px-4 border-b border-[#E8E8E8] w-32">来源</th>
+                <th className="sticky right-0 py-3 px-4 border-b border-[#E8E8E8] w-40 text-center bg-[#F7F8FA] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm text-[#333]">
@@ -893,13 +1010,24 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                       <span className="text-[#999]">-</span>
                     )}
                   </td>
+                  <td className="py-4 px-4">
+                    <span className={`inline-flex rounded px-2 py-1 text-[11px] font-medium ${item.sourceType === 'store' ? 'bg-[#E8F8F0] text-[#087A49]' : 'bg-[#F2F3F5] text-[#667085]'}`}>
+                      {item.sourceType === 'store' ? '门店自建' : '总部下发'}
+                    </span>
+                  </td>
                   <td className={`sticky right-0 py-4 px-4 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)] ${item.level === 2 ? 'bg-[#FCFCFD] group-hover:bg-[#F7FFF9]' : 'bg-white group-hover:bg-[#F9FFFC]'}`}>
-                    <div className="flex items-center justify-center text-sm">
+                    <div className="flex items-center justify-center gap-3 whitespace-nowrap text-sm">
                       <button
                         onClick={() => openEditor(item)}
                         className="text-[#00C06B] font-medium hover:text-[#008f53] hover:underline"
                       >
                         {item.level === 2 ? '编辑二级分类' : '编辑分类'}
+                      </button>
+                      <button
+                        onClick={() => openDeleteDialog(item)}
+                        className="font-medium text-[#FF4D4F] hover:text-[#D9363E] hover:underline"
+                      >
+                        删除
                       </button>
                     </div>
                   </td>
@@ -907,7 +1035,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
               ))}
               {visibleCategories.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-[#999]">暂无门店商品分类数据</td>
+                  <td colSpan={9} className="py-10 text-center text-[#999]">暂无门店商品分类数据</td>
                 </tr>
               )}
             </tbody>
@@ -969,6 +1097,196 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
           onConfirm={saveSort}
         />
       )}
+      {createDraft && currentStore && (
+        <StoreCategoryCreateModal
+          draft={createDraft}
+          storeName={currentStore.name}
+          parentOptions={scopedCategories.filter(item => item.level === 1)}
+          channelOptions={DEFAULT_CHANNELS}
+          onChange={setCreateDraft}
+          onCancel={() => setCreateDraft(null)}
+          onConfirm={saveCreatedCategory}
+        />
+      )}
+      {deleteTarget && (
+        <StoreCategoryDeleteModal
+          categoryName={deleteTarget.row.name}
+          storeName={deleteTarget.row.storeName}
+          channelNames={deleteTarget.row.channelIds.map(channelId => CHANNEL_DEFS[channelId]?.label || channelId)}
+          isAllChannels={deleteTarget.isAllChannels}
+          channelImpacts={deleteTarget.channelImpacts}
+          linkedProductCount={deleteTarget.row.linkedProductCount || 0}
+          childCount={deleteTarget.childCount}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteCategory}
+        />
+      )}
+    </div>
+  );
+};
+
+const StoreCategoryCreateModal = ({
+  draft,
+  storeName,
+  parentOptions,
+  channelOptions,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: StoreCategoryCreateDraft;
+  storeName: string;
+  parentOptions: StoreCategoryListRow[];
+  channelOptions: Array<{ id: string; label: string }>;
+  onChange: (draft: StoreCategoryCreateDraft) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const canSubmit = Boolean(draft.name.trim() && draft.code.trim() && draft.channelIds.length > 0 && (draft.level === 1 || draft.parentCode));
+
+  return (
+    <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[680px] overflow-hidden rounded-xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
+          <div>
+            <div className="text-[20px] font-black text-[#1F2129]">新增门店分类</div>
+            <div className="mt-1 text-sm text-[#98A2B3]">当前门店：{storeName}</div>
+          </div>
+          <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
+        </div>
+        <div className="space-y-5 px-8 py-6">
+          <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
+            <label className="text-sm font-bold text-[#4E5969]"><span className="mr-1 text-[#FF4D4F]">*</span>分类层级</label>
+            <div className="flex gap-3">
+              {([1, 2] as const).map(level => (
+                <button key={level} onClick={() => onChange({ ...draft, level, parentCode: level === 1 ? '' : draft.parentCode })} className={`h-10 rounded-lg border px-5 text-sm ${draft.level === level ? 'border-[#00C06B] bg-[#F3FCF7] font-bold text-[#087A49]' : 'border-[#D9DDE7] text-[#4E5969]'}`}>{level === 1 ? '一级分类' : '二级分类'}</button>
+              ))}
+            </div>
+          </div>
+          {draft.level === 2 && (
+            <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
+              <label className="text-sm font-bold text-[#4E5969]"><span className="mr-1 text-[#FF4D4F]">*</span>所属分类</label>
+              <select value={draft.parentCode} onChange={event => onChange({ ...draft, parentCode: event.target.value })} className="h-10 rounded-lg border border-[#D9DDE7] bg-white px-3 text-sm outline-none focus:border-[#00C06B]">
+                <option value="">请选择一级分类</option>
+                {parentOptions.map(option => <option key={option.id} value={option.code}>{option.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
+            <label className="text-sm font-bold text-[#4E5969]"><span className="mr-1 text-[#FF4D4F]">*</span>分类名称</label>
+            <input value={draft.name} maxLength={10} onChange={event => onChange({ ...draft, name: event.target.value })} placeholder="请输入分类名称" className="h-10 rounded-lg border border-[#D9DDE7] px-3 text-sm outline-none focus:border-[#00C06B]" />
+          </div>
+          <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
+            <label className="text-sm font-bold text-[#4E5969]">分类别名</label>
+            <input value={draft.alias} maxLength={10} onChange={event => onChange({ ...draft, alias: event.target.value })} placeholder="请输入分类别名" className="h-10 rounded-lg border border-[#D9DDE7] px-3 text-sm outline-none focus:border-[#00C06B]" />
+          </div>
+          <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
+            <label className="text-sm font-bold text-[#4E5969]"><span className="mr-1 text-[#FF4D4F]">*</span>分类标识</label>
+            <input value={draft.code} maxLength={30} onChange={event => onChange({ ...draft, code: event.target.value })} placeholder="请输入分类标识" className="h-10 rounded-lg border border-[#D9DDE7] px-3 text-sm outline-none focus:border-[#00C06B]" />
+          </div>
+          <div className="grid grid-cols-[104px_minmax(0,1fr)] items-start gap-4">
+            <label className="pt-2 text-sm font-bold text-[#4E5969]"><span className="mr-1 text-[#FF4D4F]">*</span>生效渠道</label>
+            <div className="flex flex-wrap gap-2">
+              {channelOptions.map(channel => {
+                const checked = draft.channelIds.includes(channel.id);
+                return (
+                  <label key={channel.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${checked ? 'border-[#00C06B] bg-[#F3FCF7] text-[#087A49]' : 'border-[#D9DDE7] text-[#4E5969]'}`}>
+                    <input type="checkbox" checked={checked} onChange={event => onChange({ ...draft, channelIds: event.target.checked ? [...draft.channelIds, channel.id] : draft.channelIds.filter(id => id !== channel.id) })} className="h-4 w-4 rounded accent-[#00C06B]" />
+                    {channel.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-[#EEF1F5] px-8 py-5">
+          <button onClick={onCancel} className="rounded-lg border border-[#D9DDE7] px-6 py-2.5 text-sm font-bold text-[#5B6475]">取消</button>
+          <button disabled={!canSubmit} onClick={onConfirm} className="rounded-lg bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#C9CDD4]">确定</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StoreCategoryDeleteModal = ({
+  categoryName,
+  storeName,
+  channelNames,
+  isAllChannels,
+  channelImpacts,
+  linkedProductCount,
+  childCount,
+  onCancel,
+  onConfirm,
+}: {
+  categoryName: string;
+  storeName: string;
+  channelNames: string[];
+  isAllChannels: boolean;
+  channelImpacts: StoreCategoryDeleteTarget['channelImpacts'];
+  linkedProductCount: number;
+  childCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const blocked = linkedProductCount > 0 || childCount > 0;
+  return (
+    <div className="fixed inset-0 z-[97] flex items-center justify-center bg-black/35 px-6">
+      <div className="w-full max-w-[560px] overflow-hidden rounded-xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
+          <div className="text-[20px] font-black text-[#1F2129]">{blocked ? '暂时无法删除分类' : '删除门店分类'}</div>
+          <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
+        </div>
+        <div className="space-y-4 px-8 py-6">
+          <div className="rounded-lg bg-[#F7F8FA] px-4 py-3 text-sm leading-6 text-[#4E5969]">
+            <div className="font-bold text-[#1F2129]">{categoryName}</div>
+            <div>{storeName} · {isAllChannels ? '全部渠道' : channelNames.join('、')}</div>
+          </div>
+          {isAllChannels && (
+            <div className="rounded-lg border border-[#B8DFFB] bg-[#F2F8FF] px-4 py-3 text-sm leading-6 text-[#3370B7]">
+              当前在“全部渠道”操作。删除校验及确认均按所有渠道执行，确认后将删除该门店全部渠道下的“{categoryName}”分类。
+            </div>
+          )}
+          {linkedProductCount > 0 && (
+            <div className="rounded-lg border border-[#F7D6A7] bg-[#FFF8EC] px-4 py-3 text-sm leading-6 text-[#B25E09]">
+              <div className="flex items-start gap-2">
+              <AlertCircle size={17} className="mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-bold">该分类仍关联 {linkedProductCount} 个门店商品，暂时无法删除</div>
+                  <div className="mt-1">请先解除以下渠道的商品关联后再删除。</div>
+                </div>
+              </div>
+              {isAllChannels && (
+                <div className="mt-3 divide-y divide-[#F3D9B7] rounded-md border border-[#F3D9B7] bg-white/70 px-3">
+                  {channelImpacts.filter(item => item.linkedProductCount > 0).map(item => (
+                    <div key={item.channelId} className="flex items-center justify-between py-2 text-[#7A4B16]">
+                      <span>{item.channelName}</span>
+                      <span className="font-bold">关联 {item.linkedProductCount} 个商品</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {childCount > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-[#F7D6A7] bg-[#FFF8EC] px-4 py-3 text-sm leading-6 text-[#B25E09]">
+              <AlertCircle size={17} className="mt-0.5 shrink-0" />
+              <span>该分类下仍有 {childCount} 个二级分类，请先删除二级分类。</span>
+            </div>
+          )}
+          {!blocked && (
+            <div className="text-sm leading-6 text-[#4E5969]">
+              {isAllChannels
+                ? `确认后将删除该门店全部渠道下的“${categoryName}”分类，且不可恢复。`
+                : '删除后仅影响当前门店所选渠道，且不可恢复。'}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-[#EEF1F5] px-8 py-5">
+          <button onClick={onCancel} className="rounded-lg border border-[#D9DDE7] px-6 py-2.5 text-sm font-bold text-[#5B6475]">{blocked ? '我知道了' : '取消'}</button>
+          {!blocked && <button onClick={onConfirm} className="flex items-center gap-2 rounded-lg bg-[#FF4D4F] px-6 py-2.5 text-sm font-bold text-white"><Trash2 size={16} />确认删除</button>}
+        </div>
+      </div>
     </div>
   );
 };

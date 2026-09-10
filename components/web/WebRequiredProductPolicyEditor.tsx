@@ -79,7 +79,8 @@ export const WebRequiredProductPolicyEditor: React.FC<{
   mode: 'create' | 'edit';
   policy?: RequiredPolicyRecord | null;
   onBack: () => void;
-}> = ({ mode, policy, onBack }) => {
+  onSave: (policy: RequiredPolicyRecord) => void;
+}> = ({ mode, policy, onBack, onSave }) => {
   const [policyName, setPolicyName] = useState(policy?.name || '');
   const [channels, setChannels] = useState<Set<string>>(new Set(['POS', '小程序']));
   const [orderMode, setOrderMode] = useState<OrderMode>(() => policy?.orderMode === '自动加入购物车' ? 'auto' : 'check');
@@ -177,11 +178,24 @@ export const WebRequiredProductPolicyEditor: React.FC<{
         return setFeedback({ kind: 'error', text: `请完成 ${pendingStores.map(store => store.name).join('、')} 的桌位区域配置` });
       }
     }
-    setFeedback({
-      kind: 'success',
-      text: mode === 'create'
-        ? `方案已创建，将在所选 ${selectedStoreIds.size} 家门店按生效规则执行。`
-        : `方案已保存，所选 ${selectedStoreIds.size} 家门店将直接读取品牌最新规则。`,
+    const periodLabel = activityPeriod === 'daily' ? '每天' : activityPeriod === 'weekly' ? '每周' : '每月';
+    const timeLabel = activityTime === 'allDay' ? '全天' : `${timeStart}–${timeEnd}`;
+    const effectiveLabel = effectiveMode === 'forever' ? '永久有效' : `${effectiveStart} 至 ${effectiveEnd}`;
+    onSave({
+      id: policy?.id || `RP-${String(Date.now()).slice(-6)}`,
+      name: policyName.trim(),
+      targetName: requiredRows.map(row => row.name).join('、'),
+      targetType: '商品',
+      status: policy?.status || 'enabled',
+      version: policy ? policy.version + 1 : 1,
+      orderMode: orderMode === 'check' ? '下单前检查' : '自动加入购物车',
+      selectionRule: selectionRule === 'anyOne' ? '任选一种' : '全部商品必选',
+      channels: Array.from(channels),
+      tableType: tableTypeEnabled ? `限定：${tableType}` : '不限定桌位类型',
+      tableAreaScope: tableAreaEnabled ? `${selectedStores.length} 家门店限定区域` : '不限定桌位区域',
+      effectiveRule: `${effectiveLabel} · ${periodLabel}${timeLabel}`,
+      applicableStores: selectedStores.map(store => store.name),
+      updatedAt: '刚刚',
     });
   };
 

@@ -28,7 +28,7 @@ import { WebStoreCategoryList } from './web/WebStoreCategoryList';
 import { WebCategoryManager } from './web/WebCategoryManager';
 import { WebStoreAttributeManager } from './web/WebStoreAttributeManager';
 import { WebStoreRegionList } from './web/WebStoreRegionList';
-import { WebRequiredProductPolicyList } from './web/WebRequiredProductPolicyList';
+import { MOCK_REQUIRED_POLICIES, WebRequiredProductPolicyList, type RequiredPolicyRecord } from './web/WebRequiredProductPolicyList';
 import { WebRequiredProductPolicyEditor } from './web/WebRequiredProductPolicyEditor';
 import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
 import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
@@ -440,7 +440,9 @@ export const WebAdmin: React.FC = () => {
   const [creationContext, setCreationContext] = useState<CreationContext | null>(null); // Triggers Form Page
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
   const [storeCategoryReturnMenu, setStoreCategoryReturnMenu] = useState('store_product_list');
-  const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: any } | null>(() => (
+  const [requiredPolicies, setRequiredPolicies] = useState<RequiredPolicyRecord[]>(MOCK_REQUIRED_POLICIES);
+  const [requiredPolicyNotice, setRequiredPolicyNotice] = useState('');
+  const [requiredPolicyEditorContext, setRequiredPolicyEditorContext] = useState<{ mode: 'create' | 'edit'; policy?: RequiredPolicyRecord } | null>(() => (
     new URLSearchParams(window.location.search).get('action') === 'create'
       ? { mode: 'create' }
       : null
@@ -941,6 +943,15 @@ export const WebAdmin: React.FC = () => {
                   mode={requiredPolicyEditorContext.mode}
                   policy={requiredPolicyEditorContext.policy}
                   onBack={() => setRequiredPolicyEditorContext(null)}
+                  onSave={(savedPolicy) => {
+                    setRequiredPolicies(current => requiredPolicyEditorContext.mode === 'create'
+                      ? [savedPolicy, ...current]
+                      : current.map(item => item.id === savedPolicy.id ? savedPolicy : item));
+                    setRequiredPolicyNotice(requiredPolicyEditorContext.mode === 'create'
+                      ? `方案“${savedPolicy.name}”创建成功，已启用`
+                      : `方案“${savedPolicy.name}”保存成功`);
+                    setRequiredPolicyEditorContext(null);
+                  }}
               />
           );
       }
@@ -1053,6 +1064,10 @@ export const WebAdmin: React.FC = () => {
       if (activeMenu === 'required_product_policy') {
           return (
               <WebRequiredProductPolicyList
+                  policies={requiredPolicies}
+                  onPoliciesChange={setRequiredPolicies}
+                  notice={requiredPolicyNotice}
+                  onNoticeConsumed={() => setRequiredPolicyNotice('')}
                   onCreatePolicy={() => setRequiredPolicyEditorContext({ mode: 'create' })}
                   onEditPolicy={(policy) => setRequiredPolicyEditorContext({ mode: 'edit', policy })}
               />

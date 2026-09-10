@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, MoreHorizontal, Plus, Search, X } from 'lucide-react';
+import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
 export type RequiredPolicyRecord = {
   id: string;
@@ -36,20 +37,45 @@ export const MOCK_REQUIRED_POLICIES: RequiredPolicyRecord[] = [
   },
 ];
 
+const EXCEPTION_PRODUCT_OPTIONS: SelectableProduct[] = [
+  { id: 'exception-101', name: '可乐', type: 'standard', frontendCategory: '饮品', productCode: 'SP000201', skuCode: 'SKU000201', price: 5, status: 'on_shelf' },
+  { id: 'exception-102', name: '雪碧', type: 'standard', frontendCategory: '饮品', productCode: 'SP000202', skuCode: 'SKU000202', price: 5, status: 'on_shelf' },
+  { id: 'exception-103', name: '柚C果茶', type: 'standard', frontendCategory: '饮品', productCode: 'SP000203', skuCode: 'SKU000203', price: 12, status: 'on_shelf' },
+  { id: 'exception-104', name: '米饭', type: 'standard', frontendCategory: '主食', productCode: 'SP000204', skuCode: 'SKU000204', price: 2, status: 'on_shelf' },
+  { id: 'exception-105', name: '餐具', type: 'standard', frontendCategory: '其他', productCode: 'SP000205', skuCode: 'SKU000205', price: 1, status: 'on_shelf' },
+];
+
 export const WebRequiredProductPolicyList: React.FC<{
+  policies?: RequiredPolicyRecord[];
+  onPoliciesChange?: (policies: RequiredPolicyRecord[]) => void;
+  notice?: string;
+  onNoticeConsumed?: () => void;
   onCreatePolicy?: () => void;
   onEditPolicy?: (policy: RequiredPolicyRecord) => void;
-}> = ({ onCreatePolicy, onEditPolicy }) => {
-  const [policies, setPolicies] = useState(MOCK_REQUIRED_POLICIES);
+}> = ({ policies: controlledPolicies, onPoliciesChange, notice, onNoticeConsumed, onCreatePolicy, onEditPolicy }) => {
+  const [localPolicies, setLocalPolicies] = useState(MOCK_REQUIRED_POLICIES);
+  const policies = controlledPolicies ?? localPolicies;
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<'all' | RequiredPolicyRecord['status']>('all');
   const [detail, setDetail] = useState<RequiredPolicyRecord | null>(null);
   const [deletePolicy, setDeletePolicy] = useState<RequiredPolicyRecord | null>(null);
   const [exceptionOpen, setExceptionOpen] = useState(false);
-  const [exceptionProducts, setExceptionProducts] = useState(['柚C果茶', '米饭']);
-  const [exceptionCandidate, setExceptionCandidate] = useState('可乐');
+  const [exceptionProductIds, setExceptionProductIds] = useState(['exception-103', 'exception-104']);
+  const [exceptionDraftIds, setExceptionDraftIds] = useState<string[]>([]);
+  const [exceptionSelectorDraftIds, setExceptionSelectorDraftIds] = useState<string[]>([]);
+  const [exceptionSelectorOpen, setExceptionSelectorOpen] = useState(false);
   const [moreId, setMoreId] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    if (!notice) return;
+    setToast(notice);
+    const timer = window.setTimeout(() => {
+      setToast('');
+      onNoticeConsumed?.();
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [notice, onNoticeConsumed]);
 
   const filteredPolicies = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -58,6 +84,15 @@ export const WebRequiredProductPolicyList: React.FC<{
 
   const reset = () => { setKeyword(''); setStatus('all'); };
   const feedback = (text: string) => { setToast(text); window.setTimeout(() => setToast(''), 2600); };
+  const updatePolicies = (updater: (current: RequiredPolicyRecord[]) => RequiredPolicyRecord[]) => {
+    const next = updater(policies);
+    if (onPoliciesChange) onPoliciesChange(next);
+    else setLocalPolicies(next);
+  };
+  const openExceptionSettings = () => {
+    setExceptionDraftIds(exceptionProductIds);
+    setExceptionOpen(true);
+  };
   const storeSummary = (stores: string[]) => {
     if (!stores.length) return '未选择门店';
     if (stores.length === 1) return stores[0];
@@ -83,7 +118,7 @@ export const WebRequiredProductPolicyList: React.FC<{
             <button onClick={reset} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">重置</button>
           </div>
           <div className="flex shrink-0 gap-2">
-            <button onClick={() => setExceptionOpen(true)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969]">特例设置</button>
+            <button onClick={openExceptionSettings} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969]">特例设置</button>
             <button onClick={onCreatePolicy} className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white"><Plus size={15} className="mr-1.5" />新增必选商品</button>
           </div>
         </div>
@@ -108,8 +143,8 @@ export const WebRequiredProductPolicyList: React.FC<{
                 <td className="px-3 py-3"><div className="relative flex items-center gap-3">
                   <button onClick={() => setDetail(policy)} className="font-medium text-[#008F4C]">查看</button><button onClick={() => onEditPolicy?.(policy)} className="text-[#008F4C]">编辑</button><button aria-label="更多操作" onClick={() => setMoreId(moreId === policy.id ? null : policy.id)}><MoreHorizontal size={17} className="text-[#667085]" /></button>
                   {moreId === policy.id && <div className="absolute right-0 top-7 z-30 w-32 rounded-md border border-[#E5E7EB] bg-white py-1 shadow-lg">
-                    <button onClick={() => { setPolicies(current => current.map(item => item.id === policy.id ? { ...item, status: item.status === 'enabled' ? 'disabled' : 'enabled', updatedAt: '刚刚' } : item)); setMoreId(null); feedback(policy.status === 'enabled' ? '方案已禁用' : '方案已启用'); }} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">{policy.status === 'enabled' ? '禁用' : '启用'}</button>
-                    <button onClick={() => { setPolicies(current => [{ ...policy, id: `RP-${Date.now()}`, name: `${policy.name}-副本`, status: 'disabled', updatedAt: '刚刚' }, ...current]); setMoreId(null); feedback('必选方案已复制，新方案默认为禁用'); }} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">复制</button>
+                    <button onClick={() => { updatePolicies(current => current.map(item => item.id === policy.id ? { ...item, status: item.status === 'enabled' ? 'disabled' : 'enabled', updatedAt: '刚刚' } : item)); setMoreId(null); feedback(policy.status === 'enabled' ? '方案已禁用' : '方案已启用'); }} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">{policy.status === 'enabled' ? '禁用' : '启用'}</button>
+                    <button onClick={() => { updatePolicies(current => [{ ...policy, id: `RP-${Date.now()}`, name: `${policy.name}-副本`, status: 'disabled', updatedAt: '刚刚' }, ...current]); setMoreId(null); feedback('必选方案已复制，新方案默认为禁用'); }} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">复制</button>
                     <button disabled={policy.status === 'enabled'} title={policy.status === 'enabled' ? '请先禁用方案' : '删除方案'} onClick={() => { setDeletePolicy(policy); setMoreId(null); }} className="w-full px-3 py-2 text-left text-[#D92D20] hover:bg-[#FFF5F5] disabled:cursor-not-allowed disabled:text-[#B8C0CC] disabled:hover:bg-white">删除</button>
                   </div>}
                 </div></td>
@@ -128,15 +163,32 @@ export const WebRequiredProductPolicyList: React.FC<{
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] px-5 py-3"><button onClick={() => setDetail(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">关闭</button><button onClick={() => { setDetail(null); onEditPolicy?.(detail); }} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white">编辑方案</button></div>
       </div></div>}
 
-      {exceptionOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[620px] rounded-lg bg-white shadow-2xl">
+      {exceptionOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[680px] rounded-lg bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4"><div><h3 className="font-semibold">特例设置</h3><p className="mt-1 text-[12px] text-[#667085]">订单内商品全部属于特例商品时，不校验必选商品与分类必选。</p></div><button onClick={() => setExceptionOpen(false)} aria-label="关闭特例设置"><X size={20} className="text-[#667085]" /></button></div>
-        <div className="space-y-4 p-5 text-[13px]"><div className="flex gap-2"><select value={exceptionCandidate} onChange={event => setExceptionCandidate(event.target.value)} className="h-9 flex-1 rounded-md border border-[#DDE2E8] px-3">{['可乐', '雪碧', '柚C果茶', '米饭', '餐具'].map(product => <option key={product}>{product}</option>)}</select><button onClick={() => { if (!exceptionProducts.includes(exceptionCandidate)) setExceptionProducts(current => [...current, exceptionCandidate]); }} className="h-9 rounded-md border border-[#00B460] px-4 font-medium text-[#008F4C]">添加商品</button></div>
-          <div className="overflow-hidden rounded-md border border-[#E5E7EB]"><div className="grid grid-cols-[1fr_90px] bg-[#F7F8FA] px-4 py-3 font-medium text-[#4E5969]"><span>特例商品</span><span>操作</span></div>{exceptionProducts.map(product => <div key={product} className="grid grid-cols-[1fr_90px] border-t border-[#EEF0F3] px-4 py-3"><span>{product}</span><button onClick={() => setExceptionProducts(current => current.filter(item => item !== product))} className="text-left text-[#D92D20]">移除</button></div>)}</div>
+        <div className="space-y-4 p-5 text-[13px]">
+          <div className="flex items-center justify-between"><div><div className="font-medium text-[#344054]">特例商品</div><div className="mt-1 text-[12px] text-[#98A2B3]">品牌统一维护，POS 与小程序直接读取。</div></div><button onClick={() => { setExceptionSelectorDraftIds(exceptionDraftIds); setExceptionSelectorOpen(true); }} className="inline-flex h-9 items-center rounded-md border border-[#00B460] px-4 font-medium text-[#008F4C]"><Plus size={15} className="mr-1.5" />选择商品</button></div>
+          <div className="overflow-hidden rounded-md border border-[#E5E7EB]"><div className="grid grid-cols-[1fr_170px_90px] bg-[#F7F8FA] px-4 py-3 font-medium text-[#4E5969]"><span>商品名称</span><span>前台分类</span><span>操作</span></div>{exceptionDraftIds.map(productId => {
+            const product = EXCEPTION_PRODUCT_OPTIONS.find(item => item.id === productId);
+            if (!product) return null;
+            return <div key={product.id} className="grid grid-cols-[1fr_170px_90px] border-t border-[#EEF0F3] px-4 py-3"><span>{product.name}</span><span className="text-[#667085]">{product.frontendCategory}</span><button onClick={() => setExceptionDraftIds(current => current.filter(id => id !== product.id))} className="text-left text-[#D92D20]">移除</button></div>;
+          })}{exceptionDraftIds.length === 0 && <div className="py-10 text-center text-[#98A2B3]">暂未选择特例商品</div>}</div>
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-[#E5E7EB] px-5 py-3"><span className="text-[12px] text-[#667085]">品牌统一维护，POS 与小程序直接读取。</span><div className="flex gap-2"><button onClick={() => setExceptionOpen(false)} className="h-9 rounded-md border border-[#DDE2E8] px-4">取消</button><button onClick={() => { setExceptionOpen(false); feedback('特例设置已保存，品牌配置已更新'); }} className="h-9 rounded-md bg-[#00B460] px-4 font-medium text-white">保存</button></div></div>
+        <div className="flex items-center justify-end gap-2 border-t border-[#E5E7EB] px-5 py-3"><button onClick={() => setExceptionOpen(false)} className="h-9 rounded-md border border-[#DDE2E8] px-4">取消</button><button onClick={() => { setExceptionProductIds(exceptionDraftIds); setExceptionOpen(false); feedback('特例设置已保存，品牌配置已更新'); }} className="h-9 rounded-md bg-[#00B460] px-4 font-medium text-white">保存</button></div>
       </div></div>}
 
-      {deletePolicy && <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35"><div className="w-[480px] rounded-lg bg-white p-5 shadow-2xl"><div className="flex gap-3"><AlertTriangle size={22} className="shrink-0 text-[#F79009]" /><div><h3 className="font-semibold">删除必选商品方案</h3><p className="mt-2 text-[13px] leading-6 text-[#667085]">删除方案“{deletePolicy.name}”后，其适用门店将不再命中该规则。删除不可恢复，但保留操作审计。</p></div></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setDeletePolicy(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4">取消</button><button onClick={() => { setPolicies(current => current.filter(item => item.id !== deletePolicy.id)); feedback(`方案“${deletePolicy.name}”已删除`); setDeletePolicy(null); }} className="h-9 rounded-md bg-[#D92D20] px-4 font-medium text-white">确认删除</button></div></div></div>}
+      <WebProductSelectorDialog
+        open={exceptionSelectorOpen}
+        title="选择特例商品"
+        description="从品牌商品库选择商品；订单内商品全部属于特例商品时，跳过必选校验。"
+        products={EXCEPTION_PRODUCT_OPTIONS}
+        selectedIds={exceptionSelectorDraftIds}
+        onSelectedIdsChange={setExceptionSelectorDraftIds}
+        onCancel={() => setExceptionSelectorOpen(false)}
+        onConfirm={() => { setExceptionDraftIds(exceptionSelectorDraftIds); setExceptionSelectorOpen(false); }}
+        showSkuFields={false}
+      />
+
+      {deletePolicy && <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35"><div className="w-[480px] rounded-lg bg-white p-5 shadow-2xl"><div className="flex gap-3"><AlertTriangle size={22} className="shrink-0 text-[#F79009]" /><div><h3 className="font-semibold">删除必选商品方案</h3><p className="mt-2 text-[13px] leading-6 text-[#667085]">删除方案“{deletePolicy.name}”后，其适用门店将不再命中该规则。删除不可恢复，但保留操作审计。</p></div></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setDeletePolicy(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4">取消</button><button onClick={() => { updatePolicies(current => current.filter(item => item.id !== deletePolicy.id)); feedback(`方案“${deletePolicy.name}”已删除`); setDeletePolicy(null); }} className="h-9 rounded-md bg-[#D92D20] px-4 font-medium text-white">确认删除</button></div></div></div>}
     </div>
   );
 };

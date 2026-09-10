@@ -12,6 +12,7 @@ export type RequiredPolicyRecord = {
   selectionRule: '全部商品必选' | '任选一种';
   channels: string[];
   tableType: string;
+  tableAreaScope: string;
   effectiveRule: string;
   applicableStores: string[];
   updatedAt: string;
@@ -20,17 +21,17 @@ export type RequiredPolicyRecord = {
 export const MOCK_REQUIRED_POLICIES: RequiredPolicyRecord[] = [
   {
     id: 'RP-1001', name: '火锅锅底必选', targetName: '经典牛油锅底、番茄锅底、菌汤锅底', targetType: '商品',
-    status: 'enabled', version: 6, orderMode: '自动加入购物车', selectionRule: '全部商品必选', channels: ['POS', '小程序'], tableType: '全部桌位类型',
+    status: 'enabled', version: 6, orderMode: '自动加入购物车', selectionRule: '全部商品必选', channels: ['POS', '小程序'], tableType: '不限定桌位类型', tableAreaScope: '不限定桌位区域',
     effectiveRule: '永久有效 · 每天全天', applicableStores: ['范先生的门店', '品牌直营', 'orgtest一级'], updatedAt: '2026-09-02 14:20',
   },
   {
     id: 'RP-1002', name: '麻辣烫口味任选', targetName: '麻辣酱、芝麻酱、蒜泥酱、香辣酱', targetType: '商品',
-    status: 'enabled', version: 4, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS', '小程序'], tableType: '全部桌位类型',
+    status: 'enabled', version: 4, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS', '小程序'], tableType: '不限定桌位类型', tableAreaScope: '2 家门店限定区域',
     effectiveRule: '永久有效 · 每天 10:00–22:00', applicableStores: ['范先生的门店', '一级071'], updatedAt: '2026-09-02 11:08',
   },
   {
     id: 'RP-1003', name: '包间茶位必选', targetName: '精品茉莉花茶、陈皮白茶', targetType: '商品',
-    status: 'disabled', version: 3, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS'], tableType: '包间',
+    status: 'disabled', version: 3, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS'], tableType: '限定：包间', tableAreaScope: '1 家门店限定区域',
     effectiveRule: '永久有效 · 每天全天', applicableStores: ['品牌直营'], updatedAt: '2026-09-01 16:30',
   },
 ];
@@ -93,7 +94,7 @@ export const WebRequiredProductPolicyList: React.FC<{
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[1240px] table-fixed border-collapse text-left text-[13px]">
             <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]"><tr className="border-b border-[#E5E7EB]">
-              <th className="w-[210px] px-4 py-3 font-medium">方案名称 / ID</th><th className="px-3 py-3 font-medium">必选商品</th><th className="w-[160px] px-3 py-3 font-medium">必选类型</th><th className="w-[220px] px-3 py-3 font-medium">适用门店</th><th className="w-[180px] px-3 py-3 font-medium">渠道 / 桌位</th><th className="w-[100px] px-3 py-3 font-medium">状态</th><th className="w-[150px] px-3 py-3 font-medium">更新时间</th><th className="w-[150px] px-3 py-3 font-medium">操作</th>
+              <th className="w-[210px] px-4 py-3 font-medium">方案名称 / ID</th><th className="px-3 py-3 font-medium">必选商品</th><th className="w-[160px] px-3 py-3 font-medium">必选类型</th><th className="w-[220px] px-3 py-3 font-medium">适用门店</th><th className="w-[200px] px-3 py-3 font-medium">渠道 / 堂食范围</th><th className="w-[100px] px-3 py-3 font-medium">状态</th><th className="w-[150px] px-3 py-3 font-medium">更新时间</th><th className="w-[150px] px-3 py-3 font-medium">操作</th>
             </tr></thead>
             <tbody>{filteredPolicies.map(policy => (
               <tr key={policy.id} className="border-b border-[#EEF0F3] hover:bg-[#FAFCFB]">
@@ -101,7 +102,7 @@ export const WebRequiredProductPolicyList: React.FC<{
                 <td className="px-3 py-3"><div className="line-clamp-2 text-[#344054]">{policy.targetName}</div></td>
                 <td className="px-3 py-3"><div className="text-[#344054]">{policy.orderMode}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.selectionRule}</div></td>
                 <td className="px-3 py-3"><div className="line-clamp-2 text-[#344054]">{storeSummary(policy.applicableStores)}</div><button onClick={() => setDetail(policy)} className="mt-1 text-[12px] text-[#008F4C]">查看全部 {policy.applicableStores.length} 家</button></td>
-                <td className="px-3 py-3"><div className="text-[#344054]">{policy.channels.join('、')}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableType}</div></td>
+                <td className="px-3 py-3"><div className="text-[#344054]">{policy.channels.join('、')}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableType}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableAreaScope}</div></td>
                 <td className="px-3 py-3"><span className={`inline-flex items-center gap-1.5 ${policy.status === 'enabled' ? 'text-[#008F4C]' : 'text-[#667085]'}`}><span className={`h-2 w-2 rounded-full ${policy.status === 'enabled' ? 'bg-[#00B460]' : 'bg-[#98A2B3]'}`} />{policy.status === 'enabled' ? '启用' : '禁用'}</span></td>
                 <td className="px-3 py-3 text-[#667085]">{policy.updatedAt}</td>
                 <td className="px-3 py-3"><div className="relative flex items-center gap-3">
@@ -122,7 +123,7 @@ export const WebRequiredProductPolicyList: React.FC<{
       {detail && <div className="fixed inset-0 z-[80] flex justify-end bg-black/35"><div className="flex h-full w-[560px] flex-col bg-white shadow-2xl">
         <div className="flex h-14 items-center justify-between border-b border-[#E5E7EB] px-5"><h3 className="text-[17px] font-semibold">必选方案详情</h3><button onClick={() => setDetail(null)} aria-label="关闭详情"><X size={20} className="text-[#667085]" /></button></div>
         <div className="flex-1 space-y-5 overflow-y-auto p-5 text-[13px]"><div className="rounded-md bg-[#F7F8FA] p-4"><div className="flex items-center justify-between"><div className="font-medium">{detail.name}</div><span className={detail.status === 'enabled' ? 'text-[#008F4C]' : 'text-[#667085]'}>{detail.status === 'enabled' ? '启用' : '禁用'}</span></div><div className="mt-1 text-[#667085]">ID：{detail.id} · 品牌版本 V{detail.version}</div></div>
-          <DetailField label="必选商品" value={detail.targetName} /><DetailField label="必选类型" value={detail.orderMode} /><DetailField label="选择规则" value={detail.selectionRule} /><DetailField label={`适用门店（${detail.applicableStores.length} 家）`} value={detail.applicableStores.join('、')} /><DetailField label="适用渠道" value={detail.channels.join('、')} /><DetailField label="桌位类型限定" value={detail.tableType} /><DetailField label="生效规则" value={detail.effectiveRule} /><DetailField label="点单约束" value="门店命中多个启用方案时，各方案分别校验并同时满足。" />
+          <DetailField label="必选商品" value={detail.targetName} /><DetailField label="必选类型" value={detail.orderMode} /><DetailField label="选择规则" value={detail.selectionRule} /><DetailField label={`适用门店（${detail.applicableStores.length} 家）`} value={detail.applicableStores.join('、')} /><DetailField label="适用渠道" value={detail.channels.join('、')} /><DetailField label="桌位类型限定" value={detail.tableType} /><DetailField label="桌位区域限定" value={detail.tableAreaScope} /><DetailField label="生效规则" value={detail.effectiveRule} /><DetailField label="点单约束" value="门店命中多个启用方案时，各方案分别校验并同时满足。" />
         </div>
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] px-5 py-3"><button onClick={() => setDetail(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">关闭</button><button onClick={() => { setDetail(null); onEditPolicy?.(detail); }} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white">编辑方案</button></div>
       </div></div>}

@@ -10146,9 +10146,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 <span className="rounded bg-white px-2 py-1 text-[11px] font-bold text-[#087443]">异步执行</span>
                                             </div>
                                             <div className="space-y-2 px-4 py-3 text-xs leading-5 text-[#475467]">
-                                                {meituanBrandProductMissing && <div>1. 当前品牌商品尚未创建，系统将先根据渠道商品自动创建美团品牌商品。</div>}
-                                                <div>{meituanBrandProductMissing ? '2' : '1'}. 保存当前门店的美团在线点渠道商品。</div>
-                                                <div>{meituanBrandProductMissing ? '3' : '2'}. 创建或更新平台门店商品；可在发布中心查看结果并重试失败项。</div>
+                                                {meituanBrandProductMissing && <div className="text-[#B54708]">平台品牌商品尚未同步成功：当前门店商品仍可保存，但不会创建美团平台门店商品任务。请先在渠道商品库的“美团在线点商品”入口完成品牌商品同步。</div>}
+                                                <div>1. 保存当前门店的美团在线点渠道商品。</div>
+                                                <div>2. 品牌商品已同步成功时，创建或更新平台门店商品；可在发布中心查看结果并重试失败项。</div>
                                                 {isComboProduct && <div className="mt-2 border-t border-[#DDEFE5] pt-2 text-[#8A5A00]">套餐将先校验分组、子商品及选购规则；不兼容时不影响企迈门店商品保存，只阻断平台子任务。</div>}
                                             </div>
                                         </div>

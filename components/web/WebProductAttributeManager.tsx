@@ -556,7 +556,7 @@ interface WebProductAttributeManagerProps {
 }
 
 const MASTER_ATTRIBUTE_TABS: AttributeTab[] = ['category', 'spec', 'method', 'label', 'custom_combo', 'addon'];
-const CHANNEL_ATTRIBUTE_TABS: AttributeTab[] = ['label', 'badge', 'series', 'custom_attribute', 'addon'];
+const CHANNEL_ATTRIBUTE_TABS: AttributeTab[] = ['label', 'badge', 'series', 'custom_attribute'];
 
 export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProps> = ({
   scope = 'all',

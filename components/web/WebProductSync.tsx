@@ -1296,7 +1296,7 @@ export const WebProductSync: React.FC<{
                             <div className="flex items-start justify-between gap-4 border-b border-[#E8ECEF] bg-[#F7FAF8] px-4 py-3.5">
                                 <div>
                                     <div className="text-sm font-black text-[#1F2129]">美团在线点任务编排</div>
-                                    <div className="mt-1 text-xs leading-5 text-[#667085]">页面只确认商品、门店和渠道；系统自动处理平台品牌商品依赖。</div>
+                                    <div className="mt-1 text-xs leading-5 text-[#667085]">页面只确认商品、门店和渠道；平台品牌商品由渠道商品库中的独立入口提前同步。</div>
                                 </div>
                                 <span className={`shrink-0 rounded px-2.5 py-1 text-[11px] font-bold ${qimaiManagesMeituanDine ? 'bg-[#EAF8F1] text-[#087443]' : 'bg-[#F2F4F7] text-[#667085]'}`}>
                                     {qimaiManagesMeituanDine ? '企迈管理平台商品' : '平台自行管理商品'}
@@ -1304,9 +1304,9 @@ export const WebProductSync: React.FC<{
                             </div>
                             <div className="grid gap-0 md:grid-cols-3">
                                 {[
-                                    ['1', '补齐平台品牌商品', meituanMissingBrandProducts.length > 0 ? `${meituanMissingBrandProducts.length} 个商品尚未创建，将自动创建` : '所选商品均已具备平台品牌商品'],
-                                    ['2', '更新企迈门店商品', syncSource === 'template' ? '模板仅更新门店商品，不直接改品牌商品' : '按本次门店范围创建或更新'],
-                                    ['3', '同步美团门店商品', qimaiManagesMeituanDine ? '企迈门店商品成功后执行平台子任务' : '不创建平台商品同步任务'],
+                                    ['1', '校验平台品牌商品', meituanMissingBrandProducts.length > 0 ? `${meituanMissingBrandProducts.length} 个商品尚未同步成功，仅阻断其平台门店商品子任务` : '所选商品均已具备同步成功的平台品牌商品'],
+                                    ['2', '更新企迈门店商品', syncSource === 'template' ? '模板仅更新门店商品，不直接改平台品牌商品' : '按本次门店范围创建或更新，不依赖平台品牌任务'],
+                                    ['3', '同步美团门店商品', qimaiManagesMeituanDine ? '仅对品牌商品已同步成功的商品执行平台子任务' : '不创建平台商品同步任务'],
                                 ].map(([index, title, desc]) => (
                                     <div key={index} className="border-b border-[#EEF0F2] px-4 py-4 md:border-b-0 md:border-r last:border-r-0">
                                         <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00B865] text-[11px] text-white">{index}</span>{title}</div>
@@ -1376,7 +1376,7 @@ export const WebProductSync: React.FC<{
             <h2 className="text-2xl font-bold text-gray-800 mb-2">{operationMode === 'sync' ? '同步任务已提交' : '批量修改任务已提交'}</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
                 {includesMeituanDine && qimaiManagesMeituanDine
-                    ? '系统将依次补齐美团品牌商品、更新企迈门店商品并同步美团门店商品；请在发布记录中查看子任务结果。'
+                    ? '企迈门店商品已进入下发任务；平台仅处理已提前同步成功的美团品牌商品，请在发布记录中查看各子任务结果。'
                     : '请在发布记录中查看任务执行进度和各范围处理结果。'}
             </p>
             <div className="flex space-x-4">

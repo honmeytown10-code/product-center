@@ -15,7 +15,7 @@ import {
 type BatchStatus = 'success' | 'running' | 'partial' | 'failed';
 type TaskStatus = 'success' | 'running' | 'waiting' | 'failed';
 type TaskType = 'qimai' | 'platform';
-type RecordType = 'store_publish' | 'douyin_standard' | 'douyin_addon';
+type RecordType = 'store_publish' | 'douyin_standard' | 'douyin_addon' | 'meituan_brand';
 
 type PublishTask = {
   id: string;
@@ -66,6 +66,28 @@ export type MasterChannelSyncRecord = {
 
 const batches: PublishBatch[] = [
   {
+    recordType: 'meituan_brand',
+    id: 'MBS202609100006',
+    title: '美团在线点品牌商品同步',
+    action: '创建或更新美团品牌商品',
+    sourceType: '渠道商品库',
+    sourceName: '在线点商品库',
+    snapshot: '在线点商品库 V20260910.2',
+    channels: ['美团在线点'],
+    storeScope: '品牌级同步，不涉及门店',
+    storeCount: 0,
+    productCount: 9,
+    skuCount: 18,
+    status: 'success',
+    createdAt: '2026-09-10 15:18:06',
+    creator: '周镇',
+    tasks: [{
+      id: 'MBS202609100006', type: 'platform', target: '美团在线点品牌商品', channels: ['美团在线点'], status: 'success', progress: 100,
+      productCount: 9, skuCount: 18, storeCount: 0, successCount: 9, failedCount: 0, waitingCount: 0,
+      startedAt: '2026-09-10 15:18:08', finishedAt: '2026-09-10 15:19:21',
+    }],
+  },
+  {
     recordType: 'store_publish',
     id: 'PB202608290031',
     title: '美团在线点新品下发',
@@ -83,22 +105,6 @@ const batches: PublishBatch[] = [
     creator: '周镇',
     tasks: [
       {
-        id: 'MTB202608290031',
-        type: 'platform',
-        target: '补建美团品牌商品',
-        channels: ['美团在线点'],
-        status: 'success',
-        progress: 100,
-        productCount: 2,
-        skuCount: 5,
-        storeCount: 0,
-        successCount: 2,
-        failedCount: 0,
-        waitingCount: 0,
-        startedAt: '2026-08-29 16:42:10',
-        finishedAt: '2026-08-29 16:42:46',
-      },
-      {
         id: 'QM202608290031',
         type: 'qimai',
         target: '生成门店商品（美团在线点渠道）',
@@ -111,7 +117,7 @@ const batches: PublishBatch[] = [
         successCount: 252,
         failedCount: 0,
         waitingCount: 0,
-        startedAt: '2026-08-29 16:42:48',
+        startedAt: '2026-08-29 16:42:10',
         finishedAt: '2026-08-29 16:43:19',
       },
       {
@@ -586,6 +592,7 @@ export const WebPublishRecords: React.FC<{ masterChannelSyncRecords?: MasterChan
             <option value="store_publish">门店商品下发</option>
             <option value="douyin_standard">抖音标品同步</option>
             <option value="douyin_addon">抖音加料品同步</option>
+            <option value="meituan_brand">美团品牌商品同步</option>
           </select>
           <select value={status} onChange={event => setStatus(event.target.value as 'all' | BatchStatus)} className="h-9 w-36 rounded border border-[#D9DDE3] bg-white px-3 text-sm text-[#555] outline-none focus:border-[#00B460]">
             <option value="all">全部状态</option>

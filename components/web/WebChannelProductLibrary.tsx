@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ChevronRight,
   ChevronUp,
   ChevronDown,
   Download,
@@ -24,6 +25,11 @@ import {
   isThirdPartyChannelId,
 } from '../../omnichannel';
 import type { OmnichannelChannelId, Product, ThirdPartyChannelId } from '../../types';
+import {
+  WebOnlineOrderingPlatformHub,
+  type OnlineOrderingPlatform,
+  type OnlineOrderingPlatformView,
+} from './WebOnlineOrderingPlatformHub';
 import { WebProductSelectorDialog } from './WebProductSelectorDialog';
 
 type PlatformStatus = 'not_synced' | 'initial_reviewing' | 'initial_rejected' | 'effective' | 'update_reviewing' | 'update_rejected';
@@ -288,7 +294,11 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const [auditProductId, setAuditProductId] = useState<string | null>(null);
   const [douyinProductView, setDouyinProductView] = useState<DouyinProductView>('all');
   const [syncDialogProductIds, setSyncDialogProductIds] = useState<string[]>([]);
-  const [showDouyinSyncDialog, setShowDouyinSyncDialog] = useState(false);
+  const [platformSyncTargets, setPlatformSyncTargets] = useState<OnlineOrderingPlatform[]>([]);
+  const [showPlatformSyncDialog, setShowPlatformSyncDialog] = useState(false);
+  const [showPlatformProductPicker, setShowPlatformProductPicker] = useState(false);
+  const [pendingPlatformSyncIds, setPendingPlatformSyncIds] = useState<string[]>([]);
+  const [platformProductIds, setPlatformProductIds] = useState<Record<string, string[]>>({});
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
@@ -297,6 +307,10 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const [showSortDialog, setShowSortDialog] = useState(false);
   const [sortDraftProductIds, setSortDraftProductIds] = useState<string[]>([]);
   const [categoryProductOrders, setCategoryProductOrders] = useState<Record<string, string[]>>({});
+  const [platformWorkspace, setPlatformWorkspace] = useState<{
+    platform: OnlineOrderingPlatform;
+    view: OnlineOrderingPlatformView;
+  } | null>(null);
 
   useEffect(() => {
     if (initialGroupId && availableGroups.some(group => group.id === initialGroupId)) {
@@ -356,6 +370,8 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   const activeGroup = availableGroups.find(group => group.id === activeGroupId) || availableGroups[0];
   const activeProductIds = activeGroup ? (groupProductIds[activeGroup.id] || []) : [];
+  const hasDouyinOnlineOrdering = activeGroup?.channels.includes('douyin') || false;
+  const hasMeituanOnlineOrdering = activeGroup?.channels.includes('meituan_dine') || false;
   const effectiveProducts = useMemo(() => products.map(product => {
     const productKey = activeGroup ? getChannelProductKey(activeGroup.id, product.id) : '';
     const snapshot = channelProductSnapshots[productKey] || createChannelProductSnapshot(product);
@@ -418,7 +434,6 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     || appliedFilters.skuId.trim()
     || appliedFilters.frontendCategory !== 'all'
     || appliedFilters.productType !== 'all'
-    || appliedFilters.platformStatus !== 'all'
     || selectedQuickCategory
   );
   const reviewChannel = THIRD_PARTY_CHANNELS.find(channel => (
@@ -472,59 +487,118 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     ? activeProductIds.filter(productId => getPlatformStatus(productId) !== 'not_synced')
     : [];
 
-  const displayedProducts = visibleProducts.filter(product => (
-    (douyinProductView === 'all' || activeDouyinProductIds.includes(product.id))
-    && (appliedFilters.platformStatus === 'all' || getPlatformStatus(product.id) === appliedFilters.platformStatus)
-  ));
+  const displayedProducts = visibleProducts;
 
-  const openDouyinSyncDialog = (productIds: string[]) => {
-    if (!reviewChannel || productIds.length === 0) return;
-    const syncableProductIds = productIds.filter(productId => !isPlatformReviewing(getPlatformStatus(productId) as PlatformStatus));
-    if (syncableProductIds.length === 0) {
-      setOperationMessage('所选商品均在审核中，暂时不能重复同步。');
-      return;
-    }
-    setSyncDialogProductIds(syncableProductIds);
-    setShowDouyinSyncDialog(true);
+  const getPlatformWorkspaceKey = (platform: OnlineOrderingPlatform) => `${activeGroup.id}:${platform}`;
+
+  const getGeneratedPlatformProductIds = (platform: OnlineOrderingPlatform) => {
+    const generatedIds = platformProductIds[getPlatformWorkspaceKey(platform)] || activeProductIds.slice(0, 3);
+    return platform === 'meituan'
+      ? generatedIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : generatedIds;
   };
 
-  const confirmDouyinSync = () => {
-    if (!reviewChannel) return;
-    const submittedAt = '2026-08-20 14:30';
-    setPlatformAuditOverrides(prev => {
-      const next = { ...prev };
-      syncDialogProductIds.forEach(productId => {
-        const key = getStatusKey(activeGroup.id, productId, reviewChannel.id);
-        const currentStatus = getPlatformStatus(productId) as PlatformStatus;
-        const existingRecords = prev[key] || createDefaultAuditRecords(productId, currentStatus);
-        const nextVersion = Math.max(0, ...existingRecords.map(record => record.version)) + 1;
-        next[key] = [{
-          id: `${productId}-v${nextVersion}`,
-          version: nextVersion,
-          submitType: hasEffectivePlatformVersion(currentStatus) ? 'update' : 'initial',
-          status: 'reviewing',
-          submittedAt,
-          operator: '企迈静静',
-          changedFields: hasEffectivePlatformVersion(currentStatus)
-            ? ['商品名称', '商品主图', '商品描述']
-            : ['商品名称', '商品主图', '抖音商品分类', '规格信息'],
-          effective: false,
-        }, ...existingRecords];
+  const getPlatformSyncEligibility = (platform: OnlineOrderingPlatform, productIds: string[]) => {
+    const supportedIds = platform === 'meituan'
+      ? productIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : productIds;
+    const eligibleIds = platform === 'douyin' && reviewChannel
+      ? supportedIds.filter(productId => !isPlatformReviewing(getPlatformStatus(productId) as PlatformStatus))
+      : supportedIds;
+    return {
+      eligibleIds,
+      excludedCount: productIds.length - eligibleIds.length,
+    };
+  };
+
+  const getAvailablePlatformTargets = () => ([
+    ...(hasDouyinOnlineOrdering ? ['douyin' as OnlineOrderingPlatform] : []),
+    ...(hasMeituanOnlineOrdering ? ['meituan' as OnlineOrderingPlatform] : []),
+  ]);
+
+  const openPlatformProductPicker = () => {
+    setPendingPlatformSyncIds([]);
+    setShowPlatformProductPicker(true);
+  };
+
+  const openPlatformSyncDialog = (productIds: string[]) => {
+    if (productIds.length === 0) {
+      openPlatformProductPicker();
+      return;
+    }
+    const availableTargets = getAvailablePlatformTargets();
+    const defaultTargets = availableTargets.filter(platform => (
+      getPlatformSyncEligibility(platform, productIds).eligibleIds.length > 0
+    ));
+    if (defaultTargets.length === 0) {
+      setOperationMessage('所选商品暂无可同步的平台，请查看各平台的排除原因后调整商品范围。');
+      return;
+    }
+    setSyncDialogProductIds(productIds);
+    setPlatformSyncTargets(defaultTargets);
+    setShowPlatformSyncDialog(true);
+  };
+
+  const submitPlatformSync = (platform: OnlineOrderingPlatform, productIds: string[]) => {
+    const syncableProductIds = platform === 'meituan'
+      ? productIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : productIds;
+    if (syncableProductIds.length === 0) return;
+    if (platform === 'douyin' && reviewChannel) {
+      const submittedAt = '2026-08-20 14:30';
+      setPlatformAuditOverrides(prev => {
+        const next = { ...prev };
+        syncableProductIds.forEach(productId => {
+          const key = getStatusKey(activeGroup.id, productId, reviewChannel.id);
+          const currentStatus = getPlatformStatus(productId) as PlatformStatus;
+          const existingRecords = prev[key] || createDefaultAuditRecords(productId, currentStatus);
+          const nextVersion = Math.max(0, ...existingRecords.map(record => record.version)) + 1;
+          next[key] = [{
+            id: `${productId}-v${nextVersion}`,
+            version: nextVersion,
+            submitType: hasEffectivePlatformVersion(currentStatus) ? 'update' : 'initial',
+            status: 'reviewing',
+            submittedAt,
+            operator: '企迈静静',
+            changedFields: hasEffectivePlatformVersion(currentStatus)
+              ? ['商品名称', '商品主图', '商品描述']
+              : ['商品名称', '商品主图', '抖音商品分类', '规格信息'],
+            effective: false,
+          }, ...existingRecords];
+        });
+        return next;
       });
-      return next;
-    });
-    setPlatformStatuses(prev => ({
-      ...prev,
-      ...Object.fromEntries(syncDialogProductIds.map(productId => [
-        getStatusKey(activeGroup.id, productId, reviewChannel.id),
-        (hasEffectivePlatformVersion(getPlatformStatus(productId) as PlatformStatus)
-          ? 'update_reviewing'
-          : 'initial_reviewing') as PlatformStatus,
+      setPlatformStatuses(prev => ({
+        ...prev,
+        ...Object.fromEntries(syncableProductIds.map(productId => [
+          getStatusKey(activeGroup.id, productId, reviewChannel.id),
+          (hasEffectivePlatformVersion(getPlatformStatus(productId) as PlatformStatus)
+            ? 'update_reviewing'
+            : 'initial_reviewing') as PlatformStatus,
+        ])),
+      }));
+    }
+    const workspaceKey = getPlatformWorkspaceKey(platform);
+    setPlatformProductIds(current => ({
+      ...current,
+      [workspaceKey]: Array.from(new Set([
+        ...(current[workspaceKey] || getGeneratedPlatformProductIds(platform)),
+        ...syncableProductIds,
       ])),
     }));
-    setShowDouyinSyncDialog(false);
+  };
+
+  const confirmPlatformSync = () => {
+    if (platformSyncTargets.length === 0) return;
+    const taskSummaries = platformSyncTargets.map(platform => {
+      const { eligibleIds } = getPlatformSyncEligibility(platform, syncDialogProductIds);
+      submitPlatformSync(platform, eligibleIds);
+      return `${platform === 'douyin' ? '抖音在线点' : '美团在线点'} ${eligibleIds.length} 个`;
+    });
+    setShowPlatformSyncDialog(false);
+    setPlatformSyncTargets([]);
     setSelectedProductIds([]);
-    setOperationMessage(`已创建 ${syncDialogProductIds.length} 个抖音在线点标品同步任务，可在发布中心「同步记录」查看进度。`);
+    setOperationMessage(`已创建 ${taskSummaries.length} 个平台同步子任务（${taskSummaries.join('、')}），各平台独立执行，可在发布中心「同步记录」查看进度。`);
   };
 
   const openProductScopeEditor = () => {
@@ -698,6 +772,22 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     );
   }
 
+  if (platformWorkspace) {
+    return (
+      <WebOnlineOrderingPlatformHub
+        platform={platformWorkspace.platform}
+        initialView={platformWorkspace.view}
+        catalogName={activeGroup.name}
+        products={effectiveProducts.filter(product => activeProductIds.includes(product.id))}
+        platformProductIds={getGeneratedPlatformProductIds(platformWorkspace.platform)}
+        onBack={() => setPlatformWorkspace(null)}
+        onEditProduct={editChannelProduct}
+        onOpenSyncRecords={onOpenSyncRecords}
+        onSyncProducts={(platform, productIds) => submitPlatformSync(platform, productIds)}
+      />
+    );
+  }
+
   return (
     <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
@@ -722,7 +812,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                       setActiveGroupId(group.id);
                       setSelectedQuickCategory(null);
                       setSelectedProductIds([]);
-                      setDouyinProductView('all');
+                      setPlatformWorkspace(null);
                     }}
                     className={`min-w-[176px] rounded-md border px-3 py-2 text-left transition-colors ${
                       active
@@ -801,24 +891,6 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                 <option value="combo">套餐商品</option>
               </select>
             </label>
-            {reviewChannel && (
-              <label className="flex h-9 w-[190px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 focus-within:border-[#00C06B]">
-                <span className="mr-2 shrink-0 text-xs text-gray-500">抖音标品:</span>
-                <select
-                  value={draftFilters.platformStatus}
-                  onChange={event => setDraftFilters(prev => ({ ...prev, platformStatus: event.target.value }))}
-                  className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm outline-none"
-                >
-                  <option value="all">全部状态</option>
-                  <option value="not_synced">未同步</option>
-                  <option value="initial_reviewing">首次审核中</option>
-                  <option value="initial_rejected">首次审核失败</option>
-                  <option value="effective">已生效</option>
-                  <option value="update_reviewing">更新审核中</option>
-                  <option value="update_rejected">更新审核失败</option>
-                </select>
-              </label>
-            )}
             <div className="ml-auto flex items-center gap-2">
               <button type="button" onClick={resetFilters} className="console-secondary-button">重置</button>
               <button type="button" onClick={() => setAppliedFilters(draftFilters)} className="console-primary-button">查询</button>
@@ -827,45 +899,73 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         </section>
 
         <section className="console-panel flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E8E8E8] px-4 py-3">
-            <div className="flex min-w-0 items-center gap-4">
-              {reviewChannel && (
-                <div className="flex h-9 shrink-0 items-center rounded-md bg-[#F2F3F5] p-1" role="tablist" aria-label="在线点商品视图">
-                  <button type="button" role="tab" aria-selected={douyinProductView === 'all'} onClick={() => setDouyinProductView('all')} className={`h-7 rounded px-3 text-xs font-medium ${douyinProductView === 'all' ? 'bg-white text-[#1D2129] shadow-sm' : 'text-[#667085]'}`}>全部商品 {activeProductIds.length}</button>
-                  <button type="button" role="tab" aria-selected={douyinProductView === 'douyin'} onClick={() => setDouyinProductView('douyin')} className={`h-7 rounded px-3 text-xs font-medium ${douyinProductView === 'douyin' ? 'bg-white text-[#008F4C] shadow-sm' : 'text-[#667085]'}`}>抖音标品 {activeDouyinProductIds.length}</button>
+          {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
+            <div className="flex h-12 shrink-0 items-center gap-3 border-b border-[#E8E8E8] bg-[#FAFBFC] px-4">
+              <span className="shrink-0 text-[13px] font-semibold text-[#1D2129]">平台商品</span>
+              <span className="shrink-0 text-xs text-[#86909C]">管理当前商品库生成的平台数据</span>
+              <div className="h-4 w-px shrink-0 bg-[#E5E6EB]" />
+              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+                  {hasDouyinOnlineOrdering && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPlatformWorkspace({ platform: 'douyin', view: 'products' })}
+                        aria-label="进入抖音在线点商品管理"
+                        className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-[#DDE2E7] bg-white px-3 text-[13px] font-medium text-[#1D2129] hover:border-[#80D8AF] hover:bg-[#F5FCF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#80D8AF]"
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center rounded bg-[#E8FAF7] text-[10px] font-semibold text-[#00A6A6]">抖</span>
+                        管理抖音商品
+                        <span className="text-xs font-normal text-[#86909C]">{getGeneratedPlatformProductIds('douyin').length}</span>
+                        <ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlatformWorkspace({ platform: 'douyin', view: 'addons' })}
+                        aria-label="进入抖音在线点加料管理"
+                        className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-[#DDE2E7] bg-white px-3 text-[13px] font-medium text-[#1D2129] hover:border-[#80D8AF] hover:bg-[#F5FCF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#80D8AF]"
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center rounded bg-[#E8FAF7] text-[10px] font-semibold text-[#00A6A6]">抖</span>
+                        管理抖音加料
+                        <ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" />
+                      </button>
+                    </>
+                  )}
+                  {hasMeituanOnlineOrdering && (
+                    <button
+                      type="button"
+                      onClick={() => setPlatformWorkspace({ platform: 'meituan', view: 'products' })}
+                      aria-label="进入美团在线点商品管理"
+                      className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-[#DDE2E7] bg-white px-3 text-[13px] font-medium text-[#1D2129] hover:border-[#80D8AF] hover:bg-[#F5FCF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#80D8AF]"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-[#FFF5D6] text-[10px] font-semibold text-[#9A6A00]">美</span>
+                      管理美团商品
+                      <span className="text-xs font-normal text-[#86909C]">{getGeneratedPlatformProductIds('meituan').length}</span>
+                      <ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" />
+                    </button>
+                  )}
                 </div>
-              )}
+            </div>
+          )}
+          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E8E8E8] px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-[300px] min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
                 <Search size={15} className="mr-2 text-gray-400" />
                 <input value={quickSearch} onChange={event => setQuickSearch(event.target.value)} className="w-full text-sm outline-none" placeholder="搜索商品名称、商品ID、SKUID" />
               </div>
-              {selectedProductIds.length > 0 && <span className="shrink-0 text-xs font-medium text-[#667085]">已选 {selectedProductIds.length} 个商品</span>}
+              {selectedProductIds.length > 0 && (
+                <div className="flex shrink-0 items-center gap-2 text-xs text-[#4E5969]">
+                  <span>已选 <b className="text-[#008F53]">{selectedProductIds.length}</b> 个</span>
+                  <button type="button" onClick={() => setSelectedProductIds([])} className="text-[#86909C] hover:text-[#1D2129]">清空</button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={selectedProductIds.length === 0}
-                onClick={syncSelectedFromMaster}
-                className="console-secondary-button border-[#8BD7AE] text-[#008F53] disabled:cursor-not-allowed disabled:border-[#E5E6EB] disabled:text-[#C9CDD4]"
-                title={selectedProductIds.length === 0 ? '请先勾选需要更新的渠道商品' : `从主档更新已选 ${selectedProductIds.length} 个商品`}
-              >
-                <RefreshCw size={15} />从主档更新
-              </button>
-              {reviewChannel && (
-                <button
-                  type="button"
-                  onClick={() => openDouyinSyncDialog(selectedProductIds)}
-                  disabled={selectedProductIds.length === 0 || selectedProductIds.every(id => isPlatformReviewing(getPlatformStatus(id) as PlatformStatus))}
-                  className="console-primary-button disabled:cursor-not-allowed disabled:opacity-45"
-                  title={selectedProductIds.length ? '创建或更新已选商品的抖音标品' : '请先勾选需要同步的商品'}
-                >
-                  <Send size={15} />同步抖音在线点{selectedProductIds.length ? `（${selectedProductIds.filter(id => !isPlatformReviewing(getPlatformStatus(id) as PlatformStatus)).length}）` : ''}
-                </button>
-              )}
-              <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
-                <ListFilter size={15} />排序管理
-              </button>
-              <div className="relative">
+              {selectedProductIds.length > 0 ? <button type="button" onClick={syncSelectedFromMaster} className="console-secondary-button" title={`从主档更新已选 ${selectedProductIds.length} 个商品`}><RefreshCw size={15} />从主档更新</button> : (
+                <>
+                  <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
+                    <ListFilter size={15} />排序管理
+                  </button>
+                  <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowImportExportMenu(value => !value)}
@@ -902,7 +1002,14 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     </button>
                   </div>
                 )}
-              </div>
+                  </div>
+                </>
+              )}
+              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
+                <button type="button" onClick={() => openPlatformSyncDialog(selectedProductIds)} className="console-primary-button">
+                  <Send size={15} />同步至平台{selectedProductIds.length > 0 ? `（${selectedProductIds.length}）` : ''}
+                </button>
+              )}
             </div>
           </div>
 
@@ -955,7 +1062,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               </button>
             )}
             <div className="min-w-0 flex-1 overflow-auto">
-            <table className={`${reviewChannel ? douyinProductView === 'douyin' ? 'min-w-[1120px]' : 'min-w-[1380px]' : 'min-w-[1190px]'} w-full table-fixed text-left text-sm`}>
+            <table className="w-full min-w-[1190px] table-fixed text-left text-sm">
               <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-gray-500">
                 <tr>
                   <th className="w-[50px] border-b border-[#E8E8E8] px-4 py-3 text-center">
@@ -970,24 +1077,12 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     />
                   </th>
                   <th className="w-[250px] border-b border-[#E8E8E8] px-5 py-3">商品</th>
-                  {reviewChannel && douyinProductView === 'douyin' ? (
-                    <>
-                      <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">抖音标品 ID</th>
-                      <th className="w-[230px] border-b border-[#E8E8E8] px-4 py-3">抖音商品分类</th>
-                      <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">平台状态</th>
-                      <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">最近同步</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">商品类型</th>
-                      <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">前台分类</th>
-                      <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">基础价格</th>
-                      <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-3">售卖状态</th>
-                      {reviewChannel && <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">抖音平台状态</th>}
-                      <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-3">更新时间</th>
-                    </>
-                  )}
-                  <th className={`sticky right-0 z-20 border-b border-l border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)] ${douyinProductView === 'douyin' ? 'w-[260px]' : 'w-[340px]'}`}>操作</th>
+                  <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">商品类型</th>
+                  <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">前台分类</th>
+                  <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">基础价格</th>
+                  <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-3">售卖状态</th>
+                  <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-3">更新时间</th>
+                  <th className="sticky right-0 z-20 w-[280px] border-b border-l border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -1002,38 +1097,21 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                         <div className="min-w-0"><div className="truncate font-bold text-gray-900">{product.name}</div><div className="mt-1 text-xs text-gray-400">商品ID {product.id}</div></div>
                       </div>
                     </td>
-                    {reviewChannel && douyinProductView === 'douyin' ? (() => {
-                      const status = getPlatformStatus(product.id) as PlatformStatus;
-                      return <>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4">{hasEffectivePlatformVersion(status) ? <><div className="font-medium text-[#1D2129]">{getDouyinProductId(product.id)}</div><div className="mt-1 text-xs text-[#98A2B3]">当前生效版本 V1</div></> : <><div className="font-medium text-[#86909C]">--</div><div className="mt-1 text-xs text-[#98A2B3]">尚无生效版本</div></>}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4 text-[#4E5969]">{getDouyinCategory(product)}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4">{renderPlatformStatus(product.id)}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4"><div className="text-xs text-[#4E5969]">2026-08-19 15:{20 + index}</div><div className="mt-1 text-[11px] text-[#98A2B3]">企迈 → 抖音</div></td>
-                      </>;
-                    })() : (
-                      <>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getProductTypeName(product)}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getFrontendCategoryName(product)}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4 font-medium text-gray-700">¥{Number(product.price || 0).toFixed(2)}</td>
-                        <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${getSaleStatus(product).className}`}>{getSaleStatus(product).label}</span></td>
-                        {reviewChannel && <td className="border-b border-[#F0F0F0] px-4 py-4">{renderPlatformStatus(product.id)}</td>}
-                        <td className="border-b border-[#F0F0F0] px-4 py-4 text-xs text-gray-500">2026-07-15 10:{20 + index}</td>
-                      </>
-                    )}
+                    <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getProductTypeName(product)}</td>
+                    <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getFrontendCategoryName(product)}</td>
+                    <td className="border-b border-[#F0F0F0] px-4 py-4 font-medium text-gray-700">¥{Number(product.price || 0).toFixed(2)}</td>
+                    <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${getSaleStatus(product).className}`}>{getSaleStatus(product).label}</span></td>
+                    <td className="border-b border-[#F0F0F0] px-4 py-4 text-xs text-gray-500">2026-07-15 10:{20 + index}</td>
                     <td className="sticky right-0 z-[5] border-b border-l border-[#F0F0F0] bg-white px-4 py-4 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)] group-hover:bg-[#FAFBFC]">
                       <div className="flex items-center gap-4 whitespace-nowrap text-xs font-bold">
-                        <button type="button" onClick={() => editChannelProduct(product)} className="text-[#00A35B] hover:text-[#008F53]">{reviewChannel && douyinProductView === 'douyin' ? '维护抖音资料' : '维护渠道资料'}</button>
-                        {canCreateMasterFromCatalog && douyinProductView === 'all' && <button type="button" onClick={() => editMasterProduct(product)} className="text-[#245B8A] hover:text-[#17476F]" title="进入独立的商品主档编辑页；正式产品还需校验商品主档编辑权限">编辑商品主档</button>}
-                        {reviewChannel && getPlatformStatus(product.id) === 'not_synced' && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-[#008F4C]"><Send size={12} className="mr-1" />同步至抖音</button>}
-                        {reviewChannel && getPlatformStatus(product.id) === 'effective' && douyinProductView === 'douyin' && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-[#008F4C]"><RefreshCw size={12} className="mr-1" />同步更新</button>}
-                        {reviewChannel && (getPlatformStatus(product.id) === 'initial_rejected' || getPlatformStatus(product.id) === 'update_rejected') && <button type="button" onClick={() => openDouyinSyncDialog([product.id])} className="flex items-center text-red-600"><RefreshCw size={12} className="mr-1" />重新同步</button>}
-                        {reviewChannel && douyinProductView === 'douyin' && getPlatformStatus(product.id) !== 'not_synced' && <button type="button" onClick={() => setAuditProductId(product.id)} className="text-[#245B8A]">审核记录</button>}
-                        {!unifiedCatalog && douyinProductView === 'all' && <button type="button" onClick={() => removeProductFromGroup(product.id)} className="flex items-center text-gray-400 hover:text-red-500"><Trash2 size={12} className="mr-1" />移出</button>}
+                        <button type="button" onClick={() => editChannelProduct(product)} className="text-[#00A35B] hover:text-[#008F53]">维护渠道资料</button>
+                        {canCreateMasterFromCatalog && <button type="button" onClick={() => editMasterProduct(product)} className="text-[#245B8A] hover:text-[#17476F]" title="进入独立的商品主档编辑页；正式产品还需校验商品主档编辑权限">编辑商品主档</button>}
+                        {!unifiedCatalog && <button type="button" onClick={() => removeProductFromGroup(product.id)} className="flex items-center text-gray-400 hover:text-red-500"><Trash2 size={12} className="mr-1" />移出</button>}
                       </div>
                     </td>
                   </tr>
                 ))}
-                {displayedProducts.length === 0 && <tr><td colSpan={reviewChannel ? (douyinProductView === 'douyin' ? 7 : 9) : 8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
+                {displayedProducts.length === 0 && <tr><td colSpan={8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
               </tbody>
             </table>
             </div>
@@ -1041,24 +1119,79 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         </section>
       </div>
 
-      {showDouyinSyncDialog && reviewChannel && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="同步抖音在线点标品">
-          <div className="w-[680px] overflow-hidden rounded-lg bg-white shadow-2xl">
+      <WebProductSelectorDialog
+        open={showPlatformProductPicker}
+        title="选择需要同步的平台商品"
+        description={`商品仅来自当前“${activeGroup.name}”；下一步可同时选择抖音在线点和美团在线点。已生成的平台商品也可再次选择并同步更新。`}
+        products={effectiveProducts.filter(product => activeProductIds.includes(product.id)).map(product => ({
+          ...product,
+          frontendCategory: getFrontendCategoryName(product),
+          productCode: product.skuCode,
+        }))}
+        selectedIds={pendingPlatformSyncIds}
+        onSelectedIdsChange={setPendingPlatformSyncIds}
+        confirmLabel="下一步"
+        onCancel={() => { setShowPlatformProductPicker(false); setPendingPlatformSyncIds([]); }}
+        onConfirm={() => {
+          if (pendingPlatformSyncIds.length === 0) {
+            setOperationMessage('请至少选择一个渠道商品。');
+            return;
+          }
+          setShowPlatformProductPicker(false);
+          openPlatformSyncDialog(pendingPlatformSyncIds);
+          setPendingPlatformSyncIds([]);
+        }}
+      />
+
+      {showPlatformSyncDialog && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="同步商品至平台">
+          <div className="w-[720px] overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
               <div>
-                <div className="text-[18px] font-bold text-[#1D2129]">同步抖音在线点标品</div>
-                <div className="mt-1 text-[12px] text-[#86909C]">本次仅同步品牌级标品，不选择门店，也不会创建门店点单品。</div>
+                <div className="text-[18px] font-bold text-[#1D2129]">同步商品至平台</div>
+                <div className="mt-1 text-[12px] text-[#86909C]">一次选择多个目标平台；系统按平台拆分任务，互不影响执行结果。</div>
               </div>
-              <button type="button" onClick={() => setShowDouyinSyncDialog(false)} title="关闭"><X size={18} className="text-[#667085]" /></button>
+              <button type="button" onClick={() => setShowPlatformSyncDialog(false)} title="关闭"><X size={18} className="text-[#667085]" /></button>
             </div>
             <div className="space-y-4 p-6">
-              <div className="grid grid-cols-3 gap-3 rounded-md border border-[#E5E6EB] bg-[#F7F8FA] p-4 text-sm">
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-[#E5E6EB] bg-[#F7F8FA] p-4 text-sm">
                 <div><div className="text-xs text-[#86909C]">商品来源</div><div className="mt-1 font-bold text-[#1D2129]">{activeGroup.name}</div></div>
-                <div><div className="text-xs text-[#86909C]">同步对象</div><div className="mt-1 font-bold text-[#1D2129]">{syncDialogProductIds.length} 个标品</div></div>
-                <div><div className="text-xs text-[#86909C]">目标平台</div><div className="mt-1 font-bold text-[#1D2129]">抖音在线点</div></div>
+                <div><div className="text-xs text-[#86909C]">已选商品</div><div className="mt-1 font-bold text-[#1D2129]">{syncDialogProductIds.length} 个</div></div>
               </div>
-              <div className="rounded-md border border-[#B8DBFF] bg-[#F2F8FF] px-4 py-3 text-[12px] leading-5 text-[#245B8A]">
-                系统将按商品当前资料创建或更新抖音标品并提交平台审核。已生效标品提交更新后，当前版本继续生效，新版本审核通过后才会替换。加料关联在品牌级标品同步时不处理，后续下发门店点单品时再同步关联关系。
+              <div>
+                <div className="mb-2 text-[13px] font-bold text-[#1D2129]">选择目标平台</div>
+                <div className="space-y-2">
+                  {getAvailablePlatformTargets().map(platform => {
+                    const { eligibleIds, excludedCount } = getPlatformSyncEligibility(platform, syncDialogProductIds);
+                    const checked = platformSyncTargets.includes(platform);
+                    const disabled = eligibleIds.length === 0;
+                    const label = platform === 'douyin' ? '抖音在线点' : '美团在线点';
+                    return (
+                      <label key={platform} className={`flex items-start gap-3 rounded-md border px-4 py-3 ${disabled ? 'cursor-not-allowed border-[#E5E6EB] bg-[#F7F8FA] opacity-70' : checked ? 'cursor-pointer border-[#80D8AF] bg-[#F5FCF8]' : 'cursor-pointer border-[#E5E6EB] bg-white hover:border-[#B8C1CC]'}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => setPlatformSyncTargets(current => (
+                            checked ? current.filter(item => item !== platform) : [...current, platform]
+                          ))}
+                          className="mt-0.5 h-4 w-4 accent-[#00A35B]"
+                        />
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] font-bold ${platform === 'douyin' ? 'bg-[#E8FAF7] text-[#00A6A6]' : 'bg-[#FFF5D6] text-[#9A6A00]'}`}>{platform === 'douyin' ? '抖' : '美'}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="text-[14px] font-bold text-[#1D2129]">{label}</span>
+                            <span className="text-[12px] font-medium text-[#008F53]">可同步 {eligibleIds.length} 个</span>
+                          </span>
+                          <span className="mt-1 block text-[12px] leading-5 text-[#667085]">
+                            {platform === 'douyin' ? '创建或更新抖音标品，并提交平台审核。' : '创建或更新美团品牌商品，无需平台审核。'}
+                            {excludedCount > 0 && <span className="ml-1 text-[#C46A00]">{excludedCount} 个将被排除：{platform === 'douyin' ? '商品正在审核中' : '一期暂不支持套餐商品'}。</span>}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex max-h-[180px] flex-wrap gap-2 overflow-y-auto">
                 {syncDialogProductIds.map(productId => {
@@ -1070,8 +1203,8 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
             <div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
               <button type="button" onClick={onOpenSyncRecords} className="text-[13px] font-medium text-[#008F4C] hover:text-[#006E3A]">查看历史同步记录</button>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setShowDouyinSyncDialog(false)} className="console-secondary-button">取消</button>
-                <button type="button" onClick={confirmDouyinSync} className="console-primary-button"><Send size={15} />确认同步</button>
+                <button type="button" onClick={() => setShowPlatformSyncDialog(false)} className="console-secondary-button">取消</button>
+                <button type="button" onClick={confirmPlatformSync} disabled={platformSyncTargets.length === 0} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-50"><Send size={15} />确认同步{platformSyncTargets.length > 0 ? `（${platformSyncTargets.length} 个平台）` : ''}</button>
               </div>
             </div>
           </div>

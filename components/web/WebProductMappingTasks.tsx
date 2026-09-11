@@ -26,6 +26,7 @@ type MappingTask = {
   successCount: number;
   failedCount: number;
   waitingCount: number;
+  excludedCount: number;
 };
 
 type StoreTaskResult = {
@@ -36,13 +37,13 @@ type StoreTaskResult = {
 };
 
 const initialTasks: MappingTask[] = [
-  { id: '1297204877659642021', type: 'update_platform_product', createdAt: '2026-08-20 14:29:03', completedAt: '2026-08-20 14:29:31', operator: '孙猛', status: 'completed', platform: '美团外卖', storeCount: 1, successCount: 1, failedCount: 0, waitingCount: 0 },
-  { id: '1291105153797521438', type: 'update_platform_product', createdAt: '2026-08-03 18:30:56', completedAt: '2026-08-03 18:31:27', operator: '刘剑', status: 'completed', platform: '美团外卖', storeCount: 1, successCount: 1, failedCount: 0, waitingCount: 0 },
-  { id: '1291104345890684926', type: 'update_platform_product', createdAt: '2026-08-03 18:27:43', completedAt: '2026-08-03 18:28:21', operator: '刘剑', status: 'completed', platform: '淘宝闪购', storeCount: 1, successCount: 1, failedCount: 0, waitingCount: 0 },
-  { id: '1291084481000043512', type: 'update_platform_product', createdAt: '2026-08-03 17:08:47', completedAt: '2026-08-03 17:09:42', operator: '刘剑', status: 'partial_failed', platform: '美团外卖', storeCount: 18, successCount: 16, failedCount: 2, waitingCount: 0 },
-  { id: '1289688992479694210', type: 'auto_mapping', createdAt: '2026-07-30 20:43:20', completedAt: '2026-07-30 20:43:38', operator: '周镇', status: 'completed', platform: '美团外卖', storeCount: 2734, successCount: 2734, failedCount: 0, waitingCount: 0 },
-  { id: '1288564837265471496', type: 'update_platform_product', createdAt: '2026-07-27 18:16:37', operator: '刘剑', status: 'running', platform: '抖音在线点', storeCount: 42, successCount: 28, failedCount: 0, waitingCount: 14 },
-  { id: '1288552271461963511', type: 'auto_mapping', createdAt: '2026-07-27 17:26:41', completedAt: '2026-07-27 17:27:12', operator: '刘剑', status: 'failed', platform: '美团外卖', storeCount: 3, successCount: 0, failedCount: 3, waitingCount: 0 },
+  { id: '1297204877659642021', type: 'update_platform_product', createdAt: '2026-08-20 14:29:03', completedAt: '2026-08-20 14:29:31', operator: '孙猛', status: 'completed', platform: '美团外卖', storeCount: 1, successCount: 1, failedCount: 0, waitingCount: 0, excludedCount: 2 },
+  { id: '1291105153797521438', type: 'update_platform_product', createdAt: '2026-08-03 18:30:56', completedAt: '2026-08-03 18:31:27', operator: '刘剑', status: 'completed', platform: '美团外卖', storeCount: 1, successCount: 1, failedCount: 0, waitingCount: 0, excludedCount: 2 },
+  { id: '1291104345890684926', type: 'update_platform_product', createdAt: '2026-08-03 18:27:43', completedAt: '2026-08-03 18:28:21', operator: '刘剑', status: 'completed', platform: '淘宝闪购', storeCount: 1, successCount: 1, failedCount: 0, waitingCount: 0, excludedCount: 0 },
+  { id: '1291084481000043512', type: 'update_platform_product', createdAt: '2026-08-03 17:08:47', completedAt: '2026-08-03 17:09:42', operator: '刘剑', status: 'completed', platform: '美团外卖', storeCount: 18, successCount: 16, failedCount: 2, waitingCount: 0, excludedCount: 36 },
+  { id: '1289688992479694210', type: 'auto_mapping', createdAt: '2026-07-30 20:43:20', completedAt: '2026-07-30 20:43:38', operator: '周镇', status: 'completed', platform: '美团外卖', storeCount: 2734, successCount: 2730, failedCount: 4, waitingCount: 0, excludedCount: 5468 },
+  { id: '1288564837265471496', type: 'update_platform_product', createdAt: '2026-07-27 18:16:37', operator: '刘剑', status: 'running', platform: '抖音在线点', storeCount: 42, successCount: 28, failedCount: 0, waitingCount: 14, excludedCount: 0 },
+  { id: '1288552271461963511', type: 'auto_mapping', createdAt: '2026-07-27 17:26:41', completedAt: '2026-07-27 17:27:12', operator: '刘剑', status: 'completed', platform: '美团外卖', storeCount: 3, successCount: 0, failedCount: 3, waitingCount: 0, excludedCount: 6 },
 ];
 
 const taskTypeLabels: Record<TaskType, string> = {
@@ -149,8 +150,8 @@ export const WebProductMappingTasks: React.FC = () => {
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
         <div className="flex h-11 items-center justify-between border-b border-[#E5E6EB] px-4 text-[12px] text-[#86909C]"><span>共 {filteredTasks.length} 条任务</span><span>任务由“更新平台商品”或“按商品标识匹配”等异步操作产生</span></div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] table-fixed text-left text-[13px]">
-            <thead className="bg-[#F7F8FA] text-[#4E5969]"><tr><th className="w-[220px] px-4 py-3 font-medium">任务 ID</th><th className="w-[170px] px-4 py-3 font-medium">操作类型</th><th className="w-[190px] px-4 py-3 font-medium">创建时间</th><th className="w-[120px] px-4 py-3 font-medium">操作人</th><th className="w-[180px] px-4 py-3 font-medium">状态</th><th className="w-[130px] px-4 py-3 font-medium">操作门店数</th><th className="w-[110px] px-4 py-3 font-medium">操作</th></tr></thead>
+          <table className="w-full min-w-[1180px] table-fixed text-left text-[13px]">
+            <thead className="bg-[#F7F8FA] text-[#4E5969]"><tr><th className="w-[190px] px-4 py-3 font-medium">任务 ID</th><th className="w-[140px] px-4 py-3 font-medium">操作类型</th><th className="w-[160px] px-4 py-3 font-medium">创建时间</th><th className="w-[80px] px-4 py-3 font-medium">操作人</th><th className="w-[130px] px-4 py-3 font-medium">执行状态</th><th className="w-[80px] px-4 py-3 font-medium">操作门店</th><th className="w-[270px] px-4 py-3 font-medium">执行结果</th><th className="w-[90px] px-4 py-3 font-medium">操作</th></tr></thead>
             <tbody>
               {filteredTasks.map(task => (
                 <tr key={task.id} className="border-t border-[#F0F1F2] text-[#4E5969] hover:bg-[#FAFBFC]">
@@ -160,10 +161,11 @@ export const WebProductMappingTasks: React.FC = () => {
                   <td className="px-4 py-4">{task.operator}</td>
                   <td className="px-4 py-4"><span className={`inline-flex rounded px-2 py-1 text-[12px] font-medium ${statusMeta[task.status].classes}`}>{statusMeta[task.status].label}</span>{task.completedAt && <div className="mt-1 text-[11px] text-[#86909C]">{task.completedAt}</div>}</td>
                   <td className="px-4 py-4 font-medium text-[#1D2129]">{task.storeCount}</td>
+                  <td className="px-4 py-4"><div className="flex flex-wrap gap-1.5"><span className="rounded bg-[#E8FFF3] px-2 py-1 text-[11px] text-[#008A4B]">成功 {task.successCount}</span><span className={`rounded px-2 py-1 text-[11px] ${task.failedCount ? 'bg-[#FFECE8] font-semibold text-[#CB2634]' : 'bg-[#F2F3F5] text-[#86909C]'}`}>失败 {task.failedCount}</span>{task.waitingCount > 0 && <span className="rounded bg-[#E8F3FF] px-2 py-1 text-[11px] text-[#2468A2]">等待 {task.waitingCount}</span>}<span className="rounded bg-[#FFF7E8] px-2 py-1 text-[11px] text-[#A8620A]">免绑定排除 {task.excludedCount}</span></div></td>
                   <td className="px-4 py-4"><button type="button" onClick={() => setSelectedTask(task)} className="font-medium text-[#00A35B] hover:text-[#008A4B]">任务详情</button></td>
                 </tr>
               ))}
-              {filteredTasks.length === 0 && <tr><td colSpan={7} className="px-4 py-16 text-center"><Search size={28} className="mx-auto text-[#C9CDD4]" /><div className="mt-3 text-[13px] text-[#86909C]">没有符合当前条件的任务</div><button type="button" onClick={reset} className="mt-2 text-[13px] font-medium text-[#00A35B]">清空筛选条件</button></td></tr>}
+              {filteredTasks.length === 0 && <tr><td colSpan={8} className="px-4 py-16 text-center"><Search size={28} className="mx-auto text-[#C9CDD4]" /><div className="mt-3 text-[13px] text-[#86909C]">没有符合当前条件的任务</div><button type="button" onClick={reset} className="mt-2 text-[13px] font-medium text-[#00A35B]">清空筛选条件</button></td></tr>}
             </tbody>
           </table>
         </div>
@@ -175,11 +177,12 @@ export const WebProductMappingTasks: React.FC = () => {
           <div className="flex h-full w-[760px] flex-col bg-white shadow-2xl">
             <header className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5"><div><h3 className="text-[18px] font-bold text-[#1D2129]">任务详情</h3><p className="mt-1 font-mono text-[12px] text-[#86909C]">{selectedTask.id}</p></div><button type="button" onClick={() => setSelectedTask(null)} className="rounded p-1.5 hover:bg-[#F2F3F5]" aria-label="关闭任务详情"><X size={18} /></button></header>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              <div className="grid grid-cols-4 gap-3 rounded-md bg-[#F7F8FA] p-4">
+              <div className="grid grid-cols-5 gap-3 rounded-md bg-[#F7F8FA] p-4">
                 <div><div className="text-[11px] text-[#86909C]">目标门店</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{selectedTask.storeCount}</div></div>
                 <div><div className="text-[11px] text-[#86909C]">成功</div><div className="mt-1 text-[20px] font-bold text-[#00A35B]">{selectedTask.successCount}</div></div>
                 <div><div className="text-[11px] text-[#86909C]">失败</div><div className="mt-1 text-[20px] font-bold text-[#CB2634]">{selectedTask.failedCount}</div></div>
                 <div><div className="text-[11px] text-[#86909C]">等待</div><div className="mt-1 text-[20px] font-bold text-[#2468A2]">{selectedTask.waitingCount}</div></div>
+                <div><div className="text-[11px] text-[#86909C]">免绑定排除</div><div className="mt-1 text-[20px] font-bold text-[#D46B08]">{selectedTask.excludedCount}</div></div>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 rounded-md border border-[#E5E6EB] p-4 text-[12px]"><div><dt className="text-[#86909C]">操作类型</dt><dd className="mt-1 font-medium text-[#1D2129]">{taskTypeLabels[selectedTask.type]}</dd></div><div><dt className="text-[#86909C]">平台渠道</dt><dd className="mt-1 font-medium text-[#1D2129]">{selectedTask.platform}</dd></div><div><dt className="text-[#86909C]">创建时间</dt><dd className="mt-1 text-[#4E5969]">{selectedTask.createdAt}</dd></div><div><dt className="text-[#86909C]">操作人</dt><dd className="mt-1 text-[#4E5969]">{selectedTask.operator}</dd></div></dl>
               <h4 className="mt-5 text-[14px] font-bold text-[#1D2129]">门店执行结果</h4>
@@ -192,6 +195,7 @@ export const WebProductMappingTasks: React.FC = () => {
                   </div>
                 ))}
               </div>
+              {selectedTask.failedCount > 0 && <><div className="mt-5 flex items-center justify-between"><h4 className="text-[14px] font-bold text-[#1D2129]">失败商品与原因</h4><button type="button" className="text-[12px] font-medium text-[#00A35B]">导出失败明细</button></div><div className="mt-3 overflow-hidden rounded-md border border-[#E5E6EB]"><div className="grid grid-cols-[150px_1fr_1fr_1.4fr] bg-[#F7F8FA] px-4 py-3 text-[11px] font-medium text-[#4E5969]"><div>门店</div><div>平台商品 / 规格</div><div>企迈商品 / 规格</div><div>失败原因</div></div><div className="grid grid-cols-[150px_1fr_1fr_1.4fr] items-start border-t border-[#F0F1F2] px-4 py-3 text-[12px]"><div className="text-[#4E5969]">易到家（五一广场店）</div><div><div className="font-medium text-[#1D2129]">辣椒炒肉</div><div className="mt-1 text-[#86909C]">200 克 · 34581232438</div></div><div><div className="font-medium text-[#1D2129]">番茄水果茶</div><div className="mt-1 text-[#86909C]">大杯 · SKU 1003</div></div><div className="text-[#CB2634]">绑定冲突：该企迈商品已被其他平台商品绑定</div></div></div></>}
             </div>
             <footer className="flex justify-end gap-2 border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4"><button type="button" onClick={() => setSelectedTask(null)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px] text-[#4E5969]">关闭</button>{selectedTask.failedCount > 0 && <button type="button" onClick={() => retryTask(selectedTask)} className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-bold text-white"><Loader2 size={14} className="mr-1.5" />重试失败范围</button>}</footer>
           </div>

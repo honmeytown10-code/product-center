@@ -8,11 +8,11 @@ import {
   ChevronDown,
   ClipboardList,
   Copy,
-  Link2,
   Plus,
   RefreshCw,
   Search,
   Settings2,
+  ShieldOff,
   Sparkles,
   Store,
   Unlink,
@@ -23,6 +23,7 @@ import { THIRD_PARTY_CHANNELS } from '../../omnichannel';
 import type { Product, ThirdPartyChannelId } from '../../types';
 import { WebProductMappingTasks } from './WebProductMappingTasks';
 import { WebTakeawayMappingDiagnosis } from './WebTakeawayMappingDiagnosis';
+import { WebMappingExemptionManager } from './WebMappingExemptionManager';
 
 type MappingView = 'store' | 'brand' | 'diagnosis' | 'tasks' | 'special';
 type MappingStatus = 'unmapped' | 'mapped' | 'conflict' | 'invalid';
@@ -33,8 +34,10 @@ type SpecialRuleStatus = 'enabled' | 'disabled' | 'conflict';
 type MappingRow = {
   id: string;
   platformName: string;
+  platformProductId: string;
   platformSku: string;
   platformSpec: string;
+  platformType: 'standard' | 'combo' | 'display';
   qimaiProductId?: string;
   status: MappingStatus;
   mappingBasis: MappingBasis;
@@ -44,9 +47,12 @@ type MappingRow = {
 
 type BrandMappingRow = {
   id: string;
+  platformRowId: string;
   qimaiProductId: string;
   platformProduct: string;
+  platformProductId: string;
   platformSpec: string;
+  platformType: 'standard' | 'combo' | 'display';
   sourceStore: string;
   targetStoreCount: number;
   matchedStoreCount: number;
@@ -71,8 +77,10 @@ const initialRows: MappingRow[] = [
   {
     id: 'm1',
     platformName: '招牌珍珠奶茶',
+    platformProductId: '30824739921',
     platformSku: 'MT-77821',
     platformSpec: '大杯 / 冰',
+    platformType: 'standard',
     qimaiProductId: '1',
     status: 'mapped',
     mappingBasis: 'qimai_publish',
@@ -81,8 +89,10 @@ const initialRows: MappingRow[] = [
   {
     id: 'm2',
     platformName: '手打柠檬茶（冰）',
+    platformProductId: '30824739922',
     platformSku: 'MT-77822',
     platformSpec: '标准',
+    platformType: 'standard',
     status: 'unmapped',
     mappingBasis: '--',
     updatedAt: '2026-07-29 09:41',
@@ -90,8 +100,10 @@ const initialRows: MappingRow[] = [
   {
     id: 'm3',
     platformName: '黑糖波波鲜奶',
+    platformProductId: '30824739923',
     platformSku: 'MT-77823',
     platformSpec: '中杯',
+    platformType: 'standard',
     qimaiProductId: '3',
     status: 'conflict',
     mappingBasis: 'merchant_product_code',
@@ -101,8 +113,10 @@ const initialRows: MappingRow[] = [
   {
     id: 'm4',
     platformName: '多肉葡萄',
+    platformProductId: '30824739924',
     platformSku: 'MT-77824',
     platformSpec: '大杯',
+    platformType: 'standard',
     qimaiProductId: '4',
     status: 'invalid',
     mappingBasis: 'manual_binding',
@@ -112,21 +126,48 @@ const initialRows: MappingRow[] = [
   {
     id: 'm5',
     platformName: '经典牛肉汉堡',
+    platformProductId: '30824739925',
     platformSku: 'MT-77825',
     platformSpec: '标准',
+    platformType: 'standard',
     qimaiProductId: '6',
     status: 'mapped',
     mappingBasis: 'qimai_sku_id',
     updatedAt: '2026-07-28 17:56',
+  },
+  {
+    id: 'm6',
+    platformName: '选择我们的理由',
+    platformProductId: '30824739926',
+    platformSku: 'MT-DISPLAY-001',
+    platformSpec: '品牌展示卡片',
+    platformType: 'display',
+    status: 'unmapped',
+    mappingBasis: '--',
+    updatedAt: '2026-09-11 15:13',
+  },
+  {
+    id: 'm7',
+    platformName: '产品 100% 每日现做不隔夜',
+    platformProductId: '30824739927',
+    platformSku: 'MT-DISPLAY-002',
+    platformSpec: '品牌展示卡片',
+    platformType: 'display',
+    status: 'unmapped',
+    mappingBasis: '--',
+    updatedAt: '2026-09-11 15:13',
   },
 ];
 
 const initialBrandRows: BrandMappingRow[] = [
   {
     id: 'b1',
+    platformRowId: 'm1',
     qimaiProductId: '1',
     platformProduct: '招牌珍珠奶茶',
+    platformProductId: '30824739921',
     platformSpec: '中杯、大杯',
+    platformType: 'standard',
     sourceStore: '南山万象店',
     targetStoreCount: 18,
     matchedStoreCount: 18,
@@ -134,9 +175,12 @@ const initialBrandRows: BrandMappingRow[] = [
   },
   {
     id: 'b2',
+    platformRowId: 'm2',
     qimaiProductId: '2',
     platformProduct: '手打柠檬茶',
+    platformProductId: '30824739922',
     platformSpec: '标准',
+    platformType: 'standard',
     sourceStore: '南山万象店',
     targetStoreCount: 18,
     matchedStoreCount: 15,
@@ -145,9 +189,12 @@ const initialBrandRows: BrandMappingRow[] = [
   },
   {
     id: 'b3',
+    platformRowId: 'm3',
     qimaiProductId: '3',
     platformProduct: '黑糖波波鲜奶',
+    platformProductId: '30824739923',
     platformSpec: '中杯',
+    platformType: 'standard',
     sourceStore: '福田卓悦店',
     targetStoreCount: 12,
     matchedStoreCount: 10,
@@ -156,9 +203,12 @@ const initialBrandRows: BrandMappingRow[] = [
   },
   {
     id: 'b4',
+    platformRowId: 'm5',
     qimaiProductId: '6',
     platformProduct: '经典牛肉汉堡',
+    platformProductId: '30824739925',
     platformSpec: '标准',
+    platformType: 'standard',
     sourceStore: '宝安壹方城店',
     targetStoreCount: 8,
     matchedStoreCount: 8,
@@ -230,7 +280,7 @@ const storeStatusTabs: Array<{ id: 'all' | MappingStatus; label: string }> = [
 
 const viewTabs: Array<{ id: MappingView; label: string; icon: React.ElementType }> = [
   { id: 'store', label: '门店商品映射', icon: Store },
-  { id: 'brand', label: '品牌批量映射', icon: Building2 },
+  { id: 'brand', label: '商品批量映射', icon: Building2 },
   { id: 'diagnosis', label: '外卖映射诊断', icon: Activity },
   { id: 'tasks', label: '商品管理任务', icon: ClipboardList },
   { id: 'special', label: '特殊映射配置', icon: Settings2 },
@@ -273,39 +323,43 @@ export const WebProductMapping: React.FC = () => {
   const [channelId, setChannelId] = useState<ThirdPartyChannelId>('meituan');
   const [status, setStatus] = useState<'all' | MappingStatus>('unmapped');
   const [keyword, setKeyword] = useState('');
+  const [platformSkuKeyword, setPlatformSkuKeyword] = useState('');
   const [qimaiKeyword, setQimaiKeyword] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [qimaiSkuIdKeyword, setQimaiSkuIdKeyword] = useState('');
+  const [relatedPlatformKeyword, setRelatedPlatformKeyword] = useState('');
+  const [qimaiProductType, setQimaiProductType] = useState<'all' | 'standard' | 'combo'>('all');
+  const [activePlatformRowId, setActivePlatformRowId] = useState(initialRows[0]?.id || '');
+  const [draggingPlatformRowId, setDraggingPlatformRowId] = useState<string | null>(null);
+  const [selectedQimaiProductIds, setSelectedQimaiProductIds] = useState<string[]>([]);
   const [rows, setRows] = useState<MappingRow[]>(initialRows);
   const [bindingRow, setBindingRow] = useState<MappingRow | null>(null);
   const [candidateKeyword, setCandidateKeyword] = useState('');
   const [candidateProductId, setCandidateProductId] = useState('');
   const [message, setMessage] = useState('');
+  const [exemptRowIds, setExemptRowIds] = useState<string[]>(['m6', 'm7']);
+  const [showExemptionManager, setShowExemptionManager] = useState(false);
 
   const [brandRows, setBrandRows] = useState<BrandMappingRow[]>(initialBrandRows);
   const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
   const [brandKeyword, setBrandKeyword] = useState('');
+  const [brandPlatformIdKeyword, setBrandPlatformIdKeyword] = useState('');
+  const [brandQimaiKeyword, setBrandQimaiKeyword] = useState('');
+  const [brandPlatformType, setBrandPlatformType] = useState<'all' | 'standard' | 'combo' | 'display'>('all');
+  const [brandQimaiType, setBrandQimaiType] = useState<'all' | 'standard' | 'combo'>('all');
   const [showApplyDialog, setShowApplyDialog] = useState(false);
+  const [pendingExemptBrandIds, setPendingExemptBrandIds] = useState<string[]>([]);
+  const [showStoreScopeDialog, setShowStoreScopeDialog] = useState(false);
+  const [storeScopeTab, setStoreScopeTab] = useState<'store' | 'org' | 'tag'>('tag');
+  const [storeTagMatchMode, setStoreTagMatchMode] = useState<'any' | 'all'>('any');
+  const [selectedStoreTags, setSelectedStoreTags] = useState<string[]>(['华南区域', '直营门店']);
 
   const [specialRules, setSpecialRules] = useState<SpecialRule[]>(initialSpecialRules);
   const [specialKeyword, setSpecialKeyword] = useState('');
   const [editingRule, setEditingRule] = useState<SpecialRule | null>(null);
 
   const getProduct = (id?: string) => products.find(item => item.id === id);
-
-  const filteredRows = useMemo(
-    () =>
-      rows.filter(row => {
-        const statusMatched = status === 'all' || row.status === status;
-        const keywordMatched =
-          !keyword || `${row.platformName}${row.platformSku}`.toLowerCase().includes(keyword.toLowerCase());
-        const product = products.find(item => item.id === row.qimaiProductId);
-        const qimaiMatched =
-          !qimaiKeyword ||
-          `${product?.name || ''}${product?.skuCode || ''}`.toLowerCase().includes(qimaiKeyword.toLowerCase());
-        return statusMatched && keywordMatched && qimaiMatched;
-      }),
-    [keyword, products, qimaiKeyword, rows, status],
-  );
+  const getProductType = (product?: Product) => product?.type === 'combo' ? 'combo' : 'standard';
+  const getProductMark = (product?: Product) => product ? `${getProductType(product) === 'combo' ? 'COMBO' : 'STD'}-${product.skuCode}` : '--';
 
   const candidateProducts = useMemo(
     () =>
@@ -319,18 +373,33 @@ export const WebProductMapping: React.FC = () => {
     [candidateKeyword, products],
   );
 
+  const filteredQimaiProducts = useMemo(
+    () => products.filter(product => {
+      const relatedRows = rows.filter(row => row.qimaiProductId === product.id);
+      const nameMatched = !qimaiKeyword || product.name.toLowerCase().includes(qimaiKeyword.trim().toLowerCase());
+      const skuMatched = !qimaiSkuIdKeyword || product.skuCode.toLowerCase().includes(qimaiSkuIdKeyword.trim().toLowerCase());
+      const typeMatched = qimaiProductType === 'all' || getProductType(product) === qimaiProductType;
+      const platformMatched = !relatedPlatformKeyword || relatedRows.some(row =>
+        `${row.platformName}${row.platformSku}`.toLowerCase().includes(relatedPlatformKeyword.trim().toLowerCase()),
+      );
+      return nameMatched && skuMatched && typeMatched && platformMatched;
+    }),
+    [products, qimaiKeyword, qimaiProductType, qimaiSkuIdKeyword, relatedPlatformKeyword, rows],
+  );
+
   const filteredBrandRows = useMemo(
     () =>
       brandRows.filter(row => {
         const product = getProduct(row.qimaiProductId);
-        return (
-          !brandKeyword ||
-          `${product?.name || ''}${row.platformProduct}${row.sourceStore}`
-            .toLowerCase()
-            .includes(brandKeyword.toLowerCase())
-        );
+        if (exemptRowIds.includes(row.platformRowId)) return false;
+        if (brandKeyword && !`${row.platformProduct}${row.platformSpec}`.toLowerCase().includes(brandKeyword.toLowerCase())) return false;
+        if (brandPlatformIdKeyword && !row.platformProductId.includes(brandPlatformIdKeyword.trim())) return false;
+        if (brandQimaiKeyword && !`${product?.name || ''}${product?.skuCode || ''}`.toLowerCase().includes(brandQimaiKeyword.toLowerCase())) return false;
+        if (brandPlatformType !== 'all' && row.platformType !== brandPlatformType) return false;
+        if (brandQimaiType !== 'all' && getProductType(product) !== brandQimaiType) return false;
+        return true;
       }),
-    [brandKeyword, brandRows, products],
+    [brandKeyword, brandPlatformIdKeyword, brandPlatformType, brandQimaiKeyword, brandQimaiType, brandRows, exemptRowIds, products],
   );
 
   const filteredSpecialRules = useMemo(
@@ -347,13 +416,13 @@ export const WebProductMapping: React.FC = () => {
 
   const counts = useMemo(
     () => ({
-      all: rows.length,
-      unmapped: rows.filter(row => row.status === 'unmapped').length,
-      mapped: rows.filter(row => row.status === 'mapped').length,
-      conflict: rows.filter(row => row.status === 'conflict').length,
-      invalid: rows.filter(row => row.status === 'invalid').length,
+      all: rows.filter(row => !exemptRowIds.includes(row.id)).length,
+      unmapped: rows.filter(row => !exemptRowIds.includes(row.id) && row.status === 'unmapped').length,
+      mapped: rows.filter(row => !exemptRowIds.includes(row.id) && row.status === 'mapped').length,
+      conflict: rows.filter(row => !exemptRowIds.includes(row.id) && row.status === 'conflict').length,
+      invalid: rows.filter(row => !exemptRowIds.includes(row.id) && row.status === 'invalid').length,
     }),
-    [rows],
+    [exemptRowIds, rows],
   );
 
   const openBinding = (row: MappingRow) => {
@@ -403,7 +472,7 @@ export const WebProductMapping: React.FC = () => {
   const autoMatch = () => {
     setRows(current =>
       current.map(row =>
-        row.status === 'unmapped'
+        row.status === 'unmapped' && !exemptRowIds.includes(row.id)
           ? {
               ...row,
               qimaiProductId: '2',
@@ -414,7 +483,34 @@ export const WebProductMapping: React.FC = () => {
           : row,
       ),
     );
-    setMessage('商品标识匹配已完成：新增 1 条关系；冲突结果仍需人工确认。');
+    setMessage(`自动关联已完成：新增 1 条关系，${exemptRowIds.length} 个免绑定商品已排除；冲突结果仍需人工确认。`);
+  };
+
+  const exemptRows = (rowIds: string[]) => {
+    setExemptRowIds(current => Array.from(new Set([...current, ...rowIds])));
+    setActivePlatformRowId('');
+    setSelectedBrandIds([]);
+    setPendingExemptBrandIds([]);
+    setMessage(`已将 ${rowIds.length} 个平台商品设为免绑定，后续映射页面、自动关联、诊断和任务将自动排除。`);
+  };
+
+  const bindPlatformRowToProduct = (rowId: string, productId: string) => {
+    const platformRow = rows.find(row => row.id === rowId);
+    const product = getProduct(productId);
+    if (!platformRow || !product) return;
+    setRows(current => current.map(row => row.id === rowId
+      ? {
+          ...row,
+          qimaiProductId: productId,
+          status: 'mapped',
+          mappingBasis: 'manual_binding',
+          updatedAt: '刚刚',
+          issue: undefined,
+        }
+      : row));
+    setActivePlatformRowId(rowId);
+    setDraggingPlatformRowId(null);
+    setMessage(`已将“${platformRow.platformName}”关联至企迈商品“${product.name}”。`);
   };
 
   const applyBrandMappings = () => {
@@ -457,249 +553,201 @@ export const WebProductMapping: React.FC = () => {
     setMessage('特殊映射规则已保存；发布与接单识别时将按适用渠道、门店范围和优先级执行。');
   };
 
-  const renderStoreMapping = () => (
-    <div className="space-y-3">
+  const renderStoreMapping = () => {
+    const activeChannel = THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId);
+    const platformRows = rows.filter(row => {
+      if (exemptRowIds.includes(row.id)) return false;
+      const statusMatched = status === 'all' || row.status === status;
+      const nameMatched = !keyword || row.platformName.toLowerCase().includes(keyword.trim().toLowerCase());
+      const skuMatched = !platformSkuKeyword || row.platformSku.toLowerCase().includes(platformSkuKeyword.trim().toLowerCase());
+      return statusMatched && nameMatched && skuMatched;
+    });
+    const activePlatformRow = platformRows.find(row => row.id === activePlatformRowId) || platformRows[0];
+    const statusTabs = storeStatusTabs;
+
+    return (
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
-        <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E6EB] px-4 py-3">
-          <span className="mr-1 text-[13px] font-bold text-[#1D2129]">映射范围</span>
-          <Field>
-            <span className="inline-flex items-center">
-              <Store size={14} className="mr-1.5 text-[#86909C]" />
-              南山万象店
-            </span>
-          </Field>
-          <span className="ml-3 text-[13px] font-bold text-[#1D2129]">平台渠道</span>
-          <div className="flex flex-wrap gap-1">
+        <div className="border-b border-[#E5E6EB] px-5 py-4">
+          <div className="flex items-center gap-4">
+            <button type="button" className="inline-flex items-center gap-2 text-[18px] font-bold text-[#1D2129]">
+              <span>南山万象店</span>
+              <ChevronDown size={17} className="text-[#667085]" />
+            </button>
+            <button type="button" onClick={() => setMessage('当前展示新版门店商品映射工作台。')} className="text-[13px] font-medium text-[#00A35B]">新版介绍</button>
+          </div>
+          <div className="mt-4 grid grid-cols-5 gap-3">
             {THIRD_PARTY_CHANNELS.map(channel => (
               <button
                 key={channel.id}
                 type="button"
-                onClick={() => setChannelId(channel.id)}
-                className={`h-8 rounded-md px-3 text-[12px] ${
-                  channelId === channel.id
-                    ? 'bg-[#E8FFF3] font-bold text-[#008A4B]'
-                    : 'text-[#4E5969] hover:bg-[#F2F3F5]'
-                }`}
+                onClick={() => {
+                  setChannelId(channel.id);
+                  setSelectedQimaiProductIds([]);
+                }}
+                className={`flex h-12 items-center rounded-md border px-4 text-left text-[13px] transition-colors ${channelId === channel.id ? 'border-[#45D28A] bg-[#F0FFF7] font-semibold text-[#1D2129]' : 'border-[#E5E6EB] text-[#4E5969] hover:border-[#B7E8CD]'}`}
               >
-                {channel.shortName}
+                <span className={`mr-2 h-2 w-2 rounded-full ${channelId === channel.id ? 'bg-[#00B460]' : 'bg-[#BFC5D0]'}`} />
+                <span className="truncate">{channel.shortName}</span>
               </button>
             ))}
           </div>
-          <div className="ml-auto flex gap-2">
-            <button
-              type="button"
-              onClick={() => setMessage('已创建平台商品更新任务，完成后将重新计算待映射与冲突数量。')}
-              className="inline-flex h-8 items-center rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]"
-            >
-              <RefreshCw size={14} className="mr-1.5" />
-              更新平台商品
-            </button>
-            <button
-              type="button"
-              onClick={autoMatch}
-              className="inline-flex h-8 items-center rounded-md bg-[#00B460] px-3 text-[12px] font-bold text-white"
-            >
-              <Sparkles size={14} className="mr-1.5" />
-              按商品标识匹配
-            </button>
-          </div>
         </div>
 
-        <div className="flex h-12 items-end gap-6 border-b border-[#E5E6EB] px-4">
-          {storeStatusTabs.map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => {
-                setStatus(tab.id);
-                setSelectedIds([]);
-              }}
-              className={`h-full border-b-2 px-1 text-[13px] ${
-                status === tab.id
-                  ? 'border-[#00B460] font-bold text-[#00A35B]'
-                  : 'border-transparent text-[#4E5969]'
-              }`}
-            >
-              {tab.label}
-              <span className="ml-1.5 text-[11px] text-[#86909C]">{counts[tab.id]}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-[1fr_1fr_120px] gap-3 bg-[#F7F8FA] p-4">
-          <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
-            <Search size={15} className="mr-2 text-[#86909C]" />
-            <input
-              value={keyword}
-              onChange={event => setKeyword(event.target.value)}
-              placeholder="平台商品名称 / 平台 SKU"
-              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
-            />
-          </label>
-          <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
-            <Search size={15} className="mr-2 text-[#86909C]" />
-            <input
-              value={qimaiKeyword}
-              onChange={event => setQimaiKeyword(event.target.value)}
-              placeholder="企迈商品名称 / SKUID"
-              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => {
-              setKeyword('');
-              setQimaiKeyword('');
-            }}
-            className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
-          >
-            重置
-          </button>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
-        <div className="flex h-12 items-center justify-between border-b border-[#E5E6EB] px-4">
-          <div className="text-[13px] text-[#4E5969]">
-            {selectedIds.length > 0 ? (
-              <>
-                已选 <strong className="text-[#00A35B]">{selectedIds.length}</strong> 项
-              </>
-            ) : (
-              `共 ${filteredRows.length} 条映射关系`
-            )}
-          </div>
-          <button
-            type="button"
-            disabled={selectedIds.length === 0}
-            className="inline-flex h-8 items-center rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:cursor-not-allowed disabled:text-[#C9CDD4]"
-          >
-            <ArrowRightLeft size={14} className="mr-1.5" />
-            批量建立映射
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <div className="min-w-[1220px]">
-            <div className="grid grid-cols-[44px_1.15fr_48px_1.15fr_120px_140px_120px_150px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
-              <div />
-              <div>{THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId)?.name}商品</div>
-              <div />
-              <div>企迈门店渠道商品</div>
-              <div>映射状态</div>
-              <div>关联依据</div>
-              <div>更新时间</div>
-              <div>操作</div>
+        <div className="grid min-h-[650px] grid-cols-[380px_minmax(0,1fr)]">
+          <aside className="min-w-0 border-r border-[#E5E6EB] bg-white">
+            <div className="flex min-h-14 items-center justify-between gap-2 border-b border-[#EEF0F3] px-4 py-2">
+              <div className="flex items-center gap-2 text-[15px] font-semibold text-[#1D2129]">
+                <span className="flex h-6 w-6 items-center justify-center rounded bg-[#FFD84D] text-[11px] font-bold text-[#7A4B00]">{activeChannel?.shortName.slice(0, 1)}</span>
+                {activeChannel?.name}平台商品
+              </div>
+              <div className="flex items-center gap-3"><button type="button" onClick={() => setShowExemptionManager(true)} className="inline-flex items-center gap-1 text-[12px] font-medium text-[#D46B08]"><ShieldOff size={14} />免绑定商品 {exemptRowIds.length}</button><button type="button" onClick={() => setMessage(`${activeChannel?.name}平台商品已刷新；${exemptRowIds.length} 个免绑定商品未进入列表。`)} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#00A35B]"><RefreshCw size={14} />更新平台商品</button></div>
             </div>
 
-            {filteredRows.map(row => {
-              const product = getProduct(row.qimaiProductId);
-              const selected = selectedIds.includes(row.id);
-              return (
-                <div
-                  key={row.id}
-                  className="grid min-h-[92px] grid-cols-[44px_1.15fr_48px_1.15fr_120px_140px_120px_150px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]"
-                >
-                  <div>
-                    <Checkbox
-                      checked={selected}
-                      onClick={() =>
-                        setSelectedIds(
-                          selected ? selectedIds.filter(id => id !== row.id) : [...selectedIds, row.id],
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate font-bold text-[#1D2129]" title={row.platformName}>
-                      {row.platformName}
-                    </div>
-                    <div className="mt-1 text-[12px] text-[#86909C]">
-                      {row.platformSpec} · {row.platformSku}
-                    </div>
-                  </div>
-                  <div className="flex justify-center text-[#C9CDD4]">
-                    <Link2 size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    {product ? (
-                      <div className="flex min-w-0 items-center gap-2">
-                        <img src={product.image} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
-                        <div className="min-w-0">
-                          <div className="truncate font-bold text-[#1D2129]" title={product.name}>
-                            {product.name}
-                          </div>
-                          <div className="mt-1 text-[12px] text-[#86909C]">SKUID {product.skuCode}</div>
-                        </div>
+            <div className="border-b border-[#EEF0F3] p-4">
+              <div className="flex overflow-x-auto rounded-md border border-[#E5E6EB] bg-[#F7F8FA] p-0.5">
+                {statusTabs.map(tab => (
+                  <button key={tab.id} type="button" onClick={() => setStatus(tab.id)} className={`h-8 shrink-0 rounded px-2.5 text-[12px] ${status === tab.id ? 'bg-white font-semibold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>
+                    {tab.label}<span className="ml-1 text-[10px] text-[#98A2B3]">{counts[tab.id]}</span>
+                  </button>
+                ))}
+              </div>
+              <label className="mt-3 flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
+                <Search size={15} className="mr-2 text-[#86909C]" />
+                <input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder={`${activeChannel?.shortName}商品名称`} className="min-w-0 flex-1 text-[13px] outline-none" />
+              </label>
+              <label className="mt-2 flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
+                <Search size={15} className="mr-2 text-[#86909C]" />
+                <input value={platformSkuKeyword} onChange={event => setPlatformSkuKeyword(event.target.value)} placeholder={`${activeChannel?.shortName} SKU 码`} className="min-w-0 flex-1 text-[13px] outline-none" />
+              </label>
+            </div>
+
+            <div className="max-h-[500px] space-y-2 overflow-y-auto p-4">
+              {platformRows.map((row, index) => {
+                const active = activePlatformRow?.id === row.id;
+                const mappedProduct = getProduct(row.qimaiProductId);
+                const mockImage = mappedProduct?.image || products[index % Math.max(products.length, 1)]?.image;
+                return (
+                  <article
+                    key={row.id}
+                    draggable
+                    onDragStart={() => setDraggingPlatformRowId(row.id)}
+                    onDragEnd={() => setDraggingPlatformRowId(null)}
+                    onClick={() => setActivePlatformRowId(row.id)}
+                    className={`w-full cursor-pointer rounded-md border p-3 text-left transition-colors ${active ? 'border-[#77D9A5] bg-[#F2FFF8]' : 'border-[#E5E6EB] bg-white hover:border-[#B7E8CD]'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {mockImage ? <img src={mockImage} alt="" className="h-9 w-9 shrink-0 rounded object-cover" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[#F2F3F5] text-xs text-[#667085]">{row.platformName.slice(0, 1)}</span>}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-semibold text-[#1D2129]">{row.platformName}</div>
+                        <div className="mt-1 truncate text-[11px] text-[#86909C]">商品 ID {row.platformProductId} · {row.platformSpec}</div>
+                        <div className="mt-0.5 truncate text-[11px] text-[#86909C]">SKU 码 {row.platformSku}</div>
                       </div>
-                    ) : (
-                      <span className="text-[12px] text-[#86909C]">尚未关联企迈商品</span>
-                    )}
-                  </div>
-                  <div>
-                    <span
-                      className={`inline-flex rounded px-2 py-1 text-[12px] font-medium ${
-                        statusMeta[row.status].classes
-                      }`}
-                    >
-                      {statusMeta[row.status].label}
-                    </span>
-                    {row.issue && (
-                      <div
-                        className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#CB2634]"
-                        title={row.issue}
-                      >
-                        {row.issue}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-[#4E5969]">{mappingBasisLabels[row.mappingBasis]}</div>
-                  <div className="text-[12px] text-[#86909C]">{row.updatedAt}</div>
-                  <div className="flex items-center gap-3 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => openBinding(row)}
-                      className="font-medium text-[#00A35B]"
-                    >
-                      {row.qimaiProductId ? '修改映射' : '建立映射'}
-                    </button>
-                    {row.qimaiProductId && (
-                      <button
-                        type="button"
-                        onClick={() => removeBinding(row.id)}
-                        className="text-[#4E5969]"
-                        title="解除映射"
-                      >
-                        <Unlink size={15} />
-                      </button>
-                    )}
-                  </div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusMeta[row.status].classes}`}>{statusMeta[row.status].label}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between"><span className={`rounded px-1.5 py-0.5 text-[10px] ${row.platformType === 'combo' ? 'bg-[#F4EFFF] text-[#7048B8]' : 'bg-[#F2F3F5] text-[#667085]'}`}>{row.platformType === 'combo' ? '套餐商品' : row.platformType === 'display' ? '展示商品' : '标准商品'}</span><button type="button" onClick={event => { event.stopPropagation(); exemptRows([row.id]); }} className="text-[11px] font-medium text-[#D46B08]">设为免绑定</button></div>
+                    {row.issue && <div className="mt-2 line-clamp-2 text-[11px] leading-4 text-[#CB2634]">{row.issue}</div>}
+                  </article>
+                );
+              })}
+              {platformRows.length === 0 && (
+                <div className="py-16 text-center text-[12px] text-[#86909C]">
+                  暂无符合条件的平台商品
+                  <button type="button" onClick={() => { setKeyword(''); setPlatformSkuKeyword(''); setStatus('all'); }} className="mt-2 block w-full text-[#00A35B]">清空筛选</button>
                 </div>
-              );
-            })}
+              )}
+            </div>
+          </aside>
+
+          <div className="min-w-0 bg-white">
+            <div className="flex min-h-14 flex-wrap items-center gap-2 border-b border-[#EEF0F3] px-4 py-2.5">
+              <div className="mr-auto flex items-center gap-2 text-[15px] font-semibold text-[#1D2129]">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#00B460] text-xs font-bold text-white">企</span>
+                企迈平台商品管理
+              </div>
+              <button type="button" onClick={() => setMessage('页面已刷新。')} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]">刷新页面</button>
+              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage(`已选择 ${selectedQimaiProductIds.length} 个企迈商品，移出渠道商品需二次确认。`)} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">移出渠道商品</button>
+              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage(`已选择 ${selectedQimaiProductIds.length} 个企迈商品，可移入指定商品库。`)} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">移入商品库商品</button>
+              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage('请选择目标门店后复制已验证的映射关系。')} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">复制关系到其他门店</button>
+              <button type="button" onClick={autoMatch} className="inline-flex h-8 items-center rounded-md bg-[#00B460] px-3 text-[12px] font-semibold text-white"><Sparkles size={14} className="mr-1.5" />自动关联</button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3 border-b border-[#EEF0F3] bg-[#FAFBFC] p-4">
+              <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
+                <Search size={15} className="mr-2 text-[#86909C]" />
+                <input value={qimaiKeyword} onChange={event => setQimaiKeyword(event.target.value)} placeholder="企迈商品名称" className="min-w-0 flex-1 text-[13px] outline-none" />
+              </label>
+              <select value={qimaiProductType} onChange={event => setQimaiProductType(event.target.value as 'all' | 'standard' | 'combo')} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969] outline-none"><option value="all">全部商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option></select>
+              <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
+                <Search size={15} className="mr-2 text-[#86909C]" />
+                <input value={relatedPlatformKeyword} onChange={event => setRelatedPlatformKeyword(event.target.value)} placeholder={`${activeChannel?.shortName}商品名称`} className="min-w-0 flex-1 text-[13px] outline-none" />
+              </label>
+              <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
+                <Search size={15} className="mr-2 text-[#86909C]" />
+                <input value={qimaiSkuIdKeyword} onChange={event => setQimaiSkuIdKeyword(event.target.value)} placeholder="企迈 SKU ID" className="min-w-0 flex-1 text-[13px] outline-none" />
+              </label>
+            </div>
+
+            <div className="max-h-[500px] space-y-3 overflow-y-auto bg-[#F7F8FA] p-4">
+              {filteredQimaiProducts.map(product => {
+                const relatedRows = rows.filter(row => row.qimaiProductId === product.id);
+                const relatedRow = relatedRows[0];
+                const selected = selectedQimaiProductIds.includes(product.id);
+                return (
+                  <article key={product.id} className="overflow-hidden rounded-md border border-[#E5E6EB] bg-white">
+                    <div className="flex items-center gap-3 border-b border-[#EEF0F3] px-4 py-3">
+                      <Checkbox checked={selected} onClick={() => setSelectedQimaiProductIds(selected ? selectedQimaiProductIds.filter(id => id !== product.id) : [...selectedQimaiProductIds, product.id])} />
+                      <img src={product.image} alt="" className="h-8 w-8 rounded object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-semibold text-[#1D2129]">{product.name}</div>
+                        <div className="mt-0.5 text-[11px] text-[#86909C]">商品标识：{getProductMark(product)} · 企迈 SKU ID：{product.skuCode}</div>
+                      </div>
+                      <span className={`rounded px-2 py-1 text-[11px] ${getProductType(product) === 'combo' ? 'bg-[#F4EFFF] text-[#7048B8]' : 'bg-[#F2F3F5] text-[#667085]'}`}>{getProductType(product) === 'combo' ? '套餐商品' : '标准商品'}</span>
+                      <span className="text-[12px] text-[#4E5969]">{activeChannel?.shortName}商品关联</span>
+                    </div>
+                    <div className="grid grid-cols-[minmax(180px,0.8fr)_42px_minmax(260px,1.2fr)_110px] items-center gap-3 px-4 py-3">
+                      <div className="flex h-12 items-center justify-between rounded-sm border border-dashed border-[#C9CDD4] px-3 text-[12px] text-[#4E5969]">
+                        <span className="truncate">{product.name}</span>
+                        <span className="ml-3 shrink-0">¥{product.price.toFixed(2)} / {product.specs?.[0]?.name || '标准规格'}</span>
+                      </div>
+                      <div className="flex justify-center text-[#667085]"><ArrowRightLeft size={18} /></div>
+                      <div
+                        onDragOver={event => event.preventDefault()}
+                        onDrop={() => {
+                          const rowId = draggingPlatformRowId || activePlatformRow?.id;
+                          if (rowId) bindPlatformRowToProduct(rowId, product.id);
+                        }}
+                        className={`flex h-12 items-center rounded-sm border border-dashed px-3 text-[12px] ${draggingPlatformRowId ? 'border-[#00B460] bg-[#F2FFF8]' : relatedRow ? 'border-[#9ADBB8] bg-[#F4FFF9]' : 'border-[#C9CDD4] bg-white'}`}
+                      >
+                        {relatedRow ? (
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium text-[#1D2129]">{relatedRow.platformName}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-[#86909C]">{relatedRow.platformSpec} · {relatedRow.platformSku} · {mappingBasisLabels[relatedRow.mappingBasis]}</div>
+                          </div>
+                        ) : (
+                          <span className="text-[#98A2B3]">请将左侧{activeChannel?.shortName}平台商品拖入这里</span>
+                        )}
+                      </div>
+                      <div className="flex justify-end gap-3">
+                        <button type="button" disabled={!activePlatformRow} onClick={() => activePlatformRow && bindPlatformRowToProduct(activePlatformRow.id, product.id)} className="text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">{relatedRow ? '更换绑定' : '绑定'}</button>
+                        {relatedRow && <button type="button" onClick={() => removeBinding(relatedRow.id)} title="解除映射" className="text-[#667085]"><Unlink size={15} /></button>}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+              {filteredQimaiProducts.length === 0 && (
+                <div className="flex h-[260px] flex-col items-center justify-center text-center text-[13px] text-[#86909C]">
+                  <Search size={28} className="text-[#C9CDD4]" />
+                  <div className="mt-3 font-semibold text-[#4E5969]">没有符合条件的企迈商品</div>
+                  <button type="button" onClick={() => { setQimaiKeyword(''); setRelatedPlatformKeyword(''); setQimaiSkuIdKeyword(''); setQimaiProductType('all'); }} className="mt-2 text-[#00A35B]">清空搜索条件</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-        {filteredRows.length === 0 && (
-          <div className="flex h-[260px] flex-col items-center justify-center text-center">
-            <Search size={28} className="text-[#C9CDD4]" />
-            <div className="mt-3 text-[14px] font-bold text-[#4E5969]">没有符合条件的商品</div>
-            <button
-              type="button"
-              onClick={() => {
-                setKeyword('');
-                setQimaiKeyword('');
-                setStatus('all');
-              }}
-              className="mt-2 text-[13px] text-[#00A35B]"
-            >
-              清空筛选
-            </button>
-          </div>
-        )}
       </section>
-    </div>
-  );
+    );
+  };
 
   const renderBrandMapping = () => (
     <div className="space-y-3">
@@ -712,7 +760,7 @@ export const WebProductMapping: React.FC = () => {
             <div>
               <div className="text-[14px] font-bold text-[#1D2129]">复用已验证的门店映射关系</div>
               <div className="mt-1 text-[12px] text-[#86909C]">
-                以参考门店为基准，校验目标门店平台商品后批量建立关系。
+                以参考门店为基准，校验目标门店平台商品后批量建立关系；免绑定商品不参与校验。
               </div>
             </div>
           </div>
@@ -722,23 +770,34 @@ export const WebProductMapping: React.FC = () => {
           <Field width="min-w-[184px]">
             <span>参考门店：南山万象店</span>
           </Field>
-          <Field width="min-w-[196px]">
-            <span>目标范围：华南区域 18 家</span>
-          </Field>
+          <button
+            type="button"
+            onClick={() => setShowStoreScopeDialog(true)}
+            className="flex h-9 min-w-[220px] items-center justify-between rounded-md border border-[#C9CDD4] bg-white px-3 text-left text-[12px] text-[#4E5969] hover:border-[#00B460]"
+          >
+            <span>目标范围：{selectedStoreTags.length ? `${selectedStoreTags.join('、')} · 18 家` : '请选择门店'}</span>
+            <ChevronDown size={14} className="ml-2 shrink-0 text-[#86909C]" />
+          </button>
+          <button type="button" onClick={() => setShowExemptionManager(true)} className="ml-auto inline-flex h-9 items-center rounded-md border border-[#F0C98B] bg-[#FFF9F0] px-3 text-[12px] font-medium text-[#A8620A]"><ShieldOff size={14} className="mr-1.5" />免绑定商品 {exemptRowIds.length}</button>
         </div>
-        <div className="flex items-center gap-3 bg-[#F7F8FA] p-4">
-          <label className="flex h-9 min-w-[360px] items-center rounded-md border border-[#C9CDD4] bg-white px-3">
+        <div className="grid grid-cols-6 gap-3 bg-[#F7F8FA] p-4">
+          <label className="col-span-2 flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
             <Search size={15} className="mr-2 text-[#86909C]" />
             <input
               value={brandKeyword}
               onChange={event => setBrandKeyword(event.target.value)}
-              placeholder="搜索企迈商品、平台商品或参考门店"
+              placeholder="平台商品名称 / 规格"
               className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
             />
           </label>
+          <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={brandPlatformIdKeyword} onChange={event => setBrandPlatformIdKeyword(event.target.value)} placeholder="平台商品 ID" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+          <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={brandQimaiKeyword} onChange={event => setBrandQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / SKU" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+          <select value={brandPlatformType} onChange={event => setBrandPlatformType(event.target.value as typeof brandPlatformType)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部平台商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option><option value="display">展示商品</option></select>
+          <select value={brandQimaiType} onChange={event => setBrandQimaiType(event.target.value as typeof brandQimaiType)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部企迈商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option></select>
+          <div className="col-span-6 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setBrandKeyword('')}
+            onClick={() => { setBrandKeyword(''); setBrandPlatformIdKeyword(''); setBrandQimaiKeyword(''); setBrandPlatformType('all'); setBrandQimaiType('all'); }}
             className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
           >
             重置
@@ -751,6 +810,7 @@ export const WebProductMapping: React.FC = () => {
             <RefreshCw size={14} className="mr-1.5" />
             重新校验门店差异
           </button>
+          <button type="button" disabled={selectedBrandIds.length === 0} onClick={() => setPendingExemptBrandIds(selectedBrandIds)} className="inline-flex h-9 items-center rounded-md border border-[#F0C98B] bg-white px-3 text-[13px] font-medium text-[#A8620A] disabled:border-[#D9DDE2] disabled:text-[#BFC5D0]"><ShieldOff size={14} className="mr-1.5" />批量设为免绑定</button>
           <button
             type="button"
             disabled={selectedBrandIds.length === 0}
@@ -760,27 +820,29 @@ export const WebProductMapping: React.FC = () => {
             <ArrowRightLeft size={14} className="mr-1.5" />
             批量应用映射
           </button>
+          </div>
         </div>
       </section>
 
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
         <div className="flex h-11 items-center justify-between border-b border-[#E5E6EB] px-4 text-[13px] text-[#4E5969]">
           <span>
-            共 {filteredBrandRows.length} 个品牌商品
+            共 {filteredBrandRows.length} 个平台商品规格
             {selectedBrandIds.length > 0 && (
               <>
                 ，已选 <strong className="text-[#00A35B]">{selectedBrandIds.length}</strong> 个
               </>
             )}
           </span>
-          <span className="text-[12px] text-[#86909C]">冲突商品不会被批量覆盖，需先调整门店关系</span>
+          <span className="text-[12px] text-[#86909C]">已排除 {exemptRowIds.length} 个免绑定商品；冲突商品不会被批量覆盖</span>
         </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[1180px]">
-            <div className="grid grid-cols-[44px_1.15fr_1.1fr_150px_120px_150px_160px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
+          <div className="min-w-[1200px]">
+            <div className="grid grid-cols-[44px_1fr_1.1fr_100px_130px_100px_130px_120px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
               <div />
-              <div>企迈品牌商品</div>
-              <div>参考门店平台商品</div>
+              <div>平台商品 / 规格</div>
+              <div>绑定企迈商品 / 规格</div>
+              <div>商品类型</div>
               <div>来源门店</div>
               <div>目标门店</div>
               <div>校验结果</div>
@@ -798,7 +860,7 @@ export const WebProductMapping: React.FC = () => {
               return (
                 <div
                   key={row.id}
-                  className="grid min-h-[88px] grid-cols-[44px_1.15fr_1.1fr_150px_120px_150px_160px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]"
+                  className="grid min-h-[88px] grid-cols-[44px_1fr_1.1fr_100px_130px_100px_130px_120px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]"
                 >
                   <Checkbox
                     checked={selected}
@@ -810,19 +872,12 @@ export const WebProductMapping: React.FC = () => {
                       )
                     }
                   />
-                  <div className="flex min-w-0 items-center gap-2">
-                    {product && (
-                      <img src={product.image} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="truncate font-bold text-[#1D2129]">{product?.name || '--'}</div>
-                      <div className="mt-1 text-[12px] text-[#86909C]">SKUID {product?.skuCode || '--'}</div>
-                    </div>
-                  </div>
                   <div className="min-w-0">
                     <div className="truncate font-medium text-[#1D2129]">{row.platformProduct}</div>
-                    <div className="mt-1 text-[12px] text-[#86909C]">{row.platformSpec}</div>
+                    <div className="mt-1 text-[11px] text-[#86909C]">商品 ID {row.platformProductId} · {row.platformSpec}</div>
                   </div>
+                  <div className="flex min-w-0 items-center gap-2">{product && <img src={product.image} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />}<div className="min-w-0"><div className="truncate font-bold text-[#1D2129]">{product?.name || '--'}</div><div className="mt-1 text-[11px] text-[#86909C]">标识 {getProductMark(product)} · SKU {product?.skuCode || '--'}</div></div></div>
+                  <div className="space-y-1"><div className="text-[11px] text-[#4E5969]">平台：{row.platformType === 'combo' ? '套餐' : row.platformType === 'display' ? '展示' : '标准'}</div><div className="text-[11px] text-[#4E5969]">企迈：{getProductType(product) === 'combo' ? '套餐' : '标准'}</div></div>
                   <div className="text-[#4E5969]">{row.sourceStore}</div>
                   <div>
                     <div className="font-medium text-[#1D2129]">{row.targetStoreCount} 家</div>
@@ -1100,7 +1155,7 @@ export const WebProductMapping: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold text-[#1D2129]">{product.name}</div>
                       <div className="mt-1 text-[12px] text-[#86909C]">
-                        SKUID {product.skuCode} · {product.category}
+                        商品标识 {getProductMark(product)} · SKUID {product.skuCode} · {getProductType(product) === 'combo' ? '套餐商品' : '标准商品'}
                       </div>
                     </div>
                     <div className="text-[12px] text-[#4E5969]">¥{product.price.toFixed(2)}</div>
@@ -1300,6 +1355,87 @@ export const WebProductMapping: React.FC = () => {
                 保存规则
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showStoreScopeDialog && (
+        <div className="fixed inset-0 z-[320] flex items-center justify-center bg-[#1D2129]/55" role="dialog" aria-modal="true" aria-label="选择目标门店">
+          <div className="flex h-[620px] w-[760px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
+              <div>
+                <h3 className="text-[18px] font-bold text-[#1D2129]">选择目标门店</h3>
+                <p className="mt-1 text-[12px] text-[#86909C]">可按门店、组织或门店标签确定批量映射范围。</p>
+              </div>
+              <button type="button" onClick={() => setShowStoreScopeDialog(false)} title="关闭"><X size={18} /></button>
+            </div>
+            <div className="flex min-h-0 flex-1">
+              <div className="w-[150px] shrink-0 border-r border-[#E5E6EB] bg-[#F7F8FA] p-3">
+                {([
+                  ['store', '按门店'],
+                  ['org', '按组织'],
+                  ['tag', '按标签'],
+                ] as const).map(([id, label]) => (
+                  <button key={id} type="button" onClick={() => setStoreScopeTab(id)} className={`mb-1 flex h-10 w-full items-center rounded-md px-3 text-[13px] ${storeScopeTab === id ? 'bg-[#E8FFF3] font-bold text-[#008A4B]' : 'text-[#4E5969] hover:bg-white'}`}>{label}</button>
+                ))}
+              </div>
+              <div className="min-w-0 flex-1 p-5">
+                {storeScopeTab === 'tag' ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[14px] font-bold text-[#1D2129]">门店标签</div>
+                        <div className="mt-1 text-[12px] text-[#86909C]">选择多个标签时，可指定门店需满足任一标签或同时满足全部标签。</div>
+                      </div>
+                      <div className="flex rounded-md bg-[#F2F3F5] p-1 text-[12px]">
+                        <button type="button" onClick={() => setStoreTagMatchMode('any')} className={`rounded px-3 py-1.5 ${storeTagMatchMode === 'any' ? 'bg-white font-bold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>满足任一</button>
+                        <button type="button" onClick={() => setStoreTagMatchMode('all')} className={`rounded px-3 py-1.5 ${storeTagMatchMode === 'all' ? 'bg-white font-bold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>同时满足全部</button>
+                      </div>
+                    </div>
+                    <label className="mt-4 flex h-9 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input placeholder="搜索标签名称" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {['华南区域', '直营门店', '加盟门店', '核心商圈', '24 小时营业', '新开门店'].map(tag => {
+                        const checked = selectedStoreTags.includes(tag);
+                        return <div key={tag} className={`flex h-11 items-center rounded-md border px-3 text-left text-[13px] ${checked ? 'border-[#00B460] bg-[#F2FFF8] text-[#008A4B]' : 'border-[#E5E6EB] text-[#4E5969]'}`}><Checkbox checked={checked} onClick={() => setSelectedStoreTags(checked ? selectedStoreTags.filter(item => item !== tag) : [...selectedStoreTags, tag])} /><span className="ml-2">{tag}</span></div>;
+                      })}
+                    </div>
+                    <div className="mt-5 rounded-md border border-[#B8DBFF] bg-[#F2F8FF] px-4 py-3 text-[12px] text-[#245B8A]">
+                      当前条件：{selectedStoreTags.length ? selectedStoreTags.join(` ${storeTagMatchMode === 'any' ? '或' : '且'} `) : '未选择标签'}；预计命中 18 家门店。确认后仍会在执行前校验平台商品和现有映射冲突。
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center text-center text-[13px] text-[#86909C]"><Store size={30} className="mb-3 text-[#C9CDD4]" /><div className="font-bold text-[#4E5969]">{storeScopeTab === 'store' ? '按门店选择' : '按组织选择'}</div><div className="mt-2">本原型重点演示客户提出的门店标签筛选，门店与组织沿用现有选择器。</div></div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
+              <div className="text-[12px] text-[#667085]">已选 {selectedStoreTags.length} 个标签 · 命中 18 家门店</div>
+              <div className="flex gap-2"><button type="button" onClick={() => setShowStoreScopeDialog(false)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px]">取消</button><button type="button" disabled={selectedStoreTags.length === 0} onClick={() => { setShowStoreScopeDialog(false); setMessage(`目标范围已更新：${selectedStoreTags.join('、')}，共 18 家门店。`); }} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-bold text-white disabled:bg-[#C9CDD4]">确认选择</button></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExemptionManager && (
+        <WebMappingExemptionManager
+          channelName={THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId)?.name || '当前渠道'}
+          rows={rows}
+          exemptRowIds={exemptRowIds}
+          onChange={ids => {
+            const addedCount = ids.filter(id => !exemptRowIds.includes(id)).length;
+            const restoredCount = exemptRowIds.filter(id => !ids.includes(id)).length;
+            setExemptRowIds(ids);
+            setMessage(addedCount ? `已新增 ${addedCount} 个免绑定商品。` : restoredCount ? `已恢复 ${restoredCount} 个商品至待映射范围。` : '免绑定商品配置未变化。');
+          }}
+          onClose={() => setShowExemptionManager(false)}
+        />
+      )}
+
+      {pendingExemptBrandIds.length > 0 && (
+        <div className="fixed inset-0 z-[330] flex items-center justify-center bg-[#1D2129]/55" role="dialog" aria-modal="true" aria-label="确认批量设为免绑定">
+          <div className="w-[500px] overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="px-6 py-5"><div className="flex items-center gap-2"><ShieldOff size={18} className="text-[#D46B08]" /><h3 className="text-[16px] font-bold text-[#1D2129]">确认设为免绑定商品</h3></div><p className="mt-3 text-[13px] leading-6 text-[#4E5969]">已选择 {pendingExemptBrandIds.length} 个平台商品。确认后，这些商品会从门店和批量映射页面隐藏，并跳过自动关联、诊断及后续映射任务。</p><div className="mt-3 rounded-md bg-[#FFF9F0] px-3 py-2 text-[12px] text-[#8A5315]">已存在的映射关系不会自动删除；恢复免绑定后仍可继续查看或调整原关系。</div></div>
+            <div className="flex justify-end gap-2 border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4"><button type="button" onClick={() => setPendingExemptBrandIds([])} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px]">取消</button><button type="button" onClick={() => exemptRows(brandRows.filter(row => pendingExemptBrandIds.includes(row.id)).map(row => row.platformRowId))} className="h-9 rounded-md bg-[#D46B08] px-4 text-[13px] font-semibold text-white">确认免绑定</button></div>
           </div>
         </div>
       )}

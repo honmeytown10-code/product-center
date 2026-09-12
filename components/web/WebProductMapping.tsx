@@ -29,7 +29,7 @@ type MappingView = 'store' | 'brand' | 'diagnosis' | 'tasks' | 'special';
 type MappingStatus = 'unmapped' | 'mapped' | 'conflict' | 'invalid';
 type MappingBasis = 'qimai_publish' | 'qimai_sku_id' | 'merchant_product_code' | 'manual_binding' | '--';
 type BrandApplyStatus = 'ready' | 'partial' | 'conflict' | 'applied';
-type SpecialRuleStatus = 'enabled' | 'disabled' | 'conflict';
+type SpecialRuleStatus = 'enabled' | 'disabled';
 
 type MappingRow = {
   id: string;
@@ -64,11 +64,9 @@ type SpecialRule = {
   id: string;
   name: string;
   channel: string;
-  type: 'attribute_to_addon' | 'combo_item';
+  type: 'product_name' | 'sku_name' | 'attribute_name';
   source: string;
   target: string;
-  stores: string;
-  priority: number;
   status: SpecialRuleStatus;
   updatedAt: string;
 };
@@ -219,38 +217,32 @@ const initialBrandRows: BrandMappingRow[] = [
 const initialSpecialRules: SpecialRule[] = [
   {
     id: 's1',
-    name: '美团甜度属性转加料',
+    name: '去除外卖专享后缀',
     channel: '美团外卖',
-    type: 'attribute_to_addon',
-    source: '甜度：少糖 / 半糖 / 无糖',
-    target: '加料组：甜度',
-    stores: '华东区域 · 58 家门店',
-    priority: 10,
+    type: 'product_name',
+    source: '（外卖专享）',
+    target: '',
     status: 'enabled',
     updatedAt: '2026-07-29 16:24',
   },
   {
     id: 's2',
-    name: '淘宝闪购温度属性转做法',
+    name: '规格括号统一',
     channel: '淘宝闪购',
-    type: 'attribute_to_addon',
-    source: '温度：热 / 常温 / 去冰',
-    target: '做法组：温度',
-    stores: '全部门店 · 168 家',
-    priority: 20,
+    type: 'sku_name',
+    source: '【大杯】',
+    target: '大杯',
     status: 'enabled',
     updatedAt: '2026-07-28 18:10',
   },
   {
     id: 's3',
-    name: '双人套餐子项映射',
+    name: '属性名称同义词',
     channel: '美团外卖',
-    type: 'combo_item',
-    source: '平台套餐组：饮品二选一',
-    target: '企迈套餐组：双人餐饮品',
-    stores: '华南区域 · 42 家门店',
-    priority: 30,
-    status: 'conflict',
+    type: 'attribute_name',
+    source: '温度选择',
+    target: '温度',
+    status: 'disabled',
     updatedAt: '2026-07-27 11:36',
   },
 ];
@@ -319,7 +311,10 @@ const Field: React.FC<{ children: React.ReactNode; width?: string }> = ({ childr
 
 export const WebProductMapping: React.FC = () => {
   const { products } = useProducts();
-  const [activeView, setActiveView] = useState<MappingView>('store');
+  const [activeView, setActiveView] = useState<MappingView>(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view') as MappingView | null;
+    return requestedView && viewTabs.some(tab => tab.id === requestedView) ? requestedView : 'store';
+  });
   const [channelId, setChannelId] = useState<ThirdPartyChannelId>('meituan');
   const [status, setStatus] = useState<'all' | MappingStatus>('unmapped');
   const [keyword, setKeyword] = useState('');
@@ -550,7 +545,7 @@ export const WebProductMapping: React.FC = () => {
       return [{ ...editingRule, updatedAt: '刚刚' }, ...current];
     });
     setEditingRule(null);
-    setMessage('特殊映射规则已保存；发布与接单识别时将按适用渠道、门店范围和优先级执行。');
+    setMessage('替换规则已保存；后续自动关联会先按规则统一平台文本，再执行商品匹配。');
   };
 
   const renderStoreMapping = () => {
@@ -593,14 +588,14 @@ export const WebProductMapping: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid min-h-[650px] grid-cols-[380px_minmax(0,1fr)]">
+        <div className="grid min-h-[650px] grid-cols-[352px_minmax(0,1fr)]">
           <aside className="min-w-0 border-r border-[#E5E6EB] bg-white">
             <div className="flex min-h-14 items-center justify-between gap-2 border-b border-[#EEF0F3] px-4 py-2">
-              <div className="flex items-center gap-2 text-[15px] font-semibold text-[#1D2129]">
+              <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[15px] font-semibold text-[#1D2129]">
                 <span className="flex h-6 w-6 items-center justify-center rounded bg-[#FFD84D] text-[11px] font-bold text-[#7A4B00]">{activeChannel?.shortName.slice(0, 1)}</span>
-                {activeChannel?.name}平台商品
+                {activeChannel?.shortName}商品
               </div>
-              <div className="flex items-center gap-3"><button type="button" onClick={() => setShowExemptionManager(true)} className="inline-flex items-center gap-1 text-[12px] font-medium text-[#D46B08]"><ShieldOff size={14} />免绑定商品 {exemptRowIds.length}</button><button type="button" onClick={() => setMessage(`${activeChannel?.name}平台商品已刷新；${exemptRowIds.length} 个免绑定商品未进入列表。`)} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#00A35B]"><RefreshCw size={14} />更新平台商品</button></div>
+              <div className="flex shrink-0 items-center gap-3"><button type="button" onClick={() => setShowExemptionManager(true)} className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-[#D46B08]"><ShieldOff size={14} />免绑定 {exemptRowIds.length}</button><button type="button" onClick={() => setMessage(`${activeChannel?.name}平台商品已刷新；${exemptRowIds.length} 个免绑定商品未进入列表。`)} className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-[#00A35B]"><RefreshCw size={14} />更新商品</button></div>
             </div>
 
             <div className="border-b border-[#EEF0F3] p-4">
@@ -659,16 +654,16 @@ export const WebProductMapping: React.FC = () => {
           </aside>
 
           <div className="min-w-0 bg-white">
-            <div className="flex min-h-14 flex-wrap items-center gap-2 border-b border-[#EEF0F3] px-4 py-2.5">
+            <div className="flex min-h-14 flex-nowrap items-center gap-2 overflow-x-auto border-b border-[#EEF0F3] px-4 py-2.5">
               <div className="mr-auto flex items-center gap-2 text-[15px] font-semibold text-[#1D2129]">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#00B460] text-xs font-bold text-white">企</span>
                 企迈平台商品管理
               </div>
-              <button type="button" onClick={() => setMessage('页面已刷新。')} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]">刷新页面</button>
-              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage(`已选择 ${selectedQimaiProductIds.length} 个企迈商品，移出渠道商品需二次确认。`)} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">移出渠道商品</button>
-              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage(`已选择 ${selectedQimaiProductIds.length} 个企迈商品，可移入指定商品库。`)} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">移入商品库商品</button>
-              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage('请选择目标门店后复制已验证的映射关系。')} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">复制关系到其他门店</button>
-              <button type="button" onClick={autoMatch} className="inline-flex h-8 items-center rounded-md bg-[#00B460] px-3 text-[12px] font-semibold text-white"><Sparkles size={14} className="mr-1.5" />自动关联</button>
+              <button type="button" onClick={() => setMessage('页面已刷新。')} className="h-8 shrink-0 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]">刷新页面</button>
+              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage(`已选择 ${selectedQimaiProductIds.length} 个企迈商品，移出渠道商品需二次确认。`)} className="h-8 shrink-0 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">移出渠道商品</button>
+              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage(`已选择 ${selectedQimaiProductIds.length} 个企迈商品，可移入指定商品库。`)} className="h-8 shrink-0 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">移入商品库</button>
+              <button type="button" disabled={!selectedQimaiProductIds.length} onClick={() => setMessage('请选择目标门店后复制已验证的映射关系。')} className="h-8 shrink-0 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">复制到其他门店</button>
+              <button type="button" onClick={autoMatch} className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-[#00B460] px-3 text-[12px] font-semibold text-white"><Sparkles size={14} className="mr-1.5" />自动关联</button>
             </div>
 
             <div className="grid grid-cols-4 gap-3 border-b border-[#EEF0F3] bg-[#FAFBFC] p-4">
@@ -752,8 +747,8 @@ export const WebProductMapping: React.FC = () => {
   const renderBrandMapping = () => (
     <div className="space-y-3">
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
-        <div className="flex flex-wrap items-center gap-3 border-b border-[#E5E6EB] p-4">
-          <div className="mr-3 flex items-start gap-3">
+        <div className="flex items-start gap-3 border-b border-[#E5E6EB] p-4">
+          <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#E8FFF3] text-[#00A35B]">
               <Copy size={18} />
             </div>
@@ -764,21 +759,19 @@ export const WebProductMapping: React.FC = () => {
               </div>
             </div>
           </div>
-          <Field>
-            <span>渠道：美团外卖</span>
-          </Field>
-          <Field width="min-w-[184px]">
-            <span>参考门店：南山万象店</span>
-          </Field>
+          <button type="button" onClick={() => setShowExemptionManager(true)} className="ml-auto inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-[#F0C98B] bg-[#FFF9F0] px-3 text-[12px] font-medium text-[#A8620A]"><ShieldOff size={14} className="mr-1.5" />免绑定商品 {exemptRowIds.length}</button>
+        </div>
+        <div className="grid grid-cols-3 gap-3 border-b border-[#E5E6EB] bg-[#FAFBFC] px-4 py-3">
+          <Field width="w-full min-w-0"><span>渠道：美团外卖</span></Field>
+          <Field width="w-full min-w-0"><span>参考门店：南山万象店</span></Field>
           <button
             type="button"
             onClick={() => setShowStoreScopeDialog(true)}
-            className="flex h-9 min-w-[220px] items-center justify-between rounded-md border border-[#C9CDD4] bg-white px-3 text-left text-[12px] text-[#4E5969] hover:border-[#00B460]"
+            className="flex h-9 min-w-0 items-center justify-between rounded-md border border-[#C9CDD4] bg-white px-3 text-left text-[12px] text-[#4E5969] hover:border-[#00B460]"
           >
             <span>目标范围：{selectedStoreTags.length ? `${selectedStoreTags.join('、')} · 18 家` : '请选择门店'}</span>
             <ChevronDown size={14} className="ml-2 shrink-0 text-[#86909C]" />
           </button>
-          <button type="button" onClick={() => setShowExemptionManager(true)} className="ml-auto inline-flex h-9 items-center rounded-md border border-[#F0C98B] bg-[#FFF9F0] px-3 text-[12px] font-medium text-[#A8620A]"><ShieldOff size={14} className="mr-1.5" />免绑定商品 {exemptRowIds.length}</button>
         </div>
         <div className="grid grid-cols-6 gap-3 bg-[#F7F8FA] p-4">
           <label className="col-span-2 flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
@@ -794,28 +787,28 @@ export const WebProductMapping: React.FC = () => {
           <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={brandQimaiKeyword} onChange={event => setBrandQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / SKU" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
           <select value={brandPlatformType} onChange={event => setBrandPlatformType(event.target.value as typeof brandPlatformType)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部平台商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option><option value="display">展示商品</option></select>
           <select value={brandQimaiType} onChange={event => setBrandQimaiType(event.target.value as typeof brandQimaiType)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部企迈商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option></select>
-          <div className="col-span-6 flex items-center gap-2">
+          <div className="col-span-6 flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
           <button
             type="button"
             onClick={() => { setBrandKeyword(''); setBrandPlatformIdKeyword(''); setBrandQimaiKeyword(''); setBrandPlatformType('all'); setBrandQimaiType('all'); }}
-            className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
+            className="h-9 shrink-0 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
           >
             重置
           </button>
           <button
             type="button"
             onClick={() => setMessage('已重新校验品牌映射的门店差异，冲突结果已刷新。')}
-            className="ml-auto inline-flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
+            className="ml-auto inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
           >
             <RefreshCw size={14} className="mr-1.5" />
             重新校验门店差异
           </button>
-          <button type="button" disabled={selectedBrandIds.length === 0} onClick={() => setPendingExemptBrandIds(selectedBrandIds)} className="inline-flex h-9 items-center rounded-md border border-[#F0C98B] bg-white px-3 text-[13px] font-medium text-[#A8620A] disabled:border-[#D9DDE2] disabled:text-[#BFC5D0]"><ShieldOff size={14} className="mr-1.5" />批量设为免绑定</button>
+          <button type="button" disabled={selectedBrandIds.length === 0} onClick={() => setPendingExemptBrandIds(selectedBrandIds)} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-[#F0C98B] bg-white px-3 text-[13px] font-medium text-[#A8620A] disabled:border-[#D9DDE2] disabled:text-[#BFC5D0]"><ShieldOff size={14} className="mr-1.5" />批量设为免绑定</button>
           <button
             type="button"
             disabled={selectedBrandIds.length === 0}
             onClick={() => setShowApplyDialog(true)}
-            className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-3 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#C9CDD4]"
+            className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md bg-[#00B460] px-3 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#C9CDD4]"
           >
             <ArrowRightLeft size={14} className="mr-1.5" />
             批量应用映射
@@ -837,14 +830,13 @@ export const WebProductMapping: React.FC = () => {
           <span className="text-[12px] text-[#86909C]">已排除 {exemptRowIds.length} 个免绑定商品；冲突商品不会被批量覆盖</span>
         </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[1200px]">
-            <div className="grid grid-cols-[44px_1fr_1.1fr_100px_130px_100px_130px_120px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
+          <div className="min-w-[1060px]">
+            <div className="grid grid-cols-[44px_minmax(180px,1fr)_minmax(220px,1.15fr)_104px_156px_140px_148px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
               <div />
               <div>平台商品 / 规格</div>
               <div>绑定企迈商品 / 规格</div>
               <div>商品类型</div>
-              <div>来源门店</div>
-              <div>目标门店</div>
+              <div>门店范围</div>
               <div>校验结果</div>
               <div>操作</div>
             </div>
@@ -860,7 +852,7 @@ export const WebProductMapping: React.FC = () => {
               return (
                 <div
                   key={row.id}
-                  className="grid min-h-[88px] grid-cols-[44px_1fr_1.1fr_100px_130px_100px_130px_120px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]"
+                  className="grid min-h-[88px] grid-cols-[44px_minmax(180px,1fr)_minmax(220px,1.15fr)_104px_156px_140px_148px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]"
                 >
                   <Checkbox
                     checked={selected}
@@ -878,8 +870,8 @@ export const WebProductMapping: React.FC = () => {
                   </div>
                   <div className="flex min-w-0 items-center gap-2">{product && <img src={product.image} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />}<div className="min-w-0"><div className="truncate font-bold text-[#1D2129]">{product?.name || '--'}</div><div className="mt-1 text-[11px] text-[#86909C]">标识 {getProductMark(product)} · SKU {product?.skuCode || '--'}</div></div></div>
                   <div className="space-y-1"><div className="text-[11px] text-[#4E5969]">平台：{row.platformType === 'combo' ? '套餐' : row.platformType === 'display' ? '展示' : '标准'}</div><div className="text-[11px] text-[#4E5969]">企迈：{getProductType(product) === 'combo' ? '套餐' : '标准'}</div></div>
-                  <div className="text-[#4E5969]">{row.sourceStore}</div>
                   <div>
+                    <div className="truncate text-[#4E5969]">来源：{row.sourceStore}</div>
                     <div className="font-medium text-[#1D2129]">{row.targetStoreCount} 家</div>
                     <div className="mt-1 text-[11px] text-[#86909C]">
                       已匹配 {row.matchedStoreCount} 家
@@ -897,7 +889,7 @@ export const WebProductMapping: React.FC = () => {
                       <div className="mt-1 text-[11px] leading-4 text-[#CB2634]">{row.issue}</div>
                     )}
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col items-start gap-1.5 whitespace-nowrap">
                     <button type="button" onClick={() => setMessage(`${row.platformProduct}：目标门店 ${row.targetStoreCount} 家，已匹配 ${row.matchedStoreCount} 家${row.issue ? `；${row.issue}` : ''}`)} className="font-medium text-[#00A35B]">
                       查看门店差异
                     </button>
@@ -920,149 +912,27 @@ export const WebProductMapping: React.FC = () => {
     <div className="space-y-3">
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
         <div className="flex items-center gap-3 border-b border-[#E5E6EB] p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#F2F3F5] text-[#4E5969]">
-            <Settings2 size={18} />
-          </div>
-          <div>
-            <div className="text-[14px] font-bold text-[#1D2129]">处理平台与企迈商品结构差异</div>
-            <div className="mt-1 text-[12px] text-[#86909C]">
-              仅为普通 SKU 映射无法表达的属性、加料与套餐子项关系建立例外规则。
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              setEditingRule({
-                id: `s${Date.now()}`,
-                name: '',
-                channel: '美团外卖',
-                type: 'attribute_to_addon',
-                source: '',
-                target: '',
-                stores: '全部门店',
-                priority: 10,
-                status: 'enabled',
-                updatedAt: '刚刚',
-              })
-            }
-            className="ml-auto inline-flex h-9 items-center rounded-md bg-[#00B460] px-3 text-[13px] font-bold text-white"
-          >
-            <Plus size={15} className="mr-1.5" />
-            新增特殊映射
-          </button>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#F2F3F5] text-[#4E5969]"><Settings2 size={18} /></div>
+          <div className="min-w-0"><div className="text-[14px] font-bold text-[#1D2129]">特殊映射配置</div><div className="mt-1 text-[12px] text-[#86909C]">映射匹配前替换平台商品文本，只影响匹配结果，不修改平台商品资料。</div></div>
+          <button type="button" onClick={() => setEditingRule({ id: `s${Date.now()}`, name: '', channel: '美团外卖', type: 'product_name', source: '', target: '', status: 'enabled', updatedAt: '刚刚' })} className="ml-auto inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md bg-[#00B460] px-3 text-[13px] font-bold text-white"><Plus size={15} className="mr-1.5" />新增替换规则</button>
         </div>
-        <div className="flex items-center gap-3 bg-[#F7F8FA] p-4">
-          <label className="flex h-9 min-w-[420px] items-center rounded-md border border-[#C9CDD4] bg-white px-3">
-            <Search size={15} className="mr-2 text-[#86909C]" />
-            <input
-              value={specialKeyword}
-              onChange={event => setSpecialKeyword(event.target.value)}
-              placeholder="搜索规则名称、平台属性或企迈目标"
-              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
-            />
-          </label>
-          <Field>
-            <span>渠道：全部</span>
-          </Field>
-          <Field>
-            <span>规则类型：全部</span>
-          </Field>
-          <button
-            type="button"
-            onClick={() => setSpecialKeyword('')}
-            className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"
-          >
-            重置
-          </button>
+        <div className="flex flex-nowrap items-center gap-3 overflow-x-auto bg-[#F7F8FA] p-4">
+          <label className="flex h-9 min-w-[320px] flex-1 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={specialKeyword} onChange={event => setSpecialKeyword(event.target.value)} placeholder="搜索规则名称、查找文本或替换文本" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" /></label>
+          <Field width="w-[170px] shrink-0"><span>渠道：全部</span></Field><Field width="w-[190px] shrink-0"><span>生效字段：全部</span></Field>
+          <button type="button" onClick={() => setSpecialKeyword('')} className="h-9 shrink-0 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]">重置</button>
         </div>
       </section>
-
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
-        <div className="flex h-11 items-center justify-between border-b border-[#E5E6EB] px-4 text-[13px] text-[#4E5969]">
-          <span>共 {filteredSpecialRules.length} 条特殊映射规则</span>
-          <span className="inline-flex items-center text-[12px] text-[#86909C]">
-            <AlertCircle size={14} className="mr-1.5" />
-            同渠道、同门店范围内命中多条规则时，优先级数字小的先执行
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <div className="min-w-[1200px]">
-            <div className="grid grid-cols-[1.1fr_120px_150px_1fr_1fr_190px_90px_120px_160px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
-              <div>规则名称</div>
-              <div>平台渠道</div>
-              <div>规则类型</div>
-              <div>平台对象</div>
-              <div>企迈对象</div>
-              <div>适用门店</div>
-              <div>优先级</div>
-              <div>状态</div>
-              <div>操作</div>
-            </div>
-            {filteredSpecialRules.map(rule => {
-              const ruleType =
-                rule.type === 'attribute_to_addon' ? '属性 / 做法转换' : '套餐子项映射';
-              const ruleStatus: Record<SpecialRuleStatus, { label: string; classes: string }> = {
-                enabled: { label: '已启用', classes: 'bg-[#E8FFF3] text-[#008A4B]' },
-                disabled: { label: '已停用', classes: 'bg-[#F2F3F5] text-[#667085]' },
-                conflict: { label: '存在冲突', classes: 'bg-[#FFECE8] text-[#CB2634]' },
-              };
-              return (
-                <div
-                  key={rule.id}
-                  className="grid min-h-[82px] grid-cols-[1.1fr_120px_150px_1fr_1fr_190px_90px_120px_160px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]"
-                >
-                  <div>
-                    <div className="font-bold text-[#1D2129]">{rule.name}</div>
-                    <div className="mt-1 text-[11px] text-[#86909C]">{rule.updatedAt}</div>
-                  </div>
-                  <div className="text-[#4E5969]">{rule.channel}</div>
-                  <div className="text-[#4E5969]">{ruleType}</div>
-                  <div className="pr-3 text-[#4E5969]">{rule.source}</div>
-                  <div className="pr-3 text-[#4E5969]">{rule.target}</div>
-                  <div className="text-[#4E5969]">{rule.stores}</div>
-                  <div className="font-medium text-[#1D2129]">{rule.priority}</div>
-                  <div>
-                    <span
-                      className={`inline-flex rounded px-2 py-1 text-[12px] font-medium ${
-                        ruleStatus[rule.status].classes
-                      }`}
-                    >
-                      {ruleStatus[rule.status].label}
-                    </span>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setEditingRule(rule)}
-                      className="font-medium text-[#00A35B]"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSpecialRules(current =>
-                          current.map(item =>
-                            item.id === rule.id
-                              ? {
-                                  ...item,
-                                  status: item.status === 'disabled' ? 'enabled' : 'disabled',
-                                  updatedAt: '刚刚',
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                      className="text-[#4E5969]"
-                    >
-                      {rule.status === 'disabled' ? '启用' : '停用'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <div className="flex min-h-11 items-center justify-between gap-4 border-b border-[#E5E6EB] px-4 py-2 text-[13px] text-[#4E5969]"><span className="shrink-0">共 {filteredSpecialRules.length} 条替换规则</span><span className="text-right text-[12px] text-[#86909C]">规则仅用于消除两端命名差异，停用后不再参与后续自动关联</span></div>
+        <div className="overflow-x-auto"><div className="min-w-[980px]">
+          <div className="grid grid-cols-[minmax(180px,1fr)_120px_130px_minmax(150px,1fr)_40px_minmax(150px,1fr)_100px_130px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]"><div>规则名称</div><div>平台渠道</div><div>生效字段</div><div>查找文本</div><div /><div>替换为</div><div>状态</div><div>操作</div></div>
+          {filteredSpecialRules.map(rule => {
+            const typeLabel = rule.type === 'product_name' ? '商品名称' : rule.type === 'sku_name' ? '规格名称' : '属性名称';
+            return <div key={rule.id} className="grid min-h-[76px] grid-cols-[minmax(180px,1fr)_120px_130px_minmax(150px,1fr)_40px_minmax(150px,1fr)_100px_130px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]">
+              <div className="min-w-0"><div className="truncate font-bold text-[#1D2129]">{rule.name}</div><div className="mt-1 text-[11px] text-[#86909C]">{rule.updatedAt}</div></div><div>{rule.channel}</div><div>{typeLabel}</div><div className="truncate pr-3 font-medium text-[#1D2129]">{rule.source}</div><ArrowRightLeft size={15} className="text-[#C9CDD4]" /><div className="truncate pr-3 text-[#1D2129]">{rule.target || '删除该文本'}</div><div><span className={`inline-flex whitespace-nowrap rounded px-2 py-1 text-[12px] font-medium ${rule.status === 'enabled' ? 'bg-[#E8FFF3] text-[#008A4B]' : 'bg-[#F2F3F5] text-[#667085]'}`}>{rule.status === 'enabled' ? '已启用' : '已停用'}</span></div><div className="flex gap-3 whitespace-nowrap"><button type="button" onClick={() => setEditingRule(rule)} className="font-medium text-[#00A35B]">编辑</button><button type="button" onClick={() => setSpecialRules(current => current.map(item => item.id === rule.id ? { ...item, status: item.status === 'disabled' ? 'enabled' : 'disabled', updatedAt: '刚刚' } : item))} className="text-[#4E5969]">{rule.status === 'disabled' ? '启用' : '停用'}</button></div>
+            </div>;
+          })}
+        </div></div>
       </section>
     </div>
   );
@@ -1070,7 +940,7 @@ export const WebProductMapping: React.FC = () => {
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6F8]">
       <header className="shrink-0 border-b border-[#E5E6EB] bg-white">
-        <nav className="flex h-12 items-end gap-7 px-6">
+        <nav className="flex h-12 items-end gap-6 overflow-x-auto px-6">
           {viewTabs.map(tab => {
             const Icon = tab.icon;
             return (
@@ -1081,7 +951,7 @@ export const WebProductMapping: React.FC = () => {
                   setActiveView(tab.id);
                   setMessage('');
                 }}
-                className={`flex h-full items-center border-b-2 px-1 text-[13px] ${
+                className={`flex h-full shrink-0 items-center whitespace-nowrap border-b-2 px-1 text-[13px] ${
                   activeView === tab.id
                     ? 'border-[#00B460] font-bold text-[#00A35B]'
                     : 'border-transparent text-[#4E5969] hover:text-[#1D2129]'
@@ -1244,14 +1114,14 @@ export const WebProductMapping: React.FC = () => {
 
       {editingRule && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[#1D2129]/55">
-          <div className="flex max-h-[760px] w-[720px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+          <div className="flex max-h-[760px] w-[min(680px,calc(100vw-64px))] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
               <div>
                 <h3 className="text-[18px] font-bold text-[#1D2129]">
-                  {specialRules.some(rule => rule.id === editingRule.id) ? '编辑特殊映射' : '新增特殊映射'}
+                  {specialRules.some(rule => rule.id === editingRule.id) ? '编辑替换规则' : '新增替换规则'}
                 </h3>
                 <p className="mt-1 text-[12px] text-[#86909C]">
-                  仅用于普通商品映射无法表达的平台结构差异。
+                  配置平台文本在匹配前的替换方式，不会回写平台商品资料。
                 </p>
               </div>
               <button type="button" onClick={() => setEditingRule(null)} title="关闭">
@@ -1281,7 +1151,7 @@ export const WebProductMapping: React.FC = () => {
                 </select>
               </label>
               <label>
-                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">规则类型</span>
+                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">生效字段</span>
                 <select
                   value={editingRule.type}
                   onChange={event =>
@@ -1292,50 +1162,32 @@ export const WebProductMapping: React.FC = () => {
                   }
                   className="h-9 w-full rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] outline-none"
                 >
-                  <option value="attribute_to_addon">属性 / 做法转换</option>
-                  <option value="combo_item">套餐子项映射</option>
+                  <option value="product_name">商品名称</option>
+                  <option value="sku_name">规格名称</option>
+                  <option value="attribute_name">属性名称</option>
                 </select>
               </label>
               <label>
-                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">平台对象 *</span>
+                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">查找文本 *</span>
                 <input
                   value={editingRule.source}
                   onChange={event => setEditingRule({ ...editingRule, source: event.target.value })}
-                  placeholder="选择平台属性或套餐组"
+                  placeholder="例如：（外卖专享）"
                   className="h-9 w-full rounded-md border border-[#C9CDD4] px-3 text-[13px] outline-none focus:border-[#00B460]"
                 />
               </label>
               <label>
-                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">企迈对象 *</span>
+                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">替换为</span>
                 <input
                   value={editingRule.target}
                   onChange={event => setEditingRule({ ...editingRule, target: event.target.value })}
-                  placeholder="选择企迈做法、加料或套餐组"
-                  className="h-9 w-full rounded-md border border-[#C9CDD4] px-3 text-[13px] outline-none focus:border-[#00B460]"
-                />
-              </label>
-              <label>
-                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">适用门店</span>
-                <input
-                  value={editingRule.stores}
-                  onChange={event => setEditingRule({ ...editingRule, stores: event.target.value })}
-                  className="h-9 w-full rounded-md border border-[#C9CDD4] px-3 text-[13px] outline-none focus:border-[#00B460]"
-                />
-              </label>
-              <label>
-                <span className="mb-1.5 block text-[12px] font-medium text-[#4E5969]">优先级</span>
-                <input
-                  type="number"
-                  value={editingRule.priority}
-                  onChange={event =>
-                    setEditingRule({ ...editingRule, priority: Number(event.target.value) })
-                  }
+                  placeholder="留空表示删除查找文本"
                   className="h-9 w-full rounded-md border border-[#C9CDD4] px-3 text-[13px] outline-none focus:border-[#00B460]"
                 />
               </label>
               <div className="col-span-2 flex items-start gap-2 rounded-md border border-[#FFD8A8] bg-[#FFF9F0] px-3 py-2 text-[12px] text-[#9A5A16]">
                 <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                保存时将校验同渠道、同门店范围内是否已有相同平台对象；存在重叠时需调整优先级或缩小范围。
+                示例：“招牌奶茶（外卖专享）”查找“（外卖专享）”并替换为空后，将以“招牌奶茶”参与匹配。相同渠道和字段下不允许重复查找文本。
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
@@ -1348,7 +1200,7 @@ export const WebProductMapping: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={!editingRule.name || !editingRule.source || !editingRule.target}
+                disabled={!editingRule.name || !editingRule.source}
                 onClick={saveSpecialRule}
                 className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#C9CDD4]"
               >

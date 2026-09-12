@@ -41,7 +41,7 @@ export const WebMappingExemptionManager: React.FC<Props> = ({ channelName, rows,
 
   return (
     <div className="fixed inset-0 z-[340] flex justify-end bg-[#1D2129]/45" role="dialog" aria-modal="true" aria-label="免绑定商品配置">
-      <section className="flex h-full w-[860px] flex-col bg-white shadow-2xl">
+      <section className="flex h-full w-[min(860px,calc(100vw-64px))] flex-col bg-white shadow-2xl">
         <header className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
           <div>
             <div className="flex items-center gap-2"><ShieldOff size={20} className="text-[#D46B08]" /><h3 className="text-[18px] font-bold text-[#1D2129]">免绑定商品配置</h3></div>
@@ -68,20 +68,20 @@ export const WebMappingExemptionManager: React.FC<Props> = ({ channelName, rows,
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          <div className="overflow-hidden rounded-md border border-[#E5E6EB]">
-            <div className={`grid ${mode === 'add' ? 'grid-cols-[44px_1fr_160px_130px_120px]' : 'grid-cols-[1fr_160px_130px_120px_90px]'} bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]`}>
+          <div className="overflow-x-auto rounded-md border border-[#E5E6EB]">
+            <div className={`grid min-w-[760px] ${mode === 'add' ? 'grid-cols-[44px_1fr_160px_130px_120px]' : 'grid-cols-[1fr_160px_130px_120px_90px]'} bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]`}>
               {mode === 'add' && <div />}
               <div>平台商品</div><div>平台商品 ID</div><div>商品类型</div><div>平台 SKU 码</div>{mode === 'list' && <div>操作</div>}
             </div>
             {visibleRows.map(row => {
               const selected = selectedIds.includes(row.id);
-              return <div key={row.id} className={`grid min-h-[68px] ${mode === 'add' ? 'grid-cols-[44px_1fr_160px_130px_120px]' : 'grid-cols-[1fr_160px_130px_120px_90px]'} items-center border-t border-[#F0F1F2] px-4 py-3 text-[12px]`}>
+              return <div key={row.id} className={`grid min-h-[68px] min-w-[760px] ${mode === 'add' ? 'grid-cols-[44px_1fr_160px_130px_120px]' : 'grid-cols-[1fr_160px_130px_120px_90px]'} items-center border-t border-[#F0F1F2] px-4 py-3 text-[12px]`}>
                 {mode === 'add' && <button type="button" onClick={() => toggle(row.id)} aria-label={`选择 ${row.platformName}`} className={`flex h-4 w-4 items-center justify-center rounded border ${selected ? 'border-[#00B460] bg-[#00B460] text-white' : 'border-[#C9CDD4]'}`}>{selected && <Check size={12} strokeWidth={3} />}</button>}
                 <div className="min-w-0"><div className="truncate font-semibold text-[#1D2129]">{row.platformName}</div><div className="mt-1 truncate text-[#86909C]">{row.platformSpec}</div></div>
                 <div className="font-mono text-[#4E5969]">{row.platformProductId}</div>
                 <div><span className={`rounded px-2 py-1 ${row.platformType === 'display' ? 'bg-[#FFF1E8] text-[#C45A00]' : 'bg-[#F2F3F5] text-[#4E5969]'}`}>{typeLabels[row.platformType]}</span></div>
                 <div className="font-mono text-[#4E5969]">{row.platformSku}</div>
-                {mode === 'list' && <button type="button" onClick={() => setRestoreRow(row)} className="inline-flex items-center font-medium text-[#00A35B]"><RotateCcw size={13} className="mr-1" />恢复</button>}
+                {mode === 'list' && <button type="button" onClick={() => setRestoreRow(row)} className="inline-flex items-center whitespace-nowrap font-medium text-[#00A35B]"><RotateCcw size={13} className="mr-1" />恢复</button>}
               </div>;
             })}
             {!visibleRows.length && <div className="py-16 text-center text-[13px] text-[#86909C]">{mode === 'list' ? '当前没有免绑定商品' : '没有可添加的平台商品'}</div>}

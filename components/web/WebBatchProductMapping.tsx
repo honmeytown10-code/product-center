@@ -53,7 +53,6 @@ type Props = {
   exemptCount: number;
   onChannelChange: (channelId: ThirdPartyChannelId) => void;
   onOpenExemption: () => void;
-  onExempt: (platformRowIds: string[]) => void;
   onMessage: (message: string) => void;
 };
 
@@ -142,7 +141,6 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   exemptCount,
   onChannelChange,
   onOpenExemption,
-  onExempt,
   onMessage,
 }) => {
   const [relations, setRelations] = useState<StoreRelation[]>(initialRelations);
@@ -332,7 +330,6 @@ export const WebBatchProductMapping: React.FC<Props> = ({
             <span className="whitespace-nowrap rounded bg-[#F2F3F5] px-2 py-1 text-[#667085]">全部未绑定 {scenarioCounts.unmapped}</span>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <button type="button" disabled={!selectedProductIds.length} onClick={() => { onExempt(batchProducts.filter(item => selectedProductIds.includes(item.id)).map(item => item.platformRowId)); setSelectedProductIds([]); }} className="inline-flex h-8 items-center whitespace-nowrap rounded-md border border-[#F0C98B] bg-white px-3 text-[12px] font-medium text-[#A8620A] disabled:border-[#D9DDE2] disabled:text-[#BFC5D0]"><ShieldOff size={13} className="mr-1.5" />设为免绑定</button>
             <button type="button" disabled={!selectedProductIds.length} onClick={batchUnbind} className="inline-flex h-8 items-center whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]"><Unlink size={13} className="mr-1.5" />批量解绑</button>
           </div>
         </div>

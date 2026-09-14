@@ -270,6 +270,11 @@ const initialRows: MappingRow[] = [
   },
 ];
 
+const getPlatformSkuId = (row: MappingRow) => {
+  const sequence = Number(row.id.replace(/\D/g, '')) || 0;
+  return `1297157935115968${String(500 + sequence).padStart(3, '0')}`;
+};
+
 const initialSpecialRules: SpecialRule[] = [
   {
     id: 's1',
@@ -376,6 +381,7 @@ export const WebProductMapping: React.FC = () => {
   const [qimaiProductType, setQimaiProductType] = useState<'all' | 'standard' | 'combo'>('all');
   const [activePlatformRowId, setActivePlatformRowId] = useState(initialRows[0]?.id || '');
   const [draggingPlatformRowId, setDraggingPlatformRowId] = useState<string | null>(null);
+  const [collapsedPlatformSpuIds, setCollapsedPlatformSpuIds] = useState<string[]>([]);
   const [selectedQimaiProductIds, setSelectedQimaiProductIds] = useState<string[]>([]);
   const [rows, setRows] = useState<MappingRow[]>(initialRows);
   const [bindingRow, setBindingRow] = useState<MappingRow | null>(null);
@@ -580,10 +586,16 @@ export const WebProductMapping: React.FC = () => {
     const platformRows = rows.filter(row => {
       if (exemptRowIds.includes(row.id)) return false;
       const statusMatched = status === 'all' || row.status === status;
-      const keywordMatched = !keyword || `${row.platformName}${row.platformProductId}${row.platformSku}${row.platformSpec}`.toLowerCase().includes(keyword.trim().toLowerCase());
+      const keywordMatched = !keyword || `${row.platformName}${row.platformProductId}${getPlatformSkuId(row)}${row.platformSku}${row.platformSpec}`.toLowerCase().includes(keyword.trim().toLowerCase());
       return statusMatched && keywordMatched;
     });
     const activePlatformRow = platformRows.find(row => row.id === activePlatformRowId) || platformRows[0];
+    const platformSpuGroups = Array.from(platformRows.reduce((groups, row) => {
+      const group = groups.get(row.platformProductId) || [];
+      group.push(row);
+      groups.set(row.platformProductId, group);
+      return groups;
+    }, new Map<string, MappingRow[]>()).entries()).map(([spuId, skuRows]) => ({ spuId, skuRows }));
     const statusTabs = storeStatusTabs;
 
     return (
@@ -619,6 +631,7 @@ export const WebProductMapping: React.FC = () => {
               <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[15px] font-semibold text-[#1D2129]">
                 <span className="flex h-6 w-6 items-center justify-center rounded bg-[#FFD84D] text-[11px] font-bold text-[#7A4B00]">{activeChannel?.shortName.slice(0, 1)}</span>
                 {activeChannel?.shortName}商品
+                <span className="text-[10px] font-normal text-[#98A2B3]">{platformSpuGroups.length} SPU</span>
               </div>
               <button type="button" onClick={() => setMessage(`${activeChannel?.name}平台商品已刷新；${exemptRowIds.length} 个免绑定商品未进入列表。`)} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[12px] font-medium text-[#00A35B]"><RefreshCw size={13} />更新</button>
             </div>
@@ -633,33 +646,29 @@ export const WebProductMapping: React.FC = () => {
               </div>
               <label className="mt-2 flex h-8 items-center rounded-md border border-[#C9CDD4] bg-white px-3">
                 <Search size={15} className="mr-2 text-[#86909C]" />
-                <input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="商品名称 / SPU ID / SKU ID" className="min-w-0 flex-1 text-[12px] outline-none" />
+                <input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="商品名称 / SPU ID / SKU ID / SKU码" className="min-w-0 flex-1 text-[12px] outline-none" />
               </label>
             </div>
 
-            <div className="max-h-[610px] space-y-1.5 overflow-y-auto p-3">
-              {platformRows.map((row, index) => {
-                const active = activePlatformRow?.id === row.id;
-                const mappedProduct = getProduct(row.qimaiProductId);
-                const mockImage = mappedProduct?.image || products[index % Math.max(products.length, 1)]?.image;
+            <div className="max-h-[610px] space-y-2 overflow-y-auto p-3">
+              {platformSpuGroups.map((group, index) => {
+                const firstRow = group.skuRows[0];
+                const collapsed = collapsedPlatformSpuIds.includes(group.spuId);
+                const mappedCount = group.skuRows.filter(row => row.status === 'mapped').length;
+                const mockImage = getProduct(firstRow.qimaiProductId)?.image || products[index % Math.max(products.length, 1)]?.image;
                 return (
-                  <article
-                    key={row.id}
-                    draggable
-                    onDragStart={() => setDraggingPlatformRowId(row.id)}
-                    onDragEnd={() => setDraggingPlatformRowId(null)}
-                    onClick={() => setActivePlatformRowId(row.id)}
-                    className={`w-full cursor-pointer rounded-md border px-2.5 py-2 text-left transition-colors ${active ? 'border-[#77D9A5] bg-[#F2FFF8]' : 'border-[#E5E6EB] bg-white hover:border-[#B7E8CD]'}`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {mockImage ? <img src={mockImage} alt="" className="h-8 w-8 shrink-0 rounded object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-[#F2F3F5] text-xs text-[#667085]">{row.platformName.slice(0, 1)}</span>}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-semibold text-[#1D2129]">{row.platformName}</div>
-                        <div className="mt-0.5 truncate text-[11px] text-[#86909C]">{row.platformSpec} · SPU {row.platformProductId}</div>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[#86909C]"><span className="truncate">SKU {row.platformSku}</span><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${row.platformType === 'combo' ? 'bg-[#F4EFFF] text-[#7048B8]' : 'bg-[#F2F3F5] text-[#667085]'}`}>{row.platformType === 'combo' ? '套餐' : '标准'}</span></div>
-                      </div>
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusMeta[row.status].classes}`}>{statusMeta[row.status].label}</span>
-                    </div>
+                  <article key={group.spuId} className="overflow-hidden rounded-md border border-[#E5E6EB] bg-white">
+                    <button type="button" onClick={() => setCollapsedPlatformSpuIds(collapsed ? collapsedPlatformSpuIds.filter(id => id !== group.spuId) : [...collapsedPlatformSpuIds, group.spuId])} className="flex w-full items-center gap-2.5 bg-[#FAFBFC] px-2.5 py-2 text-left hover:bg-[#F5FFF9]">
+                      {mockImage ? <img src={mockImage} alt="" className="h-8 w-8 shrink-0 rounded object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-[#F2F3F5] text-xs text-[#667085]">{firstRow.platformName.slice(0, 1)}</span>}
+                      <div className="min-w-0 flex-1"><div className="flex items-center gap-1"><span className="truncate text-[13px] font-semibold text-[#1D2129]">{firstRow.platformName}</span><ChevronDown size={13} className={`shrink-0 text-[#86909C] transition-transform ${collapsed ? '-rotate-90' : ''}`} /></div><div className="mt-0.5 truncate text-[10px] text-[#86909C]">SPU ID {group.spuId} · {group.skuRows.length} 个SKU</div></div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${mappedCount === group.skuRows.length ? statusMeta.mapped.classes : mappedCount === 0 ? statusMeta.unmapped.classes : 'bg-[#F2F8FF] text-[#245B8A]'}`}>{mappedCount}/{group.skuRows.length} 已映射</span>
+                    </button>
+                    {!collapsed && <div className="border-t border-[#EEF0F3]">{group.skuRows.map(row => {
+                      const active = activePlatformRow?.id === row.id;
+                      return <div key={row.id} draggable onDragStart={() => setDraggingPlatformRowId(row.id)} onDragEnd={() => setDraggingPlatformRowId(null)} onClick={() => setActivePlatformRowId(row.id)} className={`cursor-pointer border-b border-[#F0F1F2] px-3 py-2 text-left last:border-b-0 ${active ? 'bg-[#F2FFF8]' : 'bg-white hover:bg-[#F7F8FA]'}`}>
+                        <div className="flex items-start gap-2"><span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9CDD4]" /><div className="min-w-0 flex-1"><div className="truncate text-[12px] font-medium text-[#1D2129]">{row.platformSpec}</div><div className="mt-0.5 truncate font-mono text-[10px] text-[#86909C]">SKU ID {getPlatformSkuId(row)}</div><div className="mt-0.5 truncate font-mono text-[10px] text-[#86909C]">SKU码 {row.platformSku}</div></div><span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusMeta[row.status].classes}`}>{statusMeta[row.status].label}</span></div>
+                      </div>;
+                    })}</div>}
                   </article>
                 );
               })}
@@ -734,7 +743,7 @@ export const WebProductMapping: React.FC = () => {
                         return <div key={row?.id || `${product.id}-empty`} className="grid min-h-[64px] grid-cols-[minmax(170px,0.85fr)_34px_minmax(230px,1.15fr)_100px] items-center gap-2 border-t border-[#EEF0F3] px-3 py-2">
                           <div className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-sm border border-dashed border-[#D3D7DE] bg-white px-3 py-1.5 text-[12px]"><div className="min-w-0"><div className="truncate text-[#4E5969]">{product.name}</div><div className="mt-0.5 truncate text-[10px] text-[#86909C]">SKU {qimaiSpec.skuId} · 标识 {qimaiSpec.mark}</div></div><div className="shrink-0 text-right font-medium text-[#1D2129]"><div>{qimaiSpec.name}</div><div className="mt-0.5 text-[11px] font-normal text-[#667085]">¥{product.price.toFixed(2)}</div></div></div>
                           <div className="flex justify-center text-[#98A2B3]"><ArrowRightLeft size={17} /></div>
-                          {row ? <div className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-sm border border-dashed border-[#9ADBB8] bg-[#F5FFF9] px-3 text-[12px]"><div className="min-w-0"><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-0.5 truncate text-[11px] text-[#86909C]">SKU {row.platformSku}</div></div><span className="shrink-0 font-medium text-[#1D2129]">{row.platformSpec}</span></div> : <div className="flex min-h-11 items-center justify-center rounded-sm border border-dashed border-[#C9CDD4] bg-white px-3 text-[12px] text-[#A9AFB9]">将左侧{activeChannel?.shortName}商品拖入这里</div>}
+                          {row ? <div className="min-h-11 min-w-0 rounded-sm border border-dashed border-[#9ADBB8] bg-[#F5FFF9] px-3 py-1.5 text-[12px]"><div className="flex items-center gap-2"><div className="min-w-0 flex-1 truncate font-medium text-[#1D2129]">{row.platformName}</div><span className="shrink-0 font-mono text-[10px] text-[#86909C]">SPU {row.platformProductId}</span></div><div className="mt-1 flex items-center gap-2 border-t border-[#DDF3E7] pt-1"><span className="shrink-0 font-medium text-[#1D2129]">{row.platformSpec}</span><span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-[#86909C]">SKU ID {getPlatformSkuId(row)} · SKU码 {row.platformSku}</span></div></div> : <div className="flex min-h-11 items-center justify-center rounded-sm border border-dashed border-[#C9CDD4] bg-white px-3 text-[12px] text-[#A9AFB9]">将左侧{activeChannel?.shortName}商品拖入这里</div>}
                           <div className="flex justify-end gap-2.5 whitespace-nowrap">{row ? <><button type="button" onClick={() => openBinding(row)} className="text-[12px] font-medium text-[#00A35B]">更换</button><button type="button" onClick={() => removeBinding(row.id)} className="text-[12px] text-[#667085]">解除</button></> : <button type="button" disabled={!activePlatformRow} onClick={() => activePlatformRow && bindPlatformRowToProduct(activePlatformRow.id, product.id)} className="text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">绑定</button>}</div>
                         </div>;
                       })}
@@ -844,15 +853,15 @@ export const WebProductMapping: React.FC = () => {
               <div><h3 className="text-[17px] font-bold text-[#1D2129]">映射关系详情</h3><p className="mt-1 text-[12px] text-[#86909C]">一个企迈商品可关联多个{THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId)?.shortName}商品，解除操作仅影响所选关系。</p></div>
               <button type="button" onClick={() => setRelationDetailProductId(null)} title="关闭" className="ml-auto flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#F2F3F5]"><X size={18} /></button>
             </div>
-            <div className="shrink-0 border-b border-[#E5E6EB] bg-[#F5FFF9] px-6 py-4"><div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00B460] text-[12px] font-bold text-white">企</span><div className="min-w-0 flex-1"><div className="truncate text-[14px] font-bold text-[#1D2129]">{relationDetailProduct.name}</div><div className="mt-1 text-[12px] text-[#667085]">企迈 SPU ID <span className="select-all font-mono text-[#1D2129]">{relationDetailProduct.id}</span><span className="mx-2 text-[#C9CDD4]">·</span>{Math.max(relationDetailProduct.specs?.length || 0, 1)} 个企迈规格</div></div><span className="shrink-0 rounded bg-[#E8FFF3] px-2 py-1 text-[12px] font-medium text-[#008A4B]">已关联 {relationDetailRows.length} 个平台商品</span></div></div>
+            <div className="shrink-0 border-b border-[#E5E6EB] bg-[#F5FFF9] px-6 py-4"><div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00B460] text-[12px] font-bold text-white">企</span><div className="min-w-0 flex-1"><div className="truncate text-[14px] font-bold text-[#1D2129]">{relationDetailProduct.name}</div><div className="mt-1 text-[12px] text-[#667085]">企迈 SPU ID <span className="select-all font-mono text-[#1D2129]">{relationDetailProduct.id}</span><span className="mx-2 text-[#C9CDD4]">·</span>{Math.max(relationDetailProduct.specs?.length || 0, 1)} 个企迈规格</div></div><span className="shrink-0 rounded bg-[#E8FFF3] px-2 py-1 text-[12px] font-medium text-[#008A4B]">已关联 {new Set(relationDetailRows.map(row => row.platformProductId)).size} 个平台 SPU / {relationDetailRows.length} 个 SKU</span></div></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              <div className="overflow-x-auto rounded-md border border-[#E5E6EB]"><div className="min-w-[960px]">
-                <div className="grid grid-cols-[180px_145px_180px_190px_150px_64px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]"><div>企迈规格 / SKU ID</div><div>商品标识</div><div>{THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId)?.shortName}商品 / 规格</div><div>平台 SPU / SKU ID</div><div>绑定更新时间</div><div>操作</div></div>
+              <div className="overflow-x-auto rounded-md border border-[#E5E6EB]"><div className="min-w-[1000px]">
+                <div className="grid grid-cols-[165px_135px_165px_170px_120px_140px_56px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]"><div>企迈规格 / SKU ID</div><div>商品标识</div><div>{THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId)?.shortName}商品 / 规格</div><div>平台 SPU / SKU ID</div><div>平台 SKU码</div><div>绑定更新时间</div><div>操作</div></div>
                 {Array.from({ length: Math.max(relationDetailProduct.specs?.length || 0, relationDetailRows.length, 1) }, (_, index) => {
                   const specIndex = index % Math.max(relationDetailProduct.specs?.length || 0, 1);
                   const specMeta = getProductSpecMeta(relationDetailProduct, specIndex);
                   const row = relationDetailRows[index];
-                  return <div key={row?.id || `${relationDetailProduct.id}-spec-${index}`} className="grid min-h-[72px] grid-cols-[180px_145px_180px_190px_150px_64px] items-center border-t border-[#EEF0F3] px-4 py-2.5 text-[12px]"><div className="min-w-0 pr-3"><div className="truncate font-medium text-[#1D2129]">{specMeta.name}</div><div className="mt-1 select-all truncate font-mono text-[11px] text-[#667085]">{specMeta.skuId}</div></div><div className="select-all truncate pr-3 font-mono text-[#1D2129]">{specMeta.mark}</div><div className="min-w-0 pr-3">{row ? <><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{row.platformSpec}</div></> : <span className="text-[#A9AFB9]">未绑定平台商品</span>}</div><div className="min-w-0 pr-3">{row ? <><div className="select-all truncate font-mono text-[#4E5969]">SPU {row.platformProductId}</div><div className="mt-1 select-all truncate font-mono text-[11px] text-[#667085]">SKU {row.platformSku}</div></> : <span className="text-[#A9AFB9]">--</span>}</div><div className="text-[#4E5969]">{row?.updatedAt || '--'}</div><div>{row ? <button type="button" onClick={() => removeBinding(row.id)} className="font-medium text-[#CB2634]">解除</button> : <span className="text-[#BFC5D0]">--</span>}</div></div>;
+                  return <div key={row?.id || `${relationDetailProduct.id}-spec-${index}`} className="grid min-h-[72px] grid-cols-[165px_135px_165px_170px_120px_140px_56px] items-center border-t border-[#EEF0F3] px-4 py-2.5 text-[12px]"><div className="min-w-0 pr-3"><div className="truncate font-medium text-[#1D2129]">{specMeta.name}</div><div className="mt-1 select-all truncate font-mono text-[11px] text-[#667085]">{specMeta.skuId}</div></div><div className="select-all truncate pr-3 font-mono text-[#1D2129]">{specMeta.mark}</div><div className="min-w-0 pr-3">{row ? <><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{row.platformSpec}</div></> : <span className="text-[#A9AFB9]">未绑定平台商品</span>}</div><div className="min-w-0 pr-3">{row ? <><div className="select-all truncate font-mono text-[#4E5969]">SPU {row.platformProductId}</div><div className="mt-1 select-all truncate font-mono text-[11px] text-[#667085]">SKU {getPlatformSkuId(row)}</div></> : <span className="text-[#A9AFB9]">--</span>}</div><div className="select-all truncate pr-3 font-mono text-[#4E5969]">{row?.platformSku || '--'}</div><div className="text-[#4E5969]">{row?.updatedAt || '--'}</div><div>{row ? <button type="button" onClick={() => removeBinding(row.id)} className="font-medium text-[#CB2634]">解除</button> : <span className="text-[#BFC5D0]">--</span>}</div></div>;
                 })}
               </div></div>
             </div>
@@ -868,7 +877,7 @@ export const WebProductMapping: React.FC = () => {
               <div>
                 <h3 className="text-[18px] font-bold text-[#1D2129]">选择企迈商品</h3>
                 <p className="mt-1 text-[12px] text-[#86909C]">
-                  {bindingRow.platformName} · {bindingRow.platformSpec} · {bindingRow.platformSku}
+                  {bindingRow.platformName} · {bindingRow.platformSpec} · SKU ID {getPlatformSkuId(bindingRow)} · SKU码 {bindingRow.platformSku}
                 </p>
               </div>
               <button

@@ -811,7 +811,7 @@ export const WebProductMapping: React.FC = () => {
                           <div className="flex justify-center text-[#98A2B3]"><ArrowRightLeft size={17} /></div>
                           {row ? <div className="min-h-11 min-w-0 rounded-sm border border-dashed border-[#9ADBB8] bg-[#F5FFF9] px-3 py-1.5 text-[12px]"><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-1 flex items-center justify-between gap-2 border-t border-[#DDF3E7] pt-1"><span className="shrink-0 font-medium text-[#1D2129]">{row.platformSpec}</span><span className="truncate text-[10px] text-[#86909C]">{activeChannel?.shortName}商品</span></div></div> : <div className="flex min-h-11 items-center justify-center rounded-sm border border-dashed border-[#C9CDD4] bg-white px-3 text-[12px] text-[#A9AFB9]">拖入左侧{activeChannel?.shortName}商品，或点击本行绑定</div>}
                           <div className="flex justify-end gap-2.5 whitespace-nowrap">
-                            {relationIndex === 0 && <button type="button" onClick={() => openPlatformBinding(product.id, specIndex)} className="text-[12px] font-medium text-[#00A35B]">绑定平台商品</button>}
+                            {relationIndex === 0 && !row && <button type="button" onClick={() => openPlatformBinding(product.id, specIndex)} className="text-[12px] font-medium text-[#00A35B]">绑定平台商品</button>}
                             {row && <><button type="button" onClick={() => openBinding(row)} className="text-[12px] font-medium text-[#00A35B]">换绑</button><button type="button" onClick={() => removeBinding(row.id)} className="text-[12px] text-[#667085]">解除</button></>}
                           </div>
                         </div>);

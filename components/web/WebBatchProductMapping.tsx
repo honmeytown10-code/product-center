@@ -69,7 +69,7 @@ const batchProducts: BatchProduct[] = [
   { id: 'bp3', platformRowId: 'm3', name: '黑糖波波鲜奶', productId: '30824739923', specName: '中杯', specId: '34581232440', skuCode: 'MT-77823', type: 'standard' },
   { id: 'bp4', platformRowId: 'm4', name: '多肉葡萄', productId: '30824739924', specName: '大杯', specId: '34581232441', skuCode: 'MT-77824', type: 'standard' },
   { id: 'bp5', platformRowId: 'm5', name: '经典牛肉汉堡', productId: '30824739925', specName: '标准', specId: '34581232442', skuCode: 'MT-77825', type: 'standard' },
-  { id: 'bp6', platformRowId: 'm8', name: '招牌珍珠奶茶', productId: '30824739921', specName: '中杯', specId: '34581232443', skuCode: 'MT-77826', type: 'standard' },
+  { id: 'bp6', platformRowId: 'm8', name: '经典珍珠奶绿', productId: '30824739935', specName: '中杯', specId: '34581232443', skuCode: 'MT-77826', type: 'standard' },
   { id: 'bp7', platformRowId: 'm9', name: '手打柠檬茶', productId: '30824739928', specName: '大杯', specId: '34581232444', skuCode: 'MT-77827', type: 'standard' },
   { id: 'bp8', platformRowId: 'm10', name: '手打柠檬茶', productId: '30824739929', specName: '大杯', specId: '34581232445', skuCode: 'MT-77828', type: 'standard' },
   { id: 'bp9', platformRowId: 'm11', name: '黑糖波波鲜奶', productId: '30824739923', specName: '大杯', specId: '34581232446', skuCode: 'MT-77829', type: 'standard' },

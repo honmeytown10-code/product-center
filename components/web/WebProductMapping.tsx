@@ -140,8 +140,8 @@ const initialRows: MappingRow[] = [
   },
   {
     id: 'm8',
-    platformName: '招牌珍珠奶茶',
-    platformProductId: '30824739921',
+    platformName: '经典珍珠奶绿',
+    platformProductId: '30824739935',
     platformSku: 'MT-77826',
     platformSpec: '中杯',
     platformType: 'standard',
@@ -671,12 +671,14 @@ export const WebProductMapping: React.FC = () => {
                           const rowId = draggingPlatformRowId || activePlatformRow?.id;
                           if (rowId) bindPlatformRowToProduct(rowId, product.id);
                         }}
-                        className={`flex h-[58px] min-w-0 items-center rounded-md border border-dashed px-3 text-[12px] ${draggingPlatformRowId ? 'border-[#00B460] bg-[#F2FFF8]' : relatedRows.length ? 'border-[#9ADBB8] bg-[#F4FFF9]' : 'border-[#C9CDD4] bg-white'}`}
+                        className={`flex min-h-[58px] min-w-0 items-center rounded-md border border-dashed px-3 py-2 text-[12px] ${draggingPlatformRowId ? 'border-[#00B460] bg-[#F2FFF8]' : relatedRows.length ? 'border-[#9ADBB8] bg-[#F4FFF9]' : 'border-[#C9CDD4] bg-white'}`}
                       >
                         {relatedRows.length ? (
                           <div className="min-w-0 flex-1">
-                            <div className="truncate font-medium text-[#1D2129]">已关联 {relatedRows.length} 个{activeChannel?.shortName}商品</div>
-                            <div className="mt-1 truncate text-[11px] text-[#86909C]" title={relatedRows.map(row => `${row.platformName} / ${row.platformSpec}`).join('、')}>{relatedRows.slice(0, 2).map(row => `${row.platformName} / ${row.platformSpec}`).join('、')}{relatedRows.length > 2 ? ` 等 ${relatedRows.length} 个` : ''}</div>
+                            <div className="mb-1.5 text-[11px] font-medium text-[#008A4B]">已关联 {relatedRows.length} 个{activeChannel?.shortName}商品</div>
+                            <div className="space-y-1">
+                              {relatedRows.map(row => <div key={row.id} className="flex min-w-0 items-start gap-1.5 text-[11px] leading-4"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#34C97B]" /><span className="min-w-0 break-words font-medium text-[#1D2129]">{row.platformName}</span><span className="shrink-0 text-[#86909C]">/ {row.platformSpec}</span></div>)}
+                            </div>
                           </div>
                         ) : (
                           <span className="text-[#98A2B3]">请将左侧{activeChannel?.shortName}平台商品拖入这里</span>

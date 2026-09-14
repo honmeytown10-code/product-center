@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertCircle,
@@ -379,6 +379,7 @@ export const WebProductMapping: React.FC = () => {
   const [showQimaiMoreFilters, setShowQimaiMoreFilters] = useState(false);
   const [showBatchActions, setShowBatchActions] = useState(false);
   const [relationDetailProductId, setRelationDetailProductId] = useState<string | null>(null);
+  const [collapsedQimaiProductIds, setCollapsedQimaiProductIds] = useState<string[]>([]);
 
   const [specialRules, setSpecialRules] = useState<SpecialRule[]>(initialSpecialRules);
   const [specialKeyword, setSpecialKeyword] = useState('');
@@ -389,6 +390,12 @@ export const WebProductMapping: React.FC = () => {
   const getProductMark = (product?: Product) => product ? `${getProductType(product) === 'combo' ? 'COMBO' : 'STD'}-${product.skuCode}` : '--';
   const relationDetailProduct = getProduct(relationDetailProductId);
   const relationDetailRows = rows.filter(row => row.qimaiProductId === relationDetailProductId);
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   const candidateProducts = useMemo(
     () =>
@@ -652,42 +659,42 @@ export const WebProductMapping: React.FC = () => {
 
             {showQimaiMoreFilters && <div className="absolute right-3 top-[92px] z-20 w-[460px] rounded-lg border border-[#D9DDE2] bg-white p-4 shadow-xl"><div className="mb-3 flex items-center justify-between"><span className="text-[13px] font-bold text-[#1D2129]">更多筛选</span><button type="button" onClick={() => setShowQimaiMoreFilters(false)} title="关闭"><X size={15} /></button></div><div className="grid grid-cols-2 gap-3"><label><span className="mb-1.5 block text-[12px] text-[#667085]">关联平台商品</span><input value={relatedPlatformKeyword} onChange={event => setRelatedPlatformKeyword(event.target.value)} placeholder={`${activeChannel?.shortName}商品名称 / SKU ID`} className="h-9 w-full rounded-md border border-[#C9CDD4] px-3 text-[12px] outline-none focus:border-[#00B460]" /></label><label><span className="mb-1.5 block text-[12px] text-[#667085]">企迈 SKU ID</span><input value={qimaiSkuIdKeyword} onChange={event => setQimaiSkuIdKeyword(event.target.value)} placeholder="输入企迈 SKU ID" className="h-9 w-full rounded-md border border-[#C9CDD4] px-3 text-[12px] outline-none focus:border-[#00B460]" /></label></div><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => { setRelatedPlatformKeyword(''); setQimaiSkuIdKeyword(''); }} className="h-8 rounded-md border border-[#C9CDD4] px-3 text-[12px] text-[#4E5969]">清空</button><button type="button" onClick={() => setShowQimaiMoreFilters(false)} className="h-8 rounded-md bg-[#00B460] px-3 text-[12px] font-bold text-white">完成</button></div></div>}
 
-            <div className="max-h-[610px] divide-y divide-[#EEF0F3] overflow-y-auto">
+            <div className="max-h-[610px] space-y-3 overflow-y-auto bg-[#F7F8FA] p-3">
               {filteredQimaiProducts.map(product => {
                 const relatedRows = rows.filter(row => row.qimaiProductId === product.id);
                 const activeRelationIsHere = activePlatformRow?.qimaiProductId === product.id;
                 const selected = selectedQimaiProductIds.includes(product.id);
+                const collapsed = collapsedQimaiProductIds.includes(product.id);
+                const relationRows: Array<MappingRow | null> = relatedRows.length ? relatedRows : [null];
+                const productSpecs = product.specs?.map(spec => spec.name) || [];
                 return (
-                  <article key={product.id} className="grid min-h-[82px] grid-cols-[minmax(190px,0.9fr)_34px_minmax(220px,1.1fr)_118px] items-center gap-2 bg-white px-3 py-2.5 hover:bg-[#FAFBFC]">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <Checkbox checked={selected} onClick={() => setSelectedQimaiProductIds(selected ? selectedQimaiProductIds.filter(id => id !== product.id) : [...selectedQimaiProductIds, product.id])} />
-                        <img src={product.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
-                        <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-semibold text-[#1D2129]">{product.name}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">SPU {product.id} · SKU {product.skuCode}</div><div className="mt-0.5 text-[10px] text-[#86909C]">{getProductType(product) === 'combo' ? '套餐商品' : '标准商品'} · ¥{product.price.toFixed(2)}</div></div>
-                      </div>
-                      <div className="flex justify-center text-[#98A2B3]"><ArrowRightLeft size={17} /></div>
-                      <div
-                        onDragOver={event => event.preventDefault()}
-                        onDrop={() => {
-                          const rowId = draggingPlatformRowId || activePlatformRow?.id;
-                          if (rowId) bindPlatformRowToProduct(rowId, product.id);
-                        }}
-                        className={`flex min-h-[58px] min-w-0 items-center rounded-md border border-dashed px-3 py-2 text-[12px] ${draggingPlatformRowId ? 'border-[#00B460] bg-[#F2FFF8]' : relatedRows.length ? 'border-[#9ADBB8] bg-[#F4FFF9]' : 'border-[#C9CDD4] bg-white'}`}
-                      >
-                        {relatedRows.length ? (
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1.5 text-[11px] font-medium text-[#008A4B]">已关联 {relatedRows.length} 个{activeChannel?.shortName}商品</div>
-                            <div className="space-y-1">
-                              {relatedRows.map(row => <div key={row.id} className="flex min-w-0 items-start gap-1.5 text-[11px] leading-4"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#34C97B]" /><span className="min-w-0 break-words font-medium text-[#1D2129]">{row.platformName}</span><span className="shrink-0 text-[#86909C]">/ {row.platformSpec}</span></div>)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-[#98A2B3]">请将左侧{activeChannel?.shortName}平台商品拖入这里</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-end gap-2.5 whitespace-nowrap">
-                        <button type="button" disabled={!activePlatformRow || activeRelationIsHere} onClick={() => activePlatformRow && bindPlatformRowToProduct(activePlatformRow.id, product.id)} className="text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">{activeRelationIsHere ? '已关联' : activePlatformRow?.qimaiProductId ? '改绑到此' : relatedRows.length ? '新增关联' : '关联'}</button>
-                        {relatedRows.length > 0 && <button type="button" onClick={() => setRelationDetailProductId(product.id)} title={`查看 ${relatedRows.length} 条关联及两侧 ID`} aria-label={`查看 ${relatedRows.length} 条关联及两侧 ID`} className="relative flex h-7 w-7 items-center justify-center rounded-md border border-[#D9DDE2] bg-white text-[#667085] hover:border-[#8EDCB2] hover:text-[#00A35B]"><Info size={14} />{relatedRows.length > 1 && <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00B460] px-1 text-[9px] font-bold text-white">{relatedRows.length}</span>}</button>}
-                      </div>
+                  <article key={product.id} className="overflow-hidden rounded-md border border-[#E5E6EB] bg-white">
+                    <div className="flex h-11 items-center gap-2.5 bg-[#FAFBFC] px-3">
+                      <Checkbox checked={selected} onClick={() => setSelectedQimaiProductIds(selected ? selectedQimaiProductIds.filter(id => id !== product.id) : [...selectedQimaiProductIds, product.id])} />
+                      <img src={product.image} alt="" className="h-7 w-7 shrink-0 rounded object-cover" />
+                      <button type="button" onClick={() => setCollapsedQimaiProductIds(collapsed ? collapsedQimaiProductIds.filter(id => id !== product.id) : [...collapsedQimaiProductIds, product.id])} className="flex min-w-0 items-center gap-1.5 text-left"><span className="truncate text-[13px] font-bold text-[#1D2129]">{product.name}</span><ChevronDown size={14} className={`shrink-0 text-[#667085] transition-transform ${collapsed ? '-rotate-90' : ''}`} /></button>
+                      <button type="button" onClick={() => setRelationDetailProductId(product.id)} disabled={!relatedRows.length} title="查看关联商品及两侧 ID" className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[#86909C] hover:bg-white hover:text-[#00A35B] disabled:text-[#D9DDE2]"><Info size={14} /></button>
+                      <span className="ml-auto shrink-0 text-[12px] text-[#4E5969]">{activeChannel?.shortName}商品关联</span>
+                      <button type="button" disabled={!activePlatformRow || activeRelationIsHere} onClick={() => activePlatformRow && bindPlatformRowToProduct(activePlatformRow.id, product.id)} className="shrink-0 text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">{activeRelationIsHere ? '当前已关联' : activePlatformRow?.qimaiProductId ? '改绑到此' : relatedRows.length ? '新增关联' : '关联'}</button>
+                      {relatedRows.length > 1 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E8FFF3] px-1.5 text-[10px] font-bold text-[#008A4B]">{relatedRows.length}</span>}
+                    </div>
+                    {!collapsed && <div
+                      onDragOver={event => event.preventDefault()}
+                      onDrop={() => {
+                        const rowId = draggingPlatformRowId || activePlatformRow?.id;
+                        if (rowId) bindPlatformRowToProduct(rowId, product.id);
+                      }}
+                    >
+                      {relationRows.map((row, index) => {
+                        const qimaiSpec = productSpecs[index % Math.max(productSpecs.length, 1)] || '标准规格';
+                        return <div key={row?.id || `${product.id}-empty`} className="grid min-h-[64px] grid-cols-[minmax(170px,0.85fr)_34px_minmax(230px,1.15fr)_100px] items-center gap-2 border-t border-[#EEF0F3] px-3 py-2">
+                          <div className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-sm border border-dashed border-[#D3D7DE] bg-white px-3 text-[12px]"><div className="min-w-0"><div className="truncate text-[#4E5969]">{product.name}</div><div className="mt-0.5 truncate text-[11px] text-[#86909C]">SKU {product.skuCode}</div></div><div className="shrink-0 text-right font-medium text-[#1D2129]"><div>{qimaiSpec}</div><div className="mt-0.5 text-[11px] font-normal text-[#667085]">¥{product.price.toFixed(2)}</div></div></div>
+                          <div className="flex justify-center text-[#98A2B3]"><ArrowRightLeft size={17} /></div>
+                          {row ? <div className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-sm border border-dashed border-[#9ADBB8] bg-[#F5FFF9] px-3 text-[12px]"><div className="min-w-0"><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-0.5 truncate text-[11px] text-[#86909C]">SKU {row.platformSku}</div></div><span className="shrink-0 font-medium text-[#1D2129]">{row.platformSpec}</span></div> : <div className="flex min-h-11 items-center justify-center rounded-sm border border-dashed border-[#C9CDD4] bg-white px-3 text-[12px] text-[#A9AFB9]">将左侧{activeChannel?.shortName}商品拖入这里</div>}
+                          <div className="flex justify-end gap-2.5 whitespace-nowrap">{row ? <><button type="button" onClick={() => openBinding(row)} className="text-[12px] font-medium text-[#00A35B]">更换</button><button type="button" onClick={() => removeBinding(row.id)} className="text-[12px] text-[#667085]">解除</button></> : <button type="button" disabled={!activePlatformRow} onClick={() => activePlatformRow && bindPlatformRowToProduct(activePlatformRow.id, product.id)} className="text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">绑定</button>}</div>
+                        </div>;
+                      })}
+                    </div>}
                   </article>
                 );
               })}
@@ -763,14 +770,6 @@ export const WebProductMapping: React.FC = () => {
       </header>
 
       <main className="flex-1 overflow-y-auto p-3">
-        {message && (
-          <div className="mb-3 flex items-center justify-between rounded-md border border-[#B8DBFF] bg-[#F2F8FF] px-4 py-3 text-[13px] text-[#245B8A]">
-            <span>{message}</span>
-            <button type="button" onClick={() => setMessage('')} title="关闭">
-              <X size={16} />
-            </button>
-          </div>
-        )}
         {activeView === 'store' && renderStoreMapping()}
         {activeView === 'brand' && (
           <WebBatchProductMapping
@@ -787,6 +786,8 @@ export const WebProductMapping: React.FC = () => {
         {activeView === 'tasks' && <WebProductMappingTasks />}
         {activeView === 'special' && renderSpecialMapping()}
       </main>
+
+      {message && <div role="status" aria-live="polite" className="fixed right-6 top-[68px] z-[500] flex max-w-[440px] items-start gap-2.5 rounded-lg border border-[#BFEBD3] bg-white px-4 py-3 text-[13px] leading-5 text-[#1D2129] shadow-[0_8px_28px_rgba(29,33,41,0.16)]"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#00B460] text-white"><Check size={13} strokeWidth={3} /></span><span>{message}</span></div>}
 
       {relationDetailProduct && (
         <div className="fixed inset-0 z-[310] flex items-center justify-center bg-[#1D2129]/50" role="dialog" aria-modal="true" aria-label="映射关系详情">

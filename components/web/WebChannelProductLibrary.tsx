@@ -301,6 +301,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const [platformProductIds, setPlatformProductIds] = useState<Record<string, string[]>>({});
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
+  const [showPlatformMenu, setShowPlatformMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [importFileName, setImportFileName] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
@@ -320,6 +321,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   useEffect(() => {
     setSelectedProductIds([]);
+    setShowPlatformMenu(false);
   }, [activeGroupId]);
 
   useEffect(() => {
@@ -899,53 +901,6 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         </section>
 
         <section className="console-panel flex min-h-0 min-w-0 flex-1 flex-col">
-          {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
-            <div className="flex h-12 shrink-0 items-center gap-3 border-b border-[#E8E8E8] bg-[#FAFBFC] px-4">
-              <span className="shrink-0 text-[13px] font-semibold text-[#1D2129]">平台商品</span>
-              <span className="shrink-0 text-xs text-[#86909C]">管理当前商品库生成的平台数据</span>
-              <div className="h-4 w-px shrink-0 bg-[#E5E6EB]" />
-              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-                  {hasDouyinOnlineOrdering && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setPlatformWorkspace({ platform: 'douyin', view: 'products' })}
-                        aria-label="进入抖音在线点商品管理"
-                        className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-[#DDE2E7] bg-white px-3 text-[13px] font-medium text-[#1D2129] hover:border-[#80D8AF] hover:bg-[#F5FCF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#80D8AF]"
-                      >
-                        <span className="flex h-5 w-5 items-center justify-center rounded bg-[#E8FAF7] text-[10px] font-semibold text-[#00A6A6]">抖</span>
-                        管理抖音商品
-                        <span className="text-xs font-normal text-[#86909C]">{getGeneratedPlatformProductIds('douyin').length}</span>
-                        <ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPlatformWorkspace({ platform: 'douyin', view: 'addons' })}
-                        aria-label="进入抖音在线点加料管理"
-                        className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-[#DDE2E7] bg-white px-3 text-[13px] font-medium text-[#1D2129] hover:border-[#80D8AF] hover:bg-[#F5FCF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#80D8AF]"
-                      >
-                        <span className="flex h-5 w-5 items-center justify-center rounded bg-[#E8FAF7] text-[10px] font-semibold text-[#00A6A6]">抖</span>
-                        管理抖音加料
-                        <ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" />
-                      </button>
-                    </>
-                  )}
-                  {hasMeituanOnlineOrdering && (
-                    <button
-                      type="button"
-                      onClick={() => setPlatformWorkspace({ platform: 'meituan', view: 'products' })}
-                      aria-label="进入美团在线点商品管理"
-                      className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-[#DDE2E7] bg-white px-3 text-[13px] font-medium text-[#1D2129] hover:border-[#80D8AF] hover:bg-[#F5FCF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#80D8AF]"
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center rounded bg-[#FFF5D6] text-[10px] font-semibold text-[#9A6A00]">美</span>
-                      管理美团商品
-                      <span className="text-xs font-normal text-[#86909C]">{getGeneratedPlatformProductIds('meituan').length}</span>
-                      <ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" />
-                    </button>
-                  )}
-                </div>
-            </div>
-          )}
           <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E8E8E8] px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-[300px] min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
@@ -960,6 +915,92 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
+              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPlatformMenu(value => !value);
+                      setShowImportExportMenu(false);
+                    }}
+                    className="console-secondary-button"
+                    aria-haspopup="menu"
+                    aria-expanded={showPlatformMenu}
+                    title="查看当前商品库生成的平台商品"
+                  >
+                    <span className="flex items-center -space-x-1" aria-hidden="true">
+                      {hasDouyinOnlineOrdering && <span className="flex h-5 w-5 items-center justify-center rounded border border-white bg-[#E8FAF7] text-[10px] font-bold text-[#00A6A6]">抖</span>}
+                      {hasMeituanOnlineOrdering && <span className="flex h-5 w-5 items-center justify-center rounded border border-white bg-[#FFF5D6] text-[10px] font-bold text-[#9A6A00]">美</span>}
+                    </span>
+                    平台商品
+                    <ChevronDown size={14} className={`transition-transform ${showPlatformMenu ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showPlatformMenu && (
+                    <div role="menu" className="absolute right-0 top-[42px] z-50 w-[288px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 shadow-xl">
+                      <div className="border-b border-[#F0F1F2] px-3 py-2">
+                        <div className="text-[12px] font-semibold text-[#4E5969]">平台商品管理</div>
+                        <div className="mt-0.5 text-[11px] text-[#86909C]">查看当前商品库已生成的平台数据</div>
+                      </div>
+                      {hasDouyinOnlineOrdering && (
+                        <>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setShowPlatformMenu(false);
+                              setPlatformWorkspace({ platform: 'douyin', view: 'products' });
+                            }}
+                            className="group flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[13px] font-medium text-[#1D2129]">抖音在线点商品</span>
+                              <span className="mt-0.5 block text-[11px] text-[#86909C]">查看同步与审核状态</span>
+                            </span>
+                            <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('douyin').length}</span>
+                            <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setShowPlatformMenu(false);
+                              setPlatformWorkspace({ platform: 'douyin', view: 'addons' });
+                            }}
+                            className="group flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[13px] font-medium text-[#1D2129]">抖音在线点加料</span>
+                              <span className="mt-0.5 block text-[11px] text-[#86909C]">维护加料资料与平台状态</span>
+                            </span>
+                            <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
+                          </button>
+                        </>
+                      )}
+                      {hasMeituanOnlineOrdering && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setShowPlatformMenu(false);
+                            setPlatformWorkspace({ platform: 'meituan', view: 'products' });
+                          }}
+                          className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-2.5 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#FFF5D6] text-[11px] font-bold text-[#9A6A00]">美</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13px] font-medium text-[#1D2129]">美团在线点商品</span>
+                            <span className="mt-0.5 block text-[11px] text-[#86909C]">查看平台同步结果</span>
+                          </span>
+                          <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('meituan').length}</span>
+                          <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               {selectedProductIds.length > 0 ? <button type="button" onClick={syncSelectedFromMaster} className="console-secondary-button" title={`从主档更新已选 ${selectedProductIds.length} 个商品`}><RefreshCw size={15} />从主档更新</button> : (
                 <>
                   <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
@@ -968,7 +1009,10 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                   <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowImportExportMenu(value => !value)}
+                  onClick={() => {
+                    setShowImportExportMenu(value => !value);
+                    setShowPlatformMenu(false);
+                  }}
                   className="console-secondary-button"
                   aria-haspopup="menu"
                   aria-expanded={showImportExportMenu}

@@ -41,6 +41,7 @@ type MappingRow = {
   platformSpec: string;
   platformType: 'standard' | 'combo' | 'display';
   qimaiProductId?: string;
+  qimaiSpecIndex?: number;
   status: MappingStatus;
   mappingBasis: MappingBasis;
   updatedAt: string;
@@ -66,6 +67,7 @@ const initialRows: MappingRow[] = [
     platformSpec: '大杯 / 冰',
     platformType: 'standard',
     qimaiProductId: '1',
+    qimaiSpecIndex: 1,
     status: 'mapped',
     mappingBasis: 'qimai_publish',
     updatedAt: '2026-07-29 09:42',
@@ -147,6 +149,7 @@ const initialRows: MappingRow[] = [
     platformSpec: '中杯',
     platformType: 'standard',
     qimaiProductId: '1',
+    qimaiSpecIndex: 0,
     status: 'mapped',
     mappingBasis: 'qimai_publish',
     updatedAt: '2026-09-10 12:16',
@@ -392,6 +395,7 @@ export const WebProductMapping: React.FC = () => {
     const requested = new URLSearchParams(window.location.search).get('platformBind');
     return requested && products.some(product => product.id === requested) ? requested : null;
   });
+  const [platformBindingTargetSpecIndex, setPlatformBindingTargetSpecIndex] = useState(() => Number(new URLSearchParams(window.location.search).get('platformBindSpec') || 0));
   const [platformBindingKeyword, setPlatformBindingKeyword] = useState('');
   const [selectedPlatformBindingRowIds, setSelectedPlatformBindingRowIds] = useState<string[]>([]);
   const [selectedQimaiProductIds, setSelectedQimaiProductIds] = useState<string[]>([]);
@@ -434,6 +438,7 @@ export const WebProductMapping: React.FC = () => {
   const relationDetailRows = rows.filter(row => row.qimaiProductId === relationDetailProductId);
   const platformDetailRow = rows.find(row => row.id === platformDetailRowId);
   const platformBindingTargetProduct = getProduct(platformBindingTargetProductId);
+  const platformBindingTargetSpec = platformBindingTargetProduct ? getProductSpecMeta(platformBindingTargetProduct, platformBindingTargetSpecIndex) : null;
   const platformBindingRows = rows.filter(row => {
     if (exemptRowIds.includes(row.id) || row.status !== 'unmapped') return false;
     return !platformBindingKeyword || `${row.platformName}${row.platformProductId}${row.platformSpec}${getPlatformSkuId(row)}${row.platformSku}`.toLowerCase().includes(platformBindingKeyword.trim().toLowerCase());
@@ -451,15 +456,12 @@ export const WebProductMapping: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  const candidateProducts = useMemo(
-    () =>
-      products
-        .filter(
-          product =>
-            !candidateKeyword ||
-            `${product.name}${product.skuCode}`.toLowerCase().includes(candidateKeyword.toLowerCase()),
-        )
-        .slice(0, 8),
+  const candidateSkus = useMemo(
+    () => products.flatMap(product => Array.from({ length: Math.max(product.specs?.length || 0, 1) }, (_, specIndex) => ({
+      product,
+      specIndex,
+      spec: getProductSpecMeta(product, specIndex),
+    }))).filter(({ product, spec }) => !candidateKeyword || `${product.name}${spec.name}${spec.skuId}${spec.mark}`.toLowerCase().includes(candidateKeyword.toLowerCase())).slice(0, 12),
     [candidateKeyword, products],
   );
 
@@ -515,18 +517,20 @@ export const WebProductMapping: React.FC = () => {
 
   const openBinding = (row: MappingRow) => {
     setBindingRow(row);
-    setCandidateProductId(row.qimaiProductId || '');
+    setCandidateProductId(row.qimaiProductId ? `${row.qimaiProductId}:${row.qimaiSpecIndex || 0}` : '');
     setCandidateKeyword('');
   };
 
   const saveBinding = () => {
     if (!bindingRow || !candidateProductId) return;
+    const [targetProductId, targetSpecIndex] = candidateProductId.split(':');
     setRows(current =>
       current.map(row =>
         row.id === bindingRow.id
           ? {
               ...row,
-              qimaiProductId: candidateProductId,
+              qimaiProductId: targetProductId,
+              qimaiSpecIndex: Number(targetSpecIndex || 0),
               status: 'mapped',
               mappingBasis: 'manual_binding',
               updatedAt: '刚刚',
@@ -546,6 +550,7 @@ export const WebProductMapping: React.FC = () => {
           ? {
               ...row,
               qimaiProductId: undefined,
+              qimaiSpecIndex: undefined,
               status: 'unmapped',
               mappingBasis: '--',
               updatedAt: '刚刚',
@@ -562,6 +567,7 @@ export const WebProductMapping: React.FC = () => {
           ? {
               ...row,
               qimaiProductId: '2',
+              qimaiSpecIndex: 0,
               status: 'mapped',
               mappingBasis: 'qimai_sku_id',
               updatedAt: '刚刚',
@@ -581,8 +587,9 @@ export const WebProductMapping: React.FC = () => {
     window.setTimeout(() => setLocatedQimaiProductId(current => current === row.qimaiProductId ? null : current), 1800);
   };
 
-  const openPlatformBinding = (productId: string) => {
+  const openPlatformBinding = (productId: string, specIndex: number) => {
     setPlatformBindingTargetProductId(productId);
+    setPlatformBindingTargetSpecIndex(specIndex);
     setPlatformBindingKeyword('');
     setSelectedPlatformBindingRowIds([]);
   };
@@ -593,16 +600,17 @@ export const WebProductMapping: React.FC = () => {
     setRows(current => current.map(row => selectedPlatformBindingRowIds.includes(row.id) ? {
       ...row,
       qimaiProductId: platformBindingTargetProductId,
+      qimaiSpecIndex: platformBindingTargetSpecIndex,
       status: 'mapped',
       mappingBasis: 'manual_binding',
       updatedAt: '刚刚',
     } : row));
     setPlatformBindingTargetProductId(null);
-    setMessage(`已将 ${selectedPlatformBindingRowIds.length} 个平台 SKU 绑定至企迈商品“${targetProduct?.name || ''}”。`);
+    setMessage(`已将 ${selectedPlatformBindingRowIds.length} 个平台 SKU 绑定至企迈 SKU“${targetProduct?.name || ''} / ${platformBindingTargetSpec?.name || '标准规格'}”。`);
     setSelectedPlatformBindingRowIds([]);
   };
 
-  const bindPlatformRowToProduct = (rowId: string, productId: string) => {
+  const bindPlatformRowToProduct = (rowId: string, productId: string, specIndex: number) => {
     const platformRow = rows.find(row => row.id === rowId);
     const product = getProduct(productId);
     if (!platformRow || !product) return;
@@ -610,6 +618,7 @@ export const WebProductMapping: React.FC = () => {
       ? {
           ...row,
           qimaiProductId: productId,
+          qimaiSpecIndex: specIndex,
           status: 'mapped',
           mappingBasis: 'manual_binding',
           updatedAt: '刚刚',
@@ -771,8 +780,11 @@ export const WebProductMapping: React.FC = () => {
                 const relatedRows = rows.filter(row => row.qimaiProductId === product.id);
                 const selected = selectedQimaiProductIds.includes(product.id);
                 const collapsed = collapsedQimaiProductIds.includes(product.id);
-                const relationRows: Array<MappingRow | null> = relatedRows.length ? relatedRows : [null];
-                const productSpecs = product.specs?.map(spec => spec.name) || [];
+                const specCount = Math.max(product.specs?.length || 0, 1);
+                const specGroups = Array.from({ length: specCount }, (_, specIndex) => ({
+                  specIndex,
+                  rows: relatedRows.filter((row, rowIndex) => (row.qimaiSpecIndex ?? rowIndex % specCount) === specIndex),
+                }));
                 return (
                   <article id={`qimai-product-${product.id}`} key={product.id} className={`overflow-hidden rounded-md border bg-white transition-all ${locatedQimaiProductId === product.id ? 'border-[#00B460] ring-2 ring-[#A8EBC7]' : 'border-[#E5E6EB]'}`}>
                     <div className="flex h-11 items-center gap-2.5 bg-[#FAFBFC] px-3">
@@ -781,24 +793,28 @@ export const WebProductMapping: React.FC = () => {
                       <button type="button" onClick={() => setCollapsedQimaiProductIds(collapsed ? collapsedQimaiProductIds.filter(id => id !== product.id) : [...collapsedQimaiProductIds, product.id])} className="flex min-w-0 items-center gap-1.5 text-left"><span className="truncate text-[13px] font-bold text-[#1D2129]">{product.name}</span><ChevronDown size={14} className={`shrink-0 text-[#667085] transition-transform ${collapsed ? '-rotate-90' : ''}`} /></button>
                       <button type="button" onClick={() => setRelationDetailProductId(product.id)} disabled={!relatedRows.length} title="查看关联商品及两侧 ID" className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[#86909C] hover:bg-white hover:text-[#00A35B] disabled:text-[#D9DDE2]"><Info size={14} /></button>
                       <span className="ml-auto shrink-0 text-[11px] text-[#86909C]">已绑定 {relatedRows.length} 个平台 SKU</span>
-                      <button type="button" onClick={() => openPlatformBinding(product.id)} className="h-7 shrink-0 rounded-md border border-[#9EDDBB] bg-white px-2.5 text-[11px] font-medium text-[#00A35B]">绑定平台商品</button>
                     </div>
-                    {!collapsed && <div
-                      onDragOver={event => event.preventDefault()}
-                      onDrop={() => {
-                        const rowId = draggingPlatformRowId || activePlatformRow?.id;
-                        if (rowId) bindPlatformRowToProduct(rowId, product.id);
-                      }}
-                    >
-                      {relationRows.map((row, index) => {
-                        const specIndex = index % Math.max(productSpecs.length, 1);
+                    {!collapsed && <div>
+                      {specGroups.flatMap(({ specIndex, rows: specRows }) => {
                         const qimaiSpec = getProductSpecMeta(product, specIndex);
-                        return <div key={row?.id || `${product.id}-empty`} className="grid min-h-[64px] grid-cols-[minmax(170px,0.85fr)_34px_minmax(230px,1.15fr)_100px] items-center gap-2 border-t border-[#EEF0F3] px-3 py-2">
+                        const visibleRows: Array<MappingRow | null> = specRows.length ? specRows : [null];
+                        return visibleRows.map((row, relationIndex) => <div
+                          key={row?.id || `${product.id}-spec-${specIndex}-empty`}
+                          onDragOver={event => event.preventDefault()}
+                          onDrop={() => {
+                            const rowId = draggingPlatformRowId || activePlatformRow?.id;
+                            if (rowId) bindPlatformRowToProduct(rowId, product.id, specIndex);
+                          }}
+                          className="grid min-h-[64px] grid-cols-[minmax(170px,0.85fr)_34px_minmax(230px,1.15fr)_176px] items-center gap-2 border-t border-[#EEF0F3] px-3 py-2"
+                        >
                           <div className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-sm border border-dashed border-[#D3D7DE] bg-white px-3 py-1.5 text-[12px]"><div className="min-w-0"><div className="truncate text-[#4E5969]">{product.name}</div><div className="mt-0.5 truncate text-[10px] text-[#86909C]">企迈商品</div></div><div className="shrink-0 text-right font-medium text-[#1D2129]"><div>{qimaiSpec.name}</div><div className="mt-0.5 text-[11px] font-normal text-[#667085]">¥{product.price.toFixed(2)}</div></div></div>
                           <div className="flex justify-center text-[#98A2B3]"><ArrowRightLeft size={17} /></div>
-                          {row ? <div className="min-h-11 min-w-0 rounded-sm border border-dashed border-[#9ADBB8] bg-[#F5FFF9] px-3 py-1.5 text-[12px]"><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-1 flex items-center justify-between gap-2 border-t border-[#DDF3E7] pt-1"><span className="shrink-0 font-medium text-[#1D2129]">{row.platformSpec}</span><span className="truncate text-[10px] text-[#86909C]">{activeChannel?.shortName}商品</span></div></div> : <div className="flex min-h-11 items-center justify-center rounded-sm border border-dashed border-[#C9CDD4] bg-white px-3 text-[12px] text-[#A9AFB9]">拖入左侧{activeChannel?.shortName}商品，或点击上方“绑定平台商品”</div>}
-                          <div className="flex justify-end gap-2.5 whitespace-nowrap">{row ? <><button type="button" onClick={() => openBinding(row)} className="text-[12px] font-medium text-[#00A35B]">更换</button><button type="button" onClick={() => removeBinding(row.id)} className="text-[12px] text-[#667085]">解除</button></> : null}</div>
-                        </div>;
+                          {row ? <div className="min-h-11 min-w-0 rounded-sm border border-dashed border-[#9ADBB8] bg-[#F5FFF9] px-3 py-1.5 text-[12px]"><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-1 flex items-center justify-between gap-2 border-t border-[#DDF3E7] pt-1"><span className="shrink-0 font-medium text-[#1D2129]">{row.platformSpec}</span><span className="truncate text-[10px] text-[#86909C]">{activeChannel?.shortName}商品</span></div></div> : <div className="flex min-h-11 items-center justify-center rounded-sm border border-dashed border-[#C9CDD4] bg-white px-3 text-[12px] text-[#A9AFB9]">拖入左侧{activeChannel?.shortName}商品，或点击本行绑定</div>}
+                          <div className="flex justify-end gap-2.5 whitespace-nowrap">
+                            {relationIndex === 0 && <button type="button" onClick={() => openPlatformBinding(product.id, specIndex)} className="text-[12px] font-medium text-[#00A35B]">绑定平台商品</button>}
+                            {row && <><button type="button" onClick={() => openBinding(row)} className="text-[12px] font-medium text-[#00A35B]">换绑</button><button type="button" onClick={() => removeBinding(row.id)} className="text-[12px] text-[#667085]">解除</button></>}
+                          </div>
+                        </div>);
                       })}
                     </div>}
                   </article>
@@ -901,7 +917,7 @@ export const WebProductMapping: React.FC = () => {
 
       {platformDetailRow && <div className="fixed inset-0 z-[330] flex items-center justify-center bg-[#1D2129]/50" role="dialog" aria-modal="true" aria-label="平台商品标识"><div className="w-[min(620px,calc(100vw-48px))] overflow-hidden rounded-lg bg-white shadow-2xl"><div className="flex items-start border-b border-[#E5E6EB] px-6 py-4"><div><h3 className="text-[17px] font-bold text-[#1D2129]">平台商品标识</h3><p className="mt-1 text-[12px] text-[#86909C]">标识信息仅在核对与排查时查看，列表仍可按这些字段搜索。</p></div><button type="button" onClick={() => setPlatformDetailRowId(null)} title="关闭" className="ml-auto flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#F2F3F5]"><X size={18} /></button></div><div className="p-6"><div className="rounded-lg border border-[#E5E6EB] bg-[#FAFBFC] p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><div className="truncate text-[14px] font-bold text-[#1D2129]">{platformDetailRow.platformName}</div><div className="mt-1 text-[12px] text-[#667085]">{platformDetailRow.platformSpec}</div></div><span className={`shrink-0 rounded px-2 py-1 text-[12px] ${statusMeta[platformDetailRow.status].classes}`}>{statusMeta[platformDetailRow.status].label}</span></div><div className="mt-4 grid grid-cols-2 gap-3 text-[12px]"><div className="rounded-md bg-white px-3 py-2.5"><div className="text-[#86909C]">平台 SPU ID</div><div className="mt-1 select-all font-mono text-[#1D2129]">{platformDetailRow.platformProductId}</div></div><div className="rounded-md bg-white px-3 py-2.5"><div className="text-[#86909C]">平台 SKU ID</div><div className="mt-1 select-all font-mono text-[#1D2129]">{getPlatformSkuId(platformDetailRow)}</div></div><div className="rounded-md bg-white px-3 py-2.5"><div className="text-[#86909C]">平台 SKU码</div><div className="mt-1 select-all font-mono text-[#1D2129]">{platformDetailRow.platformSku}</div></div><div className="rounded-md bg-white px-3 py-2.5"><div className="text-[#86909C]">映射更新时间</div><div className="mt-1 text-[#1D2129]">{platformDetailRow.updatedAt}</div></div></div>{platformDetailRow.qimaiProductId && <div className="mt-3 rounded-md border border-[#BFEBD3] bg-[#F5FFF9] px-3 py-2.5 text-[12px] text-[#326B4B]">已关联企迈商品：<strong>{getProduct(platformDetailRow.qimaiProductId)?.name}</strong></div>}</div></div><div className="flex justify-end gap-2 border-t border-[#E5E6EB] bg-[#FAFBFC] px-6 py-4"><button type="button" onClick={() => setPlatformDetailRowId(null)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px] text-[#4E5969]">关闭</button>{platformDetailRow.qimaiProductId && <button type="button" onClick={() => { locateQimaiProduct(platformDetailRow); setPlatformDetailRowId(null); }} className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-bold text-white"><LocateFixed size={14} className="mr-1.5" />定位企迈商品</button>}</div></div></div>}
 
-      {platformBindingTargetProduct && <div className="fixed inset-0 z-[340] flex items-center justify-center bg-[#1D2129]/55" role="dialog" aria-modal="true" aria-label="绑定平台商品"><div className="flex max-h-[780px] w-[min(780px,calc(100vw-48px))] flex-col overflow-hidden rounded-lg bg-white shadow-2xl"><div className="flex items-start border-b border-[#E5E6EB] px-6 py-4"><div><h3 className="text-[17px] font-bold text-[#1D2129]">绑定平台商品</h3><p className="mt-1 text-[12px] text-[#86909C]">选择一个或多个平台 SKU，绑定至企迈商品“{platformBindingTargetProduct.name}”。</p></div><button type="button" onClick={() => setPlatformBindingTargetProductId(null)} title="关闭" className="ml-auto flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#F2F3F5]"><X size={18} /></button></div><div className="shrink-0 border-b border-[#E5E6EB] bg-[#FAFBFC] p-4"><label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={platformBindingKeyword} onChange={event => setPlatformBindingKeyword(event.target.value)} placeholder="搜索平台商品名称、规格、SPU ID、SKU ID或SKU码" className="min-w-0 flex-1 text-[13px] outline-none" /></label><div className="mt-2 text-[11px] text-[#86909C]">平台商品按 SPU 分组，仅展示尚未映射的 SKU；已映射关系请在原位置执行“更换”。</div></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">{platformBindingGroups.map(group => { const selectableRows=group.skuRows; const allSelected=selectableRows.every(row => selectedPlatformBindingRowIds.includes(row.id)); return <div key={group.spuId} className="overflow-hidden rounded-md border border-[#E5E6EB]"><div className="flex h-11 items-center gap-2 border-b border-[#EEF0F3] bg-[#F7F8FA] px-4"><Checkbox checked={allSelected} onClick={() => setSelectedPlatformBindingRowIds(allSelected ? selectedPlatformBindingRowIds.filter(id => !selectableRows.some(row => row.id === id)) : Array.from(new Set([...selectedPlatformBindingRowIds, ...selectableRows.map(row => row.id)])))} /><div className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#1D2129]">{group.skuRows[0].platformName}</div><span className="shrink-0 text-[11px] text-[#86909C]">{group.skuRows.length} 个 SKU</span></div>{group.skuRows.map(row => { const checked=selectedPlatformBindingRowIds.includes(row.id); return <div key={row.id} className="flex min-h-12 items-center gap-2 border-b border-[#F0F1F2] px-4 py-2 last:border-b-0"><Checkbox checked={checked} onClick={() => setSelectedPlatformBindingRowIds(checked ? selectedPlatformBindingRowIds.filter(id => id !== row.id) : [...selectedPlatformBindingRowIds,row.id])} /><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9CDD4]" /><div className="min-w-0 flex-1"><div className="truncate text-[12px] font-medium text-[#1D2129]">{row.platformSpec}</div><div className="mt-0.5 truncate text-[10px] text-[#86909C]">未映射</div></div><span className={`shrink-0 rounded px-2 py-1 text-[11px] ${statusMeta.unmapped.classes}`}>未映射</span></div>; })}</div>; })}{platformBindingGroups.length === 0 && <div className="flex h-40 items-center justify-center text-[13px] text-[#86909C]">没有符合条件的未映射平台商品</div>}</div><div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#FAFBFC] px-6 py-4"><span className="text-[12px] text-[#667085]">已选择 {selectedPlatformBindingRowIds.length} 个平台 SKU</span><div className="flex gap-2"><button type="button" onClick={() => setPlatformBindingTargetProductId(null)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px] text-[#4E5969]">取消</button><button type="button" disabled={!selectedPlatformBindingRowIds.length} onClick={savePlatformBindings} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-bold text-white disabled:bg-[#C9CDD4]">确认绑定</button></div></div></div></div>}
+      {platformBindingTargetProduct && <div className="fixed inset-0 z-[340] flex items-center justify-center bg-[#1D2129]/55" role="dialog" aria-modal="true" aria-label="绑定平台商品"><div className="flex max-h-[780px] w-[min(780px,calc(100vw-48px))] flex-col overflow-hidden rounded-lg bg-white shadow-2xl"><div className="flex items-start border-b border-[#E5E6EB] px-6 py-4"><div><h3 className="text-[17px] font-bold text-[#1D2129]">绑定平台商品</h3><p className="mt-1 text-[12px] text-[#86909C]">选择一个或多个平台 SKU，绑定至企迈 SKU“{platformBindingTargetProduct.name} / {platformBindingTargetSpec?.name || '标准规格'}”。</p></div><button type="button" onClick={() => setPlatformBindingTargetProductId(null)} title="关闭" className="ml-auto flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#F2F3F5]"><X size={18} /></button></div><div className="shrink-0 border-b border-[#E5E6EB] bg-[#FAFBFC] p-4"><label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={platformBindingKeyword} onChange={event => setPlatformBindingKeyword(event.target.value)} placeholder="搜索平台商品名称、规格、SPU ID、SKU ID或SKU码" className="min-w-0 flex-1 text-[13px] outline-none" /></label><div className="mt-2 text-[11px] text-[#86909C]">平台商品按 SPU 分组，仅展示尚未映射的 SKU；已映射关系请在原位置执行“换绑”。</div></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">{platformBindingGroups.map(group => { const selectableRows=group.skuRows; const allSelected=selectableRows.every(row => selectedPlatformBindingRowIds.includes(row.id)); return <div key={group.spuId} className="overflow-hidden rounded-md border border-[#E5E6EB]"><div className="flex h-11 items-center gap-2 border-b border-[#EEF0F3] bg-[#F7F8FA] px-4"><Checkbox checked={allSelected} onClick={() => setSelectedPlatformBindingRowIds(allSelected ? selectedPlatformBindingRowIds.filter(id => !selectableRows.some(row => row.id === id)) : Array.from(new Set([...selectedPlatformBindingRowIds, ...selectableRows.map(row => row.id)])))} /><div className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#1D2129]">{group.skuRows[0].platformName}</div><span className="shrink-0 text-[11px] text-[#86909C]">{group.skuRows.length} 个 SKU</span></div>{group.skuRows.map(row => { const checked=selectedPlatformBindingRowIds.includes(row.id); return <div key={row.id} className="flex min-h-12 items-center gap-2 border-b border-[#F0F1F2] px-4 py-2 last:border-b-0"><Checkbox checked={checked} onClick={() => setSelectedPlatformBindingRowIds(checked ? selectedPlatformBindingRowIds.filter(id => id !== row.id) : [...selectedPlatformBindingRowIds,row.id])} /><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C9CDD4]" /><div className="min-w-0 flex-1"><div className="truncate text-[12px] font-medium text-[#1D2129]">{row.platformSpec}</div><div className="mt-0.5 truncate text-[10px] text-[#86909C]">未映射</div></div><span className={`shrink-0 rounded px-2 py-1 text-[11px] ${statusMeta.unmapped.classes}`}>未映射</span></div>; })}</div>; })}{platformBindingGroups.length === 0 && <div className="flex h-40 items-center justify-center text-[13px] text-[#86909C]">没有符合条件的未映射平台商品</div>}</div><div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#FAFBFC] px-6 py-4"><span className="text-[12px] text-[#667085]">已选择 {selectedPlatformBindingRowIds.length} 个平台 SKU</span><div className="flex gap-2"><button type="button" onClick={() => setPlatformBindingTargetProductId(null)} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px] text-[#4E5969]">取消</button><button type="button" disabled={!selectedPlatformBindingRowIds.length} onClick={savePlatformBindings} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-bold text-white disabled:bg-[#C9CDD4]">确认绑定</button></div></div></div></div>}
 
       {relationDetailProduct && (
         <div className="fixed inset-0 z-[310] flex items-center justify-center bg-[#1D2129]/50" role="dialog" aria-modal="true" aria-label="映射关系详情">
@@ -915,9 +931,9 @@ export const WebProductMapping: React.FC = () => {
               <div className="overflow-x-auto rounded-md border border-[#E5E6EB]"><div className="min-w-[1000px]">
                 <div className="grid grid-cols-[165px_135px_165px_170px_120px_140px_56px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]"><div>企迈规格 / SKU ID</div><div>商品标识</div><div>{THIRD_PARTY_CHANNELS.find(channel => channel.id === channelId)?.shortName}商品 / 规格</div><div>平台 SPU / SKU ID</div><div>平台 SKU码</div><div>绑定更新时间</div><div>操作</div></div>
                 {Array.from({ length: Math.max(relationDetailProduct.specs?.length || 0, relationDetailRows.length, 1) }, (_, index) => {
-                  const specIndex = index % Math.max(relationDetailProduct.specs?.length || 0, 1);
-                  const specMeta = getProductSpecMeta(relationDetailProduct, specIndex);
                   const row = relationDetailRows[index];
+                  const specIndex = row?.qimaiSpecIndex ?? index % Math.max(relationDetailProduct.specs?.length || 0, 1);
+                  const specMeta = getProductSpecMeta(relationDetailProduct, specIndex);
                   return <div key={row?.id || `${relationDetailProduct.id}-spec-${index}`} className="grid min-h-[72px] grid-cols-[165px_135px_165px_170px_120px_140px_56px] items-center border-t border-[#EEF0F3] px-4 py-2.5 text-[12px]"><div className="min-w-0 pr-3"><div className="truncate font-medium text-[#1D2129]">{specMeta.name}</div><div className="mt-1 select-all truncate font-mono text-[11px] text-[#667085]">{specMeta.skuId}</div></div><div className="select-all truncate pr-3 font-mono text-[#1D2129]">{specMeta.mark}</div><div className="min-w-0 pr-3">{row ? <><div className="truncate font-medium text-[#1D2129]">{row.platformName}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{row.platformSpec}</div></> : <span className="text-[#A9AFB9]">未绑定平台商品</span>}</div><div className="min-w-0 pr-3">{row ? <><div className="select-all truncate font-mono text-[#4E5969]">SPU {row.platformProductId}</div><div className="mt-1 select-all truncate font-mono text-[11px] text-[#667085]">SKU {getPlatformSkuId(row)}</div></> : <span className="text-[#A9AFB9]">--</span>}</div><div className="select-all truncate pr-3 font-mono text-[#4E5969]">{row?.platformSku || '--'}</div><div className="text-[#4E5969]">{row?.updatedAt || '--'}</div><div>{row ? <button type="button" onClick={() => removeBinding(row.id)} className="font-medium text-[#CB2634]">解除</button> : <span className="text-[#BFC5D0]">--</span>}</div></div>;
                 })}
               </div></div>
@@ -952,31 +968,34 @@ export const WebProductMapping: React.FC = () => {
                 <input
                   value={candidateKeyword}
                   onChange={event => setCandidateKeyword(event.target.value)}
-                  placeholder="搜索商品名称或 SKUID"
+                  placeholder="搜索商品名称、SKU ID 或商品标识"
                   className="min-w-0 flex-1 text-[13px] outline-none"
                 />
               </label>
               <div className="mt-3 overflow-hidden rounded-md border border-[#E5E6EB]">
-                {candidateProducts.map((product: Product) => (
+                {candidateSkus.map(({ product, specIndex, spec }) => {
+                  const candidateKey = `${product.id}:${specIndex}`;
+                  return (
                   <button
-                    key={product.id}
+                    key={candidateKey}
                     type="button"
-                    onClick={() => setCandidateProductId(product.id)}
+                    onClick={() => setCandidateProductId(candidateKey)}
                     className={`flex w-full items-center gap-3 border-b border-[#F0F1F2] px-4 py-3 text-left last:border-b-0 ${
-                      candidateProductId === product.id ? 'bg-[#F2FFF8]' : 'hover:bg-[#F7F8FA]'
+                      candidateProductId === candidateKey ? 'bg-[#F2FFF8]' : 'hover:bg-[#F7F8FA]'
                     }`}
                   >
-                    <Radio active={candidateProductId === product.id} />
+                    <Radio active={candidateProductId === candidateKey} />
                     <img src={product.image} alt="" className="h-10 w-10 rounded object-cover" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold text-[#1D2129]">{product.name}</div>
                       <div className="mt-1 text-[12px] text-[#86909C]">
-                        商品标识 {getProductMark(product)} · SKUID {product.skuCode} · {getProductType(product) === 'combo' ? '套餐商品' : '标准商品'}
+                        {spec.name} · SKU ID {spec.skuId} · 商品标识 {spec.mark}
                       </div>
                     </div>
                     <div className="text-[12px] text-[#4E5969]">¥{product.price.toFixed(2)}</div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">

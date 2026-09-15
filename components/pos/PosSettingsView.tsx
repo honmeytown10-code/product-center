@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Settings, Check, Image as ImageIcon, AlignJustify } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Check, Image as ImageIcon } from 'lucide-react';
+import { useProducts } from '../../context';
 
 interface Props {
     showImage: boolean;
@@ -7,12 +8,26 @@ interface Props {
 }
 
 export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) => {
-    const [activeTab, setActiveTab] = useState('order');
+    const { activeBrandId, brandConfigs, updateBrandConfig } = useProducts();
+    const currentConfig = brandConfigs[activeBrandId] || brandConfigs.b_1;
+    const displayMode = currentConfig?.posStockoutMode || 'spu';
+    const [activeTab, setActiveTab] = useState('product');
     const [showStockInfo, setShowStockInfo] = useState(true);
+    useEffect(() => {
+        const stored = localStorage.getItem(`pos_stockout_display_mode_${activeBrandId}`);
+        if ((stored === 'spu' || stored === 'sku') && stored !== currentConfig?.posStockoutMode) {
+            updateBrandConfig(activeBrandId, { ...currentConfig, posStockoutMode: stored });
+        }
+    }, [activeBrandId]);
+    const setDisplayMode = (mode: 'spu' | 'sku') => {
+        localStorage.setItem(`pos_stockout_display_mode_${activeBrandId}`, mode);
+        updateBrandConfig(activeBrandId, { ...currentConfig, posStockoutMode: mode });
+    };
 
     const SETTINGS_TABS = [
         { id: 'general', label: '通用' },
         { id: 'business', label: '营业设置' },
+        { id: 'product', label: '商品管理' },
         { id: 'order', label: '点单设置' },
         { id: 'checkout', label: '结账设置' },
         { id: 'payment', label: '支付设置' },
@@ -29,7 +44,7 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
     ];
 
     return (
-        <div className="flex h-full w-full bg-white text-[#333] font-sans">
+        <div className="pos-settings flex h-full w-full bg-white text-[#333] font-sans">
             {/* Secondary Sidebar */}
             <div className="w-[140px] bg-white border-r border-[#E8E8E8] flex flex-col overflow-y-auto no-scrollbar shrink-0 shadow-[2px_0_8px_rgba(0,0,0,0.02)] z-10">
                 {SETTINGS_TABS.map(tab => (
@@ -37,8 +52,8 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex items-center px-5 py-3.5 text-[13px] transition-colors relative ${
-                            activeTab === tab.id 
-                                ? 'bg-[#EEF2FC] text-[#3B6BDB] font-bold' 
+                            activeTab === tab.id
+                                ? 'bg-[#EEF2FC] text-[#3478F6] font-bold'
                                 : 'text-[#666] hover:bg-gray-50'
                         }`}
                     >
@@ -48,26 +63,46 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
             </div>
 
             {/* Main Settings Content */}
-            <div className="flex-1 bg-[#F5F6FA] p-6 overflow-y-auto">
+            <div className="flex-1 bg-[transparent] p-6 overflow-y-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-full p-8">
-                    {activeTab === 'order' ? (
+                    {activeTab === 'product' ? (
+                        <div className="pos-product-settings">
+                            <div className="pos-settings-title"><h2>商品管理</h2><p>设置本机 POS 商品管理页面的展示方式。</p></div>
+                            <section className="pos-settings-section">
+                                <div className="pos-settings-section-heading"><div><h3>商品沽清展示方式</h3><p>所有商品卡片统一使用同一种层级，切换后立即生效。</p></div><span>当前：{displayMode === 'spu' ? '按商品展示' : '按规格展示'}</span></div>
+                                <div className="pos-display-mode-options" role="radiogroup" aria-label="商品沽清商品展示方式">
+                                    <button className={'pos-display-mode-option' + (displayMode === 'spu' ? ' active' : '')} role="radio" aria-checked={displayMode === 'spu'} onClick={() => setDisplayMode('spu')}>
+                                        <div className="pos-display-mode-copy"><strong>按商品展示（SPU）</strong><span>一个商品一张卡，多规格库存汇总展示；商品名称下方不展示规格。</span></div>
+                                        <div className="pos-display-mode-preview spu"><article><div><b>生椰拿铁</b><em>部分售罄</em></div><footer><span>剩余 15</span><strong>¥18</strong></footer></article></div>
+                                        <span className="pos-display-mode-check"><Check size={15} /></span>
+                                    </button>
+                                    <button className={'pos-display-mode-option' + (displayMode === 'sku' ? ' active' : '')} role="radio" aria-checked={displayMode === 'sku'} onClick={() => setDisplayMode('sku')}>
+                                        <div className="pos-display-mode-copy"><strong>按规格展示（SKU）</strong><span>每个规格单独一张卡，商品名称下方展示规格和特殊商品类型。</span></div>
+                                        <div className="pos-display-mode-preview sku"><article><b>生椰拿铁</b><p><span>大杯</span></p><footer><span>剩余 10</span><strong>¥18</strong></footer></article><article><b>香煎三文鱼</b><p><span>默认规格</span><em>称重</em></p><footer><span>剩余 1200</span><strong>¥0.58</strong></footer></article></div>
+                                        <span className="pos-display-mode-check"><Check size={15} /></span>
+                                    </button>
+                                </div>
+                                <div className="pos-settings-note">该设置只影响「商品沽清」页面的卡片和批量选择粒度。</div>
+                            </section>
+                        </div>
+                    ) : activeTab === 'order' ? (
                         <div className="max-w-3xl">
-                            
+
                             {/* Section 1: 商品展示 */}
                             <div className="mb-10">
                                 <h3 className="text-[15px] font-bold text-[#333] mb-5">商品展示</h3>
-                                
+
                                 <div className="flex items-start space-x-6 mb-6">
                                     {/* No Image Card */}
                                     <div className="flex flex-col">
                                         <div className="text-[13px] font-bold text-[#333] mb-3">无图卡片</div>
-                                        <div 
+                                        <div
                                             onClick={() => setShowImage(false)}
                                             className={`relative w-[280px] h-[140px] rounded-lg border-2 cursor-pointer transition-all overflow-hidden ${
-                                                !showImage ? 'border-[#3B6BDB]' : 'border-transparent'
+                                                !showImage ? 'border-[#3478F6]' : 'border-transparent'
                                             }`}
                                         >
-                                            <div className="absolute inset-0 bg-[#808080] p-4 flex items-start justify-between">
+                                            <div className="absolute inset-0 bg-[#EAF0FB] p-4 flex items-start justify-between">
                                                 {/* Mock No-Image Item */}
                                                 <div className="w-[140px] h-[60px] bg-white rounded flex flex-col justify-center px-3 shadow-sm">
                                                     <div className="text-[12px] text-[#333] mb-2">商品01</div>
@@ -84,7 +119,7 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                                 <div className="w-24 h-2.5 bg-[#666] rounded-full opacity-50"></div>
                                             </div>
                                             {!showImage && (
-                                                <div className="absolute top-0 right-0 w-0 h-0 border-t-[28px] border-t-[#3B6BDB] border-l-[28px] border-l-transparent">
+                                                <div className="absolute top-0 right-0 w-0 h-0 border-t-[28px] border-t-[#3478F6] border-l-[28px] border-l-transparent">
                                                     <Check size={14} className="absolute -top-[24px] -left-[14px] text-white" strokeWidth={3} />
                                                 </div>
                                             )}
@@ -94,13 +129,13 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                     {/* Image Card */}
                                     <div className="flex flex-col">
                                         <div className="text-[13px] font-bold text-[#333] mb-3">大图卡片</div>
-                                        <div 
+                                        <div
                                             onClick={() => setShowImage(true)}
                                             className={`relative w-[280px] h-[140px] rounded-lg border-2 cursor-pointer transition-all overflow-hidden ${
-                                                showImage ? 'border-[#3B6BDB]' : 'border-transparent'
+                                                showImage ? 'border-[#3478F6]' : 'border-transparent'
                                             }`}
                                         >
-                                            <div className="absolute inset-0 bg-[#808080] p-4 flex items-start justify-between">
+                                            <div className="absolute inset-0 bg-[#EAF0FB] p-4 flex items-start justify-between">
                                                 {/* Mock Image Item */}
                                                 <div className="w-[140px] h-[60px] bg-white rounded flex items-center p-2 shadow-sm space-x-2">
                                                     <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
@@ -123,7 +158,7 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                                 <div className="h-6 flex-1 bg-[#666] rounded opacity-30"></div>
                                             </div>
                                             {showImage && (
-                                                <div className="absolute top-0 right-0 w-0 h-0 border-t-[28px] border-t-[#3B6BDB] border-l-[28px] border-l-transparent">
+                                                <div className="absolute top-0 right-0 w-0 h-0 border-t-[28px] border-t-[#3478F6] border-l-[28px] border-l-transparent">
                                                     <Check size={14} className="absolute -top-[24px] -left-[14px] text-white" strokeWidth={3} />
                                                 </div>
                                             )}
@@ -132,7 +167,7 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                 </div>
 
                                 <label className="flex items-center cursor-pointer mt-4">
-                                    <div className={`w-4 h-4 rounded-[3px] border flex items-center justify-center mr-2 transition-colors ${showStockInfo ? 'bg-[#3B6BDB] border-[#3B6BDB]' : 'border-gray-300 bg-white'}`}>
+                                    <div className={`w-4 h-4 rounded-[3px] border flex items-center justify-center mr-2 transition-colors ${showStockInfo ? 'bg-[#3478F6] border-[#3478F6]' : 'border-gray-300 bg-white'}`}>
                                         {showStockInfo && <Check size={12} className="text-white" strokeWidth={3} />}
                                     </div>
                                     <span className="text-[13px] text-[#333]">显示库存信息</span>
@@ -165,9 +200,9 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                 <div className="flex items-start space-x-6">
                                     <div className="flex flex-col">
                                         <div className="text-[13px] font-bold text-[#333] mb-3">不显示常点商品</div>
-                                        <div className="w-[240px] h-[120px] bg-[#808080] rounded-t-lg overflow-hidden relative">
+                                        <div className="w-[240px] h-[120px] bg-[#EAF0FB] rounded-t-lg overflow-hidden relative">
                                             <div className="flex border-b border-[#666] opacity-80">
-                                                <div className="px-4 py-2 bg-[#3B6BDB] text-white text-[12px]">全部</div>
+                                                <div className="px-4 py-2 bg-[#3478F6] text-white text-[12px]">全部</div>
                                                 <div className="px-4 py-2 text-white text-[12px]">商品分类1</div>
                                                 <div className="px-4 py-2 text-white text-[12px]">商品分类2</div>
                                             </div>
@@ -180,9 +215,9 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                     </div>
                                     <div className="flex flex-col">
                                         <div className="text-[13px] font-bold text-[#333] mb-3">显示常点商品</div>
-                                        <div className="w-[240px] h-[120px] bg-[#808080] rounded-t-lg overflow-hidden relative">
+                                        <div className="w-[240px] h-[120px] bg-[#EAF0FB] rounded-t-lg overflow-hidden relative">
                                             <div className="flex border-b border-[#666] opacity-80">
-                                                <div className="px-4 py-2 bg-[#3B6BDB] text-white text-[12px]">常点商品</div>
+                                                <div className="px-4 py-2 bg-[#3478F6] text-white text-[12px]">常点商品</div>
                                                 <div className="px-4 py-2 text-white text-[12px]">全部</div>
                                                 <div className="px-4 py-2 text-white text-[12px]">商品分类1</div>
                                             </div>
@@ -191,7 +226,7 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
                                                 <div className="bg-white w-16 h-16 rounded"></div>
                                                 <div className="bg-white w-16 h-16 rounded"></div>
                                             </div>
-                                            <div className="absolute top-0 right-0 w-0 h-0 border-t-[28px] border-t-[#3B6BDB] border-l-[28px] border-l-transparent">
+                                            <div className="absolute top-0 right-0 w-0 h-0 border-t-[28px] border-t-[#3478F6] border-l-[28px] border-l-transparent">
                                                 <Check size={14} className="absolute -top-[24px] -left-[14px] text-white" strokeWidth={3} />
                                             </div>
                                         </div>

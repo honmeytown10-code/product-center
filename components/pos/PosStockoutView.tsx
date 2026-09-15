@@ -1,20 +1,75 @@
-
-import React, { useState, useMemo } from 'react';
-import { Search, ChevronDown, Check, AlertTriangle, Link2Off, RotateCcw, CheckSquare, RefreshCw, Layers, LayoutGrid, Menu, CheckCircle2, Circle, ChevronLeft, ChevronRight, Image, AlignJustify, Square } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, Image, RotateCcw } from 'lucide-react';
 import { useProducts } from '../../context';
-import { FILTER_CHANNEL_OPTIONS, CHANNEL_TABS, CategoryButton, ChannelType } from './PosCommon';
 import { CATEGORIES } from '../../types';
-import { ClearanceSettingsModal } from './PosModals';
+import { CHANNEL_TABS, ChannelType } from './PosCommon';
+import { ClearanceSettingsModal, ClearanceUpdate } from './PosModals';
+import { PosCategories, PosStatusFilters, PosDock, PosEmpty, PosResult, PosSelection, PosDialog, POS_STORE_NAME } from './PosWorkspace';
+// Most restaurant items have no selling limit. These samples represent the few items
+// that the store has explicitly limited or sold out through stockout management.
+const MOCK_LIMITED_PRODUCT_IDS = new Set(['p8', 'p9', 'p16', 'p18', 'p22', 'p23', 'p29', 'p30', 'p34', 'p38']);
+const createMockProduct = (id: string, name: string, price: number, spec: string, sampleStock: number, category: string, tags: { text: string; color: string }[] = []) => {
+  const stock = MOCK_LIMITED_PRODUCT_IDS.has(id) ? sampleStock : Infinity;
+  const soldOut = stock <= 0;
+  const status = soldOut ? 'sold_out' : stock < 30 ? 'warning' : 'normal';
+  const specNames = spec.includes('/') && !spec.includes('约') ? spec.split('/') : [spec];
+  const specs = specNames.length > 1 ? specNames.map((specName, index) => ({ id: `${id}_s${index + 1}`, name: specName, stock: stock === Infinity ? Infinity : Math.floor(stock / specNames.length) + (index < stock % specNames.length ? 1 : 0) })) : undefined;
+  return {
+    id, name, price, spec, stock, category, status, tags,
+    hasMultipleSpecs: !!specs,
+    specs,
+    channels: Object.fromEntries(CHANNEL_TABS.map(item => [item.id, soldOut ? 'sold_out' : 'normal'])),
+    channelStocks: Object.fromEntries(CHANNEL_TABS.map(item => [item.id, stock])),
+    channelTypes: soldOut ? Object.fromEntries(CHANNEL_TABS.map(item => [item.id, '长期'])) : {},
+  };
+};
+
+const ADDITIONAL_MOCK_PRODUCTS = [
+  createMockProduct('p7', '港式冻柠茶', 16, '中杯/大杯', 48, '现制饮品'),
+  createMockProduct('p8', '杨枝甘露', 22, '标准杯', 0, '现制饮品'),
+  createMockProduct('p9', '桂花乌龙奶茶', 18, '中杯/大杯', 18, '现制饮品'),
+  createMockProduct('p10', '黑糖珍珠鲜奶', 20, '大杯', 36, '现制饮品'),
+  createMockProduct('p11', '冰美式', 12, '中杯/大杯', 66, '现制饮品'),
+  createMockProduct('p12', '抹茶生椰', 21, '大杯', 0, '现制饮品'),
+  createMockProduct('p13', '白桃乌龙气泡水', 19, '标准杯', 12, '现制饮品'),
+  createMockProduct('p14', '芋泥波波牛乳', 23, '大杯', 42, '现制饮品'),
+  createMockProduct('p15', '蜜汁叉烧饭', 36, '标准份', 24, '中式正餐'),
+  createMockProduct('p16', '川香水煮牛肉', 48, '标准份', 0, '中式正餐'),
+  createMockProduct('p17', '台式卤肉饭', 28, '标准份', 50, '中式正餐'),
+  createMockProduct('p18', '菌菇鸡汤面', 26, '标准份', 8, '中式正餐'),
+  createMockProduct('p19', '葱油拌面', 18, '标准份', 35, '中式正餐'),
+  createMockProduct('p20', '金汤酸菜鱼', 58, '双人份', 0, '中式正餐'),
+  createMockProduct('p21', '经典香辣鸡腿堡', 24, '单品/套餐', 60, '西式快餐'),
+  createMockProduct('p22', '黑椒牛柳意面', 32, '标准份', 14, '西式快餐'),
+  createMockProduct('p23', '芝士培根披萨', 52, '九英寸', 0, '西式快餐'),
+  createMockProduct('p24', '香脆薯条', 12, '中份/大份', 28, '西式快餐'),
+  createMockProduct('p25', '奥尔良烤翅', 22, '六只装', 45, '西式快餐'),
+  createMockProduct('p26', '流心巴斯克', 28, '单块', 0, '烘焙甜品'),
+  createMockProduct('p27', '海盐芝士蛋糕', 26, '单块', 12, '烘焙甜品'),
+  createMockProduct('p28', '黄油可颂', 15, '单个', 32, '烘焙甜品'),
+  createMockProduct('p29', '肉桂苹果卷', 18, '单个', 7, '烘焙甜品'),
+  createMockProduct('p30', '巧克力熔岩蛋糕', 30, '单份', 0, '烘焙甜品'),
+  createMockProduct('p31', '抹茶红豆司康', 16, '单个', 38, '烘焙甜品'),
+  createMockProduct('p32', '无糖气泡水', 8, '330ml', 120, '零售商品'),
+  createMockProduct('p33', '冷萃咖啡液', 28, '250ml', 0, '零售商品'),
+  createMockProduct('p34', '坚果能量棒', 12, '45g', 16, '零售商品'),
+  createMockProduct('p35', '挂耳咖啡礼盒', 68, '10袋装', 75, '零售商品'),
+  createMockProduct('p36', '门店限定保温杯', 99, '500ml', 9, '零售商品'),
+  createMockProduct('p37', '珍珠加料', 2, '单份', 40, '加料', [{ text: '加料', color: 'blue' }]),
+  createMockProduct('p38', '小芋圆加料', 3, '单份', 0, '加料', [{ text: '加料', color: 'blue' }]),
+  createMockProduct('p39', '仙草冻加料', 2, '单份', 22, '加料', [{ text: '加料', color: 'blue' }]),
+  createMockProduct('p40', '燕麦奶加料', 3, '单份', 55, '加料', [{ text: '加料', color: 'blue' }]),
+];
 
 const MOCK_DISPLAY_PRODUCTS = [
-  { id: 'addon-1', name: '燕麦奶', price: 2.00, spec: '加料', stock: 56, status: 'normal', tags: [{ text: '加料', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal', meituan_dine: 'normal', douyin_dine: 'normal' }, channelStocks: { pos: 56, mini_dine: 56, mini_take: 56, mini_pickup: 56, meituan: 56, taobao: 56, meituan_dine: 56, douyin_dine: 56 } },
-  { id: 'addon-2', name: '椰果', price: 1.00, spec: '加料', stock: 0, status: 'sold_out', tags: [{ text: '加料', color: 'green' }], channels: { pos: 'sold_out', mini_dine: 'sold_out', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out', meituan_dine: 'sold_out', douyin_dine: 'sold_out' }, channelStocks: { pos: 0, mini_dine: 0, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0, meituan_dine: 0, douyin_dine: 0 }, channelTypes: { pos: '当日', mini_dine: '当日', mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日', meituan_dine: '当日', douyin_dine: '当日' } },
-  { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '套餐', stock: 80, status: 'normal', tags: [{ text: '套餐', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 80, mini_dine: 80, mini_take: 80, mini_pickup: 80, meituan: 80, taobao: 80 } },
-  { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '称重', stock: 1200, status: 'normal', tags: [{ text: '称重', color: 'blue' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 1200, mini_dine: 1200, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, channelTypes: { mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日' } },
-  { id: 'p3', name: '生椰拿铁', price: 18.00, spec: '多规格', stock: 15, status: 'sold_out', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 15, mini_dine: 15, mini_take: 0, mini_pickup: 15, meituan: 0, taobao: 5 }, hasMultipleSpecs: true, specs: [{id: 's1', name: '大杯', stock: 10}, {id: 's2', name: '中杯', stock: 5}, {id: 's3', name: '小杯', stock: 0}], channelTypes: { mini_take: '当日', meituan: '长期' } },
-  { id: 'p4', name: '老火例汤', price: 12.00, spec: '按餐段', stock: 10, status: 'warning', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: 10, mini_dine: 10, mini_take: 10, mini_pickup: 10, meituan: 10, taobao: 10 } },
-  { id: 'p5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: 55, status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 55, mini_dine: 55, mini_take: 30, mini_pickup: 30, meituan: 0, taobao: 30 }, channelTypes: { meituan: '当日' } },
-  { id: 'p6', name: '手打柠檬茶', price: 18.00, spec: '多规格', stock: 0, status: 'sold_out', tags: [], channels: { pos: 'sold_out', mini_dine: 'sold_out', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 0, mini_dine: 0, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, hasMultipleSpecs: true, specs: [{id: 's4', name: '标准', stock: 0}], channelTypes: { pos: '长期', mini_dine: '长期', mini_take: '长期', mini_pickup: '长期', meituan: '长期', taobao: '长期' } },
+  { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '标准套餐', specialType: '套餐', stock: Infinity, category: '中式正餐', status: 'normal', tags: [{ text: '套餐', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: Infinity, taobao: Infinity } },
+  { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '默认规格', specialType: '称重', stock: Infinity, category: '西式快餐', status: 'normal', tags: [{ text: '称重', color: 'blue' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, channelTypes: { mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日' } },
+  { id: 'p3', name: '生椰拿铁', price: 18.00, spec: '多规格', stock: 15, category: '现制饮品', status: 'sold_out', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 15, mini_dine: 15, mini_take: 0, mini_pickup: 15, meituan: 0, taobao: 5 }, hasMultipleSpecs: true, specs: [{id: 's1', name: '大杯', stock: 10}, {id: 's2', name: '中杯', stock: 5}, {id: 's3', name: '小杯', stock: 0}], channelTypes: { mini_take: '当日', meituan: '长期' } },
+  { id: 'p4', name: '老火例汤', price: 12.00, spec: '标准份', specialType: '按餐段', stock: Infinity, category: '中式正餐', status: 'normal', tags: [{ text: '按餐段', color: 'orange' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: Infinity, taobao: Infinity } },
+  { id: 'p5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: Infinity, category: '中式正餐', status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: 0, taobao: Infinity }, channelTypes: { meituan: '当日' } },
+  { id: 'p6', name: '手打柠檬茶', price: 18.00, spec: '多规格', stock: 0, category: '现制饮品', status: 'sold_out', tags: [], channels: { pos: 'sold_out', mini_dine: 'sold_out', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 0, mini_dine: 0, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, hasMultipleSpecs: true, specs: [{id: 's4', name: '标准', stock: 0}], channelTypes: { pos: '长期', mini_dine: '长期', mini_take: '长期', mini_pickup: '长期', meituan: '长期', taobao: '长期' } },
+  { id: 'p41', name: '美团限定香辣鸡排', price: 26.00, spec: '单份', stock: 32, category: '西式快餐', status: 'normal', tags: [{ text: '渠道限定', color: 'blue' }], channels: { pos: 'unmapped', mini_dine: 'unmapped', mini_take: 'unmapped', mini_pickup: 'unmapped', meituan: 'normal', taobao: 'normal' }, channelStocks: { meituan: 22, taobao: 10 }, channelTypes: {} },
+  ...ADDITIONAL_MOCK_PRODUCTS,
 ];
 
 const MOCK_LEFT_LOGS = [
@@ -35,699 +90,156 @@ const MOCK_LEFT_LOGS = [
   
   // 场景6：分组隔离示例（仅外卖渠道沽清）
   { id: 'l6', name: '香煎三文鱼', price: 0.58, spec: '称重', stock: 1200, status: 'warning', tags: [], type: 'mixed', time: '16:00', rank: 6, channels: { pos: 'normal', mini_take: 'sold_out', meituan: 'sold_out' }, channelStocks: { pos: 1200, mini_take: 0, meituan: 0 }, channelTypes: { mini_take: '当日', meituan: '当日' } },
+  ...ADDITIONAL_MOCK_PRODUCTS.filter(item => item.stock < 30).map((item, index) => ({
+    ...item,
+    id: `l${index + 7}`,
+    type: item.stock <= 0 ? '长期沽清' : '当日沽清',
+    time: `${String(9 + (index % 10)).padStart(2, '0')}:${index % 2 ? '45' : '20'}`,
+    rank: index + 7,
+    channelTypes: Object.fromEntries(CHANNEL_TABS.map(channelItem => [channelItem.id, item.stock <= 0 ? '长期' : '当日'])),
+  })),
 ];
 
-export const PosStockoutView: React.FC<{showImage: boolean}> = ({ showImage }) => {
+
+export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onReset: () => void; channel: ChannelType; onChannelChange: (channel: ChannelType) => void }> = ({ showImage, search, onReset, channel, onChannelChange }) => {
   const { activeBrandId, brandConfigs } = useProducts();
-  const currentBrandConfig = useMemo(() => brandConfigs[activeBrandId], [brandConfigs, activeBrandId]);
-  const isStockShared = currentBrandConfig?.features.stock_shared ?? true;
-  const enableChannelGrouping = currentBrandConfig?.enableChannelGrouping ?? false;
-  const channelGroups = currentBrandConfig?.channelGroups || [];
-  const posStockoutMode = currentBrandConfig?.posStockoutMode || 'spu';
-  const posStockoutWarningThreshold = currentBrandConfig?.posStockoutWarningThreshold ?? 30;
-
-  const [selectedCategory, setSelectedCategory] = useState('全部');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isBatchMode, setIsBatchMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
-  // Left Panel Batch Mode
-  const [isLeftBatchMode, setIsLeftBatchMode] = useState(false);
-  const [leftSelectedIds, setLeftSelectedIds] = useState<Set<string>>(new Set());
-
-  // Channel View State (only used when isStockShared is false)
-  // CRITICAL FIX: The initial state MUST be a valid single channel ID, never an empty string or invalid group ID.
-  const [activeChannelTab, setActiveChannelTab] = useState<string>('pos'); 
-
-  // The dropdown options are ALWAYS the atomic channels, regardless of grouping.
-  const channelTabs = useMemo(() => {
-      if (isStockShared) return []; // No tabs needed
-      return FILTER_CHANNEL_OPTIONS.filter(opt => opt.id !== 'all');
-  }, [isStockShared]);
-
-  // Clean up any stray group IDs if the config changes
-  React.useEffect(() => {
-      if (!isStockShared && channelTabs.length > 0) {
-          if (!channelTabs.some(t => t.id === activeChannelTab)) {
-              setActiveChannelTab('pos');
-          }
-      }
-  }, [isStockShared, channelTabs, activeChannelTab]);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingTarget, setEditingTarget] = useState<any>(null);
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [cancelSelectedChannels, setCancelSelectedChannels] = useState<string[]>([]);
-
-  // Initialize selected channels for cancellation
-  React.useEffect(() => {
-      if (cancelConfirmOpen) {
-          if (isStockShared) {
-              setCancelSelectedChannels([]);
-          } else {
-              const validChannels = CHANNEL_TABS.map(t => t.id);
-              if (editingTarget && !isBatchMode && !isLeftBatchMode) {
-                  // Single product
-                  setCancelSelectedChannels(validChannels.filter(chId => {
-                      const dataKey = chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId;
-                      return editingTarget.channels[dataKey as any] !== 'unmapped';
-                  }));
-              } else {
-                  // Batch mode
-                  setCancelSelectedChannels(validChannels);
-              }
-          }
-      }
-  }, [cancelConfirmOpen, editingTarget, isBatchMode, isLeftBatchMode, isStockShared]);
-
-  const toggleCancelChannel = (c: string) => {
-      setCancelSelectedChannels(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+  const config = brandConfigs[activeBrandId];
+  const shared = config?.features.stock_shared ?? true;
+  const displayMode = config?.posStockoutMode ?? 'spu';
+  const threshold = config?.posStockoutWarningThreshold ?? 30;
+  const [products, setProducts] = useState<any[]>(MOCK_DISPLAY_PRODUCTS);
+  const [logs, setLogs] = useState<any[]>(MOCK_LEFT_LOGS);
+  const [category, setCategory] = useState('全部');
+  const [filter, setFilter] = useState<'all' | 'sold' | 'low' | 'long'>('all');
+  const [batch, setBatch] = useState(false);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<any>(null);
+  const [batchTargets, setBatchTargets] = useState<any[] | null>(null);
+  const [recovery, setRecovery] = useState<any[] | null>(null);
+  const [result, setResult] = useState('');
+  const [recoveryChannels, setRecoveryChannels] = useState<string[]>([]);
+  const [crossChannelChoice, setCrossChannelChoice] = useState<{ item: any; channels: ChannelType[] } | null>(null);
+  const [locatedProductId, setLocatedProductId] = useState('');
+  useEffect(() => {
+    if (recovery) setRecoveryChannels(shared || channel === 'all' ? CHANNEL_TABS.map(item => item.id) : [channel]);
+  }, [recovery, shared, channel]);
+  const stock = (item: any): number => shared || channel === 'all' ? item.stock : item.channelStocks?.[channel] ?? item.stock;
+  const channelStocks = (item: any) => CHANNEL_TABS.map(itemChannel => item.channelStocks?.[itemChannel.id]).filter((value): value is number => typeof value === 'number');
+  const isSold = (item: any) => {
+    if (shared || channel !== 'all') return stock(item) <= 0;
+    const stocks = channelStocks(item);
+    return stocks.length ? stocks.every(value => value <= 0) : item.stock <= 0;
   };
-
-  const displayList = useMemo(() => {
-      const threshold = posStockoutWarningThreshold ?? 30;
-      
-      if (isStockShared) {
-          return MOCK_LEFT_LOGS.filter(log => log.status === 'sold_out' || log.stock < threshold);
-      }
-      
-      // Use the raw state. The useEffect guarantees it will eventually be valid.
-      // But we need a fallback for the very first render cycle if activeChannelTab is somehow 'self_operated'
-      const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
-      
-      return MOCK_LEFT_LOGS.filter(log => {
-          // Add extra safety for channels objects
-          if (!log.channels || !log.channelStocks) return false;
-          
-          const channelStatus = log.channels[currentTab];
-          const channelStock = log.channelStocks[currentTab];
-          
-          // Show if completely sold out in this channel
-          if (channelStatus === 'sold_out') return true;
-          // Show if stock is low (< threshold) in this channel
-          if (channelStock !== undefined && channelStock !== null && channelStock < threshold) return true;
-          
-          return false;
-      });
-  }, [isStockShared, activeChannelTab, channelTabs, posStockoutWarningThreshold]);
-
-  const currentList = useMemo(() => {
-      let list = MOCK_DISPLAY_PRODUCTS.filter(p => p.name.includes(searchQuery));
-      
-      if (selectedCategory !== '全部') {
-          list = list.filter(p => {
-              if (selectedCategory === '加料') return p.tags && p.tags.some((t: any) => t.text === '加料');
-              return true;
-          });
-      }
-      
-      // If SKU mode is enabled, flatten multi-spec products into individual SKU cards
-      if (posStockoutMode === 'sku') {
-          const flatList: any[] = [];
-          list.forEach(p => {
-              if (p.hasMultipleSpecs && p.specs) {
-                  p.specs.forEach((sku: any) => {
-                      flatList.push({
-                          ...p,
-                          id: `${p.id}_${sku.id}`, // unique composite ID
-                          spec: sku.name, // override SPU '多规格' text with specific SKU name
-                          stock: sku.stock,
-                          hasMultipleSpecs: false, // treat as single spec for rendering
-                          isFlattenedSku: true, // flag to know it's a flattened SKU
-                          // For simplicity in mock, assume channel stocks are proportional or inherit SPU's overall logic
-                          // In real world, SKU would have its own channelStocks object
-                      });
-                  });
-              } else {
-                  flatList.push(p);
-              }
-          });
-          return flatList;
-      }
-      
-      return list;
-  }, [searchQuery, posStockoutMode, selectedCategory]);
-
-  const handleItemClick = (item: any) => {
-    const meituanAddonUnsupported = item.id.startsWith('addon-') && !isStockShared && activeChannelTab === 'meituan_dine';
-    if (meituanAddonUnsupported) return;
-    if (isBatchMode) {
-      const newSet = new Set(selectedIds);
-      if (newSet.has(item.id)) newSet.delete(item.id);
-      else newSet.add(item.id);
-      setSelectedIds(newSet);
-    } else {
-        setEditingTarget(item);
-        setModalOpen(true);
+  const clearanceTypes = (item: any): string[] => {
+    if (shared) return item.type ? [item.type] : [];
+    if (channel !== 'all') return item.channelTypes?.[channel] ? [item.channelTypes[channel]] : [];
+    return CHANNEL_TABS.map(itemChannel => item.channelTypes?.[itemChannel.id]).filter(Boolean);
+  };
+  const isLongClearance = (item: any) => clearanceTypes(item).some(type => String(type).includes('长期'));
+  const isLowStock = (item: any) => !isSold(item) && stock(item) > 0 && stock(item) < threshold;
+  const match = (item: any) => item.name.toLowerCase().includes(search.trim().toLowerCase());
+  const matchesCategory = (item: any) => category === '全部' || (category === '加料' ? item.tags?.some((tag: any) => tag.text === '加料') : item.category === category);
+  const searching = !!search.trim();
+  const mappedChannelIds = (item: any): ChannelType[] => CHANNEL_TABS.filter(itemChannel => item.channels?.[itemChannel.id] && item.channels[itemChannel.id] !== 'unmapped').map(itemChannel => itemChannel.id);
+  const isMappedToCurrentChannel = (item: any) => shared || channel === 'all' || mappedChannelIds(item).includes(channel);
+  const scoped = products.filter(item => isMappedToCurrentChannel(item) && match(item) && (searching || matchesCategory(item)));
+  const matched = displayMode === 'sku' ? scoped.flatMap(item => item.hasMultipleSpecs ? item.specs.map((sku: any) => ({ ...item, id: item.id + '_' + sku.id, parentId: item.id, skuId: sku.id, spec: sku.name, stock: sku.stock, channelStocks: sku.channelStocks || Object.fromEntries(CHANNEL_TABS.map(channel => [channel.id, sku.stock])), hasMultipleSpecs: false, specs: undefined })) : [item]) : scoped;
+  const visible = matched.filter(item => filter === 'all' || filter === 'sold' && isSold(item) || filter === 'low' && isLowStock(item) || filter === 'long' && isLongClearance(item));
+  const otherChannelMatches = !shared && searching ? products.filter(item => match(item) && !isMappedToCurrentChannel(item) && mappedChannelIds(item).some(itemChannel => itemChannel !== channel)) : [];
+  useEffect(() => { setSelection(new Set()); setBatch(false); }, [search, category, filter, channel, displayMode]);
+  useEffect(() => { if (searching) setCategory('全部'); }, [searching]);
+  useEffect(() => {
+    if (!locatedProductId) return;
+    const timer = window.setTimeout(() => setLocatedProductId(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [locatedProductId, channel]);
+  const openCrossChannel = (item: any) => {
+    const channels = mappedChannelIds(item).filter(itemChannel => itemChannel !== channel);
+    if (channels.length === 1) {
+      setLocatedProductId(item.id);
+      onChannelChange(channels[0]);
+      return;
     }
+    setCrossChannelChoice({ item, channels });
   };
-
-  const renderProductClearanceCard = (item: any, isSelected: boolean) => {
-     const meituanAddonUnsupported = item.id.startsWith('addon-') && !isStockShared && activeChannelTab === 'meituan_dine';
-     let isOverallSoldOut = false;
-     let isPartialSoldOut = false;
-     
-     // Calculate Stock & Status based on active view mode
-     let displayStock: string | number = item.stock;
-     
-     if (!isStockShared) {
-         // Single channel view ONLY
-         const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
-         displayStock = item.channelStocks?.[currentTab] ?? item.stock;
-         
-         // If displayStock is a number and is 0, it is overall sold out FOR THIS CHANNEL/GROUP
-         if (typeof displayStock === 'number' && displayStock <= 0) {
-             isOverallSoldOut = true;
-         }
-     } else {
-        // Shared stock mode
-        if (typeof displayStock === 'number' && displayStock <= 0) isOverallSoldOut = true;
-     }
-
-     // 多规格商品（SPU模式）的部分售罄逻辑
-     if (item.hasMultipleSpecs && item.specs && !item.isFlattenedSku) {
-         const allSpecsSoldOut = item.specs.every((sku: any) => sku.stock <= 0);
-         const someSpecsSoldOut = item.specs.some((sku: any) => sku.stock <= 0);
-         
-         if (allSpecsSoldOut) {
-             isOverallSoldOut = true;
-         } else if (someSpecsSoldOut) {
-             isPartialSoldOut = true;
-         }
-     }
-
-     // Grid View
-     return (
-        <div key={item.id} onClick={() => handleItemClick(item)} className={`relative bg-white rounded-xl shadow-sm transition-all border flex flex-col ${showImage ? 'p-3' : 'p-4'} ${showImage ? 'h-[100px]' : 'h-[140px]'} group overflow-hidden ${meituanAddonUnsupported ? 'cursor-not-allowed border-amber-100 bg-amber-50/40 opacity-75' : 'cursor-pointer hover:shadow-md'} ${isBatchMode && isSelected ? 'border-[#00C06B] bg-[#00C06B]/5' : meituanAddonUnsupported ? '' : 'border-gray-100 hover:border-[#00C06B]/30'}`}>
-           {isOverallSoldOut && !isBatchMode && <div className="absolute inset-0 bg-white/60 z-10 pointer-events-none transition-opacity"></div>}
-           
-           <div className="flex h-full relative z-0">
-               {showImage && (
-                   <div className="w-16 h-16 bg-gray-100 rounded-lg mr-3 flex items-center justify-center text-gray-400 text-xs shrink-0 relative mt-1">
-                       <Image size={20} className="text-gray-300" />
-                       {/* Floating tags over image for Image Mode */}
-                       {item.tags && item.tags.length > 0 && (
-                           <div className="absolute -top-1.5 -left-1.5 flex flex-col gap-0.5">
-                               {item.tags.map((tag: any, idx: number) => <span key={idx} className={`text-[9px] px-1 py-0.5 rounded text-white font-bold shadow-sm ${tag.color === 'green' ? 'bg-[#00C06B]' : tag.color === 'blue' ? 'bg-blue-600' : 'bg-orange-500'}`}>{tag.text}</span>)}
-                           </div>
-                       )}
-                   </div>
-               )}
-               
-               <div className="flex flex-col flex-1 min-w-0">
-                   <div className="flex items-start justify-between mb-1">
-                      <div className="flex flex-col w-full relative">
-                          {/* Tags above name for No-Image Mode */}
-                          {!showImage && item.tags && item.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-1.5 mt-0.5">
-                                  {item.tags.map((tag: any, idx: number) => <span key={idx} className={`text-[10px] px-1.5 py-0.5 rounded text-white font-bold ${tag.color === 'green' ? 'bg-[#00C06B]' : tag.color === 'blue' ? 'bg-blue-600' : 'bg-orange-500'}`}>{tag.text}</span>)}
-                              </div>
-                          )}
-                          <h3 className={`font-bold text-gray-900 ${showImage ? 'text-[15px] mt-1' : 'text-[16px]'} leading-snug line-clamp-2 w-full ${isPartialSoldOut ? 'pr-12' : ''}`}>
-                              {item.name}
-                              {item.hasMultipleSpecs ? <span className="text-[12px] font-normal text-blue-500 ml-1 bg-blue-50 px-1 rounded inline-block align-text-bottom">多规格</span> : (!['标准', '称重', '按餐段'].includes(item.spec) && <span className="text-[13px] font-normal text-gray-500 ml-1">({item.spec})</span>)}
-                          </h3>
-                      </div>
-                   </div>
-                   
-                   <div className={`mt-auto flex items-end justify-between ${showImage ? 'pt-1' : 'pt-2 border-t border-gray-50 border-dashed'}`}>
-                       <span className="text-[14px] font-bold text-orange-500">
-                           {isOverallSoldOut || item.hasMultipleSpecs ? '' : (!isStockShared && activeChannelTab === 'all' ? '' : `剩余 ${displayStock}`)}
-                       </span>
-                       <div className={`font-bold font-mono text-xl leading-none ${isOverallSoldOut ? 'text-gray-300' : 'text-gray-800'}`}>
-                           <span className="text-xs mr-0.5">¥</span>{item.price?.toFixed(2)}
-                       </div>
-                   </div>
-               </div>
-           </div>
-           
-           {isOverallSoldOut && <div className="absolute right-4 bottom-8 transform rotate-[-12deg] pointer-events-none z-20"><div className="border-[3px] border-red-500 text-red-500 rounded-lg px-3 py-1 text-lg font-black bg-white/90 shadow-sm backdrop-blur-[1px]">已售罄</div></div>}
-           {meituanAddonUnsupported && <div className="absolute bottom-2 left-3 right-3 z-20 rounded-md bg-amber-100 px-2 py-1 text-center text-[10px] font-bold text-amber-700">美团在线点加料不支持沽清</div>}
-           
-           {/* Adjusted Partial Sold Out Badge Position */}
-           {isPartialSoldOut && !isBatchMode && (
-               <div className={`absolute z-20 right-0 top-0`}>
-                   <div className="bg-orange-50 text-orange-500 font-bold shadow-sm rounded-bl-lg rounded-tr-xl px-2 py-1 text-[10px]">
-                       部分售罄
-                   </div>
-               </div>
-           )}
-           
-           {isBatchMode && (
-               <div className="absolute top-2 right-2 z-30">
-                   {isSelected ? <CheckCircle2 size={22} className="text-[#00C06B] fill-white"/> : <Circle size={22} className="text-gray-200 fill-transparent group-hover:text-[#00C06B]/50"/>}
-               </div>
-           )}
-        </div>
-
-     );
+  const chooseCrossChannel = (target: ChannelType) => {
+    if (!crossChannelChoice) return;
+    setLocatedProductId(crossChannelChoice.item.id);
+    onChannelChange(target);
+    setCrossChannelChoice(null);
   };
-
-  return (
-    <div className="flex flex-col h-full w-full bg-[#F5F6FA] overflow-hidden font-sans relative">
-        {/* Global Header (Highest Hierarchy) */}
-        <div className="bg-white border-b border-gray-200 h-14 flex items-center px-6 shrink-0 z-20 shadow-[0_2px_10px_rgba(0,0,0,0.02)] space-x-8">
-            {/* Left Section: Channel Selector */}
-            <div className="flex items-center h-full shrink-0">
-                {!isStockShared && channelTabs.length > 0 ? (
-                    <>
-                        <div className="flex items-center text-sm font-bold text-gray-800 mr-4">
-                            <Layers size={16} className="text-[#00C06B] mr-2" />
-                            当前操作渠道/分组：
-                        </div>
-                        {/* 无论是否开启渠道分组，顶部始终只展示原子的单渠道下拉框 */}
-                        <div className="relative group flex items-center bg-gray-50 rounded-lg px-3 py-1 border border-gray-200 cursor-pointer hover:border-[#00C06B]/30 transition-all min-w-[120px]">
-                            <select 
-                                value={channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos'}
-                                onChange={(e) => setActiveChannelTab(e.target.value)}
-                                className="bg-transparent text-[13px] font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-6 w-full"
-                            >
-                                {channelTabs.map(tab => (
-                                    <option key={tab.id} value={tab.id}>{tab.label}</option>
-                                ))}
-                            </select>
-                            <ChevronDown size={14} className="text-gray-400 absolute right-2 pointer-events-none"/>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex items-center text-sm font-bold text-gray-800">
-                        <Layers size={16} className="text-[#00C06B] mr-2" />
-                        全渠道统一管理模式
-                    </div>
-                )}
-            </div>
-
-            {/* Right Section: Global Search */}
-            <div className="flex-1 flex items-center h-full max-w-[400px]">
-                <div className="relative group w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#00C06B] transition-colors" size={16} />
-                    <input 
-                        value={searchQuery} 
-                        onChange={(e) => setSearchQuery(e.target.value)} 
-                        className="w-full pl-10 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-sm outline-none focus:border-[#00C06B] focus:bg-white transition-all font-medium" 
-                        placeholder="支持商品名称/拼音/助记码搜索"
-                    />
-                </div>
-            </div>
+  const openEditor = (item: any) => setEditing({ ...item, stock: stock(item), status: isSold(item) ? 'sold_out' : item.status, specs: item.specs?.map((sku: any) => ({ ...sku, stock: stock(sku) })) });
+  const exit = () => { setBatch(false); setSelection(new Set()); };
+  const click = (item: any) => {
+    if (!batch) { openEditor(item); return; }
+    setSelection(prev => { const next = new Set(prev); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; });
+  };
+  const apply = (update: ClearanceUpdate, targets: any[]) => {
+    const updateItem = (item: any) => {
+      const itemTargets = targets.filter(target => target.id === item.id || target.parentId === item.id || target.name === item.name);
+      if (!itemTargets.length) return item;
+      const selectedSkuIds = new Set(itemTargets.map(target => target.skuId).filter(Boolean));
+      const channels = shared ? CHANNEL_TABS.map(item => item.id) : update.channels;
+      const quantity = update.recover ? Infinity : Number(update.method === 'day' ? update.values.dayRemain || 0 : update.values.longLimit || 0);
+      const patchSpec = (spec: any) => {
+        if (selectedSkuIds.size && !selectedSkuIds.has(spec.id)) return spec;
+        if (!update.recover && update.mode === 'sku' && !update.selectedSpecs.includes(spec.id)) return spec;
+        const values = update.mode === 'sku' ? update.specValues[spec.id] || update.values : update.values;
+        const qty = update.recover ? Infinity : Number(update.method === 'day' ? values.dayRemain || 0 : values.longLimit || 0);
+        return { ...spec, stock: shared ? qty : spec.stock, channelStocks: { ...spec.channelStocks, ...Object.fromEntries(channels.map(id => [id, qty])) } };
+      };
+      const specs = item.specs?.map(patchSpec);
+      const totalFor = (id?: string) => specs ? specs.reduce((sum: number, spec: any) => sum + (id ? spec.channelStocks?.[id] ?? spec.stock : spec.stock), 0) : quantity;
+      const nextStock = shared ? totalFor() : item.stock;
+      return { ...item, specs, stock: nextStock, maxStock: update.method === 'day' ? update.values.dayNextLimit === '' ? undefined : Number(update.values.dayNextLimit) : item.maxStock, status: shared ? nextStock <= 0 ? 'sold_out' : 'normal' : item.status, channelStocks: { ...item.channelStocks, ...Object.fromEntries(channels.map(id => [id, totalFor(id)])) }, channels: { ...item.channels, ...Object.fromEntries(channels.map(id => [id, totalFor(id) <= 0 ? 'sold_out' : 'normal'])) }, type: update.recover ? '' : update.method === 'day' ? '当日沽清' : '长期沽清', channelTypes: { ...item.channelTypes, ...Object.fromEntries(channels.map(id => [id, update.recover ? '' : update.method === 'day' ? '当日' : '长期'])) } };
+    };
+    setProducts(prev => prev.map(updateItem));
+    setLogs(prev => {
+      const next = prev.map(updateItem);
+      targets.forEach(target => { if (!next.some(item => item.name === target.name)) next.push(updateItem(target)); });
+      return next;
+    });
+    setResult(targets.length + ' 项商品' + (update.recover ? '已恢复无限库存' : '沽清设置已更新') + ' · ' + (shared ? '全部关联渠道' : update.channels.map(id => CHANNEL_TABS.find(item => item.id === id)?.label).join('、')));
+    setEditing(null); setBatchTargets(null); setRecovery(null); exit();
+  };
+  const chosen = visible.filter(item => selection.has(item.id));
+  return <div className="pos-view">
+    <PosResult message={result} onClose={() => setResult('')} />
+      <div className="pos-view"><PosCategories items={['全部', '加料', ...CATEGORIES.slice(1)]} value={category} onChange={setCategory} />
+        <div className="pos-grid-scroll" key={category + filter + search + channel}><div className="pos-grid" data-status-view={filter !== 'all'}>{visible.map(item => {
+          const qty = stock(item);
+          const specsPartial = item.hasMultipleSpecs && item.specs?.some((sku: any) => stock(sku) <= 0) && item.specs?.some((sku: any) => stock(sku) > 0);
+          const stocks = channel === 'all' && !shared ? channelStocks(item) : [];
+          const channelsPartial = stocks.some(value => value <= 0) && stocks.some(value => value > 0);
+          const partial = specsPartial || channelsPartial;
+          const types = clearanceTypes(item);
+          const clearanceType = types.some(type => String(type).includes('长期')) ? '长期沽清' : types.some(Boolean) ? '当日沽清' : '';
+          const sold = isSold(item);
+          const badge = sold ? (isLongClearance(item) ? '长期沽清' : '当日沽清') : partial ? '部分售罄' : null;
+          const specialTags = [...new Set([item.specialType, ...(item.tags || []).map((tag: any) => tag.text)].filter(Boolean))];
+          return <button key={item.id} data-product-id={item.parentId || item.id} className={'pos-card' + (sold ? ' is-disabled' : '') + (batch && selection.has(item.id) ? ' is-selected' : '') + (locatedProductId === (item.parentId || item.id) ? ' is-located' : '')} aria-label={item.name + ' · ' + (sold ? '已售罄' : qty === Infinity ? '无限库存' : '剩余 ' + qty)} aria-pressed={batch ? selection.has(item.id) : undefined} onClick={() => click(item)}>
+            {showImage && <span className="pos-image-placeholder"><Image size={26} /></span>}
+            <div className="pos-card-heading"><h3>{item.name}</h3>{batch ? <PosSelection selected={selection.has(item.id)} /> : badge && <span className={'pos-tag ' + (badge === '长期沽清' ? 'long' : badge === '部分售罄' ? 'warning' : 'danger')}>{badge}</span>}</div>
+            {displayMode === 'sku' ? <div className="pos-card-meta"><span className="pos-card-spec">{item.spec || '默认规格'}</span>{specialTags.map(tag => <span key={tag} className="pos-special-tag">{tag}</span>)}</div> : filter === 'long' && clearanceType ? <div className="pos-card-meta"><span className="pos-tag long">{clearanceType}</span></div> : null}
+            <div className="pos-card-footer">{qty !== Infinity && <span className={'pos-state' + (sold ? ' danger' : isLowStock(item) ? ' warning' : '')}>{sold ? '已售罄' : '剩余 ' + qty}</span>}{sold && !batch ? <span className="pos-recover" onClick={event => { event.stopPropagation(); setRecovery([item]); }}><RotateCcw size={14} />恢复售卖</span> : <span className="pos-card-price"><small>¥</small>{item.price}</span>}</div>
+          </button>;
+        })}</div>
+          {!visible.length && !!otherChannelMatches.length && <div className="pos-current-channel-empty"><strong>当前渠道没有这个商品</strong><span>已在门店其他渠道找到结果，可直接切换后操作。</span></div>}
+          {!!otherChannelMatches.length && <section className="pos-other-results" aria-label="其他渠道搜索结果">
+            <header><div><strong>其他渠道找到 {otherChannelMatches.length} 个商品</strong><span>当前「{CHANNEL_TABS.find(item => item.id === channel)?.label}」没有这些商品</span></div><em>门店全部渠道搜索</em></header>
+            <div className="pos-other-result-list">{otherChannelMatches.map(item => {
+              const channels = mappedChannelIds(item).filter(itemChannel => itemChannel !== channel);
+              const labels = channels.map(itemChannel => CHANNEL_TABS.find(tab => tab.id === itemChannel)?.label).filter(Boolean);
+              const description = displayMode === 'sku' ? item.hasMultipleSpecs ? `${item.specs.length} 个规格` : item.spec || '默认规格' : item.category;
+              return <button key={item.id} className="pos-other-result" onClick={() => openCrossChannel(item)}><span className="pos-other-result-main"><strong>{item.name}</strong><small>{description}</small></span><span className="pos-other-result-channel">可在 {labels.join('、')}</span><ChevronRight size={19} /></button>;
+            })}</div>
+          </section>}
+          {!visible.length && !otherChannelMatches.length && <PosEmpty filtered={!!search || category !== '全部' || filter !== 'all'} onReset={() => { onReset(); setCategory('全部'); setFilter('all'); }} />}
         </div>
-        {!isStockShared && activeChannelTab === 'meituan_dine' && (
-            <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs font-bold text-amber-700">
-                美团在线点商品可正常沽清；加料仅支持在上下架页面操作，当前页不提供加料沽清。
-            </div>
-        )}
-        
-        <div className="flex-1 flex overflow-hidden">
-            {/* Left Panel: Today's Stockout / Low Stock Warnings */}
-            <div className="w-[340px] bg-white border-r border-gray-200 flex flex-col z-10 shrink-0 relative">
-                <div className="flex flex-col border-b border-gray-100 bg-white shrink-0">
-                    <div className="h-14 flex items-center justify-between px-5">
-                        <div className="flex items-center">
-                            <span className="font-bold text-gray-800 text-[16px] mr-2">今日已沽清/低库存预警</span>
-                            {displayList.length > 0 && (<span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{displayList.length}</span>)}
-                        </div>
-                        {displayList.length > 0 && (
-                            <span className="text-xs font-medium text-gray-400">滑动查看更多</span>
-                        )}
-                    </div>
-                </div>
-                
-                <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
-                    <div className="flex items-start">
-                        <AlertTriangle size={16} className="mr-2 mt-0.5 shrink-0 text-orange-500 fill-orange-100"/>
-                        <span className="text-[12px] text-orange-700 leading-snug">剩余数量小于 {posStockoutWarningThreshold} 的商品将显示在此预警列表，点击可极速操作。</span>
-                    </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-0 bg-white">
-                    {displayList.map((item) => {
-                        let isOverallSoldOut = false;
-                        let isPartialSoldOut = false;
-                        let hasStock = true;
-                        let channelStockEntries: {channel: string, stock: number}[] = [];
-                        
-                        let displayStock: number = item.stock;
-                        let displayType: string = item.type;
-
-                        if (!isStockShared) {
-                            const currentTab = channelTabs.some(t => t.id === activeChannelTab) ? activeChannelTab : 'pos';
-                            displayStock = item.channelStocks?.[currentTab] ?? 0;
-                            displayType = item.channelTypes?.[currentTab] || '当日沽清';
-                            
-                            hasStock = displayStock > 0;
-                            isOverallSoldOut = !hasStock;
-                        } else {
-                            hasStock = item.stock > 0;
-                            isOverallSoldOut = !hasStock;
-                        }
-
-                        return (
-                            <div 
-                                key={item.id} 
-                                onClick={() => {
-                                    if (isLeftBatchMode) {
-                                        const newSet = new Set(leftSelectedIds);
-                                        if (newSet.has(item.id)) newSet.delete(item.id);
-                                        else newSet.add(item.id);
-                                        setLeftSelectedIds(newSet);
-                                    } else {
-                                        handleItemClick(item);
-                                    }
-                                }} 
-                                className={`border-b border-gray-100 cursor-pointer group transition-all relative ${isLeftBatchMode && leftSelectedIds.has(item.id) ? 'bg-[#00C06B]/5 border-l-4 border-l-[#00C06B]' : 'hover:bg-[#00C06B]/5 border-l-4 border-l-transparent'}`}
-                            >
-                                <div className="px-5 py-4 flex items-center">
-                                    {isLeftBatchMode && (
-                                        <div className="mr-3">
-                                            {leftSelectedIds.has(item.id) ? <CheckCircle2 size={20} className="text-[#00C06B] fill-white"/> : <Circle size={20} className="text-gray-200 fill-transparent"/>}
-                                        </div>
-                                    )}
-                                    <div className="flex items-start justify-between flex-1 min-w-0">
-                            <div className="flex-1 flex flex-col justify-center min-w-0 pr-2">
-                                <div className="flex items-center mb-1 w-full relative">
-                                    <span className="font-bold text-[14px] text-gray-900 truncate flex-1">{item.name}</span>
-                                    {(isStockShared || activeChannelTab !== 'all') && (
-                                        (!isStockShared && displayType === 'mixed') ? (
-                                            <span className="shrink-0 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded leading-none whitespace-nowrap ml-2 absolute right-0 -top-1 shadow-sm">多态沽清</span>
-                                        ) : (displayType === '长期沽清' || displayType === '长期') ? (
-                                            <span className="shrink-0 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded leading-none whitespace-nowrap ml-2 absolute right-0 -top-1 shadow-sm">长期沽清</span>
-                                        ) : (
-                                            <span className="shrink-0 text-[10px] font-bold text-[#00C06B] bg-[#00C06B]/10 border border-[#00C06B]/20 px-1.5 py-0.5 rounded leading-none whitespace-nowrap ml-2 absolute right-0 -top-1 shadow-sm">当日沽清</span>
-                                        )
-                                    )}
-                                </div>
-                                <div className="text-[11px] text-gray-400 font-medium mb-1.5 truncate">
-                                    {item.spec}
-                                </div>
-                                {(!isStockShared && activeChannelTab === 'all') && (
-                                    <div className="flex flex-wrap gap-1 mt-auto w-full">
-                                        {Object.entries(item.channelStocks).map(([channel, channelStock]) => {
-                                            const tab = FILTER_CHANNEL_OPTIONS.find(t => t.id === channel);
-                                            const isZero = channelStock === 0;
-                                            // Dynamic color based on stock and specific clearance type
-                                            const clearanceType = item.channelTypes?.[channel];
-                                            let bgClass = "bg-blue-50 text-blue-600 border border-blue-100"; // Default stock normal/low stock
-                                            let displayContent = `${tab?.shortLabel || channel}: ${channelStock}`;
-                                            
-                                            if (isZero) {
-                                                if (clearanceType === '长期') {
-                                                    bgClass = "bg-orange-50 text-orange-600 border border-orange-100";
-                                                    displayContent = `${tab?.shortLabel || channel}: 0 (长期)`;
-                                                } else if (clearanceType === '当日') {
-                                                    bgClass = "bg-blue-50 text-blue-600 border border-blue-100";
-                                                    displayContent = `${tab?.shortLabel || channel}: 0 (当日)`;
-                                                } else {
-                                                    bgClass = "bg-red-50 text-red-500 border border-red-100"; // Fallback sold out
-                                                    displayContent = `${tab?.shortLabel || channel}: 0`;
-                                                }
-                                            }
-
-                                            return (
-                                                <span key={channel} className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap shrink-0 ${bgClass}`}>
-                                                    {displayContent}
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                                        <div className="flex flex-col items-end justify-center shrink-0 w-[60px]">
-                                            {hasStock ? (
-                                                isStockShared ? (
-                                                    <>
-                                                        <span className="text-[#00C06B] text-xl font-bold font-mono leading-none">{displayStock}</span>
-                                                        <span className="text-[10px] text-gray-400 mt-1">剩余</span>
-                                                    </>
-                                                ) : (
-                                                    activeChannelTab === 'all' ? (
-                                                        <div className="flex flex-col items-end justify-center h-full">
-                                                            <span className={`text-[12px] font-bold ${isPartialSoldOut ? 'text-orange-500' : 'text-blue-500'}`}>
-                                                                {isPartialSoldOut ? '部分售罄' : '低库存'}
-                                                            </span>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setEditingTarget(item); setCancelConfirmOpen(true); }} 
-                                                                className="mt-1 text-gray-300 hover:text-[#00C06B] p-1 rounded-full hover:bg-[#00C06B]/10 transition-colors"
-                                                                title="取消沽清 (恢复库存)"
-                                                            >
-                                                                <RotateCcw size={14}/>
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <span className="text-[#00C06B] text-xl font-bold font-mono leading-none">{displayStock}</span>
-                                                            <span className="text-[10px] text-gray-400 mt-1">剩余</span>
-                                                        </>
-                                                    )
-                                                )
-                                            ) : (
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-red-500 text-sm font-bold">已售罄</span>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setEditingTarget(item); setCancelConfirmOpen(true); }} 
-                                                        className="mt-1 text-gray-300 hover:text-[#00C06B] p-1 rounded-full hover:bg-[#00C06B]/10 transition-colors"
-                                                        title="取消沽清 (恢复库存)"
-                                                    >
-                                                        <RotateCcw size={14}/>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                
-                {/* Left Panel Batch Action Footer */}
-                <div className="bg-white border-t border-gray-200 h-16 flex items-center justify-between px-4 z-20 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-                    {!isLeftBatchMode ? (
-                        <button 
-                            onClick={() => setIsLeftBatchMode(true)}
-                            className="w-full py-2.5 rounded-lg bg-gray-50 text-gray-600 font-bold hover:bg-gray-100 transition-all flex items-center justify-center text-sm"
-                        >
-                            <CheckSquare size={16} className="mr-2"/> 批量操作
-                        </button>
-                    ) : (
-                        <>
-                            <button 
-                                onClick={() => {
-                                    const allIds = displayList.map(i => i.id);
-                                    if (leftSelectedIds.size === allIds.length) {
-                                        setLeftSelectedIds(new Set());
-                                    } else {
-                                        setLeftSelectedIds(new Set(allIds));
-                                    }
-                                }}
-                                className="flex items-center text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
-                            >
-                                <div className="mr-2">
-                                    {leftSelectedIds.size > 0 ? (
-                                        <CheckSquare size={18} className="text-[#00C06B]" />
-                                    ) : (
-                                        <Square size={18} className="text-gray-300" />
-                                    )}
-                                </div>
-                                全选
-                            </button>
-                            <div className="flex items-center space-x-2">
-                                <button 
-                                    disabled={leftSelectedIds.size === 0} 
-                                    onClick={() => {
-                                        setSelectedIds(leftSelectedIds);
-                                        setIsBatchMode(true);
-                                        setModalOpen(true);
-                                    }}
-                                    className="px-3 py-1.5 rounded bg-[#00C06B] text-white font-bold disabled:opacity-50 transition-all text-xs hover:bg-[#00A35B]"
-                                >
-                                    沽清
-                                </button>
-                                <button 
-                                    disabled={leftSelectedIds.size === 0} 
-                                    onClick={() => setCancelConfirmOpen(true)}
-                                    className="px-3 py-1.5 rounded bg-white border border-gray-200 text-red-500 font-bold disabled:opacity-50 transition-all text-xs hover:border-red-500"
-                                >
-                                    取消
-                                </button>
-                                <button 
-                                    onClick={() => { setIsLeftBatchMode(false); setLeftSelectedIds(new Set()); }}
-                                    className="px-3 py-1.5 rounded text-gray-400 hover:bg-gray-100 font-bold transition-all text-xs"
-                                >
-                                    退出
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Right Panel: Main Workspace */}
-            <div className="flex-1 flex flex-col bg-[#F5F6FA] relative min-w-0">
-                <div className="bg-white border-b border-gray-200 px-5 flex items-center justify-between overflow-x-auto no-scrollbar shrink-0 z-10">
-                    <div className="flex items-center space-x-1 flex-1">
-                        <button onClick={() => setSelectedCategory('全部')} className={`px-5 py-3 text-sm font-bold border-b-[3px] transition-all whitespace-nowrap ${selectedCategory === '全部' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>全部</button>
-                        <button onClick={() => setSelectedCategory('加料')} className={`px-5 py-3 text-sm font-bold border-b-[3px] transition-all whitespace-nowrap ${selectedCategory === '加料' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>加料</button>
-                        {CATEGORIES.slice(1).map(c => (
-                            <button key={c} onClick={() => setSelectedCategory(c)} className={`px-5 py-3 text-sm font-bold border-b-[3px] transition-all whitespace-nowrap ${selectedCategory === c ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{c}</button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-5 pb-24 no-scrollbar">
-                    <div className={`grid gap-4 content-start ${showImage ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
-                        {currentList.map(item => renderProductClearanceCard(item, selectedIds.has(item.id)))}
-                    </div>
-                </div>
-                
-                <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-16 flex items-center justify-between px-6 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-                    <div className="flex items-center space-x-4">
-                        {!isBatchMode ? (
-                            <button onClick={() => setIsBatchMode(true)} className="px-6 py-2.5 rounded-lg bg-blue-50 text-blue-600 font-bold hover:bg-blue-100 text-sm transition-all flex items-center">
-                                <CheckSquare size={16} className="mr-2"/> 批量管理
-                            </button>
-                        ) : (
-                            <div className="flex items-center space-x-3">
-                                <button onClick={() => { setModalOpen(true); }} disabled={selectedIds.size === 0} className="px-6 py-2.5 rounded-lg bg-white border border-gray-200 hover:border-red-500 text-red-600 font-bold shadow-sm disabled:opacity-50 transition-all flex items-center">
-                                    批量沽清
-                                </button>
-                                <button onClick={() => { setCancelConfirmOpen(true); }} disabled={selectedIds.size === 0} className="px-6 py-2.5 rounded-lg bg-white border border-gray-200 hover:border-[#00C06B] text-[#00C06B] font-bold shadow-sm disabled:opacity-50 transition-all flex items-center">
-                                    取消沽清 (恢复库存)
-                                </button>
-                                <div className="w-px h-6 bg-gray-200 mx-2"></div>
-                                <button onClick={() => { setIsBatchMode(false); setSelectedIds(new Set()); }} className="px-4 py-2 rounded-lg font-bold text-gray-500 hover:bg-gray-100 text-sm">
-                                    退出批量
-                                </button>
-                                <span className="text-sm font-bold text-gray-800 ml-4">已选 <span className="text-blue-600 mx-1">{selectedIds.size}</span> 项</span>
-                            </div>
-                        )}
-                        <button className="px-4 py-2 rounded-lg text-gray-500 font-bold hover:text-[#00C06B] text-sm flex items-center transition-colors">
-                            <RefreshCw size={16} className="mr-2"/> 刷新
-                        </button>
-                    </div>
-                    <div className="flex items-center space-x-6 text-sm text-gray-500 font-medium">
-                        <span>共 {currentList.length} 条</span>
-                        <div className="flex space-x-1">
-                            <button className="w-8 h-8 border rounded flex items-center justify-center bg-gray-50 text-gray-400 cursor-not-allowed"><ChevronLeft size={14}/></button>
-                            <button className="w-8 h-8 border rounded flex items-center justify-center hover:border-[#00C06B] hover:text-[#00C06B] transition-colors"><ChevronRight size={14}/></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {modalOpen && (
-                <ClearanceSettingsModal 
-                   product={editingTarget} 
-                   batchIds={isBatchMode ? Array.from(selectedIds) : undefined}
-                   isBatch={isBatchMode}
-                   onClose={() => { setModalOpen(false); setEditingTarget(null); }}
-                   onConfirm={() => {
-                       setModalOpen(false);
-                       setEditingTarget(null);
-                       if (isBatchMode) {
-                           setSelectedIds(new Set());
-                           setIsBatchMode(false);
-                       }
-                   }}
-                   activeChannel={(isStockShared ? 'all' : activeChannelTab) as ChannelType}
-                />
-            )}
-        </div>
-
-        {/* Cancel Clearance Confirm Dialog */}
-        {cancelConfirmOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-                <div className="bg-white rounded-xl shadow-2xl w-[480px] overflow-hidden animate-in zoom-in-95 font-sans">
-                    <div className="p-6">
-                        <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <AlertTriangle size={32} />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">确认取消沽清？</h3>
-                        <p className="text-gray-500 text-sm text-center mb-6">
-                            取消沽清后，
-                            {isLeftBatchMode ? (
-                                <>选中的 <span className="font-bold text-[#333]">{leftSelectedIds.size}</span> 个预警商品</>
-                            ) : isBatchMode ? (
-                                <>选中的 <span className="font-bold text-[#333]">{selectedIds.size}</span> 个商品</>
-                            ) : (
-                                <>该商品 <span className="font-bold text-[#333]">{editingTarget?.name}</span></>
-                            )}
-                            将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许在<span className="font-bold text-[#333] mx-1">{isStockShared ? '所有关联渠道' : '下方选中渠道'}</span>正常售卖。
-                        </p>
-
-                        {!isStockShared && (
-                            <div className="bg-[#F7F8FA] rounded-xl p-5 border border-[#E8E8E8]">
-                                <div className="text-xs font-bold text-gray-700 mb-3">选择生效渠道</div>
-                                {enableChannelGrouping ? (
-                                    <div className="space-y-3">
-                                        {channelGroups.map(group => {
-                                            const groupChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c));
-                                            if (groupChannels.length === 0) return null;
-                                            
-                                            const isGroupActive = groupChannels.every(id => cancelSelectedChannels.includes(id));
-                                            return (
-                                                <div 
-                                                    key={group.id}
-                                                    onClick={() => {
-                                                        if (isGroupActive) setCancelSelectedChannels(prev => prev.filter(id => !groupChannels.includes(id)));
-                                                        else setCancelSelectedChannels(prev => Array.from(new Set([...prev, ...groupChannels])));
-                                                    }}
-                                                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isGroupActive ? 'bg-[#00C06B]/10 border-[#00C06B] shadow-sm text-[#00C06B]' : 'bg-white border-gray-200 text-gray-600 hover:border-[#00C06B]/50'}`}
-                                                >
-                                                    <span className="font-bold text-sm">{group.name}</span>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {groupChannels.map(cId => (
-                                                            <span key={cId} className={`text-[10px] px-1.5 py-0.5 rounded border ${isGroupActive ? 'bg-white border-[#00C06B]/30 text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
-                                                                {CHANNEL_TABS.find(t => t.id === cId)?.label || cId}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {CHANNEL_TABS.map(tab => {
-                                            const isActive = cancelSelectedChannels.includes(tab.id);
-                                            return (
-                                                <div 
-                                                    key={tab.id}
-                                                    onClick={() => toggleCancelChannel(tab.id)}
-                                                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${isActive ? 'bg-[#00C06B]/10 border-[#00C06B] shadow-sm text-[#00C06B]' : 'bg-white border-gray-200 text-gray-600 hover:border-[#00C06B]/50'}`}
-                                                >
-                                                    <span className="text-sm font-bold">{tab.label}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex border-t border-gray-100">
-                        <button onClick={() => { setCancelConfirmOpen(false); setEditingTarget(null); }} className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-50 transition-colors">再想想</button>
-                        <div className="w-px bg-gray-100"></div>
-                        <button 
-                            onClick={() => {
-                                // Execute cancel clearance logic here
-                                setCancelConfirmOpen(false);
-                                setEditingTarget(null);
-                                if (isLeftBatchMode) {
-                                    setLeftSelectedIds(new Set());
-                                    setIsLeftBatchMode(false);
-                                }
-                                if (isBatchMode) {
-                                    setSelectedIds(new Set());
-                                    setIsBatchMode(false);
-                                }
-                            }} 
-                            disabled={!isStockShared && cancelSelectedChannels.length === 0}
-                            className={`flex-1 py-4 font-bold transition-colors ${(!isStockShared && cancelSelectedChannels.length === 0) ? 'text-gray-300 bg-gray-50 cursor-not-allowed' : 'text-[#00C06B] hover:bg-[#00C06B]/5'}`}
-                        >
-                            确认恢复
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-    </div>
-  );
+        <PosDock batch={batch} count={selection.size} allSelected={!!visible.length && visible.every(item => selection.has(item.id))} onSelectAll={() => setSelection(selection.size === visible.length ? new Set() : new Set(visible.map(item => item.id)))} onBatch={() => setBatch(true)} onExit={exit} filters={<PosStatusFilters value={filter} onChange={value => setFilter(value as 'all' | 'sold' | 'low' | 'long')} options={[{ id: 'all', label: '全部', count: matched.length }, { id: 'sold', label: '已沽清', count: matched.filter(isSold).length, tone: 'danger' }, { id: 'low', label: '低库存', count: matched.filter(isLowStock).length, tone: 'warning' }, { id: 'long', label: '长期沽清', count: matched.filter(isLongClearance).length, tone: 'long' }]} />}><button className="pos-button danger" disabled={!selection.size} onClick={() => setBatchTargets(chosen)}>批量沽清</button><button className="pos-button secondary" disabled={!selection.size} onClick={() => setRecovery(chosen)}>恢复库存</button></PosDock>
+      </div>
+    {(editing || batchTargets) && <ClearanceSettingsModal product={editing} batchIds={batchTargets?.map(item => item.id)} isBatch={!!batchTargets} onClose={() => { setEditing(null); setBatchTargets(null); }} onConfirm={update => apply(update, batchTargets || [editing])} activeChannel={shared ? 'all' : channel} />}
+    {recovery && <PosDialog title="确认恢复无限库存？" onClose={() => setRecovery(null)} footer={<><button className="pos-button quiet" onClick={() => setRecovery(null)}>取消</button><button className="pos-button" disabled={!recoveryChannels.length} onClick={() => apply({ recover: true, method: 'day', mode: 'spu', values: { dayRemain: '0', dayNextLimit: '', longLimit: '0' }, specValues: {}, selectedSpecs: [], channels: recoveryChannels }, recovery)}>确认恢复</button></>}><h3>{recovery.map(item => item.name).join('、')}</h3><p>{POS_STORE_NAME} · {shared ? '全部关联渠道' : recoveryChannels.map(id => CHANNEL_TABS.find(item => item.id === id)?.label).join('、') || '请选择渠道'}</p><p>确认后立即取消沽清并恢复为无限库存，商品可继续售卖。需要限制售卖数量时，可重新设置沽清。</p>{!shared && <div className="pos-channel-options"><p>生效渠道（当前渠道必须保留，可追加其他渠道）</p>{config?.enableChannelGrouping && config.channelGroups?.map(group => <button key={group.id} className="pos-button secondary" onClick={() => { const ids = group.channels.filter(id => CHANNEL_TABS.some(item => item.id === id)); setRecoveryChannels(prev => ids.every(id => prev.includes(id)) ? prev.filter(id => !ids.includes(id) || id === channel) : [...new Set([...prev, ...ids])]); }}>{group.name}</button>)}<div className="flex flex-wrap gap-2 mt-3">{CHANNEL_TABS.map(item => <button key={item.id} disabled={item.id === channel} className={'pos-button ' + (recoveryChannels.includes(item.id) ? 'secondary' : 'quiet')} aria-pressed={recoveryChannels.includes(item.id)} onClick={() => setRecoveryChannels(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}>{item.label}{item.id === channel ? ' · 当前' : ''}</button>)}</div></div>}</PosDialog>}
+    {crossChannelChoice && <PosDialog title="选择要切换的渠道" onClose={() => setCrossChannelChoice(null)}><div className="pos-channel-choice-intro"><strong>{crossChannelChoice.item.name}</strong><span>该商品不在当前渠道，请选择一个有此商品的渠道。</span></div><div className="pos-channel-choice-list">{crossChannelChoice.channels.map(itemChannel => { const qty = crossChannelChoice.item.channelStocks?.[itemChannel]; return <button key={itemChannel} onClick={() => chooseCrossChannel(itemChannel)}><span><strong>{CHANNEL_TABS.find(tab => tab.id === itemChannel)?.label}</strong><small>{qty === Infinity ? '不限量' : typeof qty === 'number' ? qty <= 0 ? '已沽清' : '剩余 ' + qty : '可售'}</small></span><ChevronRight size={20} /></button>; })}</div></PosDialog>}
+  </div>;
 };

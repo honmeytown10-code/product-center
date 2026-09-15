@@ -47,17 +47,21 @@ export const NumpadInput: React.FC<{
 }> = ({ label, value, active, onFocus, placeholder, large }) => (
    <div 
       onClick={onFocus}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onFocus(); } }}
       className={`
-         relative rounded-2xl border-2 transition-all cursor-pointer bg-white group hover:border-[#00C06B]/50
-         ${active ? 'border-[#00C06B] ring-4 ring-[#00C06B]/10 z-10' : 'border-gray-200'}
+         relative rounded-2xl border-2 transition-all cursor-pointer bg-white group hover:border-[#3478F6]/50
+         ${active ? 'border-[#3478F6] ring-4 ring-[#3478F6]/10 z-10' : 'border-gray-200'}
          ${large ? 'p-6' : 'p-4'}
       `}
    >
-      <div className={`text-xs font-bold uppercase mb-1 transition-colors ${active ? 'text-[#00C06B]' : 'text-gray-400'}`}>{label}</div>
+      <div className={`text-xs font-bold uppercase mb-1 transition-colors ${active ? 'text-[#3478F6]' : 'text-gray-400'}`}>{label}</div>
       <div className={`font-mono font-black text-gray-800 ${large ? 'text-4xl' : 'text-2xl'} ${!value ? 'text-gray-300' : ''}`}>
          {value || placeholder || '0'}
       </div>
-      {active && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#00C06B] animate-pulse rounded-full"></div>}
+      {active && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#3478F6] animate-pulse rounded-full"></div>}
    </div>
 );
 

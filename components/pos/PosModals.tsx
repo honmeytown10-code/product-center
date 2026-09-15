@@ -4,11 +4,12 @@ import { X, Check, RotateCcw, Lock, Clock3, AlertTriangle, Delete, Layers, Check
 import { useProducts } from '../../context';
 import { CHANNEL_TABS, SHELF_VIEW_TABS, ChannelType, ChannelTabType, NumpadInput, ChannelTag } from './PosCommon';
 import { ChannelGroup } from '../../types';
+import { POS_STORE_NAME } from './PosWorkspace';
 
 // --- Shelf Action Dialog ---
 export const ShelfActionDialog = ({
   open,
-  data, 
+  data,
   onClose,
   onConfirm,
   isShelvesUnited,
@@ -23,16 +24,16 @@ export const ShelfActionDialog = ({
   enableChannelGrouping?: boolean;
   channelGroups?: ChannelGroup[];
 }) => {
-  const isBatch = !!data.items;
-  const items = isBatch ? (data.items || []) : (data.item ? [data.item] : []);
+  const items = data.items || (data.item ? [data.item] : []);
+  const isBatch = items.length > 1;
   const count = items.length;
-  const name = isBatch ? `${count}个商品` : data.item?.name;
-  
+  const name = isBatch ? `${count}个商品` : items[0]?.name;
+
   // Calculate which channels are mapped for ALL selected items
   const validChannels = useMemo(() => {
      return CHANNEL_TABS.map(t => t.id).filter(chId => {
          return items.every(i => {
-             const dataKey = chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId;
+             const dataKey = chId;
              return i.channels[dataKey as ChannelTabType] !== 'unmapped';
          });
      });
@@ -40,25 +41,26 @@ export const ShelfActionDialog = ({
 
   // State for single product channel statuses
   const [channelStatus, setChannelStatus] = useState<Record<string, 'on_shelf' | 'off_shelf'>>({});
-  
+
   // State for batch action selected channels
   const [batchSelectedChannels, setBatchSelectedChannels] = useState<string[]>([]);
+  const currentShelfChannel = data.targetChannel !== 'all' && validChannels.includes(data.targetChannel) ? data.targetChannel : null;
 
   useEffect(() => {
     if (!open) return;
-    
-    if (isBatch) {
-        setBatchSelectedChannels(validChannels);
-    } else if (data.item) {
+
+    const currentChannel = currentShelfChannel ? [currentShelfChannel] : validChannels;
+    setBatchSelectedChannels(isShelvesUnited ? validChannels : currentChannel);
+    if (!isBatch && data.item) {
         const initialStatus: Record<string, 'on_shelf' | 'off_shelf'> = {};
         validChannels.forEach(ch => {
-            const dataKey = ch === 'mini_dine' || ch === 'mini_take' || ch === 'mini_pickup' ? 'mini' : ch;
+            const dataKey = ch;
             const status = data.item.channels[dataKey as ChannelTabType] || 'off_shelf';
             initialStatus[ch] = isShelvesUnited ? data.item.status : status;
         });
         setChannelStatus(initialStatus);
     }
-  }, [open, data, validChannels, isBatch, isShelvesUnited]);
+  }, [open, data, validChannels, isBatch, isShelvesUnited, currentShelfChannel]);
 
   const toggleChannelStatus = (chId: string) => {
       if (isShelvesUnited) return; // locked
@@ -72,7 +74,7 @@ export const ShelfActionDialog = ({
       if (isShelvesUnited) return; // locked
       const validGroupChannels = groupChannels.filter(c => validChannels.includes(c));
       if (validGroupChannels.length === 0) return;
-      
+
       setChannelStatus(prev => {
           const next = { ...prev };
           const allOn = validGroupChannels.every(c => prev[c] === 'on_shelf');
@@ -91,7 +93,7 @@ export const ShelfActionDialog = ({
   };
 
   const toggleBatchChannel = (chId: string) => {
-      if (isShelvesUnited) return; // locked
+      if (isShelvesUnited || chId === currentShelfChannel) return;
       setBatchSelectedChannels(prev => prev.includes(chId) ? prev.filter(c => c !== chId) : [...prev, chId]);
   };
 
@@ -99,10 +101,10 @@ export const ShelfActionDialog = ({
       if (isShelvesUnited) return; // locked
       const validGroupChannels = groupChannels.filter(c => validChannels.includes(c));
       if (validGroupChannels.length === 0) return;
-      
+
       const allSelected = validGroupChannels.every(c => batchSelectedChannels.includes(c));
       if (allSelected) {
-          setBatchSelectedChannels(prev => prev.filter(c => !validGroupChannels.includes(c)));
+          setBatchSelectedChannels(prev => prev.filter(c => !validGroupChannels.includes(c) || c === currentShelfChannel));
       } else {
           const toAdd = validGroupChannels.filter(c => !batchSelectedChannels.includes(c));
           setBatchSelectedChannels(prev => [...prev, ...toAdd]);
@@ -110,20 +112,16 @@ export const ShelfActionDialog = ({
   };
 
   const handleConfirm = () => {
-      if (isBatch) {
-          const updates: Record<string, 'on_shelf' | 'off_shelf'> = {};
-          const status = data.action === 'on' ? 'on_shelf' : 'off_shelf';
-          batchSelectedChannels.forEach(ch => { updates[ch] = status; });
-          onConfirm(updates);
-      } else {
-          onConfirm(channelStatus);
-      }
+      const updates: Record<string, 'on_shelf' | 'off_shelf'> = {};
+      const status = data.action === 'on' ? 'on_shelf' : 'off_shelf';
+      batchSelectedChannels.forEach(ch => { updates[ch] = status; });
+      onConfirm(updates);
   };
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
+    <div className="pos-legacy-modal fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
        <div className="bg-white rounded-[12px] shadow-2xl w-[500px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[80vh]">
           <div className="pt-6 pb-4 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
              <h3 className="text-xl font-bold text-[#333] flex items-center">
@@ -131,7 +129,7 @@ export const ShelfActionDialog = ({
              </h3>
              <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
           </div>
-          
+
           <div className="p-6 overflow-y-auto flex-1">
              <div className="mb-6 text-center">
                 <span className="text-[#666] text-base">确认将 <span className="font-bold text-[#333] text-lg mx-1">{name}</span> {data.action === 'on' ? '上架' : '下架'}吗？</span>
@@ -148,9 +146,10 @@ export const ShelfActionDialog = ({
              )}
 
              {/* Always show channel selection, but lock it if united */}
-             <div className="bg-[#F7F8FA] rounded-xl p-5 border border-[#E8E8E8]">
-                 <div className="text-sm font-bold text-gray-700 mb-4">选择生效渠道</div>
-                 
+             <div className="bg-[#EDF2FB] rounded-xl p-5 border border-[#E8E8E8]">
+                 <div className="text-sm font-bold text-gray-700 mb-1">选择生效渠道</div>
+                 {!isShelvesUnited && <p className="mb-4 text-xs text-gray-500">当前渠道必须保留，可追加其他渠道执行相同操作。</p>}
+
                  {enableChannelGrouping ? (
                      // Grouped toggles
                          <div className="space-y-3">
@@ -158,20 +157,20 @@ export const ShelfActionDialog = ({
                                  const gChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c));
                                  const validGChannels = gChannels.filter(c => validChannels.includes(c));
                                  if (validGChannels.length === 0) return null;
-                                 
+
                                  const isAllSelected = validGChannels.every(c => batchSelectedChannels.includes(c));
-                                 
+
                                  return (
-                                     <div 
-                                         key={group.id} 
+                                     <div
+                                         key={group.id}
                                          onClick={() => toggleBatchGroup(validGChannels)}
-                                         className={`flex items-center justify-between p-4 bg-white border rounded-lg cursor-pointer transition-all hover:border-[#00C06B]/50 ${isAllSelected ? 'border-[#00C06B] shadow-sm' : 'border-gray-200'}`}
+                                         className={`flex items-center justify-between p-4 bg-white border rounded-lg cursor-pointer transition-all hover:border-[#3478F6]/50 ${isAllSelected ? 'border-[#3478F6] shadow-sm' : 'border-gray-200'}`}
                                      >
                                          <div>
                                              <div className="font-bold text-gray-800 text-sm mb-1">{group.name}</div>
                                              <div className="text-xs text-gray-500">包含: {validGChannels.map(c => CHANNEL_TABS.find(t => t.id === c)?.label).join(', ')}</div>
                                          </div>
-                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isAllSelected ? 'bg-[#00C06B] border-[#00C06B]' : 'border-gray-300'}`}>
+                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isAllSelected ? 'bg-[#3478F6] border-[#3478F6]' : 'border-gray-300'}`}>
                                              {isAllSelected && <Check size={14} className="text-white"/>}
                                          </div>
                                      </div>
@@ -184,21 +183,23 @@ export const ShelfActionDialog = ({
                              {CHANNEL_TABS.map(tab => {
                                  const isValid = validChannels.includes(tab.id);
                                  const isSelected = batchSelectedChannels.includes(tab.id);
-                                 
+                                 const isCurrent = tab.id === currentShelfChannel;
+                                 const currentStatus = !isBatch ? items[0]?.channels?.[tab.id] : null;
+
                                  if (!isValid) return null;
-                                 
+
                                  return (
-                                     <div 
+                                     <div
                                          key={tab.id}
                                          onClick={() => toggleBatchChannel(tab.id)}
-                                         className={`flex items-center justify-between p-3 bg-white border rounded-lg transition-all ${isShelvesUnited ? 'opacity-60 cursor-not-allowed border-gray-200' : `cursor-pointer hover:border-[#00C06B]/50 ${isSelected ? 'border-[#00C06B] shadow-sm' : 'border-gray-200'}`}`}
+                                         className={`flex items-center justify-between p-3 bg-white border rounded-lg transition-all ${isShelvesUnited || isCurrent ? 'opacity-75 cursor-not-allowed border-gray-200' : `cursor-pointer hover:border-[#3478F6]/50 ${isSelected ? 'border-[#3478F6] shadow-sm' : 'border-gray-200'}`}`}
                                      >
                                          <div className="flex items-center space-x-3">
                                              <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isShelvesUnited ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600'}`}>{tab.icon}</div>
-                                             <span className="font-bold text-[#333] text-sm">{tab.label}</span>
+                                             <span className="font-bold text-[#333] text-sm">{tab.label}{isCurrent ? ' · 当前' : ''}{currentStatus && <small className="block mt-0.5 text-[10px] font-normal text-gray-400">当前{currentStatus === 'on_shelf' ? '已上架' : '已下架'}</small>}</span>
                                          </div>
-                                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#00C06B] border-[#00C06B]' : 'border-gray-300'}`}>
-                                             {isSelected && <Check size={12} className="text-white"/>}
+                                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#3478F6] border-[#3478F6]' : 'border-gray-300'}`}>
+                                             {isCurrent ? <Lock size={10} className="text-white"/> : isSelected && <Check size={12} className="text-white"/>}
                                          </div>
                                      </div>
                                  )
@@ -207,13 +208,13 @@ export const ShelfActionDialog = ({
                      )}
                  </div>
           </div>
-          
+
           <div className="p-6 pt-4 border-t border-gray-100 flex space-x-4 shrink-0">
              <button onClick={onClose} className="flex-1 py-3 rounded-lg bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-colors">取消</button>
-             <button 
-                 onClick={handleConfirm} 
+             <button
+                 onClick={handleConfirm}
                  disabled={!isShelvesUnited && batchSelectedChannels.length === 0}
-                 className="flex-1 py-3 rounded-lg text-white font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-[#00C06B] hover:bg-[#00A35B]"
+                 className="flex-1 py-3 rounded-lg text-white font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-[#3478F6] hover:bg-[#2563EB]"
              >
                  确认{data.action === 'on' ? '上架' : '下架'}
              </button>
@@ -258,6 +259,9 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
       const newState = { ...localChannels };
       (Object.keys(newState) as ChannelTabType[]).forEach(key => { if (newState[key] !== 'unmapped') newState[key] = action === 'on' ? 'on_shelf' : 'off_shelf'; });
       setLocalChannels(newState);
+      if (isShelvesUnited) {
+          onConfirm({ ...item, status: action === 'on' ? 'on_shelf' : 'off_shelf', channels: newState });
+      }
    };
 
    const handleConfirm = () => {
@@ -310,7 +314,7 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
                            }).filter(c => c.label); // Filter valid
 
                        if (groupChannels.length === 0) return null;
-                       
+
                        const isUnmappedGroup = groupChannels.every(ch => ch.status === 'unmapped');
                        const allOn = groupChannels.filter(ch => ch.status !== 'unmapped').every(ch => ch.status === 'on_shelf');
 
@@ -344,7 +348,7 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
                                                    {isUnmapped ? (
                                                        <span className="text-[10px] text-red-400 bg-red-50 px-2 py-0.5 rounded font-bold">未建立映射</span>
                                                    ) : (
-                                                       <div onClick={() => toggleChannel(ch.id as ChannelTabType)} className={`w-10 h-6 rounded-full relative transition-all ${isShelvesUnited ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${isOn ? 'bg-[#00C06B]' : 'bg-gray-200'}`}>
+                                                       <div onClick={() => toggleChannel(ch.id as ChannelTabType)} className={`w-10 h-6 rounded-full relative transition-all ${isShelvesUnited ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${isOn ? 'bg-[#3478F6]' : 'bg-gray-200'}`}>
                                                            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all shadow-sm flex items-center justify-center ${isOn ? 'left-4.5' : 'left-0.5'}`}></div>
                                                        </div>
                                                    )}
@@ -390,13 +394,13 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
    };
 
    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
+      <div className="pos-legacy-modal fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
          <div className="bg-white rounded-[12px] shadow-2xl w-[600px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-               <div><h3 className="text-xl font-bold text-[#333]">多渠道上下架管理</h3><p className="text-sm text-gray-500 mt-1">{item.name}</p></div>
+               <div><h3 className="text-xl font-bold text-[#333]">商品上下架</h3><p className="text-sm text-gray-500 mt-1">{item.name} · {POS_STORE_NAME}</p></div>
                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={20}/></button>
             </div>
-            <div className="p-6 bg-[#F7F8FA] overflow-y-auto">
+            <div className="p-6 bg-[#EDF2FB] overflow-y-auto">
                {!isShelvesUnited && (
                    <div className="flex space-x-3 mb-6">
                       <button onClick={() => handleBatch('on')} className="flex-1 bg-white border border-gray-200 text-blue-600 font-bold py-3 rounded-lg shadow-sm hover:border-blue-400 hover:shadow-md transition-all active:scale-95">一键全渠道上架</button>
@@ -424,7 +428,9 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
 };
 
 // --- Clearance Settings Modal ---
-export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string[]; isBatch?: boolean; onClose: () => void; onConfirm: () => void; activeChannel: ChannelType | string }> = ({ product, batchIds, isBatch, onClose, onConfirm, activeChannel }) => {
+export type ClearanceUpdate = { recover?: boolean; method: 'day' | 'long'; mode: 'spu' | 'sku'; values: { dayRemain: string; dayNextLimit: string; longLimit: string }; specValues: Record<string, { dayRemain: string; dayNextLimit: string; longLimit: string }>; selectedSpecs: string[]; channels: string[] };
+
+export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string[]; isBatch?: boolean; onClose: () => void; onConfirm: (update: ClearanceUpdate) => void; activeChannel: ChannelType | string }> = ({ product, batchIds, isBatch, onClose, onConfirm, activeChannel }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const currentConfig = brandConfigs[activeBrandId];
   const isStockShared = currentConfig?.features.stock_shared ?? true;
@@ -439,19 +445,20 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
       return CHANNEL_TABS.map(t => t.id).filter(chId => {
           if (isBatch) return true; // simplified for batch
           if (!product) return false;
-          const dataKey = chId === 'mini_dine' || chId === 'mini_take' || chId === 'mini_pickup' ? 'mini' : chId;
+          const dataKey = chId;
           return product.channels[dataKey as ChannelTabType] !== 'unmapped';
       });
   }, [product, isBatch]);
 
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(resolvedChannels);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(() => !isStockShared && resolvedChannels.includes(activeChannel as ChannelTabType) ? [activeChannel] : resolvedChannels);
+  const currentChannel = !isStockShared && resolvedChannels.includes(activeChannel as ChannelTabType) ? String(activeChannel) : null;
 
   useEffect(() => {
-      setSelectedChannels(resolvedChannels);
-  }, [resolvedChannels, isStockShared]);
+      setSelectedChannels(!isStockShared && resolvedChannels.includes(activeChannel as ChannelTabType) ? [activeChannel] : resolvedChannels);
+  }, [resolvedChannels, isStockShared, activeChannel]);
 
   const toggleChannel = (c: string) => {
-    if (isStockShared) return; 
+    if (isStockShared || c === currentChannel) return;
     setSelectedChannels(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
   };
 
@@ -460,7 +467,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
           // Find unassigned channels
           const assignedChannels = new Set(channelGroups.flatMap(g => g.channels));
           const unassignedChannels = resolvedChannels.filter(c => !assignedChannels.has(c));
-          
+
           const groupsToRender = [...channelGroups];
           if (unassignedChannels.length > 0) {
               groupsToRender.push({
@@ -473,20 +480,20 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
           return groupsToRender.map(group => {
               const groupChannels = group.channels.filter(c => resolvedChannels.includes(c));
               if (groupChannels.length === 0) return null;
-              
+
               const isGroupActive = groupChannels.every(id => selectedChannels.includes(id));
               const isLocked = false; // groups only render in independent mode, so never locked here
-              
+
               return (
-                  <div 
+                  <div
                     key={group.id}
                     onClick={() => {
-                        if (isGroupActive) setSelectedChannels(prev => prev.filter(id => !groupChannels.includes(id)));
+                        if (isGroupActive) setSelectedChannels(prev => prev.filter(id => !groupChannels.includes(id) || id === currentChannel));
                         else setSelectedChannels(prev => Array.from(new Set([...prev, ...groupChannels])));
                     }}
                     className={`
                         flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer min-w-[140px] relative
-                        ${isGroupActive ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B]' : 'bg-white border-gray-200 text-gray-500 hover:border-[#00C06B]/50'}
+                        ${isGroupActive ? 'bg-[#3478F6]/10 border-[#3478F6] text-[#3478F6]' : 'bg-white border-gray-200 text-gray-500 hover:border-[#3478F6]/50'}
                     `}
                   >
                       <div className="flex items-center justify-between mb-2">
@@ -494,7 +501,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                           {groupChannels.map(cId => (
-                              <span key={cId} className={`text-[10px] px-1.5 py-0.5 rounded border ${isGroupActive ? 'bg-white border-[#00C06B]/30 text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                              <span key={cId} className={`text-[10px] px-1.5 py-0.5 rounded border ${isGroupActive ? 'bg-white border-[#3478F6]/30 text-[#3478F6]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
                                   {CHANNEL_TABS.find(t => t.id === cId)?.label || cId}
                               </span>
                           ))}
@@ -508,16 +515,17 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
       return resolvedChannels.map(chId => {
           const tab = CHANNEL_TABS.find(t => t.id === chId);
           const isActive = selectedChannels.includes(chId);
-          const isLocked = isStockShared;
+          const isLocked = isStockShared || chId === currentChannel;
 
           return (
-              <div 
+              <div
                 key={chId}
                 onClick={() => toggleChannel(chId)}
-                className={`flex items-center px-3 py-2 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'border-[#00C06B] bg-[#00C06B]/10 text-[#00C06B]' : 'border-gray-200 bg-white text-gray-600'} ${isLocked ? 'opacity-80 cursor-not-allowed' : 'hover:border-[#00C06B]/50'}`}
+                className={`flex items-center px-3 py-2 rounded-lg border-2 cursor-pointer transition-all ${isActive ? 'border-[#3478F6] bg-[#3478F6]/10 text-[#3478F6]' : 'border-gray-200 bg-white text-gray-600'} ${isLocked ? 'opacity-80 cursor-not-allowed' : 'hover:border-[#3478F6]/50'}`}
               >
-                  <span className="text-sm font-bold mr-2">{tab?.label}</span>
+                  <span className="text-sm font-bold mr-2">{tab?.label}{chId === currentChannel ? ' · 当前渠道' : ''}</span>
                   {isLocked && <Lock size={12} className="text-orange-400"/>}
+                  {!isBatch && !isStockShared && <span className="ml-2 text-[10px] text-gray-400">{(product?.channelStocks?.[chId] ?? product?.stock) === Infinity ? '不限量' : `库存 ${product?.channelStocks?.[chId] ?? product?.stock ?? 0}`}</span>}
               </div>
           );
       });
@@ -526,19 +534,19 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
   // State management for 2-column unified layout
   const [globalMethod, setGlobalMethod] = useState<'day' | 'long'>('day');
   const [clearanceMode, setClearanceMode] = useState<'spu' | 'sku'>('spu');
-  
+
   // Logic for default dayNextLimit (if product has maxStock, use it, else empty string representing infinite)
   const defaultNextLimit = product?.maxStock !== undefined && product?.maxStock !== null ? String(product.maxStock) : '';
-  
+
   const [targetValues, setTargetValues] = useState({ dayRemain: '0', dayNextLimit: defaultNextLimit, longLimit: '0' });
   const [activeField, setActiveField] = useState<'dayRemain' | 'dayNextLimit' | 'longLimit'>('dayRemain');
-  
+
   // Selected specs for multi-spec operations
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
-  
+
   // Advanced Spec Row Focus Logic
   const [activeSpecRowId, setActiveSpecRowId] = useState<string | null>(null);
-  
+
   // Store individual spec values: specId -> { dayRemain, dayNextLimit, longLimit }
   const [specValues, setSpecValues] = useState<Record<string, { dayRemain: string, dayNextLimit: string, longLimit: string }>>({});
 
@@ -579,7 +587,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
          // Update global target value and sync to ALL selected specs
          setTargetValues(prev => {
              const newVal = updateValue(prev[activeField]);
-             
+
              // Sync down to selected specs if it's a global change
              if (isMultiSpec) {
                  setSpecValues(specPrev => {
@@ -593,7 +601,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                      return nextSpecs;
                  });
              }
-             
+
              return { ...prev, [activeField]: newVal };
          });
      }
@@ -608,7 +616,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
       else setSelectedSpecs(product?.specs?.map((s:any) => s.id) || []);
   };
 
-  const canConfirm = (isMultiSpec && clearanceMode === 'sku') ? selectedSpecs.length > 0 : true;
+  const canConfirm = selectedChannels.length > 0 && ((isMultiSpec && clearanceMode === 'sku') ? selectedSpecs.length > 0 : true);
 
   // Secondary confirmation for cancel clearance
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -617,16 +625,16 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
   const [showHelpModal, setShowHelpModal] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className={`bg-white rounded-[24px] h-[680px] shadow-2xl flex overflow-hidden transform scale-100 transition-all font-sans w-[880px]`}>
-            
+    <div className="pos-legacy-modal fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className={`bg-white rounded-[24px] h-[680px] max-h-[calc(100%-32px)] shadow-2xl flex overflow-hidden transform scale-100 transition-all font-sans w-[880px]`}>
+
             {/* Left Panel: Settings Workspace */}
             <div className="flex-1 flex flex-col bg-white relative border-r border-gray-100 min-w-0">
                <div className="p-8 pb-6 flex justify-between items-start shrink-0 border-b border-gray-50">
                   <div>
                      <div className="flex items-center gap-3">
                          <h3 className="text-2xl font-black text-gray-900 leading-tight">{title}</h3>
-                         <button 
+                         <button
                             onClick={() => setShowHelpModal(true)}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors"
                          >
@@ -634,15 +642,16 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                             如何沽清商品
                          </button>
                      </div>
+                     <p className="text-xs text-gray-400 mt-2">{POS_STORE_NAME} · 确认后立即生效</p>
                      {!isBatch && !isMultiSpec && (
                          <div className="text-sm font-bold text-gray-400 mt-2 flex items-center gap-2">
-                            <span className="text-gray-600">¥{product?.price?.toFixed(2)}</span> 
+                            <span className="text-gray-600">¥{product?.price?.toFixed(2)}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                             <span>{product?.spec}</span>
                             {isStockShared && (
                                 <>
                                     <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                    <span className="text-gray-500">剩余: {product?.stock ?? 0}</span>
+                                    <span className="text-gray-500">{product?.stock === Infinity ? '不限量售卖' : `剩余: ${product?.stock ?? 0}`}</span>
                                 </>
                             )}
                          </div>
@@ -657,19 +666,19 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                            <div className="flex-1">
                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">沽清类型</div>
                                <div className="flex space-x-3">
-                                   <button onClick={() => handleMethodChange('day')} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${globalMethod === 'day' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>当日沽清</button>
-                                   <button onClick={() => handleMethodChange('long')} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${globalMethod === 'long' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>长期沽清</button>
+                                   <button onClick={() => handleMethodChange('day')} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${globalMethod === 'day' ? 'bg-[#3478F6]/10 border-[#3478F6] text-[#3478F6] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>当日沽清</button>
+                                   <button onClick={() => handleMethodChange('long')} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${globalMethod === 'long' ? 'bg-[#3478F6]/10 border-[#3478F6] text-[#3478F6] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>长期沽清</button>
                                </div>
                            </div>
                        </div>
-                       
+
                        {isMultiSpec && (
                            <div className="flex gap-4">
                                <div className="flex-1">
                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">沽清模式</div>
                                    <div className="flex space-x-3">
-                                       <button onClick={() => { setClearanceMode('spu'); setActiveSpecRowId(null); }} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${clearanceMode === 'spu' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>按商品统一设置</button>
-                                       <button onClick={() => { setClearanceMode('sku'); if(product?.specs?.length && !activeSpecRowId) { setActiveSpecRowId(product.specs[0].id); if (selectedSpecs.length === 0) setSelectedSpecs(product.specs.map((s:any)=>s.id)); } }} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${clearanceMode === 'sku' ? 'bg-[#00C06B]/10 border-[#00C06B] text-[#00C06B] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>按规格独立设置</button>
+                                       <button onClick={() => { setClearanceMode('spu'); setActiveSpecRowId(null); }} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${clearanceMode === 'spu' ? 'bg-[#3478F6]/10 border-[#3478F6] text-[#3478F6] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>按商品统一设置</button>
+                                       <button onClick={() => { setClearanceMode('sku'); if(product?.specs?.length && !activeSpecRowId) { setActiveSpecRowId(product.specs[0].id); if (selectedSpecs.length === 0) setSelectedSpecs(product.specs.map((s:any)=>s.id)); } }} className={`flex-1 py-3.5 rounded-xl text-[14px] font-black transition-all border-2 ${clearanceMode === 'sku' ? 'bg-[#3478F6]/10 border-[#3478F6] text-[#3478F6] shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'}`}>按规格独立设置</button>
                                    </div>
                                </div>
                            </div>
@@ -686,62 +695,62 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                        生效规格明细 <span className="text-red-500 ml-1">*</span>
                                        <span className="ml-2 text-[10px] text-gray-400 font-normal bg-gray-100 px-1.5 py-0.5 rounded">已选 {selectedSpecs.length}/{product?.specs?.length || 0}</span>
                                    </div>
-                                   <button onClick={selectAllSpecs} className="text-[#00C06B] text-sm font-bold hover:text-[#00A35B] transition-colors">
+                                   <button onClick={selectAllSpecs} className="text-[#3478F6] text-sm font-bold hover:text-[#2563EB] transition-colors">
                                        {selectedSpecs.length === (product?.specs?.length || 0) ? '取消全选' : '全选'}
                                    </button>
                                </div>
-                           
+
                                <div className="space-y-2">
                                    {product?.specs?.map((spec: any) => {
                                        const isSelected = selectedSpecs.includes(spec.id);
                                        const isActiveRow = activeSpecRowId === spec.id;
                                        const vals = specValues[spec.id] || { dayRemain: '0', dayNextLimit: defaultNextLimit, longLimit: '0' };
-                                       
+
                                        return (
-                                           <div 
-                                               key={spec.id} 
+                                           <div
+                                               key={spec.id}
                                                onClick={() => {
                                                    if (!isSelected) toggleSpec(spec.id);
                                                    setActiveSpecRowId(spec.id);
                                                    if (globalMethod === 'day' && activeField === 'longLimit') setActiveField('dayRemain');
                                                    if (globalMethod === 'long' && activeField !== 'longLimit') setActiveField('longLimit');
                                                }}
-                                               className={`flex items-center p-3 rounded-xl border-2 transition-all cursor-pointer ${isSelected ? (isActiveRow ? 'border-[#00C06B] bg-[#00C06B]/5 shadow-sm ring-2 ring-[#00C06B]/20' : 'border-gray-200 bg-white hover:border-[#00C06B]/30') : 'border-transparent bg-gray-50 opacity-60 hover:opacity-100'}`}
+                                               className={`flex items-center p-3 rounded-xl border-2 transition-all cursor-pointer ${isSelected ? (isActiveRow ? 'border-[#3478F6] bg-[#3478F6]/5 shadow-sm ring-2 ring-[#3478F6]/20' : 'border-gray-200 bg-white hover:border-[#3478F6]/30') : 'border-transparent bg-gray-50 opacity-60 hover:opacity-100'}`}
                                            >
-                                               <div 
+                                               <div
                                                    onClick={(e) => { e.stopPropagation(); toggleSpec(spec.id); }}
                                                    className="mr-3 p-1"
                                                >
-                                                   {isSelected ? <CheckCircle2 size={22} className="text-[#00C06B] fill-white"/> : <Circle size={22} className="text-gray-300 fill-transparent"/>}
+                                                   {isSelected ? <CheckCircle2 size={22} className="text-[#3478F6] fill-white"/> : <Circle size={22} className="text-gray-300 fill-transparent"/>}
                                                </div>
-                                               
+
                                                <div className="w-[100px] shrink-0 font-bold text-gray-800 text-[15px] truncate pr-2 flex flex-col">
                                                    <span>{spec.name}</span>
                                                    <span className="text-[10px] text-gray-400 font-normal mt-0.5">当前库存: {spec.stock ?? 0}</span>
                                                </div>
-                                               
+
                                                <div className="flex-1 flex gap-2">
                                                    {globalMethod === 'day' ? (
                                                        <>
-                                                           <div 
+                                                           <div
                                                                onClick={(e) => { e.stopPropagation(); setActiveSpecRowId(spec.id); setActiveField('dayRemain'); if(!isSelected) toggleSpec(spec.id); }}
-                                                               className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'dayRemain' ? 'bg-white border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
+                                                               className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'dayRemain' ? 'bg-white border-[#3478F6] text-[#3478F6]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
                                                            >
                                                                <span className="text-[10px] text-gray-400">今日剩余</span>
                                                                <span className="font-mono font-bold">{vals.dayRemain || '0'}</span>
                                                            </div>
-                                                           <div 
+                                                           <div
                                                                onClick={(e) => { e.stopPropagation(); setActiveSpecRowId(spec.id); setActiveField('dayNextLimit'); if(!isSelected) toggleSpec(spec.id); }}
-                                                               className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'dayNextLimit' ? 'bg-white border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
+                                                               className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'dayNextLimit' ? 'bg-white border-[#3478F6] text-[#3478F6]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
                                                            >
                                                                <span className="text-[10px] text-gray-400">次日补足</span>
                                                                <span className="font-mono font-bold">{vals.dayNextLimit || '无限'}</span>
                                                            </div>
                                                        </>
                                                    ) : (
-                                                       <div 
+                                                       <div
                                                            onClick={(e) => { e.stopPropagation(); setActiveSpecRowId(spec.id); setActiveField('longLimit'); if(!isSelected) toggleSpec(spec.id); }}
-                                                           className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'longLimit' ? 'bg-white border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
+                                                           className={`flex-1 h-10 rounded-lg flex items-center justify-between px-3 border transition-colors ${isActiveRow && activeField === 'longLimit' ? 'bg-white border-[#3478F6] text-[#3478F6]' : 'bg-gray-50 border-gray-100 text-gray-700'}`}
                                                        >
                                                            <span className="text-[10px] text-gray-400">剩余可售</span>
                                                            <span className="font-mono font-bold">{vals.longLimit || '0'}</span>
@@ -782,7 +791,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                        </div>
                    </div>
                </div>
-               
+
                {/* Global Lock Info Bar */}
                <div className="px-8 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
                    <div className="text-xs font-bold text-gray-500 flex items-center">
@@ -790,7 +799,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                        {isStockShared ? (
                            <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded flex items-center ml-2"><Lock size={12} className="mr-1"/> 共享库存 (全局同步)</span>
                        ) : enableChannelGrouping ? (
-                           <span className="text-[#00C06B] bg-[#00C06B]/10 px-2 py-1 rounded flex items-center ml-2"><Layers size={12} className="mr-1"/> 渠道分组独立</span>
+                           <span className="text-[#3478F6] bg-[#3478F6]/10 px-2 py-1 rounded flex items-center ml-2"><Layers size={12} className="mr-1"/> 渠道分组独立</span>
                        ) : (
                            <span className="text-gray-600 bg-gray-200 px-2 py-1 rounded ml-2">全渠道完全独立</span>
                        )}
@@ -799,26 +808,26 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
             </div>
 
             {/* Right Panel: Numpad & Actions */}
-            <div className="w-[320px] bg-[#F7F8FA] p-6 flex flex-col justify-between shrink-0 select-none relative">
+            <div className="w-[320px] bg-[#EDF2FB] p-6 flex flex-col justify-between shrink-0 select-none relative">
                 <button onClick={onClose} className="absolute top-4 right-4 p-2.5 bg-gray-200 hover:bg-gray-300 rounded-full text-gray-500 transition-colors z-10 active:scale-90"><X size={20}/></button>
-                
+
                 <div className="mt-12 grid grid-cols-3 gap-3 flex-1 content-start mb-6">
                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0].map(num => (
-                       <button key={num} onClick={() => handleNumpadInput(num.toString())} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-2xl font-black text-gray-800 hover:bg-white hover:border-[#00C06B] hover:text-[#00C06B] hover:shadow-md active:bg-[#00C06B]/5 active:scale-95 transition-all">{num}</button>
+                       <button key={num} onClick={() => handleNumpadInput(num.toString())} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-2xl font-black text-gray-800 hover:bg-white hover:border-[#3478F6] hover:text-[#3478F6] hover:shadow-md active:bg-[#3478F6]/5 active:scale-95 transition-all">{num}</button>
                    ))}
                    <button onClick={() => handleNumpadInput('backspace')} className="h-[72px] bg-white rounded-2xl shadow-sm border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-500 hover:shadow-md active:scale-95 transition-all flex items-center justify-center"><X size={28}/></button>
                 </div>
-                
+
                 <div className="space-y-3">
                     <button onClick={() => handleNumpadInput('clear')} className="w-full py-3 text-gray-400 text-sm font-bold hover:text-gray-600 transition-colors">清空当前输入</button>
                     <div className="flex gap-3">
                         {(!isBatch && (product?.status === 'sold_out' || product?.status === 'warning')) && (
                             <button onClick={() => setShowCancelConfirm(true)} className="flex-[0.8] h-16 bg-white border-2 border-red-100 text-red-500 rounded-2xl text-lg font-black hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all flex items-center justify-center shadow-sm">取消沽清</button>
                         )}
-                        <button 
-                            onClick={onConfirm} 
+                        <button
+                            onClick={() => onConfirm({ method: globalMethod, mode: clearanceMode, values: targetValues, specValues, selectedSpecs, channels: selectedChannels })}
                             disabled={!canConfirm}
-                            className={`flex-1 h-16 text-white rounded-2xl text-xl font-black shadow-lg transition-all flex items-center justify-center ${canConfirm ? 'bg-[#00C06B] shadow-[#00C06B]/30 hover:bg-[#00A35B] active:scale-95' : 'bg-gray-300 shadow-none cursor-not-allowed'}`}
+                            className={`flex-1 h-16 text-white rounded-2xl text-xl font-black shadow-lg transition-all flex items-center justify-center ${canConfirm ? 'bg-[#3478F6] shadow-[#3478F6]/30 hover:bg-[#2563EB] active:scale-95' : 'bg-gray-300 shadow-none cursor-not-allowed'}`}
                         >
                             确认修改
                         </button>
@@ -829,7 +838,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
 
         {/* Cancel Clearance Confirm Dialog inside the Modal */}
         {showCancelConfirm && (
-            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
+            <div className="pos-legacy-modal fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
                 <div className="bg-white rounded-xl shadow-2xl w-[400px] overflow-hidden animate-in zoom-in-95 font-sans">
                     <div className="p-6 text-center">
                         <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -853,8 +862,8 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                         <div className="w-px bg-gray-100"></div>
                         <button onClick={() => {
                             setShowCancelConfirm(false);
-                            onConfirm();
-                        }} className="flex-1 py-4 font-bold text-[#00C06B] hover:bg-[#00C06B]/5 transition-colors">确认恢复</button>
+                            onConfirm({ recover: true, method: globalMethod, mode: clearanceMode, values: targetValues, specValues, selectedSpecs, channels: selectedChannels });
+                        }} className="flex-1 py-4 font-bold text-[#3478F6] hover:bg-[#3478F6]/5 transition-colors">确认恢复</button>
                     </div>
                 </div>
             </div>
@@ -862,13 +871,13 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
 
         {/* Help Modal */}
         {showHelpModal && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
+            <div className="pos-legacy-modal fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
                 <div className="bg-white rounded-xl shadow-2xl w-[600px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[85vh]">
                     <div className="pt-5 pb-4 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
                         <h3 className="text-xl font-bold text-[#333]">如何沽清商品</h3>
                         <button onClick={() => setShowHelpModal(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                     </div>
-                    <div className="p-6 overflow-y-auto flex-1 space-y-8 bg-[#F7F8FA]">
+                    <div className="p-6 overflow-y-auto flex-1 space-y-8 bg-[#EDF2FB]">
                         {/* Scenario 1 */}
                         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                             <h4 className="text-[15px] font-bold text-gray-900 mb-3 flex items-center">
@@ -894,7 +903,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                     <rect x="22" y="22" width="76" height="26" rx="3" fill="#DBEAFE"/>
                                     <text x="60" y="39" fontSize="12" fill="#2563EB" textAnchor="middle" fontWeight="bold">当日沽清</text>
                                     <text x="138" y="39" fontSize="12" fill="#6B7280" textAnchor="middle">长期沽清</text>
-                                    
+
                                     {/* Inputs */}
                                     <rect x="20" y="65" width="170" height="40" rx="4" fill="white" stroke="#3B82F6" strokeWidth="1.5"/>
                                     <text x="30" y="80" fontSize="10" fill="#9CA3AF">今日剩余</text>
@@ -903,7 +912,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                     <rect x="210" y="65" width="170" height="40" rx="4" fill="white" stroke="#E5E7EB"/>
                                     <text x="220" y="80" fontSize="10" fill="#9CA3AF">次日补足</text>
                                     <text x="220" y="96" fontSize="14" fill="#111827" fontWeight="bold" fontFamily="monospace">80</text>
-                                    
+
                                     {/* Pointers/Arrows */}
                                     <path d="M100 45 L50 65" stroke="#3B82F6" strokeWidth="1.5" strokeDasharray="4 2" markerEnd="url(#arrow)"/>
                                     <defs>
@@ -939,13 +948,13 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                     <rect x="102" y="22" width="76" height="26" rx="3" fill="#FFEDD5"/>
                                     <text x="60" y="39" fontSize="12" fill="#6B7280" textAnchor="middle">当日沽清</text>
                                     <text x="140" y="39" fontSize="12" fill="#EA580C" textAnchor="middle" fontWeight="bold">长期沽清</text>
-                                    
+
                                     {/* Inputs */}
                                     <rect x="20" y="65" width="360" height="40" rx="4" fill="white" stroke="#EA580C" strokeWidth="1.5"/>
                                     <text x="30" y="80" fontSize="10" fill="#9CA3AF">剩余可售</text>
                                     <text x="30" y="96" fontSize="14" fill="#111827" fontWeight="bold" fontFamily="monospace">0</text>
                                     <text x="360" y="90" fontSize="10" fill="#9CA3AF" textAnchor="end">设为0即长期售罄</text>
-                                    
+
                                     {/* Pointers/Arrows */}
                                     <path d="M140 45 L140 65" stroke="#EA580C" strokeWidth="1.5" strokeDasharray="4 2" markerEnd="url(#arrowOrange)"/>
                                     <defs>
@@ -960,7 +969,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                         {/* Scenario 3 */}
                         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                             <h4 className="text-[15px] font-bold text-gray-900 mb-3 flex items-center">
-                                <span className="w-1.5 h-4 bg-[#00C06B] rounded-full mr-2"></span>
+                                <span className="w-1.5 h-4 bg-[#3478F6] rounded-full mr-2"></span>
                                 场景三：恢复已沽清商品的正常售卖
                             </h4>
                             <div className="text-sm text-gray-600 space-y-2 leading-relaxed">
@@ -975,13 +984,13 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                 <svg width="400" height="100" viewBox="0 0 400 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     {/* Buttons mock */}
                                     <rect width="400" height="100" rx="8" fill="#F9FAFB" stroke="#E5E7EB"/>
-                                    
+
                                     <rect x="20" y="30" width="160" height="40" rx="8" fill="white" stroke="#FECACA" strokeWidth="1.5"/>
                                     <text x="100" y="55" fontSize="14" fill="#EF4444" textAnchor="middle" fontWeight="bold">取消沽清</text>
 
-                                    <rect x="200" y="30" width="180" height="40" rx="8" fill="#00C06B"/>
+                                    <rect x="200" y="30" width="180" height="40" rx="8" fill="#3478F6"/>
                                     <text x="290" y="55" fontSize="14" fill="white" textAnchor="middle" fontWeight="bold">确认修改</text>
-                                    
+
                                     {/* Cursor mock */}
                                     <path d="M90 70 L105 50 L115 60 Z" fill="black" stroke="white" strokeWidth="2"/>
                                     <circle cx="100" cy="55" r="15" fill="#EF4444" fillOpacity="0.2"/>
@@ -990,7 +999,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                         </div>
                     </div>
                     <div className="p-4 border-t border-gray-100 shrink-0">
-                        <button onClick={() => setShowHelpModal(false)} className="w-full py-3 bg-[#00C06B] text-white rounded-lg font-bold hover:bg-[#00A35B] transition-colors">我已了解</button>
+                        <button onClick={() => setShowHelpModal(false)} className="w-full py-3 bg-[#3478F6] text-white rounded-lg font-bold hover:bg-[#2563EB] transition-colors">我已了解</button>
                     </div>
                 </div>
             </div>

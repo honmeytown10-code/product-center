@@ -19,11 +19,7 @@ type BatchProduct = {
   id: string;
   platformRowId: string;
   name: string;
-  productId: string;
   specName: string;
-  skuId: string;
-  skuCode: string;
-  type: 'standard' | 'combo';
 };
 
 type StoreRelation = {
@@ -31,9 +27,13 @@ type StoreRelation = {
   batchProductId: string;
   storeName: string;
   storeCode: string;
+  platformProductId: string;
+  platformSkuId: string;
+  platformSkuCode: string;
   status: 'mapped' | 'unmapped';
   qimaiProductId?: string;
   qimaiSpec?: string;
+  qimaiSpecIndex?: number;
   updatedAt?: string;
 };
 
@@ -61,22 +61,20 @@ const channelTabs: Array<{ id: ThirdPartyChannelId; label: string }> = [
 ];
 
 const batchProducts: BatchProduct[] = [
-  { id: 'bp1', platformRowId: 'm1', name: '招牌珍珠奶茶', productId: '30824739921', specName: '大杯', skuId: '34581232438', skuCode: 'MT-77821', type: 'standard' },
-  { id: 'bp2', platformRowId: 'm2', name: '手打柠檬茶（冰）', productId: '30824739922', specName: '标准', skuId: '34581232439', skuCode: 'MT-77822', type: 'standard' },
-  { id: 'bp3', platformRowId: 'm3', name: '黑糖波波鲜奶', productId: '30824739923', specName: '中杯', skuId: '34581232440', skuCode: 'MT-77823', type: 'standard' },
-  { id: 'bp4', platformRowId: 'm4', name: '多肉葡萄', productId: '30824739924', specName: '大杯', skuId: '34581232441', skuCode: 'MT-77824', type: 'standard' },
-  { id: 'bp5', platformRowId: 'm5', name: '经典牛肉汉堡', productId: '30824739925', specName: '标准', skuId: '34581232442', skuCode: 'MT-77825', type: 'standard' },
-  { id: 'bp6', platformRowId: 'm8', name: '经典珍珠奶绿', productId: '30824739935', specName: '中杯', skuId: '34581232443', skuCode: 'MT-77826', type: 'standard' },
-  { id: 'bp7', platformRowId: 'm9', name: '手打柠檬茶', productId: '30824739928', specName: '大杯', skuId: '34581232444', skuCode: 'MT-77827', type: 'standard' },
-  { id: 'bp8', platformRowId: 'm10', name: '手打柠檬茶', productId: '30824739929', specName: '大杯', skuId: '34581232445', skuCode: 'MT-77828', type: 'standard' },
-  { id: 'bp9', platformRowId: 'm11', name: '黑糖波波鲜奶', productId: '30824739923', specName: '大杯', skuId: '34581232446', skuCode: 'MT-77829', type: 'standard' },
-  { id: 'bp10', platformRowId: 'm12', name: '多肉葡萄', productId: '30824739924', specName: '中杯', skuId: '34581232447', skuCode: 'MT-77830', type: 'standard' },
-  { id: 'bp11', platformRowId: 'm13', name: '经典牛肉汉堡', productId: '30824739925', specName: '双层', skuId: '34581232448', skuCode: 'MT-77831', type: 'standard' },
-  { id: 'bp12', platformRowId: 'm14', name: '双人分享套餐', productId: '30824739930', specName: '2 人份', skuId: '34581232449', skuCode: 'MT-77832', type: 'combo' },
-  { id: 'bp13', platformRowId: 'm15', name: '双人分享套餐', productId: '30824739931', specName: '2 人份', skuId: '34581232450', skuCode: 'MT-77833', type: 'combo' },
-  { id: 'bp14', platformRowId: 'm16', name: '午市工作餐', productId: '30824739932', specName: '单人份', skuId: '34581232451', skuCode: 'MT-77834', type: 'combo' },
-  { id: 'bp15', platformRowId: 'm17', name: '季节限定草莓奶昔', productId: '30824739933', specName: '中杯', skuId: '34581232452', skuCode: 'MT-77835', type: 'standard' },
-  { id: 'bp16', platformRowId: 'm18', name: '老娘舅随心套餐', productId: '30824739934', specName: '1 人份', skuId: '34581232453', skuCode: 'MT-77836', type: 'combo' },
+  { id: 'bp1', platformRowId: 'm1', name: '招牌珍珠奶茶', specName: '大杯' },
+  { id: 'bp2', platformRowId: 'm2', name: '手打柠檬茶（冰）', specName: '标准' },
+  { id: 'bp3', platformRowId: 'm3', name: '黑糖波波鲜奶', specName: '中杯' },
+  { id: 'bp4', platformRowId: 'm4', name: '多肉葡萄', specName: '大杯' },
+  { id: 'bp5', platformRowId: 'm5', name: '经典牛肉汉堡', specName: '标准' },
+  { id: 'bp6', platformRowId: 'm8', name: '经典珍珠奶绿', specName: '中杯' },
+  { id: 'bp7', platformRowId: 'm9', name: '手打柠檬茶', specName: '大杯' },
+  { id: 'bp9', platformRowId: 'm11', name: '黑糖波波鲜奶', specName: '大杯' },
+  { id: 'bp10', platformRowId: 'm12', name: '多肉葡萄', specName: '中杯' },
+  { id: 'bp11', platformRowId: 'm13', name: '经典牛肉汉堡', specName: '双层' },
+  { id: 'bp12', platformRowId: 'm14', name: '双人分享套餐', specName: '2 人份' },
+  { id: 'bp14', platformRowId: 'm16', name: '午市工作餐', specName: '单人份' },
+  { id: 'bp15', platformRowId: 'm17', name: '季节限定草莓奶昔', specName: '中杯' },
+  { id: 'bp16', platformRowId: 'm18', name: '老娘舅随心套餐', specName: '1 人份' },
 ];
 
 const stores = [
@@ -116,9 +114,14 @@ const initialRelations: StoreRelation[] = batchProducts.flatMap(product => {
       batchProductId: product.id,
       storeName,
       storeCode,
+      // 聚合行无统一平台身份；同名同规格在每家门店可拥有不同 SPU/SKU。
+      platformProductId: `308247${String(39920 + Number(product.id.replace(/\D/g, '')) + index).padStart(5, '0')}`,
+      platformSkuId: `345812${String(32430 + Number(product.id.replace(/\D/g, '')) * 18 + index).padStart(5, '0')}`,
+      platformSkuCode: `MT-${String(77820 + Number(product.id.replace(/\D/g, '')) * 18 + index)}`,
       status: mapped ? 'mapped' : 'unmapped',
       qimaiProductId: mapped ? plan.productIds[index % plan.productIds.length] : undefined,
       qimaiSpec: mapped ? (index % 2 ? '中杯 / 常温' : '大杯 / 冰') : undefined,
+      qimaiSpecIndex: mapped ? index % 2 : undefined,
       updatedAt: mapped ? `2026-09-${String(10 - (index % 3)).padStart(2, '0')} ${String(9 + index).padStart(2, '0')}:24` : undefined,
     } as StoreRelation;
   });
@@ -144,12 +147,12 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   const [keyword, setKeyword] = useState('');
   const [qimaiKeyword, setQimaiKeyword] = useState('');
   const [bindingStatus, setBindingStatus] = useState<'all' | 'partial' | 'mapped' | 'unmapped'>('all');
-  const [productType, setProductType] = useState<'all' | 'standard' | 'combo'>('all');
   const [detailProductId, setDetailProductId] = useState<string | null>(() => {
     const requested = new URLSearchParams(window.location.search).get('batchDetail');
     return batchProducts.some(item => item.id === requested) ? requested : null;
   });
   const [detailStoreKeyword, setDetailStoreKeyword] = useState('');
+  const [detailPlatformKeyword, setDetailPlatformKeyword] = useState('');
   const [detailQimaiKeyword, setDetailQimaiKeyword] = useState('');
   const [detailStatus, setDetailStatus] = useState<'all' | 'mapped' | 'unmapped'>('all');
   const [selectedRelationIds, setSelectedRelationIds] = useState<string[]>([]);
@@ -191,12 +194,11 @@ export const WebBatchProductMapping: React.FC<Props> = ({
       || (bindingStatus === 'mapped' && stats.unmapped === 0)
       || (bindingStatus === 'unmapped' && stats.mapped === 0)
       || (bindingStatus === 'partial' && stats.mapped > 0 && stats.unmapped > 0);
-    return (!keyword || `${item.name}${item.productId}${item.specName}${item.skuId}${item.skuCode}`.toLowerCase().includes(keyword.trim().toLowerCase()))
-      && (productType === 'all' || item.type === productType)
+    return (!keyword || `${item.name}${item.specName}`.toLowerCase().includes(keyword.trim().toLowerCase()))
       && statusMatched
       && qimaiMatched;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [bindingStatus, exemptRowIds, keyword, productType, qimaiKeyword, relations, products]);
+  }), [bindingStatus, exemptRowIds, keyword, qimaiKeyword, relations, products]);
 
   const activeProduct = batchProducts.find(item => item.id === detailProductId);
   const scenarioCounts = useMemo(() => filteredProducts.reduce((counts, item) => {
@@ -211,9 +213,10 @@ export const WebBatchProductMapping: React.FC<Props> = ({
     const qimai = productById(item.qimaiProductId);
     return (detailStatus === 'all' || item.status === detailStatus)
       && (!detailStoreKeyword || `${item.storeName}${item.storeCode}`.toLowerCase().includes(detailStoreKeyword.trim().toLowerCase()))
-      && (!detailQimaiKeyword || `${qimai?.name || ''}${qimai?.skuCode || ''}`.toLowerCase().includes(detailQimaiKeyword.trim().toLowerCase()));
+      && (!detailPlatformKeyword || `${item.platformProductId}${item.platformSkuId}${item.platformSkuCode}`.toLowerCase().includes(detailPlatformKeyword.trim().toLowerCase()))
+      && (!detailQimaiKeyword || `${qimai?.name || ''}${qimai?.specs?.[item.qimaiSpecIndex || 0]?.name || item.qimaiSpec || ''}${qimai?.skuCode || ''}`.toLowerCase().includes(detailQimaiKeyword.trim().toLowerCase()));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [detailProductId, detailQimaiKeyword, detailStatus, detailStoreKeyword, relations, products]);
+  }), [detailPlatformKeyword, detailProductId, detailQimaiKeyword, detailStatus, detailStoreKeyword, relations, products]);
 
   const candidateProducts = useMemo(() => products.filter(item =>
     !candidateKeyword || `${item.name}${item.id}${item.skuCode}${item.category}`.toLowerCase().includes(candidateKeyword.trim().toLowerCase()),
@@ -223,6 +226,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
     setDetailProductId(batchProductId);
     setSelectedRelationIds([]);
     setDetailStoreKeyword('');
+    setDetailPlatformKeyword('');
     setDetailQimaiKeyword('');
     setDetailStatus('all');
     const nextUrl = new URL(window.location.href);
@@ -259,6 +263,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
       status: 'mapped',
       qimaiProductId: candidateProductId,
       qimaiSpec: candidateSpec || candidate.specs?.[0]?.name || '默认规格',
+      qimaiSpecIndex: Math.max(0, candidate.specs?.findIndex(spec => spec.name === candidateSpec) ?? 0),
       updatedAt: '刚刚',
     } : relation));
     onMessage(`已将 ${bindingTarget.relationIds.length} 家门店的该平台规格绑定至“${candidate.name} / ${candidateSpec || '默认规格'}”。`);
@@ -273,6 +278,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
       status: 'unmapped',
       qimaiProductId: undefined,
       qimaiSpec: undefined,
+      qimaiSpecIndex: undefined,
       updatedAt: undefined,
     } : relation));
     onMessage(`已解除 ${relationIds.length} 家门店的绑定关系。`);
@@ -299,18 +305,17 @@ export const WebBatchProductMapping: React.FC<Props> = ({
 
         <div className="flex h-[52px] items-center gap-2 px-4">
           <button type="button" onClick={() => setShowScope(true)} className="inline-flex h-8 w-[180px] shrink-0 items-center justify-between rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]"><span className="truncate">华南区域、直营门店 · 18 家</span><ChevronDown size={13} className="ml-2 shrink-0" /></button>
-          <label className="flex h-8 min-w-[180px] flex-[1.2] items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={14} className="mr-2 shrink-0 text-[#86909C]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="平台商品名称 / SKU ID / SKU码" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label>
+          <label className="flex h-8 min-w-[180px] flex-[1.2] items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={14} className="mr-2 shrink-0 text-[#86909C]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="平台商品名称 / 规格" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label>
           <label className="flex h-8 min-w-[150px] flex-1 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={14} className="mr-2 shrink-0 text-[#86909C]" /><input value={qimaiKeyword} onChange={event => setQimaiKeyword(event.target.value)} placeholder="已绑定企迈商品 / SKU" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label>
           <select value={bindingStatus} onChange={event => setBindingStatus(event.target.value as typeof bindingStatus)} className="h-8 w-[140px] shrink-0 rounded-md border border-[#C9CDD4] bg-white px-2 text-[12px] text-[#4E5969]"><option value="all">全部绑定情况</option><option value="partial">部分门店已绑定</option><option value="mapped">全部门店已绑定</option><option value="unmapped">全部门店未绑定</option></select>
-          <select value={productType} onChange={event => setProductType(event.target.value as typeof productType)} className="h-8 w-[120px] shrink-0 rounded-md border border-[#C9CDD4] bg-white px-2 text-[12px] text-[#4E5969]"><option value="all">全部商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option></select>
-          <button type="button" onClick={() => onMessage(`已按当前条件查询，共 ${filteredProducts.length} 个平台商品 SKU。`)} className="h-8 shrink-0 whitespace-nowrap rounded-md bg-[#00B460] px-3 text-[12px] font-bold text-white">查询</button>
-          <button type="button" onClick={() => { setKeyword(''); setQimaiKeyword(''); setBindingStatus('all'); setProductType('all'); }} className="h-8 shrink-0 whitespace-nowrap rounded-md px-2 text-[12px] text-[#4E5969]">重置</button>
+          <button type="button" onClick={() => onMessage(`已按当前条件查询，共 ${filteredProducts.length} 个平台商品规格。`)} className="h-8 shrink-0 whitespace-nowrap rounded-md bg-[#00B460] px-3 text-[12px] font-bold text-white">查询</button>
+          <button type="button" onClick={() => { setKeyword(''); setQimaiKeyword(''); setBindingStatus('all'); }} className="h-8 shrink-0 whitespace-nowrap rounded-md px-2 text-[12px] text-[#4E5969]">重置</button>
         </div>
       </section>
 
       <section className="overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
         <div className="flex min-h-12 items-center gap-3 border-b border-[#E5E6EB] px-4 py-2">
-          <span className="shrink-0 text-[13px] text-[#4E5969]">共 {filteredProducts.length} 个平台商品 SKU{selectedProductIds.length > 0 && <>，已选 <strong className="text-[#00A35B]">{selectedProductIds.length}</strong> 个</>}</span>
+          <span className="shrink-0 text-[13px] text-[#4E5969]">共 {filteredProducts.length} 个平台商品规格{selectedProductIds.length > 0 && <>，已选 <strong className="text-[#00A35B]">{selectedProductIds.length}</strong> 个</>}</span>
           <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px]">
             <span className="whitespace-nowrap rounded bg-[#E8FFF3] px-2 py-1 text-[#008A4B]">全部已绑定 {scenarioCounts.mapped}</span>
             <span className="whitespace-nowrap rounded bg-[#FFF7E8] px-2 py-1 text-[#B36B00]">部分已绑定 {scenarioCounts.partial}</span>
@@ -323,20 +328,19 @@ export const WebBatchProductMapping: React.FC<Props> = ({
           </div>
         </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[980px]">
-            <div className="grid grid-cols-[36px_minmax(170px,1.2fr)_135px_84px_205px_minmax(150px,1fr)_170px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
-              <div /><div>平台商品</div><div>平台规格</div><div>商品类型</div><div>门店绑定覆盖</div><div>企迈商品分布</div><div>操作</div>
+          <div className="min-w-[900px]">
+            <div className="grid grid-cols-[36px_minmax(200px,1.2fr)_145px_205px_minmax(170px,1fr)_170px] bg-[#F7F8FA] px-4 py-3 text-[12px] font-medium text-[#4E5969]">
+              <div /><div>平台商品</div><div>平台规格</div><div>门店绑定覆盖</div><div>企迈商品分布</div><div>操作</div>
             </div>
             {filteredProducts.map(item => {
               const stats = statsFor(item.id);
               const itemRelations = relations.filter(relation => relation.batchProductId === item.id);
               const mappedNames = Array.from(new Set(itemRelations.filter(relation => relation.status === 'mapped').map(relation => productById(relation.qimaiProductId)?.name).filter(Boolean))) as string[];
               const selected = selectedProductIds.includes(item.id);
-              return <div key={item.id} className="grid min-h-[92px] grid-cols-[36px_minmax(170px,1.2fr)_135px_84px_205px_minmax(150px,1fr)_170px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]">
+              return <div key={item.id} className="grid min-h-[74px] grid-cols-[36px_minmax(200px,1.2fr)_145px_205px_minmax(170px,1fr)_170px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]">
                 <Checkbox checked={selected} label={`选择${item.name}`} onClick={() => setSelectedProductIds(selected ? selectedProductIds.filter(id => id !== item.id) : [...selectedProductIds, item.id])} />
-                <div className="min-w-0 pr-4"><div className="truncate font-bold text-[#1D2129]">{item.name}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">商品 ID {item.productId}</div></div>
-                <div className="min-w-0 pr-3"><div className="font-medium text-[#1D2129]">{item.specName}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">SKU ID {item.skuId}</div><div className="mt-0.5 truncate text-[11px] text-[#86909C]">SKU码 {item.skuCode}</div></div>
-                <div><span className="inline-flex whitespace-nowrap rounded bg-[#F2F3F5] px-2 py-1 text-[12px] text-[#667085]">{item.type === 'combo' ? '套餐商品' : '标准商品'}</span></div>
+                <div className="min-w-0 pr-4"><div className="truncate font-bold text-[#1D2129]">{item.name}</div><div className="mt-1 text-[11px] text-[#86909C]">按名称＋规格聚合 · {stats.total} 家门店</div></div>
+                <div className="min-w-0 pr-3 font-medium text-[#1D2129]">{item.specName}</div>
                 <button type="button" onClick={() => openDetails(item.id)} className="group w-[190px] rounded-md border border-[#E5E6EB] bg-[#FAFBFC] px-3 py-2 text-left hover:border-[#8EDCB2] hover:bg-[#F5FFF9]">
                   <div className="flex items-center justify-between"><span className="text-[12px] text-[#667085]">共 {stats.total} 家</span><ChevronRight size={14} className="text-[#98A2B3] group-hover:text-[#00A35B]" /></div>
                   <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-[#FFE8C7]"><span className="bg-[#22B573]" style={{ width: `${(stats.mapped / stats.total) * 100}%` }} /></div>
@@ -361,31 +365,33 @@ export const WebBatchProductMapping: React.FC<Props> = ({
             <div className="flex shrink-0 items-start gap-4 border-b border-[#E5E6EB] px-6 py-4">
               <button type="button" onClick={closeDetails} className="inline-flex h-9 shrink-0 items-center rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><ChevronLeft size={16} className="mr-1" />返回列表</button>
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E8FFF3] text-[#00A35B]"><Link2 size={19} /></div>
-              <div className="min-w-0"><h3 className="text-[17px] font-bold text-[#1D2129]">{activeProduct.name} · {activeProduct.specName}</h3><p className="mt-1 text-[12px] text-[#86909C]">平台商品 ID {activeProduct.productId} · SKU ID {activeProduct.skuId} · SKU码 {activeProduct.skuCode}</p></div>
+              <div className="min-w-0"><h3 className="text-[17px] font-bold text-[#1D2129]">{activeProduct.name} · {activeProduct.specName}</h3><p className="mt-1 text-[12px] text-[#86909C]">按平台商品名称和规格聚合；各门店的平台标识在下方明细中核对。</p></div>
               <div className="ml-auto rounded-md bg-[#F2F8FF] px-3 py-2 text-[12px] text-[#245B8A]">门店级绑定关系可独立维护</div>
             </div>
             <div className="grid shrink-0 grid-cols-4 gap-3 border-b border-[#E5E6EB] bg-[#FAFBFC] px-6 py-4">
               {(() => { const stats = statsFor(detailProductId); return <><div className="rounded-md border border-[#E5E6EB] bg-white px-4 py-3"><div className="text-[12px] text-[#86909C]">范围内门店</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{stats.total}</div></div><div className="rounded-md border border-[#BFEBD3] bg-[#F5FFF9] px-4 py-3"><div className="text-[12px] text-[#4E8B68]">已绑定门店</div><div className="mt-1 text-[20px] font-bold text-[#008A4B]">{stats.mapped}</div></div><div className="rounded-md border border-[#F3D29C] bg-[#FFF9F0] px-4 py-3"><div className="text-[12px] text-[#A66B1F]">未绑定门店</div><div className="mt-1 text-[20px] font-bold text-[#D46B08]">{stats.unmapped}</div></div><div className="rounded-md border border-[#D9DDE2] bg-white px-4 py-3"><div className="text-[12px] text-[#86909C]">已绑定企迈商品</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{stats.distinctQimai} 种</div></div></>; })()}
             </div>
             <div className="flex shrink-0 flex-wrap items-end gap-2 border-b border-[#E5E6EB] px-6 py-3">
-              <label className="flex h-9 w-[230px] items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={detailStoreKeyword} onChange={event => setDetailStoreKeyword(event.target.value)} placeholder="门店名称 / 编号" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
-              <label className="flex h-9 w-[250px] items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 text-[#86909C]" /><input value={detailQimaiKeyword} onChange={event => setDetailQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / SKU" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+              <label className="flex h-9 min-w-[190px] flex-1 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailStoreKeyword} onChange={event => setDetailStoreKeyword(event.target.value)} placeholder="门店名称 / 编号" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+              <label className="flex h-9 min-w-[240px] flex-[1.3] items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailPlatformKeyword} onChange={event => setDetailPlatformKeyword(event.target.value)} placeholder="平台 SPU ID / SKU ID / SKU码" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+              <label className="flex h-9 min-w-[200px] flex-1 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailQimaiKeyword} onChange={event => setDetailQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / 规格 / SKU" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
               <select value={detailStatus} onChange={event => setDetailStatus(event.target.value as typeof detailStatus)} className="h-9 w-[160px] rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部绑定状态</option><option value="mapped">已绑定</option><option value="unmapped">未绑定</option></select>
-              <button type="button" onClick={() => { setDetailStoreKeyword(''); setDetailQimaiKeyword(''); setDetailStatus('all'); }} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]">重置</button>
+              <button type="button" onClick={() => { setDetailStoreKeyword(''); setDetailPlatformKeyword(''); setDetailQimaiKeyword(''); setDetailStatus('all'); }} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]">重置</button>
             </div>
             <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E6EB] px-6 py-2.5"><span className="mr-auto text-[12px] text-[#667085]">已选 {selectedRelationIds.length} 家门店</span><button type="button" disabled={!selectedRelationIds.length} onClick={() => startBinding(detailProductId, selectedRelationIds, `批量换绑 ${selectedRelationIds.length} 家门店`)} className="h-8 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">批量绑定 / 换绑</button><button type="button" disabled={!selectedRelationIds.some(id => relations.find(item => item.id === id)?.status === 'mapped')} onClick={() => unbindRelations(selectedRelationIds.filter(id => relations.find(item => item.id === id)?.status === 'mapped'))} className="h-8 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">批量解绑</button></div>
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[1030px]">
-                <div className="grid grid-cols-[44px_190px_190px_110px_minmax(220px,1fr)_150px_150px] bg-[#F7F8FA] px-6 py-3 text-[12px] font-medium text-[#4E5969]"><div /><div>企迈外卖门店</div><div>平台商品 / SKU</div><div>绑定状态</div><div>绑定企迈商品 / 规格</div><div>绑定更新时间</div><div>操作</div></div>
-                {detailRelations.map(relation => { const qimai = productById(relation.qimaiProductId); const selected = selectedRelationIds.includes(relation.id); return <div key={relation.id} className="grid min-h-[78px] grid-cols-[44px_190px_190px_110px_minmax(220px,1fr)_150px_150px] items-center border-t border-[#F0F1F2] px-6 py-3 text-[13px]">
+              <div className="min-w-[1180px]">
+                <div className="grid grid-cols-[44px_170px_260px_100px_minmax(230px,1fr)_150px_120px] bg-[#F7F8FA] px-6 py-3 text-[12px] font-medium text-[#4E5969]"><div /><div>企迈外卖门店</div><div>该门店平台商品标识</div><div>绑定状态</div><div>绑定企迈商品 / 规格</div><div>绑定更新时间</div><div>操作</div></div>
+                {detailRelations.map(relation => { const qimai = productById(relation.qimaiProductId); const selected = selectedRelationIds.includes(relation.id); return <div key={relation.id} className="grid min-h-[88px] grid-cols-[44px_170px_260px_100px_minmax(230px,1fr)_150px_120px] items-center border-t border-[#F0F1F2] px-6 py-3 text-[13px]">
                   <Checkbox checked={selected} label={`选择${relation.storeName}`} onClick={() => setSelectedRelationIds(selected ? selectedRelationIds.filter(id => id !== relation.id) : [...selectedRelationIds, relation.id])} />
                   <div className="min-w-0 pr-3"><div className="truncate font-medium text-[#1D2129]">{relation.storeName}</div><div className="mt-1 text-[11px] text-[#86909C]">门店编号 {relation.storeCode}</div></div>
-                  <div className="min-w-0 pr-3"><div className="truncate text-[#1D2129]">{activeProduct.name} · {activeProduct.specName}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">SKU ID {activeProduct.skuId}</div><div className="mt-0.5 truncate text-[11px] text-[#86909C]">SKU码 {activeProduct.skuCode}</div></div>
+                  <div className="min-w-0 pr-3"><div className="truncate text-[#1D2129]">{activeProduct.name} · {activeProduct.specName}</div><div className="mt-1 truncate font-mono text-[11px] text-[#667085]">SPU ID {relation.platformProductId} · SKU ID {relation.platformSkuId}</div><div className="mt-0.5 truncate font-mono text-[11px] text-[#667085]">SKU码 {relation.platformSkuCode}</div></div>
                   <div><span className={`inline-flex whitespace-nowrap rounded px-2 py-1 text-[12px] font-medium ${relation.status === 'mapped' ? 'bg-[#E8FFF3] text-[#008A4B]' : 'bg-[#FFF7E8] text-[#D46B08]'}`}>{relation.status === 'mapped' ? '已绑定' : '未绑定'}</span></div>
-                  <div className="min-w-0 pr-3">{qimai ? <><div className="truncate font-bold text-[#1D2129]">{qimai.name}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{relation.qimaiSpec} · SKU {qimai.skuCode}</div></> : <span className="text-[#98A2B3]">--</span>}</div>
+                  <div className="min-w-0 pr-3">{qimai ? <><div className="truncate font-bold text-[#1D2129]">{qimai.name}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{qimai.specs?.[relation.qimaiSpecIndex || 0]?.name || relation.qimaiSpec || '默认规格'} · 企迈 SKU {qimai.skuCode}{qimai.specs && qimai.specs.length > 1 ? `-${(relation.qimaiSpecIndex || 0) + 1}` : ''}</div></> : <span className="text-[#98A2B3]">--</span>}</div>
                   <div className="text-[12px] text-[#667085]">{relation.updatedAt || '--'}</div>
                   <div className="flex items-center gap-3 whitespace-nowrap">{relation.status === 'mapped' ? <><button type="button" onClick={() => startBinding(detailProductId, [relation.id], `换绑 ${relation.storeName}`)} className="font-medium text-[#00A35B]">换绑</button><button type="button" onClick={() => unbindRelations([relation.id])} className="text-[#4E5969]">解绑</button></> : <button type="button" onClick={() => startBinding(detailProductId, [relation.id], `绑定 ${relation.storeName}`)} className="font-medium text-[#00A35B]">绑定</button>}</div>
                 </div>; })}
+                {detailRelations.length === 0 && <div className="px-6 py-16 text-center text-[13px] text-[#86909C]">没有符合当前搜索条件的门店关系，请调整条件或重置筛选。</div>}
               </div>
             </div>
             <div className="flex shrink-0 items-center justify-between border-t border-[#E5E6EB] bg-[#FAFBFC] px-6 py-3"><span className="text-[12px] text-[#86909C]">共 {detailRelations.length} 家门店</span><button type="button" onClick={closeDetails} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-4 text-[13px] text-[#4E5969]">返回列表</button></div>

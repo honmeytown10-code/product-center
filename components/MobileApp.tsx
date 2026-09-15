@@ -18,7 +18,15 @@ import { MobileBrandProductTools } from './mobile/MobileBrandProductTools';
 import { MobileProductSorter } from './mobile/MobileProductSorter';
 import { MobileCategorySorter } from './mobile/MobileCategorySorter';
 import { MobileProductEditor } from './mobile/MobileProductEditor';
-import { BatchOperationSelect, BatchConfigStep, BatchActionMenu, BatchActionType, BatchStep } from './mobile/MobileBatchComponents';
+import {
+  applyBatchProductName,
+  BatchActionMenu,
+  BatchActionType,
+  BatchConfigStep,
+  BatchNameEditorData,
+  BatchOperationSelect,
+  BatchStep,
+} from './mobile/MobileBatchComponents';
 import { MobileLabelManager } from './mobile/MobileLabelManager';
 import { MobileBadgeManager } from './mobile/MobileBadgeManager';
 import { cloneBadges, cloneLabelGroups, DEFAULT_STORE_BADGES, DEFAULT_STORE_LABEL_GROUPS, MobileBadgeItem, MobileLabelGroup } from './mobile/productMeta';
@@ -85,11 +93,19 @@ export const MobileApp: React.FC = () => {
 
   const handleBatchConfirm = (batchData: any) => {
       if (batchData.action === 'edit_attr') {
-          Array.from(selectedIds).forEach(id => {
+          (Array.from(selectedIds) as string[]).forEach(id => {
               const product = products.find(item => item.id === id);
               if (!product) return;
 
               const updates: any = {};
+
+              if (batchData.fields?.includes('p_name')) {
+                  const nameData = batchData.data?.p_name as BatchNameEditorData | undefined;
+                  const nextName = applyBatchProductName(product.name, product.id, nameData);
+                  if (nextName.trim() && nextName !== product.name) {
+                      updates.name = nextName;
+                  }
+              }
 
               if (batchData.fields?.includes('s_price')) {
                   const priceData = batchData.data?.s_price;
@@ -157,7 +173,7 @@ export const MobileApp: React.FC = () => {
               }
 
               batchData.fields?.forEach((field: string) => {
-                  if (['s_price', 'st_time'].includes(field)) return;
+                  if (['p_name', 's_price', 'st_time'].includes(field)) return;
                   if (batchData.data?.[field] !== undefined) {
                       if (field === 'p_cat' && Array.isArray(batchData.data[field])) {
                           updates.category = batchData.data[field].join('、');
@@ -262,7 +278,7 @@ export const MobileApp: React.FC = () => {
                     <MockToolCard 
                         icon={<Edit3 size={20}/>} 
                         label="批量修改" 
-                        desc="改价/上下架/沽清" 
+                        desc="改名称/改价/上下架"
                         color="bg-indigo-50 text-indigo-500"
                         onClick={() => navigateTo('batch_operation_select')}
                     />

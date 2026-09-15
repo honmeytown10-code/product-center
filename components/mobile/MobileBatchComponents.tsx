@@ -28,6 +28,49 @@ type BatchPriceEditorData = {
   specPrices: Record<string, Record<number, string>>;
 };
 
+export type BatchNameEditorData = {
+  mode: 'individual' | 'uniform';
+  uniformMethod: 'overwrite' | 'replace' | 'affix';
+  overwriteName: string;
+  findText: string;
+  replaceText: string;
+  affixPosition: 'prefix' | 'suffix';
+  affixText: string;
+  individualNames: Record<string, string>;
+};
+
+const PRODUCT_NAME_MAX_LENGTH = 70;
+
+export const applyBatchProductName = (
+  currentName: string,
+  productId: string,
+  data?: BatchNameEditorData,
+) => {
+  if (!data) return currentName;
+  if (data.mode === 'individual') return data.individualNames[productId] ?? currentName;
+  if (data.uniformMethod === 'overwrite') return data.overwriteName;
+  if (data.uniformMethod === 'replace') {
+    return data.findText ? currentName.split(data.findText).join(data.replaceText) : currentName;
+  }
+  return data.affixPosition === 'prefix'
+    ? `${data.affixText}${currentName}`
+    : `${currentName}${data.affixText}`;
+};
+
+const isBatchNameEditValid = (products: Product[], data?: BatchNameEditorData) => {
+  if (!data || products.length === 0) return false;
+  if (data.mode === 'uniform') {
+    if (data.uniformMethod === 'overwrite' && !data.overwriteName.trim()) return false;
+    if (data.uniformMethod === 'replace' && !data.findText) return false;
+    if (data.uniformMethod === 'replace' && !products.some(product => product.name.includes(data.findText))) return false;
+    if (data.uniformMethod === 'affix' && !data.affixText) return false;
+  }
+
+  const nextNames = products.map(product => applyBatchProductName(product.name, product.id, data));
+  return nextNames.every(name => name.trim().length > 0 && name.length <= PRODUCT_NAME_MAX_LENGTH)
+    && nextNames.some((name, index) => name !== products[index].name);
+};
+
 type StoreExecuteChannelId = 'mini_dine' | 'mini_take' | 'pos' | 'meituan' | 'taobao' | 'meituan_kiosk';
 
 type BatchSoldOutConfig = {
@@ -461,6 +504,257 @@ const BatchPriceEditor = ({
   );
 };
 
+const BatchNameEditor = ({
+  products,
+  data,
+  onBack,
+  onSave,
+}: {
+  products: Product[];
+  data: BatchNameEditorData;
+  onBack: () => void;
+  onSave: (data: BatchNameEditorData) => void;
+}) => {
+  const [nameData, setNameData] = React.useState<BatchNameEditorData>(() => JSON.parse(JSON.stringify(data)));
+  const isValid = isBatchNameEditValid(products, nameData);
+  const previewProducts = products.slice(0, 5);
+  const hasIndividualChange = products.some(product => (nameData.individualNames[product.id] ?? product.name) !== product.name);
+  const hasUniformInput = nameData.uniformMethod === 'overwrite'
+    ? nameData.overwriteName.length > 0
+    : nameData.uniformMethod === 'replace'
+      ? nameData.findText.length > 0
+      : nameData.affixText.length > 0;
+  const canShowPreview = nameData.mode === 'uniform' && hasUniformInput;
+  const shouldShowValidationHint = !isValid && (
+    nameData.mode === 'individual'
+      ? hasIndividualChange
+      : hasUniformInput || (nameData.uniformMethod === 'replace' && nameData.replaceText.length > 0)
+  );
+
+  const updateIndividualName = (productId: string, value: string) => {
+    setNameData(prev => ({
+      ...prev,
+      individualNames: {
+        ...prev.individualNames,
+        [productId]: value.slice(0, PRODUCT_NAME_MAX_LENGTH),
+      },
+    }));
+  };
+
+  const getValidationHint = () => {
+    if (nameData.mode === 'individual') {
+      const hasEmptyName = products.some(product => !(nameData.individualNames[product.id] ?? product.name).trim());
+      if (hasEmptyName) return '商品名称不能为空';
+      if (products.every(product => (nameData.individualNames[product.id] ?? product.name) === product.name)) return '请至少修改 1 个商品名称';
+      return '';
+    }
+    if (nameData.uniformMethod === 'overwrite' && !nameData.overwriteName.trim()) return '请输入覆盖后的商品名称';
+    if (nameData.uniformMethod === 'replace' && !nameData.findText) return '请输入需要替换的文字';
+    if (nameData.uniformMethod === 'replace' && !products.some(product => product.name.includes(nameData.findText))) return '所选商品名称中未找到要替换的文字';
+    if (nameData.uniformMethod === 'affix' && !nameData.affixText) return `请输入要添加的${nameData.affixPosition === 'prefix' ? '前缀' : '后缀'}`;
+    if (products.some(product => applyBatchProductName(product.name, product.id, nameData).length > PRODUCT_NAME_MAX_LENGTH)) return `修改后商品名称不能超过 ${PRODUCT_NAME_MAX_LENGTH} 个字符`;
+    if (products.some(product => !applyBatchProductName(product.name, product.id, nameData).trim())) return '修改后商品名称不能为空';
+    if (products.every(product => applyBatchProductName(product.name, product.id, nameData) === product.name)) return '修改后的商品名称没有变化';
+    return '';
+  };
+
+  const renderTextInput = (
+    value: string,
+    onChange: (value: string) => void,
+    placeholder: string,
+    allowEmpty = false,
+  ) => (
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 focus-within:border-[#00C06B]">
+      <input
+        value={value}
+        maxLength={PRODUCT_NAME_MAX_LENGTH}
+        aria-label={placeholder}
+        onChange={event => onChange(event.target.value.slice(0, PRODUCT_NAME_MAX_LENGTH))}
+        placeholder={placeholder}
+        className="w-full bg-transparent text-sm font-bold text-[#1F2129] outline-none placeholder:text-gray-300"
+      />
+      {!allowEmpty && (
+        <div className="mt-1 text-right text-[10px] font-medium text-gray-400">
+          {value.length}/{PRODUCT_NAME_MAX_LENGTH}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="absolute inset-0 z-[100] flex flex-col bg-[#F5F6FA] animate-in slide-in-from-bottom duration-300">
+      <div className="h-[50px] shrink-0 border-b border-gray-100 bg-white px-4 flex items-center">
+        <button type="button" onClick={onBack} aria-label="返回批量设置" className="p-2 -ml-2 text-gray-600">
+          <ChevronLeft size={24}/>
+        </button>
+        <span className="flex-1 text-center text-base font-bold text-[#1F2129] mr-6">商品名称</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar p-4 pb-32 space-y-4">
+        <div className="rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3 flex items-start">
+          <Info size={14} className="text-blue-500 mt-0.5 mr-2 shrink-0"/>
+          <div className="text-[11px] leading-5 text-blue-700 font-medium">
+            仅修改所选商品的名称，商品编码、规格和其他资料不变。
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-white p-1 shadow-sm">
+          {([
+            { id: 'individual', label: '个性修改' },
+            { id: 'uniform', label: '统一修改' },
+          ] as const).map(option => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={nameData.mode === option.id}
+              onClick={() => setNameData(prev => ({ ...prev, mode: option.id }))}
+              className={`rounded-lg px-4 py-3 text-sm font-bold transition-all ${nameData.mode === option.id ? 'bg-[#E6F8F0] text-[#00C06B]' : 'text-gray-500 active:bg-gray-50'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {nameData.mode === 'individual' ? (
+          <div className="space-y-3">
+            {products.map(product => {
+              const value = nameData.individualNames[product.id] ?? product.name;
+              return (
+                <div key={product.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center">
+                    <img src={product.image} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-gray-100 object-cover"/>
+                    <div className="ml-3 min-w-0 flex-1">
+                      <div className="text-sm font-bold text-[#1F2129]" title={product.name}>{product.name}</div>
+                      <div className="mt-0.5 text-[10px] text-gray-400">商品编码 {product.skuCode}</div>
+                    </div>
+                  </div>
+                  {renderTextInput(value, nextValue => updateIndividualName(product.id, nextValue), '请输入商品名称')}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-4">
+              <div>
+                <div className="text-sm font-black text-[#1F2129]">统一修改方式</div>
+                <div className="mt-1 text-[11px] text-gray-400">统一规则会应用到全部 {products.length} 个已选商品</div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { id: 'overwrite', label: '覆盖' },
+                  { id: 'replace', label: '替换' },
+                  { id: 'affix', label: '前缀/后缀' },
+                ] as const).map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={nameData.uniformMethod === option.id}
+                    onClick={() => setNameData(prev => ({ ...prev, uniformMethod: option.id }))}
+                    className={`rounded-xl border px-2 py-3 text-xs font-bold transition-all ${nameData.uniformMethod === option.id ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              {nameData.uniformMethod === 'overwrite' && renderTextInput(
+                nameData.overwriteName,
+                value => setNameData(prev => ({ ...prev, overwriteName: value })),
+                '请输入覆盖后的商品名称',
+              )}
+
+              {nameData.uniformMethod === 'replace' && (
+                <div className="space-y-3">
+                  {renderTextInput(
+                    nameData.findText,
+                    value => setNameData(prev => ({ ...prev, findText: value })),
+                    '请输入需要替换的文字',
+                  )}
+                  {renderTextInput(
+                    nameData.replaceText,
+                    value => setNameData(prev => ({ ...prev, replaceText: value })),
+                    '替换为（留空表示删除）',
+                    true,
+                  )}
+                </div>
+              )}
+
+              {nameData.uniformMethod === 'affix' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { id: 'prefix', label: '添加前缀' },
+                      { id: 'suffix', label: '添加后缀' },
+                    ] as const).map(option => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={nameData.affixPosition === option.id}
+                        onClick={() => setNameData(prev => ({ ...prev, affixPosition: option.id }))}
+                        className={`rounded-xl border px-3 py-3 text-xs font-bold ${nameData.affixPosition === option.id ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {renderTextInput(
+                    nameData.affixText,
+                    value => setNameData(prev => ({ ...prev, affixText: value })),
+                    `请输入${nameData.affixPosition === 'prefix' ? '前缀' : '后缀'}`,
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-gray-100 px-4 py-3">
+                <div className="text-sm font-black text-[#1F2129]">修改预览</div>
+                <div className="mt-1 text-[11px] text-gray-400">
+                  {canShowPreview ? `展示前 ${Math.min(products.length, previewProducts.length)} 个商品` : '输入修改内容后展示名称变化'}
+                </div>
+              </div>
+              {canShowPreview ? (
+                <div className="divide-y divide-gray-100">
+                  {previewProducts.map(product => {
+                    const nextName = applyBatchProductName(product.name, product.id, nameData);
+                    const isNameInvalid = !nextName.trim() || nextName.length > PRODUCT_NAME_MAX_LENGTH;
+                    return (
+                      <div key={product.id} className="px-4 py-3">
+                        <div className="text-[10px] font-medium text-gray-400">原名称：{product.name}</div>
+                        <div className={`mt-1 break-words text-sm font-bold ${isNameInvalid ? 'text-red-500' : 'text-[#1F2129]'}`}>
+                          修改后：{nextName.trim() ? nextName : '名称为空'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-7 text-center">
+                  <div className="text-sm font-bold text-gray-400">等待输入修改内容</div>
+                  <div className="mt-1 text-[11px] leading-5 text-gray-300">预览不会影响当前商品名称</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 border-t border-gray-100 bg-white p-4 pb-8 shadow-lg">
+        {shouldShowValidationHint && <div className="mb-2 text-center text-[11px] font-medium text-red-500">{getValidationHint()}</div>}
+        <button
+          type="button"
+          onClick={() => isValid && onSave(nameData)}
+          disabled={!isValid}
+          className={`w-full h-12 rounded-xl font-bold text-white transition-all ${isValid ? 'bg-[#00C06B] shadow-lg shadow-green-100 active:scale-95' : 'bg-gray-300 cursor-not-allowed'}`}
+        >
+          保存
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const BatchCategoryEditor = ({
   options,
   selectedValues,
@@ -578,7 +872,7 @@ export const BatchOperationSelect = ({ onBack, onSelectAction }: { onBack: () =>
                         </div>
                         <div className="flex-1">
                             <h4 className="font-bold text-gray-900 mb-1">批量修改商品信息</h4>
-                            <p className="text-xs text-gray-400 leading-relaxed">支持同时修改价格、分类、售卖时间等属性</p>
+                            <p className="text-xs text-gray-400 leading-relaxed">支持同时修改名称、价格、分类、售卖时间等属性</p>
                         </div>
                         <ChevronRight size={20} className="text-gray-300 ml-2" />
                     </div>
@@ -611,6 +905,7 @@ export const BatchConfigStep = ({
     const [batchTargetChannels, setBatchTargetChannels] = React.useState<ChannelType[]>(['all']);
     const [showTimeSalesEditor, setShowTimeSalesEditor] = React.useState(false);
     const [showPriceEditor, setShowPriceEditor] = React.useState(false);
+    const [showNameEditor, setShowNameEditor] = React.useState(false);
     const [showCategoryEditor, setShowCategoryEditor] = React.useState(false);
     const [soldOutConfig, setSoldOutConfig] = React.useState<BatchSoldOutConfig>({
         clearType: 'daily',
@@ -622,6 +917,7 @@ export const BatchConfigStep = ({
     const [deleteTargetChannels, setDeleteTargetChannels] = React.useState<StoreExecuteChannelId[]>([]);
 
     const editableFieldsDef = [
+        { id: 'p_name', label: '商品名称', type: 'name', icon: <Edit3 size={14}/> },
         { id: 's_price', label: '基础价格', type: 'number', icon: <Tag size={14}/> },
         { id: 'p_cat', label: '商品分类', type: 'selector', icon: <Layers size={14}/> },
         { id: 'st_time', label: '售卖时间', type: 'time', icon: <Clock size={14}/> },
@@ -676,6 +972,25 @@ export const BatchConfigStep = ({
         });
     };
 
+    const ensureNameDraft = () => {
+        setBatchFormData(prev => {
+            if (prev.p_name) return prev;
+            return {
+                ...prev,
+                p_name: {
+                    mode: 'individual',
+                    uniformMethod: 'overwrite',
+                    overwriteName: '',
+                    findText: '',
+                    replaceText: '',
+                    affixPosition: 'prefix',
+                    affixText: '',
+                    individualNames: Object.fromEntries(selectedProducts.map(product => [product.id, product.name])),
+                } as BatchNameEditorData,
+            };
+        });
+    };
+
     const ensureTimeSalesDraft = () => {
         setBatchFormData(prev => {
             if (prev.st_time) return prev;
@@ -691,6 +1006,7 @@ export const BatchConfigStep = ({
     
     const toggleEditField = (id: string) => {
         if (!batchEditFields.includes(id)) {
+            if (id === 'p_name') ensureNameDraft();
             if (id === 's_price') ensurePriceDraft();
             if (id === 'st_time') ensureTimeSalesDraft();
         }
@@ -993,6 +1309,34 @@ export const BatchConfigStep = ({
         );
     };
 
+    const renderNameEditor = () => {
+        const nameData = batchFormData.p_name as BatchNameEditorData | undefined;
+        let summary = '支持统一修改或个性修改';
+        if (nameData?.mode === 'uniform') {
+            if (nameData.uniformMethod === 'overwrite' && nameData.overwriteName) summary = `统一覆盖为“${nameData.overwriteName}”`;
+            if (nameData.uniformMethod === 'replace' && nameData.findText) summary = `将“${nameData.findText}”替换为“${nameData.replaceText}”`;
+            if (nameData.uniformMethod === 'affix' && nameData.affixText) summary = `统一添加${nameData.affixPosition === 'prefix' ? '前缀' : '后缀'}“${nameData.affixText}”`;
+        } else if (nameData && isBatchNameEditValid(selectedProducts, nameData)) {
+            const changedCount = selectedProducts.filter(product => applyBatchProductName(product.name, product.id, nameData) !== product.name).length;
+            summary = `个性修改 · 已修改 ${changedCount} 个商品名称`;
+        }
+
+        return (
+            <button
+                onClick={() => setShowNameEditor(true)}
+                className="w-full rounded-2xl border border-gray-100 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
+            >
+                <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-[#1F2129]">商品名称</div>
+                        <div className="text-[11px] text-gray-400 mt-1 break-words">{summary}</div>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-300 ml-3 shrink-0"/>
+                </div>
+            </button>
+        );
+    };
+
     const renderTimeSaleEditor = () => {
         const timeSaleData = (batchFormData.st_time as BatchTimeSaleFormData | undefined) || {
             mode: 'timed' as const,
@@ -1067,6 +1411,9 @@ export const BatchConfigStep = ({
         );
     };
 
+    const hasInvalidNameEdit = batchEditFields.includes('p_name')
+        && !isBatchNameEditValid(selectedProducts, batchFormData.p_name as BatchNameEditorData | undefined);
+
 
     return (
         <div className="flex-1 flex flex-col bg-[#F5F6FA] relative h-full">
@@ -1119,7 +1466,9 @@ export const BatchConfigStep = ({
                                                 <span className="text-gray-400 mr-2">{def.icon}</span>
                                                 <span className="text-xs font-bold text-gray-500">{def.label}</span>
                                             </div>
-                                            {fieldId === 's_price' ? (
+                                            {fieldId === 'p_name' ? (
+                                                renderNameEditor()
+                                            ) : fieldId === 's_price' ? (
                                                 renderPriceEditor()
                                             ) : fieldId === 'p_cat' ? (
                                                 renderCategoryEditor()
@@ -1243,12 +1592,13 @@ export const BatchConfigStep = ({
                   onClick={handleApply}
                   disabled={
                     (isAttributeMode && batchEditFields.length === 0)
+                    || hasInvalidNameEdit
                     || (isSoldOutMode && soldOutConfig.channels.length === 0)
                     || (isDeleteMode && deleteTargetChannels.length === 0)
                   }
                   className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center
                       ${actionType === 'delete' ? 'bg-red-500 shadow-red-200' : 'bg-[#00C06B] shadow-green-100'}
-                      ${((isAttributeMode && batchEditFields.length === 0) || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
+                      ${((isAttributeMode && batchEditFields.length === 0) || hasInvalidNameEdit || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
                   `}
                 >
                     {actionType === 'delete' ? (
@@ -1272,6 +1622,30 @@ export const BatchConfigStep = ({
                             },
                         }));
                         setShowTimeSalesEditor(false);
+                    }}
+                />
+            )}
+
+            {showNameEditor && (
+                <BatchNameEditor
+                    products={selectedProducts}
+                    data={(batchFormData.p_name as BatchNameEditorData | undefined) || {
+                        mode: 'individual',
+                        uniformMethod: 'overwrite',
+                        overwriteName: '',
+                        findText: '',
+                        replaceText: '',
+                        affixPosition: 'prefix',
+                        affixText: '',
+                        individualNames: Object.fromEntries(selectedProducts.map(product => [product.id, product.name])),
+                    }}
+                    onBack={() => setShowNameEditor(false)}
+                    onSave={data => {
+                        setBatchFormData(prev => ({
+                            ...prev,
+                            p_name: data,
+                        }));
+                        setShowNameEditor(false);
                     }}
                 />
             )}

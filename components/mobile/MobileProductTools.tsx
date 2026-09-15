@@ -123,7 +123,7 @@ export const MobileProductTools: React.FC<Props> = ({ onBack, onNavigate }) => {
                 </div>
                 <div className="flex-1">
                     <div className="text-sm font-bold text-gray-800">批量修改</div>
-                    <div className="text-xs text-gray-400 mt-0.5">支持批量改价、上下架、沽清等</div>
+                    <div className="text-xs text-gray-400 mt-0.5">支持批量改名称、改价、上下架、沽清等</div>
                 </div>
                 <ChevronRight size={16} className="text-gray-300"/>
             </div>

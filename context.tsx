@@ -110,7 +110,7 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const addProduct = (product: Product) => setProducts([...products, product]);
   const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts(products.map(p => p.id === id ? { ...p, ...updates } : p));
+    setProducts(currentProducts => currentProducts.map(p => p.id === id ? { ...p, ...updates } : p));
   };
   const deleteProduct = (id: string) => setProducts(products.filter(p => p.id !== id));
 

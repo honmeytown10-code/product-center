@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Check, CheckSquare, Search, X } from 'lucide-react';
 
-export const POS_STORE_NAME = '【杭州】技术测试账号';
 
 export function PosCategories({ items, value, onChange }: { items: string[]; value: string; onChange: (value: string) => void }) {
   return <nav className="pos-categories" aria-label="分类筛选">{items.map(item => <button key={item} aria-pressed={value === item} className={value === item ? 'active' : ''} onClick={() => onChange(item)}>{item}</button>)}</nav>;
@@ -56,5 +55,12 @@ export function PosDialog({ title, children, footer, onClose, className = '' }: 
 }
 
 export function PosResult({ message, onClose }: { message: string; onClose: () => void }) {
-  return message ? <div className="pos-result" role="status"><Check size={18} /><span>{message}</span><button aria-label="关闭操作结果" onClick={onClose}><X size={18} /></button></div> : null;
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => close.current(), 3200);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+  return message ? <div className="pos-result" role="status" aria-live="polite"><Check size={18} /><span>{message}</span></div> : null;
 }

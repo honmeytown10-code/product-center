@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Check, Image as ImageIcon } from 'lucide-react';
-import { useProducts } from '../../context';
 
 interface Props {
     showImage: boolean;
@@ -8,26 +7,12 @@ interface Props {
 }
 
 export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) => {
-    const { activeBrandId, brandConfigs, updateBrandConfig } = useProducts();
-    const currentConfig = brandConfigs[activeBrandId] || brandConfigs.b_1;
-    const displayMode = currentConfig?.posStockoutMode || 'spu';
-    const [activeTab, setActiveTab] = useState('product');
+    const [activeTab, setActiveTab] = useState('order');
     const [showStockInfo, setShowStockInfo] = useState(true);
-    useEffect(() => {
-        const stored = localStorage.getItem(`pos_stockout_display_mode_${activeBrandId}`);
-        if ((stored === 'spu' || stored === 'sku') && stored !== currentConfig?.posStockoutMode) {
-            updateBrandConfig(activeBrandId, { ...currentConfig, posStockoutMode: stored });
-        }
-    }, [activeBrandId]);
-    const setDisplayMode = (mode: 'spu' | 'sku') => {
-        localStorage.setItem(`pos_stockout_display_mode_${activeBrandId}`, mode);
-        updateBrandConfig(activeBrandId, { ...currentConfig, posStockoutMode: mode });
-    };
 
     const SETTINGS_TABS = [
         { id: 'general', label: '通用' },
         { id: 'business', label: '营业设置' },
-        { id: 'product', label: '商品管理' },
         { id: 'order', label: '点单设置' },
         { id: 'checkout', label: '结账设置' },
         { id: 'payment', label: '支付设置' },
@@ -65,27 +50,7 @@ export const PosSettingsView: React.FC<Props> = ({ showImage, setShowImage }) =>
             {/* Main Settings Content */}
             <div className="flex-1 bg-[transparent] p-6 overflow-y-auto">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 min-h-full p-8">
-                    {activeTab === 'product' ? (
-                        <div className="pos-product-settings">
-                            <div className="pos-settings-title"><h2>商品管理</h2><p>设置本机 POS 商品管理页面的展示方式。</p></div>
-                            <section className="pos-settings-section">
-                                <div className="pos-settings-section-heading"><div><h3>商品沽清展示方式</h3><p>所有商品卡片统一使用同一种层级，切换后立即生效。</p></div><span>当前：{displayMode === 'spu' ? '按商品展示' : '按规格展示'}</span></div>
-                                <div className="pos-display-mode-options" role="radiogroup" aria-label="商品沽清商品展示方式">
-                                    <button className={'pos-display-mode-option' + (displayMode === 'spu' ? ' active' : '')} role="radio" aria-checked={displayMode === 'spu'} onClick={() => setDisplayMode('spu')}>
-                                        <div className="pos-display-mode-copy"><strong>按商品展示（SPU）</strong><span>一个商品一张卡，多规格库存汇总展示；商品名称下方不展示规格。</span></div>
-                                        <div className="pos-display-mode-preview spu"><article><div><b>生椰拿铁</b><em>部分售罄</em></div><footer><span>剩余 15</span><strong>¥18</strong></footer></article></div>
-                                        <span className="pos-display-mode-check"><Check size={15} /></span>
-                                    </button>
-                                    <button className={'pos-display-mode-option' + (displayMode === 'sku' ? ' active' : '')} role="radio" aria-checked={displayMode === 'sku'} onClick={() => setDisplayMode('sku')}>
-                                        <div className="pos-display-mode-copy"><strong>按规格展示（SKU）</strong><span>每个规格单独一张卡，商品名称下方展示规格和特殊商品类型。</span></div>
-                                        <div className="pos-display-mode-preview sku"><article><b>生椰拿铁</b><p><span>大杯</span></p><footer><span>剩余 10</span><strong>¥18</strong></footer></article><article><b>香煎三文鱼</b><p><span>默认规格</span><em>称重</em></p><footer><span>剩余 1200</span><strong>¥0.58</strong></footer></article></div>
-                                        <span className="pos-display-mode-check"><Check size={15} /></span>
-                                    </button>
-                                </div>
-                                <div className="pos-settings-note">该设置只影响「商品沽清」页面的卡片和批量选择粒度。</div>
-                            </section>
-                        </div>
-                    ) : activeTab === 'order' ? (
+                    {activeTab === 'order' ? (
                         <div className="max-w-3xl">
 
                             {/* Section 1: 商品展示 */}

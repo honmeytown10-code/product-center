@@ -16,12 +16,12 @@ const RAW_SHELF_ITEMS = [
     { id: 'g8', name: '1110商品', status: 'on_shelf', category: '测试分类B' },
     { id: 'g9', name: '新建电商商城商品2', status: 'on_shelf', category: '仅小程序分类' },
     { id: 'g10', name: '0827beta单规格套餐-4', status: 'on_shelf', category: '后台分类展示合集' },
-    { id: 'g11', name: '已下架-红烧排骨', status: 'off_shelf', category: '后台分类展示合集' },
-    { id: 'g12', name: '已下架-清蒸鲈鱼', status: 'off_shelf', category: '测试分类A' },
-    { id: 'g13', name: '已下架-麻婆豆腐', status: 'off_shelf', category: '测试分类B' },
-    { id: 'g14', name: '已下架-宫保鸡丁', status: 'off_shelf', category: '后台分类展示合集' },
-    { id: 'g15', name: '已下架-回锅肉', status: 'off_shelf', category: '仅小程序分类' },
-    { id: 'g16', name: '已下架-番茄炒蛋', status: 'off_shelf', category: '测试分类A' },
+    { id: 'g11', name: '红烧排骨', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g12', name: '清蒸鲈鱼', status: 'off_shelf', category: '测试分类A' },
+    { id: 'g13', name: '麻婆豆腐', status: 'off_shelf', category: '测试分类B' },
+    { id: 'g14', name: '宫保鸡丁', status: 'off_shelf', category: '后台分类展示合集' },
+    { id: 'g15', name: '回锅肉', status: 'off_shelf', category: '仅小程序分类' },
+    { id: 'g16', name: '番茄炒蛋', status: 'off_shelf', category: '测试分类A' },
     { id: 'g17', name: '招牌红烧肉盖饭', status: 'on_shelf', category: '后台分类展示合集' },
     { id: 'g18', name: '黑椒牛柳意面', status: 'on_shelf', category: '后台分类展示合集' },
     { id: 'g19', name: '经典香辣鸡腿堡', status: 'on_shelf', category: '仅小程序分类' },
@@ -78,7 +78,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
   const [filter, setFilter] = useState<'all' | 'off'>('all');
   const [batch, setBatch] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
-  const [action, setAction] = useState<{ items: typeof items; action: 'on' | 'off'; targetChannel: ChannelType; isAllView: boolean; visibleChannels?: string[] } | null>(null);
+  const [action, setAction] = useState<{ items: typeof items; action: 'on' | 'off'; targetChannel: ChannelType; isAllView: boolean; visibleChannels?: string[]; batch: boolean } | null>(null);
   const [result, setResult] = useState('');
   const [crossChannelChoice, setCrossChannelChoice] = useState<{ item: typeof items[number]; channels: ChannelType[] } | null>(null);
   const [locatedProductId, setLocatedProductId] = useState('');
@@ -126,7 +126,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
     if (!batch) { openAction([item], shelfState(item) === 'off' ? 'on' : 'off'); return; }
     setSelection(prev => { const next = new Set(prev); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; });
   };
-  const openAction = (target: typeof items, action: 'on' | 'off') => setAction({ items: target, action, targetChannel: channel, isAllView: channel === 'all', visibleChannels: channel === 'all' ? undefined : [channel] });
+  const openAction = (target: typeof items, action: 'on' | 'off') => setAction({ items: target, action, targetChannel: channel, isAllView: channel === 'all', visibleChannels: channel === 'all' ? undefined : [channel], batch });
   const apply = (updates: Record<string, 'on_shelf' | 'off_shelf'>) => {
     if (!action) return;
     const ids = new Set(action.items.map(item => item.id));

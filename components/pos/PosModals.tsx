@@ -1,10 +1,52 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, RotateCcw, Lock, Clock3, AlertTriangle, Delete, Layers, CheckCircle2, Circle, RefreshCw, ChevronLeft, ChevronRight, Table, HelpCircle } from 'lucide-react';
+import { X, Check, RotateCcw, Lock, Clock3, Delete, Layers, CheckCircle2, Circle, RefreshCw, ChevronLeft, ChevronRight, Table, HelpCircle } from 'lucide-react';
 import { useProducts } from '../../context';
 import { CHANNEL_TABS, SHELF_VIEW_TABS, ChannelType, ChannelTabType, NumpadInput, ChannelTag } from './PosCommon';
 import { ChannelGroup } from '../../types';
-import { POS_STORE_NAME } from './PosWorkspace';
+import { PosDialog } from './PosWorkspace';
+
+export const StockoutRecoveryDialog: React.FC<{
+  products: any[];
+  mappedChannels: string[];
+  currentChannel: ChannelType;
+  shared: boolean;
+  channelGroups?: ChannelGroup[];
+  onClose: () => void;
+  onConfirm: (channels: string[]) => void;
+}> = ({ products, mappedChannels, currentChannel, shared, channelGroups, onClose, onConfirm }) => {
+  const current = currentChannel !== 'all' && mappedChannels.includes(currentChannel) ? currentChannel : null;
+  const [selected, setSelected] = useState<string[]>(() => shared || !current ? mappedChannels : [current]);
+  const orderedChannels = current ? [current, ...mappedChannels.filter(id => id !== current)] : mappedChannels;
+  const toggle = (id: string) => setSelected(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]);
+  const toggleGroup = (ids: string[]) => setSelected(previous => ids.every(id => previous.includes(id))
+    ? previous.filter(id => !ids.includes(id) || id === current)
+    : [...new Set([...previous, ...ids])]);
+  const name = products.length === 1 ? products[0]?.name : `${products.length} 个商品`;
+  const statusFor = (id: string) => {
+    if (products.length !== 1) return '';
+    const qty = products[0]?.channelStocks?.[id] ?? products[0]?.stock;
+    return qty === Infinity ? '无限' : typeof qty === 'number' ? qty <= 0 ? '已售罄' : `剩余 ${qty}` : '';
+  };
+  return <PosDialog className="pos-recovery-dialog" title="恢复售卖" onClose={onClose} footer={<>
+    <button className="pos-button quiet" onClick={onClose}>取消</button>
+    <button className="pos-button" disabled={!shared && !selected.length} onClick={() => onConfirm(selected)}>确认恢复</button>
+  </>}>
+    <div className="pos-recovery-product"><strong>{name}</strong></div>
+    <div className="pos-recovery-effect"><RotateCcw size={20} /><div><strong>取消沽清，恢复无限库存</strong><span>商品可以继续售卖。</span></div></div>
+    <div className="pos-recovery-channel-title"><strong>生效渠道</strong><span>{shared ? '全部关联渠道统一恢复' : current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span></div>
+    {!shared && !!channelGroups?.length && <div className="pos-recovery-groups">{channelGroups.map(group => {
+      const ids = group.channels.filter(id => mappedChannels.includes(id));
+      return ids.length ? <button key={group.id} type="button" aria-pressed={ids.every(id => selected.includes(id))} onClick={() => toggleGroup(ids)}>{group.name}</button> : null;
+    })}</div>}
+    <div className="pos-recovery-channels">{orderedChannels.map(id => {
+      const isCurrent = id === current;
+      return <button key={id} type="button" disabled={shared || isCurrent} aria-pressed={selected.includes(id)} onClick={() => toggle(id)}>
+        <span><strong>{CHANNEL_TABS.find(tab => tab.id === id)?.label}{isCurrent && <em>当前</em>}</strong>{!shared && <small>{statusFor(id)}</small>}</span><span className="pos-recovery-check">{shared ? <Lock size={13} /> : isCurrent ? <Lock size={13} /> : selected.includes(id) && <Check size={15} />}</span>
+      </button>;
+    })}</div>
+  </PosDialog>;
+};
 
 // --- Shelf Action Dialog ---
 export const ShelfActionDialog = ({
@@ -17,7 +59,7 @@ export const ShelfActionDialog = ({
   channelGroups
 }: {
   open: boolean;
-  data: { item?: any; items?: any[]; action: 'on' | 'off'; targetChannel: ChannelType; isAllView: boolean; visibleChannels?: string[] };
+  data: { item?: any; items?: any[]; action: 'on' | 'off'; targetChannel: ChannelType; isAllView: boolean; visibleChannels?: string[]; batch?: boolean };
   onClose: () => void;
   onConfirm: (updates: Record<string, 'on_shelf' | 'off_shelf'>) => void;
   isShelvesUnited: boolean;
@@ -25,7 +67,7 @@ export const ShelfActionDialog = ({
   channelGroups?: ChannelGroup[];
 }) => {
   const items = data.items || (data.item ? [data.item] : []);
-  const isBatch = items.length > 1;
+  const isBatch = !!data.batch || items.length > 1;
   const count = items.length;
   const name = isBatch ? `${count}个商品` : items[0]?.name;
 
@@ -34,15 +76,14 @@ export const ShelfActionDialog = ({
      return CHANNEL_TABS.map(t => t.id).filter(chId => {
          return items.every(i => {
              const dataKey = chId;
-             return i.channels[dataKey as ChannelTabType] !== 'unmapped';
+             return !!i.channels[dataKey as ChannelTabType] && i.channels[dataKey as ChannelTabType] !== 'unmapped';
          });
      });
   }, [items]);
+  const unifiedChannels = useMemo(() => CHANNEL_TABS.map(tab => tab.id).filter(id =>
+    items.some(item => item.channels?.[id] && item.channels[id] !== 'unmapped')
+  ), [items]);
 
-  // State for single product channel statuses
-  const [channelStatus, setChannelStatus] = useState<Record<string, 'on_shelf' | 'off_shelf'>>({});
-
-  // State for batch action selected channels
   const [batchSelectedChannels, setBatchSelectedChannels] = useState<string[]>([]);
   const currentShelfChannel = data.targetChannel !== 'all' && validChannels.includes(data.targetChannel) ? data.targetChannel : null;
 
@@ -50,47 +91,8 @@ export const ShelfActionDialog = ({
     if (!open) return;
 
     const currentChannel = currentShelfChannel ? [currentShelfChannel] : validChannels;
-    setBatchSelectedChannels(isShelvesUnited ? validChannels : currentChannel);
-    if (!isBatch && data.item) {
-        const initialStatus: Record<string, 'on_shelf' | 'off_shelf'> = {};
-        validChannels.forEach(ch => {
-            const dataKey = ch;
-            const status = data.item.channels[dataKey as ChannelTabType] || 'off_shelf';
-            initialStatus[ch] = isShelvesUnited ? data.item.status : status;
-        });
-        setChannelStatus(initialStatus);
-    }
-  }, [open, data, validChannels, isBatch, isShelvesUnited, currentShelfChannel]);
-
-  const toggleChannelStatus = (chId: string) => {
-      if (isShelvesUnited) return; // locked
-      setChannelStatus(prev => ({
-          ...prev,
-          [chId]: prev[chId] === 'on_shelf' ? 'off_shelf' : 'on_shelf'
-      }));
-  };
-
-  const toggleGroupStatus = (groupChannels: string[], targetStatus?: 'on_shelf' | 'off_shelf') => {
-      if (isShelvesUnited) return; // locked
-      const validGroupChannels = groupChannels.filter(c => validChannels.includes(c));
-      if (validGroupChannels.length === 0) return;
-
-      setChannelStatus(prev => {
-          const next = { ...prev };
-          const allOn = validGroupChannels.every(c => prev[c] === 'on_shelf');
-          const newStatus = targetStatus || (allOn ? 'off_shelf' : 'on_shelf');
-          validGroupChannels.forEach(c => { next[c] = newStatus; });
-          return next;
-      });
-  };
-
-  const handleAllChannels = (status: 'on_shelf' | 'off_shelf') => {
-      setChannelStatus(prev => {
-          const next = { ...prev };
-          validChannels.forEach(c => { next[c] = status; });
-          return next;
-      });
-  };
+    setBatchSelectedChannels(isShelvesUnited ? unifiedChannels : currentChannel);
+  }, [open, validChannels, unifiedChannels, isShelvesUnited, currentShelfChannel]);
 
   const toggleBatchChannel = (chId: string) => {
       if (isShelvesUnited || chId === currentShelfChannel) return;
@@ -114,114 +116,50 @@ export const ShelfActionDialog = ({
   const handleConfirm = () => {
       const updates: Record<string, 'on_shelf' | 'off_shelf'> = {};
       const status = data.action === 'on' ? 'on_shelf' : 'off_shelf';
-      batchSelectedChannels.forEach(ch => { updates[ch] = status; });
+      (isShelvesUnited ? unifiedChannels : batchSelectedChannels).forEach(ch => { updates[ch] = status; });
       onConfirm(updates);
   };
 
   if (!open) return null;
 
-  return (
-    <div className="pos-legacy-modal fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-       <div className="bg-white rounded-[12px] shadow-2xl w-[500px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[80vh]">
-          <div className="pt-6 pb-4 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
-             <h3 className="text-xl font-bold text-[#333] flex items-center">
-                {isBatch ? '批量' : ''}{data.action === 'on' ? '上架' : '下架'}操作
-             </h3>
-             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
-          </div>
-
-          <div className="p-6 overflow-y-auto flex-1">
-             <div className="mb-6 text-center">
-                <span className="text-[#666] text-base">确认将 <span className="font-bold text-[#333] text-lg mx-1">{name}</span> {data.action === 'on' ? '上架' : '下架'}吗？</span>
-             </div>
-
-             {isShelvesUnited && (
-                 <div className="mb-6 bg-orange-50 border border-orange-100 rounded-lg p-4 flex items-start">
-                     <Lock size={16} className="text-orange-500 mr-2 mt-0.5 shrink-0"/>
-                     <div className="text-sm text-orange-700">
-                         <div className="font-bold mb-1">已开启全渠道统一</div>
-                         <p className="opacity-90 text-xs">本次操作将自动同步至所有已关联渠道，无需单独勾选。</p>
-                     </div>
-                 </div>
-             )}
-
-             {/* Always show channel selection, but lock it if united */}
-             <div className="bg-[#EDF2FB] rounded-xl p-5 border border-[#E8E8E8]">
-                 <div className="text-sm font-bold text-gray-700 mb-1">选择生效渠道</div>
-                 {!isShelvesUnited && <p className="mb-4 text-xs text-gray-500">当前渠道必须保留，可追加其他渠道执行相同操作。</p>}
-
-                 {enableChannelGrouping ? (
-                     // Grouped toggles
-                         <div className="space-y-3">
-                             {channelGroups?.map(group => {
-                                 const gChannels = group.channels.filter(c => CHANNEL_TABS.some(t => t.id === c));
-                                 const validGChannels = gChannels.filter(c => validChannels.includes(c));
-                                 if (validGChannels.length === 0) return null;
-
-                                 const isAllSelected = validGChannels.every(c => batchSelectedChannels.includes(c));
-
-                                 return (
-                                     <div
-                                         key={group.id}
-                                         onClick={() => toggleBatchGroup(validGChannels)}
-                                         className={`flex items-center justify-between p-4 bg-white border rounded-lg cursor-pointer transition-all hover:border-[#3478F6]/50 ${isAllSelected ? 'border-[#3478F6] shadow-sm' : 'border-gray-200'}`}
-                                     >
-                                         <div>
-                                             <div className="font-bold text-gray-800 text-sm mb-1">{group.name}</div>
-                                             <div className="text-xs text-gray-500">包含: {validGChannels.map(c => CHANNEL_TABS.find(t => t.id === c)?.label).join(', ')}</div>
-                                         </div>
-                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isAllSelected ? 'bg-[#3478F6] border-[#3478F6]' : 'border-gray-300'}`}>
-                                             {isAllSelected && <Check size={14} className="text-white"/>}
-                                         </div>
-                                     </div>
-                                 )
-                             })}
-                         </div>
-                     ) : (
-                         // Independent flat toggles
-                         <div className="grid grid-cols-2 gap-3">
-                             {CHANNEL_TABS.map(tab => {
-                                 const isValid = validChannels.includes(tab.id);
-                                 const isSelected = batchSelectedChannels.includes(tab.id);
-                                 const isCurrent = tab.id === currentShelfChannel;
-                                 const currentStatus = !isBatch ? items[0]?.channels?.[tab.id] : null;
-
-                                 if (!isValid) return null;
-
-                                 return (
-                                     <div
-                                         key={tab.id}
-                                         onClick={() => toggleBatchChannel(tab.id)}
-                                         className={`flex items-center justify-between p-3 bg-white border rounded-lg transition-all ${isShelvesUnited || isCurrent ? 'opacity-75 cursor-not-allowed border-gray-200' : `cursor-pointer hover:border-[#3478F6]/50 ${isSelected ? 'border-[#3478F6] shadow-sm' : 'border-gray-200'}`}`}
-                                     >
-                                         <div className="flex items-center space-x-3">
-                                             <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isShelvesUnited ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600'}`}>{tab.icon}</div>
-                                             <span className="font-bold text-[#333] text-sm">{tab.label}{isCurrent ? ' · 当前' : ''}{currentStatus && <small className="block mt-0.5 text-[10px] font-normal text-gray-400">当前{currentStatus === 'on_shelf' ? '已上架' : '已下架'}</small>}</span>
-                                         </div>
-                                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#3478F6] border-[#3478F6]' : 'border-gray-300'}`}>
-                                             {isCurrent ? <Lock size={10} className="text-white"/> : isSelected && <Check size={12} className="text-white"/>}
-                                         </div>
-                                     </div>
-                                 )
-                             })}
-                         </div>
-                     )}
-                 </div>
-          </div>
-
-          <div className="p-6 pt-4 border-t border-gray-100 flex space-x-4 shrink-0">
-             <button onClick={onClose} className="flex-1 py-3 rounded-lg bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 transition-colors">取消</button>
-             <button
-                 onClick={handleConfirm}
-                 disabled={!isShelvesUnited && batchSelectedChannels.length === 0}
-                 className="flex-1 py-3 rounded-lg text-white font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-[#3478F6] hover:bg-[#2563EB]"
-             >
-                 确认{data.action === 'on' ? '上架' : '下架'}
-             </button>
-          </div>
-       </div>
-    </div>
-  );
+  const actionLabel = data.action === 'on' ? '上架' : '下架';
+  const unifiedCurrent = items[0]?.status === 'on_shelf' ? 'on' : 'off';
+  const orderedShelfTabs = currentShelfChannel ? [CHANNEL_TABS.find(tab => tab.id === currentShelfChannel)!, ...CHANNEL_TABS.filter(tab => tab.id !== currentShelfChannel)] : CHANNEL_TABS;
+  const renderChannel = (tab: typeof CHANNEL_TABS[number]) => {
+    const valid = validChannels.includes(tab.id);
+    const selected = batchSelectedChannels.includes(tab.id);
+    const current = tab.id === currentShelfChannel;
+    const status = isBatch ? null : items[0]?.channels?.[tab.id];
+    return <button key={tab.id} className="pos-shelf-channel" data-selected={selected} disabled={!valid || isShelvesUnited || current} aria-pressed={selected} onClick={() => toggleBatchChannel(tab.id)}>
+      <span className="pos-shelf-channel-name"><strong>{tab.label}{current && <em>当前</em>}</strong>{!isBatch && <small className={status === 'on_shelf' ? 'on' : status === 'off_shelf' ? 'off' : ''}>{!valid ? '未铺货' : status === 'on_shelf' ? '已上架' : '已下架'}</small>}</span>
+      <span className={'pos-shelf-channel-result' + (selected ? ' selected' : '')}>{!valid ? '不可操作' : selected ? `本次${actionLabel}` : '保持原状'}</span>
+    </button>;
+  };
+  return <PosDialog title={`${isBatch ? '批量' : ''}${actionLabel}商品`} className="pos-shelf-action-dialog" onClose={onClose} footer={<>
+    <button className="pos-button quiet" onClick={onClose}>取消</button>
+    <button className="pos-button" disabled={!(isShelvesUnited ? unifiedChannels : batchSelectedChannels).length} onClick={handleConfirm}>确认{actionLabel}</button>
+  </>}>
+    <div className="pos-shelf-product"><strong>{name}</strong></div>
+    <div className="pos-shelf-impact"><strong>{isShelvesUnited ? `全部关联渠道统一${actionLabel}` : `本次${actionLabel} ${batchSelectedChannels.length} 个渠道`}</strong><span>{data.action === 'on' ? '上架后商品可在生效渠道售卖。' : '下架后商品在生效渠道停止售卖。'}{!isShelvesUnited && '未选择的渠道保持原状。'}</span></div>
+    {isShelvesUnited && !isBatch && <div className="pos-shelf-unified-status">
+      <div><span>当前状态</span><strong className={unifiedCurrent}>{unifiedCurrent === 'on' ? '已上架' : '已下架'}</strong></div>
+      <ChevronRight size={18} />
+      <div><span>操作后</span><strong className={data.action === 'on' ? 'on' : 'off'}>{data.action === 'on' ? '已上架' : '已下架'}</strong></div>
+    </div>}
+    {!isShelvesUnited && <>
+    {enableChannelGrouping && !!channelGroups?.length && <div className="pos-shelf-groups">{channelGroups.map(group => {
+      const ids = group.channels.filter(id => validChannels.includes(id));
+      return ids.length ? <button key={group.id} type="button" onClick={() => toggleBatchGroup(ids)}>{group.name}</button> : null;
+    })}</div>}
+    <div className="pos-shelf-section-title">生效渠道 · {currentShelfChannel ? '当前渠道固定，其他渠道可追加' : '选择需要操作的渠道'}</div>
+    <div className="pos-shelf-other-channels">{(isBatch ? orderedShelfTabs.filter(tab => validChannels.includes(tab.id)) : orderedShelfTabs).map(renderChannel)}</div>
+    </>}
+    {isShelvesUnited && <>
+      <div className="pos-shelf-section-title">{isBatch ? '全部渠道' : '商品关联渠道'} · 统一生效，不可单独选择</div>
+      <div className="pos-shelf-other-channels">{(isBatch ? CHANNEL_TABS : CHANNEL_TABS.filter(tab => unifiedChannels.includes(tab.id))).map(tab => <div key={tab.id} className="pos-shelf-channel pos-shelf-channel-locked" data-active={unifiedChannels.includes(tab.id)}><strong>{tab.label}</strong>{unifiedChannels.includes(tab.id) ? <Lock size={15} aria-hidden="true" /> : <small>未关联</small>}</div>)}</div>
+      {isBatch && <p className="pos-shelf-batch-note">本批次展示所选商品涉及的渠道；未铺货的商品不受该渠道操作影响。</p>}
+    </>}
+  </PosDialog>;
 };
 
 // --- Shelf Management Modal ---
@@ -397,7 +335,7 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
       <div className="pos-legacy-modal fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
          <div className="bg-white rounded-[12px] shadow-2xl w-[600px] overflow-hidden animate-in zoom-in-95 font-sans flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-               <div><h3 className="text-xl font-bold text-[#333]">商品上下架</h3><p className="text-sm text-gray-500 mt-1">{item.name} · {POS_STORE_NAME}</p></div>
+               <div><h3 className="text-xl font-bold text-[#333]">商品上下架</h3><p className="text-sm text-gray-500 mt-1">{item.name}</p></div>
                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={20}/></button>
             </div>
             <div className="p-6 bg-[#EDF2FB] overflow-y-auto">
@@ -446,7 +384,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
           if (isBatch) return true; // simplified for batch
           if (!product) return false;
           const dataKey = chId;
-          return product.channels[dataKey as ChannelTabType] !== 'unmapped';
+          return !!product.channels[dataKey as ChannelTabType] && product.channels[dataKey as ChannelTabType] !== 'unmapped';
       });
   }, [product, isBatch]);
 
@@ -525,7 +463,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
               >
                   <span className="text-sm font-bold mr-2">{tab?.label}{chId === currentChannel ? ' · 当前渠道' : ''}</span>
                   {isLocked && <Lock size={12} className="text-orange-400"/>}
-                  {!isBatch && !isStockShared && <span className="ml-2 text-[10px] text-gray-400">{(product?.channelStocks?.[chId] ?? product?.stock) === Infinity ? '不限量' : `库存 ${product?.channelStocks?.[chId] ?? product?.stock ?? 0}`}</span>}
+                  {!isBatch && !isStockShared && <span className="ml-2 text-[10px] text-gray-400">{(product?.channelStocks?.[chId] ?? product?.stock) === Infinity ? '无限' : `库存 ${product?.channelStocks?.[chId] ?? product?.stock ?? 0}`}</span>}
               </div>
           );
       });
@@ -642,7 +580,6 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                             如何沽清商品
                          </button>
                      </div>
-                     <p className="text-xs text-gray-400 mt-2">{POS_STORE_NAME} · 确认后立即生效</p>
                      {!isBatch && !isMultiSpec && (
                          <div className="text-sm font-bold text-gray-400 mt-2 flex items-center gap-2">
                             <span className="text-gray-600">¥{product?.price?.toFixed(2)}</span>
@@ -651,7 +588,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                             {isStockShared && (
                                 <>
                                     <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                    <span className="text-gray-500">{product?.stock === Infinity ? '不限量售卖' : `剩余: ${product?.stock ?? 0}`}</span>
+                                    <span className="text-gray-500">{product?.stock === Infinity ? '无限库存' : `剩余: ${product?.stock ?? 0}`}</span>
                                 </>
                             )}
                          </div>
@@ -836,38 +773,10 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
             </div>
         </div>
 
-        {/* Cancel Clearance Confirm Dialog inside the Modal */}
-        {showCancelConfirm && (
-            <div className="pos-legacy-modal fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-                <div className="bg-white rounded-xl shadow-2xl w-[400px] overflow-hidden animate-in zoom-in-95 font-sans">
-                    <div className="p-6 text-center">
-                        <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <AlertTriangle size={32} />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">确认取消沽清？</h3>
-                        <p className="text-gray-500 text-sm">
-                            取消沽清后，该商品 <span className="font-bold text-[#333]">{product?.name}</span> 在
-                            {!isStockShared && selectedChannels.length > 0 ? (
-                                <span className="font-bold text-blue-600 mx-1">
-                                    {selectedChannels.map(id => CHANNEL_TABS.find(t => t.id === id)?.label || id).join('、')}
-                                </span>
-                            ) : (
-                                <span className="font-bold text-[#333] mx-1">所有关联渠道</span>
-                            )}
-                            将被<span className="text-orange-500 font-bold">恢复为无限库存状态</span>，并允许正常售卖。
-                        </p>
-                    </div>
-                    <div className="flex border-t border-gray-100">
-                        <button onClick={() => setShowCancelConfirm(false)} className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-50 transition-colors">再想想</button>
-                        <div className="w-px bg-gray-100"></div>
-                        <button onClick={() => {
-                            setShowCancelConfirm(false);
-                            onConfirm({ recover: true, method: globalMethod, mode: clearanceMode, values: targetValues, specValues, selectedSpecs, channels: selectedChannels });
-                        }} className="flex-1 py-4 font-bold text-[#3478F6] hover:bg-[#3478F6]/5 transition-colors">确认恢复</button>
-                    </div>
-                </div>
-            </div>
-        )}
+        {showCancelConfirm && <StockoutRecoveryDialog products={product ? [product] : []} mappedChannels={resolvedChannels} currentChannel={activeChannel as ChannelType} shared={isStockShared} channelGroups={enableChannelGrouping ? channelGroups : []} onClose={() => setShowCancelConfirm(false)} onConfirm={channels => {
+            setShowCancelConfirm(false);
+            onConfirm({ recover: true, method: globalMethod, mode: clearanceMode, values: targetValues, specValues, selectedSpecs, channels });
+        }} />}
 
         {/* Help Modal */}
         {showHelpModal && (

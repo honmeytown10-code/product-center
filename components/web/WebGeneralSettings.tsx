@@ -207,15 +207,16 @@ export const WebGeneralSettings: React.FC<Props> = ({
                     </div>
                 </section>
 
-                {/* 门店业务设置 (Moved from Ops) */}
+                {/* POS 商品管理设置 */}
                 <section className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h3 className="text-base font-bold text-gray-800 mb-6 pb-2 border-b border-gray-100">门店业务设置</h3>
+                    <h3 className="text-base font-bold text-gray-800 mb-2">POS 商品管理设置</h3>
+                    <p className="text-xs text-gray-500 mb-6 pb-3 border-b border-gray-100">当前品牌下的门店 POS 统一使用以下设置。</p>
                     <div className="space-y-10 max-w-4xl">
                         {/* POS Stockout Mode Setting */}
                         <div className="space-y-4">
                             <div>
-                                <h5 className="text-[15px] font-bold text-gray-900">企迈数店 POS 商品沽清模式</h5>
-                                <p className="text-xs text-gray-400 mt-1">用于控制POS上商品沽清页面，商品按SPU或SKU模式展示、操作</p>
+                                <h5 className="text-[15px] font-bold text-gray-900">商品沽清展示方式</h5>
+                                <p className="text-xs text-gray-400 mt-1">控制 POS 商品沽清页按商品（SPU）或按规格（SKU）展示和操作。</p>
                             </div>
                             <div className="flex items-center space-x-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4">
                                 <label className="flex items-center cursor-pointer group" onClick={(e) => { 
@@ -244,8 +245,8 @@ export const WebGeneralSettings: React.FC<Props> = ({
                         {/* POS Stockout Warning Threshold Setting */}
                         <div className="flex items-start justify-between">
                             <div className="flex-1 pr-10">
-                                <h5 className="text-[15px] font-bold text-gray-900">企迈数店 POS 已沽清列表设置</h5>
-                                <p className="text-xs text-gray-400 mt-1 leading-relaxed">用于控制POS上商品沽清页面，左侧已沽清列表数据展示规则，商品剩余份数小于设置的值，会在左侧已沽清列表展示，否则不展示</p>
+                                <h5 className="text-[15px] font-bold text-gray-900">低库存提醒阈值</h5>
+                                <p className="text-xs text-gray-400 mt-1 leading-relaxed">POS 商品沽清页中，剩余数量大于 0 且低于该值的商品会进入“低库存”快捷筛选；库存为 0 的商品归入“已沽清”。</p>
                             </div>
                             <div className="flex shrink-0 items-center rounded-lg border border-gray-200 bg-gray-50 px-4 py-2">
                                 <span className="text-sm font-bold text-gray-600 mr-3">商品剩余份数小于</span>
@@ -260,7 +261,7 @@ export const WebGeneralSettings: React.FC<Props> = ({
                                         }
                                     }}
                                 />
-                                <span className="text-sm font-bold text-gray-600 ml-3">时，商品展示在已沽清列表</span>
+                                <span className="text-sm font-bold text-gray-600 ml-3">时，归入低库存</span>
                             </div>
                         </div>
                     </div>

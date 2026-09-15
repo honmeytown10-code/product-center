@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
-import { POS_STORE_NAME, PosCategories, PosStatusFilters, PosDialog, PosDock, PosEmpty, PosResult, PosSelection } from './PosWorkspace';
+import { PosCategories, PosStatusFilters, PosDialog, PosDock, PosEmpty, PosResult, PosSelection } from './PosWorkspace';
 type MethodRow = {
   id: string;
   storeId: string;
@@ -104,7 +104,7 @@ export const PosMethodView: React.FC<{ search: string; onReset: () => void }> = 
     </PosDock>
     {action && <PosDialog title={'确认' + (action.enabled ? '启用' : '禁用') + (action.rows.length > 1 ? '所选做法？' : '此做法？')} onClose={() => setAction(null)} footer={<><button className="pos-button quiet" onClick={() => setAction(null)}>取消</button><button className={'pos-button' + (!action.enabled ? ' danger' : '')} onClick={confirm}>{action.enabled ? '确认启用' : '确认禁用'}</button></>}>
       <h3>{action.rows.map(row => row.methodValue).join('、')}</h3>
-      <p>{POS_STORE_NAME} · 全部渠道</p>
+      <p>全部渠道</p>
       <p>{action.enabled ? '确认后立即恢复可选，关联商品可继续选择这些做法。' : '确认后立即禁用，关联商品点单时不可再选择这些做法；需要时可在卡片上恢复。'}</p>
       {action.rows.length === 1 && <dl>{Object.entries({ '做法名称': action.rows[0].methodName, '做法标识码': action.rows[0].methodCode || '—', '备注': action.rows[0].remark || '—', '温馨提示': action.rows[0].prompt || '—', '做法值多选': action.rows[0].multiValue ? '已开启' : '已关闭', '做法选项': action.rows[0].optionType }).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{value}</dd></React.Fragment>)}</dl>}
     </PosDialog>}

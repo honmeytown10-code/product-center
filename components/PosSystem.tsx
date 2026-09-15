@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Monitor, ClipboardList, Settings, ShoppingBag, Search, X, RefreshCw, Printer, Wifi, HelpCircle, Volume2, Layers } from 'lucide-react';
+import { Monitor, ClipboardList, Settings, ShoppingBag, Search, X, RefreshCw, Printer, Wifi, HelpCircle, Volume2 } from 'lucide-react';
 import { useProducts } from '../context';
 import { PosShelfView } from './pos/PosShelfView';
 import { PosStockoutView } from './pos/PosStockoutView';
@@ -41,8 +41,8 @@ export const PosSystem: React.FC = () => {
     <main className="pos-main">
       <header className="pos-header">
         {module === 'product' ? <nav className="pos-tabs" aria-label="商品管理功能">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); setSearch(''); setGuideOpen(false); }}>{item.label}</button>)}</nav> : <h1 className="text-xl font-bold">系统设置</h1>}
-        {module === 'product' && tab === 'stockout' && (stockShared ? <div className="pos-header-scope"><Layers size={17} /><span>全渠道统一库存</span></div> : <label className="pos-channel-select"><span>渠道</span><select aria-label="商品沽清当前渠道" value={channel} onChange={event => setChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>)}
-        {module === 'product' && tab === 'shelf' && (shelfUnited ? <div className="pos-header-scope"><Layers size={17} /><span>全渠道统一上下架</span></div> : <label className="pos-channel-select"><span>渠道</span><select aria-label="商品上下架当前渠道" value={shelfChannel} onChange={event => setShelfChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>)}
+        {module === 'product' && tab === 'stockout' && !stockShared && <label className="pos-channel-select"><span>渠道</span><select aria-label="商品沽清当前渠道" value={channel} onChange={event => setChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
+        {module === 'product' && tab === 'shelf' && !shelfUnited && <label className="pos-channel-select"><span>渠道</span><select aria-label="商品上下架当前渠道" value={shelfChannel} onChange={event => setShelfChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
         {module === 'product' && tab !== 'item' && <label className="pos-search"><Search size={18} /><input aria-label={tab === 'method' ? '搜索做法' : '搜索商品'} placeholder={tab === 'method' ? '搜索做法名 / 首字母 / 标识码' : searchesStoreLibrary ? '搜索门店全部渠道商品 / 扫码' : '搜索商品名 / 首字母 / 扫码'} value={search} onChange={event => setSearch(event.target.value)} />{search && <button aria-label="清除搜索" onClick={() => setSearch('')}><X size={16} /></button>}</label>}
         {module === 'product' && <div className="pos-header-tools">{tab === 'stockout' && <button className="pos-guide-button" onClick={() => setGuideOpen(true)}><HelpCircle size={17} />如何沽清</button>}<button className="pos-icon-button" aria-label="刷新商品" onClick={() => window.location.reload()}><RefreshCw size={18} /></button><span className="pos-icon-button" role="img" aria-label="打印机已连接"><Printer size={18} /></span><span className="pos-icon-button" role="img" aria-label="网络已连接"><Wifi size={18} /></span></div>}
       </header>

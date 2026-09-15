@@ -122,11 +122,12 @@ const TimeSalesBatchEditor = ({
   onBack,
   onSave,
 }: {
-  data: TimeSalesConfig;
+  data: BatchTimeSaleFormData;
   onBack: () => void;
-  onSave: (config: TimeSalesConfig) => void;
+  onSave: (data: BatchTimeSaleFormData) => void;
 }) => {
-  const [config, setConfig] = React.useState<TimeSalesConfig>(cloneTimeSalesConfig(data));
+  const [mode, setMode] = React.useState<BatchTimeSaleFormData['mode']>(data.mode);
+  const [config, setConfig] = React.useState<TimeSalesConfig>(cloneTimeSalesConfig(data.config));
 
   const toggleDay = (ruleId: string, day: number) => {
     setConfig(prev => ({
@@ -182,10 +183,36 @@ const TimeSalesBatchEditor = ({
         <button onClick={onBack} className="p-2 -ml-2 text-gray-600">
           <ChevronLeft size={24}/>
         </button>
-        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">分时段售卖</span>
+        <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">售卖时间</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar pb-32">
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-white p-1 shadow-sm">
+          <button
+            onClick={() => setMode('always')}
+            className={`rounded-lg py-3 text-sm font-bold transition-all ${mode === 'always' ? 'bg-[#E6F8F0] text-[#00C06B]' : 'text-gray-500'}`}
+          >
+            全时段售卖
+          </button>
+          <button
+            onClick={() => setMode('timed')}
+            className={`rounded-lg py-3 text-sm font-bold transition-all ${mode === 'timed' ? 'bg-[#E6F8F0] text-[#00C06B]' : 'text-gray-500'}`}
+          >
+            分时段售卖
+          </button>
+        </div>
+
+        <div className="rounded-xl bg-[#FFF4E8] px-3.5 py-3 text-[11px] font-medium leading-5 text-[#FF8800]">
+          保存后将按当前模式统一覆盖所选商品的售卖时间。
+        </div>
+
+        {mode === 'always' ? (
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="text-sm font-black text-[#1F2129]">恢复为全时段售卖</div>
+            <div className="mt-2 text-[11px] leading-5 text-gray-400">所选商品将不再限制销售日期与每周销售时间。</div>
+          </div>
+        ) : (
+          <>
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
           <div>
             <h4 className="text-base font-black text-gray-800">销售日期</h4>
@@ -257,10 +284,12 @@ const TimeSalesBatchEditor = ({
             <span>添加销售时间 ({config.rules.length}/3)</span>
           </button>
         )}
+          </>
+        )}
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 bg-white border-t border-gray-100 shadow-lg">
-        <button onClick={() => onSave(config)} className="w-full h-12 bg-[#00C06B] text-white rounded-xl font-bold shadow-lg shadow-green-100 active:scale-95 transition-all">
+        <button onClick={() => onSave({ mode, config })} className="w-full h-12 bg-[#00C06B] text-white rounded-xl font-bold shadow-lg shadow-green-100 active:scale-95 transition-all">
           保存
         </button>
       </div>
@@ -901,12 +930,13 @@ export const BatchConfigStep = ({
     isShelvesUnited: boolean
 }) => {
     const [batchEditFields, setBatchEditFields] = React.useState<string[]>([]);
+    const [configuredEditFields, setConfiguredEditFields] = React.useState<string[]>([]);
     const [batchFormData, setBatchFormData] = React.useState<Record<string, any>>({});
     const [batchTargetChannels, setBatchTargetChannels] = React.useState<ChannelType[]>(['all']);
     const [showTimeSalesEditor, setShowTimeSalesEditor] = React.useState(false);
     const [showPriceEditor, setShowPriceEditor] = React.useState(false);
-    const [showNameEditor, setShowNameEditor] = React.useState(false);
     const [showCategoryEditor, setShowCategoryEditor] = React.useState(false);
+    const [showNameEditor, setShowNameEditor] = React.useState(false);
     const [soldOutConfig, setSoldOutConfig] = React.useState<BatchSoldOutConfig>({
         clearType: 'daily',
         remainingCount: '0',
@@ -1014,6 +1044,10 @@ export const BatchConfigStep = ({
             if (prev.includes(id)) return prev.filter(f => f !== id);
             return [...prev, id];
         });
+    };
+
+    const markEditFieldConfigured = (id: string) => {
+        setConfiguredEditFields(prev => prev.includes(id) ? prev : [...prev, id]);
     };
 
     const getActionTitle = () => {
@@ -1231,54 +1265,47 @@ export const BatchConfigStep = ({
         </div>
     );
 
-    const updateTimeSaleMode = (mode: 'always' | 'timed') => {
-        setBatchFormData(prev => ({
-            ...prev,
-            st_time: {
-                mode,
-                config: ((prev.st_time as BatchTimeSaleFormData)?.config || cloneTimeSalesConfig()),
-            },
-        }));
-    };
+    const renderSettingRow = ({
+        title,
+        description,
+        onClick,
+        configured = false,
+    }: {
+        title: string;
+        description: string;
+        onClick: () => void;
+        configured?: boolean;
+    }) => (
+        <button
+            onClick={onClick}
+            className="w-full rounded-xl bg-[#F7F7F8] px-4 py-4 text-left transition-colors active:bg-gray-100"
+        >
+            <div className="flex items-center">
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-[#1F2129]">{title}</span>
+                        {configured && <span className="rounded bg-[#E6F8F0] px-1.5 py-0.5 text-[9px] font-bold text-[#00C06B]">已设置</span>}
+                    </div>
+                    <div className="mt-1 text-[11px] leading-5 text-gray-400 break-words">{description}</div>
+                </div>
+                <div className="ml-3 flex shrink-0 items-center text-xs font-medium text-gray-400">
+                    <span>{configured ? '修改' : '去设置'}</span>
+                    <ChevronRight size={16} className="ml-1"/>
+                </div>
+            </div>
+        </button>
+    );
 
     const renderCategoryEditor = () => {
         const selectedCategories: string[] = Array.isArray(batchFormData.p_cat) ? batchFormData.p_cat : [];
-        const previewCategories = selectedCategories.slice(0, 3);
-        const hiddenCategoryCount = Math.max(selectedCategories.length - previewCategories.length, 0);
-
-        return (
-            <div className="space-y-4">
-                <button
-                    onClick={() => setShowCategoryEditor(true)}
-                    className="w-full rounded-2xl border border-gray-100 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
-                >
-                    <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                            <div className="text-sm font-bold text-[#1F2129]">商品分类</div>
-                            <div className="text-[11px] text-gray-400 mt-1">
-                                {selectedCategories.length > 0 ? `已选择 ${selectedCategories.length} 个分类` : '选择要统一修改的商品分类'}
-                            </div>
-                        </div>
-                        <ChevronRight size={16} className="text-gray-300 ml-3 shrink-0"/>
-                    </div>
-                </button>
-
-                {selectedCategories.length > 0 && (
-                    <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                            {previewCategories.map(category => (
-                                <span key={category} className="px-3 py-1.5 rounded-full bg-white text-[12px] font-bold text-gray-700 border border-gray-200">
-                                    {category}
-                                </span>
-                            ))}
-                        </div>
-                        {hiddenCategoryCount > 0 && (
-                            <div className="text-[12px] font-bold text-gray-500">另有 {hiddenCategoryCount} 个已选分类</div>
-                        )}
-                    </div>
-                )}
-            </div>
-        );
+        return renderSettingRow({
+            title: '商品分类',
+            description: selectedCategories.length > 0
+                ? `统一修改为${selectedCategories.join('、')}`
+                : '选择要统一修改的商品分类',
+            onClick: () => setShowCategoryEditor(true),
+            configured: configuredEditFields.includes('p_cat'),
+        });
     };
 
     const renderPriceEditor = () => {
@@ -1291,50 +1318,33 @@ export const BatchConfigStep = ({
               )
             : '按商品规格单独修改价格';
 
-        return (
-            <div>
-                <button
-                    onClick={() => setShowPriceEditor(true)}
-                    className="w-full rounded-2xl border border-gray-100 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
-                >
-                    <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                            <div className="text-sm font-bold text-[#1F2129]">基础价格</div>
-                            <div className="text-[11px] text-gray-400 mt-1">{summary}</div>
-                        </div>
-                        <ChevronRight size={16} className="text-gray-300 ml-3 shrink-0"/>
-                    </div>
-                </button>
-            </div>
-        );
+        return renderSettingRow({
+            title: '基础价格',
+            description: configuredEditFields.includes('s_price') ? summary : '支持统一改价或按商品规格单独修改',
+            onClick: () => setShowPriceEditor(true),
+            configured: configuredEditFields.includes('s_price'),
+        });
     };
 
     const renderNameEditor = () => {
         const nameData = batchFormData.p_name as BatchNameEditorData | undefined;
         let summary = '支持统一修改或个性修改';
         if (nameData?.mode === 'uniform') {
-            if (nameData.uniformMethod === 'overwrite' && nameData.overwriteName) summary = `统一覆盖为“${nameData.overwriteName}”`;
-            if (nameData.uniformMethod === 'replace' && nameData.findText) summary = `将“${nameData.findText}”替换为“${nameData.replaceText}”`;
-            if (nameData.uniformMethod === 'affix' && nameData.affixText) summary = `统一添加${nameData.affixPosition === 'prefix' ? '前缀' : '后缀'}“${nameData.affixText}”`;
+            if (nameData.uniformMethod === 'overwrite') summary = nameData.overwriteName ? `统一覆盖为“${nameData.overwriteName}”` : '统一覆盖商品名称';
+            if (nameData.uniformMethod === 'replace') summary = nameData.findText ? `将“${nameData.findText}”替换为“${nameData.replaceText}”` : '统一替换名称中的文字';
+            if (nameData.uniformMethod === 'affix') summary = nameData.affixText ? `统一添加${nameData.affixPosition === 'prefix' ? '前缀' : '后缀'}“${nameData.affixText}”` : '统一添加前缀或后缀';
         } else if (nameData && isBatchNameEditValid(selectedProducts, nameData)) {
             const changedCount = selectedProducts.filter(product => applyBatchProductName(product.name, product.id, nameData) !== product.name).length;
             summary = `个性修改 · 已修改 ${changedCount} 个商品名称`;
         }
 
-        return (
-            <button
-                onClick={() => setShowNameEditor(true)}
-                className="w-full rounded-2xl border border-gray-100 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
-            >
-                <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-[#1F2129]">商品名称</div>
-                        <div className="text-[11px] text-gray-400 mt-1 break-words">{summary}</div>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-300 ml-3 shrink-0"/>
-                </div>
-            </button>
-        );
+        const configured = configuredEditFields.includes('p_name') && Boolean(nameData && isBatchNameEditValid(selectedProducts, nameData));
+        return renderSettingRow({
+            title: '商品名称',
+            description: configured ? summary : '支持统一修改或个性修改',
+            onClick: () => setShowNameEditor(true),
+            configured,
+        });
     };
 
     const renderTimeSaleEditor = () => {
@@ -1342,77 +1352,20 @@ export const BatchConfigStep = ({
             mode: 'timed' as const,
             config: cloneTimeSalesConfig(),
         };
-        const previewRules = timeSaleData.config.rules.slice(0, 2);
-        const hiddenRuleCount = Math.max(timeSaleData.config.rules.length - previewRules.length, 0);
-
-        return (
-            <div className="space-y-4">
-                <div className="rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3 flex items-start">
-                    <Info size={14} className="text-blue-500 mt-0.5 mr-2 shrink-0"/>
-                    <div className="text-[11px] leading-5 text-blue-700 font-medium">
-                        保存后将统一覆盖所选商品当前售卖时间配置。
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                    <button
-                        onClick={() => updateTimeSaleMode('always')}
-                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${timeSaleData.mode === 'always' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
-                    >
-                        全时段售卖
-                    </button>
-                    <button
-                        onClick={() => updateTimeSaleMode('timed')}
-                        className={`rounded-xl border px-4 py-3 text-sm font-bold transition-all ${timeSaleData.mode === 'timed' ? 'border-[#00C06B] bg-[#E6F8F0] text-[#00C06B]' : 'border-gray-200 bg-white text-gray-500'}`}
-                    >
-                        分时段售卖
-                    </button>
-                </div>
-
-                {timeSaleData.mode === 'always' ? (
-                    <div className="rounded-xl border border-gray-100 bg-white px-4 py-4">
-                        <div className="text-sm font-bold text-[#1F2129]">恢复为全时段售卖</div>
-                        <div className="text-[11px] text-gray-400 mt-1">保存后，所选商品将不再限制销售日期与每周销售时间。</div>
-                    </div>
-                ) : (
-                    <>
-                        <button
-                            onClick={() => setShowTimeSalesEditor(true)}
-                            className="w-full rounded-2xl border border-gray-100 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="text-sm font-bold text-[#1F2129]">分时段售卖</div>
-                                <div className="text-sm font-bold text-gray-400 ml-3 truncate max-w-[170px]">{getTimeSaleDateSummary(timeSaleData.config)}</div>
-                                <ChevronRight size={16} className="ml-3 flex-shrink-0 text-gray-300"/>
-                            </div>
-                        </button>
-
-                        {previewRules.map(rule => {
-                            const days = rule.days.length === 7 ? '全周' : (rule.days.length > 0 ? rule.days.map(day => DAY_LABELS[day - 1]).join('、') : '未选星期');
-                            const timeText = rule.times.length > 0 ? rule.times.join(' / ') : '未设置时间';
-                            return (
-                                <div key={rule.id} className="bg-gray-50 rounded-xl p-4 flex items-center justify-between animate-in fade-in">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="text-[13px] font-bold text-gray-700 truncate">{days}</div>
-                                        <div className="text-[11px] text-gray-400 mt-1">{timeText}</div>
-                                    </div>
-                                    <Clock size={16} className="text-gray-300 ml-3 shrink-0"/>
-                                </div>
-                            );
-                        })}
-                        {hiddenRuleCount > 0 && (
-                            <div className="bg-gray-50 rounded-xl px-4 py-3 text-[12px] font-bold text-gray-500 text-center">
-                                另有 {hiddenRuleCount} 组售卖时间规则
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-        );
+        return renderSettingRow({
+            title: '售卖时间',
+            description: configuredEditFields.includes('st_time')
+                ? (timeSaleData.mode === 'always' ? '统一修改为全时段售卖' : `统一修改为分时段售卖 · ${getTimeSaleDateSummary(timeSaleData.config)}`)
+                : '统一覆盖所选商品当前售卖时间配置',
+            onClick: () => setShowTimeSalesEditor(true),
+            configured: configuredEditFields.includes('st_time'),
+        });
     };
 
     const hasInvalidNameEdit = batchEditFields.includes('p_name')
         && !isBatchNameEditValid(selectedProducts, batchFormData.p_name as BatchNameEditorData | undefined);
+    const hasUnconfiguredEditField = isAttributeMode
+        && batchEditFields.some(fieldId => !configuredEditFields.includes(fieldId));
 
 
     return (
@@ -1421,16 +1374,16 @@ export const BatchConfigStep = ({
                 <button onClick={onBack} className="p-2 -ml-2 text-gray-600 hover:text-black">
                     <ChevronLeft size={24}/>
                 </button>
-                <span className="font-bold text-base">设置修改内容</span>
+                <span className="font-bold text-base">{isAttributeMode ? '批量修改商品信息' : getActionTitle()}</span>
                 <div className="w-8"></div>
             </div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-6">
+            <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
                 {isAttributeMode && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                        <div className="bg-white rounded-2xl p-5 shadow-sm">
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                        <div className="bg-white rounded-2xl p-4 shadow-sm">
                             <h4 className="text-sm font-black text-[#1F2129] mb-3 flex items-center">
-                                <List size={16} className="mr-2 text-purple-600"/> 
+                                <List size={16} className="mr-2 text-[#00C06B]"/>
                                 选择修改项
                             </h4>
                             <div className="flex flex-wrap gap-2">
@@ -1440,10 +1393,9 @@ export const BatchConfigStep = ({
                                         <button 
                                           key={f.id}
                                           onClick={() => toggleEditField(f.id)}
-                                          className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center ${active ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-transparent text-gray-500 hover:bg-gray-100'}`}
+                                          className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center ${active ? 'bg-[#E6F8F0] border-[#00C06B] text-[#00C06B]' : 'bg-gray-50 border-transparent text-gray-500 hover:bg-gray-100'}`}
                                         >
-                                            {f.icon}
-                                            <span className="ml-1.5">{f.label}</span>
+                                            <span>{f.label}</span>
                                             {active && <Check size={12} className="ml-1.5"/>}
                                         </button>
                                     )
@@ -1452,20 +1404,12 @@ export const BatchConfigStep = ({
                         </div>
 
                         {batchEditFields.length > 0 ? (
-                            <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-                                <h4 className="text-sm font-black text-[#1F2129] mb-2 flex items-center">
-                                    <Edit3 size={16} className="mr-2 text-blue-600"/> 
-                                    输入新内容
-                                </h4>
+                            <div className="bg-white rounded-2xl p-4 shadow-sm">
+                                <h4 className="mb-3 text-sm font-black text-[#1F2129]">批量设置</h4>
+                                <div className="space-y-3">
                                 {batchEditFields.map(fieldId => {
-                                    const def = editableFieldsDef.find(f => f.id === fieldId);
-                                    if (!def) return null;
                                     return (
-                                        <div key={fieldId} className="bg-gray-50 p-4 rounded-xl border border-gray-100 animate-in slide-in-from-top-2">
-                                            <div className="flex items-center mb-2">
-                                                <span className="text-gray-400 mr-2">{def.icon}</span>
-                                                <span className="text-xs font-bold text-gray-500">{def.label}</span>
-                                            </div>
+                                        <React.Fragment key={fieldId}>
                                             {fieldId === 'p_name' ? (
                                                 renderNameEditor()
                                             ) : fieldId === 's_price' ? (
@@ -1474,28 +1418,11 @@ export const BatchConfigStep = ({
                                                 renderCategoryEditor()
                                             ) : fieldId === 'st_time' ? (
                                                 renderTimeSaleEditor()
-                                            ) : def.type === 'number' ? (
-                                                <div className="flex items-center">
-                                                    <span className="text-lg font-bold mr-1 text-[#1F2129]">¥</span>
-                                                    <input 
-                                                      type="number" 
-                                                      className="w-full text-lg font-bold outline-none bg-transparent text-[#1F2129]" 
-                                                      placeholder="0.00"
-                                                      value={batchFormData[fieldId] || ''}
-                                                      onChange={e => setBatchFormData(prev => ({ ...prev, [fieldId]: e.target.value }))}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <input 
-                                                  className="w-full text-sm font-bold outline-none bg-transparent text-[#1F2129] placeholder-gray-300"
-                                                  placeholder={`输入新的${def.label}`}
-                                                  value={batchFormData[fieldId] || ''}
-                                                  onChange={e => setBatchFormData(prev => ({ ...prev, [fieldId]: e.target.value }))}
-                                                />
-                                            )}
-                                        </div>
+                                            ) : null}
+                                        </React.Fragment>
                                     );
                                 })}
+                                </div>
                             </div>
                         ) : (
                             <div className="bg-white/50 border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center text-gray-400">
@@ -1525,7 +1452,7 @@ export const BatchConfigStep = ({
 
                 {isDeleteMode && renderDeleteChannelPanel()}
 
-                {!isSoldOutMode && !isDeleteMode && actionType !== 'delete' && (
+                {!isSoldOutMode && !isDeleteMode && (
                     <div className="bg-white rounded-2xl p-5 shadow-sm">
                         <h4 className="text-sm font-black text-[#1F2129] mb-4 flex items-center">
                             <Share2 size={16} className="mr-2 text-orange-500"/> 
@@ -1592,13 +1519,14 @@ export const BatchConfigStep = ({
                   onClick={handleApply}
                   disabled={
                     (isAttributeMode && batchEditFields.length === 0)
+                    || hasUnconfiguredEditField
                     || hasInvalidNameEdit
                     || (isSoldOutMode && soldOutConfig.channels.length === 0)
                     || (isDeleteMode && deleteTargetChannels.length === 0)
                   }
                   className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center
                       ${actionType === 'delete' ? 'bg-red-500 shadow-red-200' : 'bg-[#00C06B] shadow-green-100'}
-                      ${((isAttributeMode && batchEditFields.length === 0) || hasInvalidNameEdit || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
+                      ${((isAttributeMode && batchEditFields.length === 0) || hasUnconfiguredEditField || hasInvalidNameEdit || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
                   `}
                 >
                     {actionType === 'delete' ? (
@@ -1611,16 +1539,17 @@ export const BatchConfigStep = ({
 
             {showTimeSalesEditor && (
                 <TimeSalesBatchEditor
-                    data={((batchFormData.st_time as BatchTimeSaleFormData | undefined)?.config) || cloneTimeSalesConfig()}
+                    data={(batchFormData.st_time as BatchTimeSaleFormData | undefined) || {
+                        mode: 'timed',
+                        config: cloneTimeSalesConfig(),
+                    }}
                     onBack={() => setShowTimeSalesEditor(false)}
-                    onSave={config => {
+                    onSave={data => {
                         setBatchFormData(prev => ({
                             ...prev,
-                            st_time: {
-                                mode: 'timed',
-                                config,
-                            },
+                            st_time: data,
                         }));
+                        markEditFieldConfigured('st_time');
                         setShowTimeSalesEditor(false);
                     }}
                 />
@@ -1645,6 +1574,7 @@ export const BatchConfigStep = ({
                             ...prev,
                             p_name: data,
                         }));
+                        markEditFieldConfigured('p_name');
                         setShowNameEditor(false);
                     }}
                 />
@@ -1653,13 +1583,21 @@ export const BatchConfigStep = ({
             {showPriceEditor && (
                 <BatchPriceEditor
                     products={selectedProducts}
-                    data={((batchFormData.s_price as BatchPriceEditorData | undefined) || { uniformPrice: '', specPrices: {} })}
+                    data={((batchFormData.s_price as BatchPriceEditorData | undefined) || {
+                        mode: 'uniform',
+                        uniformMethod: 'adjust',
+                        adjustType: 'increase',
+                        adjustAmount: '',
+                        fixedPrice: '',
+                        specPrices: {},
+                    })}
                     onBack={() => setShowPriceEditor(false)}
                     onSave={data => {
                         setBatchFormData(prev => ({
                             ...prev,
                             s_price: data,
                         }));
+                        markEditFieldConfigured('s_price');
                         setShowPriceEditor(false);
                     }}
                 />
@@ -1675,6 +1613,7 @@ export const BatchConfigStep = ({
                             ...prev,
                             p_cat: values,
                         }));
+                        markEditFieldConfigured('p_cat');
                         setShowCategoryEditor(false);
                     }}
                 />

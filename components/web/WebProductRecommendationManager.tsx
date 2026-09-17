@@ -6,8 +6,8 @@ import {
   Check,
   ChevronDown,
   Copy,
-  Crown,
   Eye,
+  EyeOff,
   FileSliders,
   LockKeyhole,
   MoreHorizontal,
@@ -482,14 +482,20 @@ const DeliveryRuleEditor = ({ template, onClose, onSave }: { template: Recommend
         </section>
 
         <section className="border-b border-[#EEF0F3] py-5">
-          <SectionTitle icon={<Users size={16} />} title="展示用户" description="先确定目标用户，再设置非目标用户是否能看到推荐。" />
+          <SectionTitle icon={<Users size={16} />} title="用户范围" description="先设置目标用户，再配置未命中该范围的用户是否能看到推荐。" />
           <div className="mt-4 space-y-4">
             <FormRow label="目标用户" required><div className="flex flex-wrap gap-5"><RadioOption checked={rule.audience === 'all'} onChange={() => setRule(current => ({ ...current, audience: 'all', nonMemberVisibility: 'hidden' }))} label="全部用户" /><RadioOption checked={rule.audience === 'member_tag'} onChange={() => setRule(current => ({ ...current, audience: 'member_tag', nonMemberVisibility: 'hidden' }))} label="按会员标签" /><RadioOption checked={rule.audience === 'paid_member'} onChange={() => setRule(current => ({ ...current, audience: 'paid_member' }))} label="付费会员" /></div></FormRow>
             {rule.audience === 'paid_member' && (
-              <FormRow label="展示类型" required>
-                <div className="grid grid-cols-2 gap-3">
-                  <ChoiceCard selected={rule.nonMemberVisibility === 'hidden'} icon={<LockKeyhole size={18} />} title="不可见" description="非对应付费会员不展示此推荐，保持当前默认逻辑。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'hidden' }))} />
-                  <ChoiceCard selected={rule.nonMemberVisibility === 'visible_locked'} icon={<Crown size={18} />} title="可见但不可购买" description="展示商品但禁止购买；点击后由点单页引导升级对应付费会员。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'visible_locked' }))} />
+              <FormRow label="非目标用户" required alignTop>
+                <div>
+                  <div className="mb-3">
+                    <div className="font-medium text-[#1D2129]">非目标用户的展示方式</div>
+                    <div className="mt-1 text-xs leading-5 text-[#667085]">以下设置仅影响未命中上述目标范围的用户；目标用户可正常查看并购买。</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <ChoiceCard selected={rule.nonMemberVisibility === 'hidden'} icon={<EyeOff size={18} />} title="不展示" description="非目标用户看不到该推荐。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'hidden' }))} />
+                    <ChoiceCard selected={rule.nonMemberVisibility === 'visible_locked'} icon={<Eye size={18} />} title="展示但不可购买" description="非目标用户可查看推荐商品，但不能购买；具体提示或引导由点单页处理。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'visible_locked' }))} />
+                  </div>
                 </div>
               </FormRow>
             )}
@@ -589,10 +595,10 @@ const ModeBadge = ({ mode, label }: { mode: ActivityMode; label: string }) => {
 };
 
 const RuleSummary = ({ rule }: { rule: DeliveryRule }) => (
-  <div className="space-y-1"><div>{rule.channels.join('、')} · {rule.saleTypes.join('、')}</div><div className="text-xs text-[#98A2B3]">{rule.audience === 'all' ? '全部用户' : rule.audience === 'member_tag' ? '会员标签用户' : rule.nonMemberVisibility === 'visible_locked' ? '付费会员；非对应用户可见不可买' : '仅对应付费会员可见'} · {rule.stores.length === STORE_OPTIONS.length ? '全部门店' : `${rule.stores.length} 家门店`}</div></div>
+  <div className="space-y-1"><div>{rule.channels.join('、')} · {rule.saleTypes.join('、')}</div><div className="text-xs text-[#98A2B3]">{rule.audience === 'all' ? '全部用户可购买' : rule.audience === 'member_tag' ? '会员标签用户可购买' : rule.nonMemberVisibility === 'visible_locked' ? '付费会员可购买；非目标用户可见不可购买' : '仅付费会员可见并购买'} · {rule.stores.length === STORE_OPTIONS.length ? '全部门店' : `${rule.stores.length} 家门店`}</div></div>
 );
 
-const FormRow = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => <div className="flex items-start"><div className="w-[116px] shrink-0 pt-2 text-right text-[#4E5969]">{required && <span className="mr-1 text-[#D92D20]">*</span>}{label}：</div><div className="min-w-0 flex-1 pl-4">{children}</div></div>;
+const FormRow = ({ label, required, alignTop = false, children }: { label: string; required?: boolean; alignTop?: boolean; children: React.ReactNode }) => <div className="flex items-start"><div className={`w-[116px] shrink-0 text-right text-[#4E5969] ${alignTop ? 'pt-0' : 'pt-2'}`}>{required && <span className="mr-1 text-[#D92D20]">*</span>}{label}：</div><div className="min-w-0 flex-1 pl-4">{children}</div></div>;
 const DetailField = ({ label, value }: { label: string; value: string }) => <div><div className="text-xs text-[#98A2B3]">{label}</div><div className="mt-2 rounded-md border border-[#E5E7EB] p-3 leading-6 text-[#4E5969]">{value}</div></div>;
 const CheckOption = ({ checked, onChange, label, disabled, suffix }: { checked: boolean; onChange: () => void; label: string; disabled?: boolean; suffix?: string }) => <label className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-[#B8C0CC]' : 'cursor-pointer'}`}><input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="accent-[#00B460]" />{label}{suffix && <span className="text-xs text-[#98A2B3]">{suffix}</span>}</label>;
 const RadioOption = ({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) => <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" checked={checked} onChange={onChange} className="accent-[#00B460]" />{label}</label>;

@@ -104,24 +104,39 @@ const DOUYIN_REUSE_ROWS = [
 
 const MEITUAN_DINE_REUSE_ROWS = [
   {
-    source: '名称、规格、SKU、价格与后台分类',
-    target: '品牌标准商品基础结构',
-    rule: '直接复用企迈发布快照；标准商品描述、简述、图片和售卖时间一期不提交。',
+    source: '商品名称与基础价格',
+    target: '标准商品名称与 SKU 销售价',
+    rule: '复用渠道商品当前生效值；价格由元换算为分。',
   },
   {
-    source: '加料与选择规则',
-    target: '品牌加料、加料组与客制化规则',
-    rule: '仅商品实际关联且能够等价转换时提交；标签和互斥规则一期不提交。',
+    source: '规格与 SKU',
+    target: '售卖属性、规格组与 SKU 规格组合',
+    rule: '规格值先同步为美团售卖属性，再按规格组和完整规格值组合生成 SKU；当前渠道只控制规格启用状态。',
   },
   {
-    source: '套餐结构、简述与图片',
-    target: '美团套餐、分组和套餐明细',
-    rule: '仅兼容套餐提交；简述与图片按套餐接口硬必填规则复用和预检。',
+    source: '商品图片',
+    target: '商品主图与详情图',
+    rule: '一期对接、非必填；新增或变更图片时先上传美团，再随商品提交；未配置不阻断同步。',
+  },
+  {
+    source: '售卖时间',
+    target: '商品售卖星期、日期与时段',
+    rule: '一期对接、非必填；复用渠道商品通用字段，未配置时按美团全天售卖处理。',
+  },
+  {
+    source: '做法',
+    target: 'Premium、做法组与 SKU 客制化规则',
+    rule: '按当前渠道启用的做法组和做法项生成；不在美团专属区重复新增、删除或修改结构。',
+  },
+  {
+    source: '加料',
+    target: 'Premium、加料组与 SKU 客制化规则',
+    rule: '同步启用的加料项、价格及限选规则；无法等价转换时在发布预检中阻断。',
   },
   {
     source: '门店价格、上下架与库存',
     target: '美团门店商品经营数据',
-    rule: '随门店下发任务提交；售卖日期和时段一期不提交。',
+    rule: '只在商品同步门店或门店经营操作时提交；品牌商品同步不创建门店任务。',
   },
 ];
 
@@ -321,7 +336,7 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
           <div className="border border-[#CFE8DA] bg-[#F3FCF7] px-5 py-4">
             <div className="flex items-center text-sm font-black text-[#087443]"><Check size={15} className="mr-2" />一期无需额外填写美团专属字段</div>
             <div className="mt-2 text-xs leading-5 text-[#4D7C62]">
-              标准商品所需的名称、规格、SKU、价格和后台分类复用企迈资料；管理模式、来源、门店连接和平台编码由系统生成。商品简述、平台标签、属性互斥、售卖日期与时段等增强字段一期不展示、不提交。
+              标准商品所需的名称、规格、SKU、价格、后台分类、图片、售卖时间、做法和加料均复用企迈资料；管理模式、来源、门店连接和平台编码由系统生成。图片与售卖时间为一期非必填字段；套餐、商品简述、平台标签和属性互斥一期不提交。
             </div>
           </div>
         ) : (

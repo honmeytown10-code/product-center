@@ -99,6 +99,7 @@ export interface BrandConfig {
   channelGroups?: ChannelGroup[];
   posStockoutMode?: 'spu' | 'sku'; // POS沽清模式 (SPU / SKU)
   posStockoutWarningThreshold?: number; // POS已沽清列表预警阈值
+  allowPosCrossChannelManagement?: boolean; // 是否允许POS跨渠道管理商品
   omnichannel?: OmnichannelBrandConfig;
 }
 

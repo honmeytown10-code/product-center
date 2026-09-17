@@ -102,11 +102,16 @@ export const PosMethodView: React.FC<{ search: string; onReset: () => void }> = 
     <PosDock batch={batch} count={selection.size} allSelected={!!visible.length && visible.every(row => selection.has(row.id))} onSelectAll={() => setSelection(selection.size === visible.length ? new Set() : new Set(visible.map(row => row.id)))} onBatch={() => setBatch(true)} onExit={exit} filters={<PosStatusFilters value={filter} onChange={value => setFilter(value as 'all' | 'disabled')} options={[{ id: 'all', label: '全部', count: matched.length }, { id: 'disabled', label: '已禁用', count: matched.filter(row => !row.enabled).length, attention: true }]} />}>
       <button className="pos-button secondary" disabled={!selection.size} onClick={() => openAction(true)}>批量启用</button><button className="pos-button danger" disabled={!selection.size} onClick={() => openAction(false)}>批量禁用</button>
     </PosDock>
-    {action && <PosDialog title={'确认' + (action.enabled ? '启用' : '禁用') + (action.rows.length > 1 ? '所选做法？' : '此做法？')} onClose={() => setAction(null)} footer={<><button className="pos-button quiet" onClick={() => setAction(null)}>取消</button><button className={'pos-button' + (!action.enabled ? ' danger' : '')} onClick={confirm}>{action.enabled ? '确认启用' : '确认禁用'}</button></>}>
-      <h3>{action.rows.map(row => row.methodValue).join('、')}</h3>
-      <p>全部渠道</p>
-      <p>{action.enabled ? '确认后立即恢复可选，关联商品可继续选择这些做法。' : '确认后立即禁用，关联商品点单时不可再选择这些做法；需要时可在卡片上恢复。'}</p>
-      {action.rows.length === 1 && <dl>{Object.entries({ '做法名称': action.rows[0].methodName, '做法标识码': action.rows[0].methodCode || '—', '备注': action.rows[0].remark || '—', '温馨提示': action.rows[0].prompt || '—', '做法值多选': action.rows[0].multiValue ? '已开启' : '已关闭', '做法选项': action.rows[0].optionType }).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{value}</dd></React.Fragment>)}</dl>}
+    {action && <PosDialog className="pos-method-action-dialog" title={action.rows.length > 1 ? `确认批量${action.enabled ? '启用' : '禁用'}？` : `确认${action.enabled ? '启用' : '禁用'}做法？`} onClose={() => setAction(null)} footer={<><button className="pos-button quiet" onClick={() => setAction(null)}>取消</button><button className={'pos-button' + (!action.enabled ? ' danger' : '')} onClick={confirm}>{action.enabled ? '确认启用' : '确认禁用'}</button></>}>
+      <div className="pos-method-action-object">
+        <strong>{action.rows.length > 1 ? `已选 ${action.rows.length} 项做法` : action.rows[0].methodValue}</strong>
+        <span>{action.rows.length > 1 ? action.rows.slice(0, 3).map(row => row.methodValue).join('、') + (action.rows.length > 3 ? ` 等 ${action.rows.length} 项` : '') : action.rows[0].methodName}</span>
+      </div>
+      <div className="pos-method-action-effect" data-danger={!action.enabled}>
+        <strong>{action.enabled ? '恢复点单可选' : '停止点单可选'}</strong>
+        <span>{action.enabled ? '启用后，关联商品点单时可以重新选择该做法。' : '禁用后，关联商品点单时将不能选择该做法。'}</span>
+      </div>
+      <div className="pos-method-action-scope"><span>作用范围</span><strong>当前门店 · 全部渠道</strong></div>
     </PosDialog>}
   </div>;
 };

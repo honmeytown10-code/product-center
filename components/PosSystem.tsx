@@ -15,6 +15,9 @@ export const PosSystem: React.FC = () => {
   const config = brandConfigs[activeBrandId];
   const stockShared = config?.features.stock_shared ?? true;
   const shelfUnited = config?.features.shelves_unite ?? true;
+  const posOnlyProducts = !(config?.allowPosCrossChannelManagement ?? true);
+  const posOnlyStockOperation = posOnlyProducts && !stockShared;
+  const posOnlyShelfOperation = posOnlyProducts && !shelfUnited;
   const [module, setModule] = useState<'product' | 'settings'>('product');
   const [tab, setTab] = useState<SubTab>(() => {
     const value = new URLSearchParams(window.location.search).get('posTab');
@@ -25,9 +28,9 @@ export const PosSystem: React.FC = () => {
   const [shelfChannel, setShelfChannel] = useState<ChannelType>('pos');
   const [showImage, setShowImage] = useState(() => localStorage.getItem('pos_local_showImage') === 'true');
   const [guideOpen, setGuideOpen] = useState(false);
-  const searchesStoreLibrary = module === 'product' && (tab === 'stockout' && !stockShared || tab === 'shelf' && !shelfUnited);
-  useEffect(() => { setChannel(stockShared ? 'all' : current => current === 'all' ? 'pos' : current); }, [stockShared]);
-  useEffect(() => { setShelfChannel(shelfUnited ? 'all' : current => current === 'all' ? 'pos' : current); }, [shelfUnited]);
+  const searchesStoreLibrary = !posOnlyProducts && module === 'product' && (tab === 'stockout' && !stockShared || tab === 'shelf' && !shelfUnited);
+  useEffect(() => { setChannel(stockShared ? 'all' : posOnlyProducts ? 'pos' : current => current === 'all' ? 'pos' : current); }, [stockShared, posOnlyProducts]);
+  useEffect(() => { setShelfChannel(shelfUnited ? 'all' : posOnlyProducts ? 'pos' : current => current === 'all' ? 'pos' : current); }, [shelfUnited, posOnlyProducts]);
   const tabs: { id: SubTab; label: string }[] = [{ id: 'stockout', label: '商品沽清' }, { id: 'method', label: '做法管理' }, { id: 'shelf', label: '商品上下架' }, { id: 'item', label: '品项沽清' }];
   return <div className="pos-system">
     <aside className="pos-rail" aria-label="POS 主导航">
@@ -41,14 +44,14 @@ export const PosSystem: React.FC = () => {
     <main className="pos-main">
       <header className="pos-header">
         {module === 'product' ? <nav className="pos-tabs" aria-label="商品管理功能">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); setSearch(''); setGuideOpen(false); }}>{item.label}</button>)}</nav> : <h1 className="text-xl font-bold">系统设置</h1>}
-        {module === 'product' && tab === 'stockout' && !stockShared && <label className="pos-channel-select"><span>渠道</span><select aria-label="商品沽清当前渠道" value={channel} onChange={event => setChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
-        {module === 'product' && tab === 'shelf' && !shelfUnited && <label className="pos-channel-select"><span>渠道</span><select aria-label="商品上下架当前渠道" value={shelfChannel} onChange={event => setShelfChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
+        {module === 'product' && tab === 'stockout' && !stockShared && !posOnlyProducts && !posOnlyStockOperation && <label className="pos-channel-select"><span>渠道</span><select aria-label="商品沽清当前渠道" value={channel} onChange={event => setChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
+        {module === 'product' && tab === 'shelf' && !shelfUnited && !posOnlyProducts && !posOnlyShelfOperation && <label className="pos-channel-select"><span>渠道</span><select aria-label="商品上下架当前渠道" value={shelfChannel} onChange={event => setShelfChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
         {module === 'product' && tab !== 'item' && <label className="pos-search"><Search size={18} /><input aria-label={tab === 'method' ? '搜索做法' : '搜索商品'} placeholder={tab === 'method' ? '搜索做法名 / 首字母 / 标识码' : searchesStoreLibrary ? '搜索门店全部渠道商品 / 扫码' : '搜索商品名 / 首字母 / 扫码'} value={search} onChange={event => setSearch(event.target.value)} />{search && <button aria-label="清除搜索" onClick={() => setSearch('')}><X size={16} /></button>}</label>}
         {module === 'product' && <div className="pos-header-tools">{tab === 'stockout' && <button className="pos-guide-button" onClick={() => setGuideOpen(true)}><HelpCircle size={17} />如何沽清</button>}<button className="pos-icon-button" aria-label="刷新商品" onClick={() => window.location.reload()}><RefreshCw size={18} /></button><span className="pos-icon-button" role="img" aria-label="打印机已连接"><Printer size={18} /></span><span className="pos-icon-button" role="img" aria-label="网络已连接"><Wifi size={18} /></span></div>}
       </header>
       <section className="pos-view" hidden={module !== 'settings'}><PosSettingsView showImage={showImage} setShowImage={value => { setShowImage(value); localStorage.setItem('pos_local_showImage', String(value)); }} /></section>
-      <section className="pos-view" hidden={module !== 'product' || tab !== 'stockout'}><PosStockoutView showImage={showImage} search={search} onReset={() => setSearch('')} channel={channel} onChannelChange={setChannel} /></section>
-      <section className="pos-view" hidden={module !== 'product' || tab !== 'shelf'}><PosShelfView showImage={showImage} search={search} onReset={() => setSearch('')} channel={shelfChannel} onChannelChange={setShelfChannel} /></section>
+      <section className="pos-view" hidden={module !== 'product' || tab !== 'stockout'}><PosStockoutView showImage={showImage} search={search} onReset={() => setSearch('')} channel={channel} onChannelChange={setChannel} posOnlyProducts={posOnlyProducts} posOnlyOperation={posOnlyStockOperation} /></section>
+      <section className="pos-view" hidden={module !== 'product' || tab !== 'shelf'}><PosShelfView showImage={showImage} search={search} onReset={() => setSearch('')} channel={shelfChannel} onChannelChange={setShelfChannel} posOnlyProducts={posOnlyProducts} posOnlyOperation={posOnlyShelfOperation} /></section>
       <section className="pos-view" hidden={module !== 'product' || tab !== 'method'}><PosMethodView search={search} onReset={() => setSearch('')} /></section>
       <section className="pos-view" hidden={module !== 'product' || tab !== 'item'}><div className="pos-empty"><ShoppingBag size={36} /><h3>品项沽清</h3><p>当前原型尚未接入品项数据，此入口保留。</p><button className="pos-button secondary" onClick={() => setTab('stockout')}>返回商品沽清</button></div></section>
       {guideOpen && <PosDialog title="如何沽清商品" className="pos-guide-dialog" onClose={() => setGuideOpen(false)}>

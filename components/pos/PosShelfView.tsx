@@ -57,7 +57,7 @@ const RAW_SHELF_ITEMS = [
 const INITIAL_SHELF_ITEMS = RAW_SHELF_ITEMS.map((item, index) => ({
     ...item,
     channels: {
-        pos: item.id === 'g45' ? 'unmapped' : item.status === 'off_shelf' && index % 4 === 0 ? 'on_shelf' : item.status,
+        pos: item.id === 'g45' || item.category.includes('小程序') ? 'unmapped' : item.status === 'off_shelf' && index % 4 === 0 ? 'on_shelf' : item.status,
         mini_dine: item.id === 'g45' ? 'unmapped' : item.status,
         mini_take: item.id === 'g45' ? 'unmapped' : item.status === 'on_shelf' && index % 6 === 0 ? 'off_shelf' : item.status,
         mini_pickup: item.id === 'g45' ? 'unmapped' : item.status,
@@ -69,7 +69,7 @@ const INITIAL_SHELF_ITEMS = RAW_SHELF_ITEMS.map((item, index) => ({
 }));
 
 
-export const PosShelfView: React.FC<{ showImage: boolean; search: string; onReset: () => void; channel: ChannelType; onChannelChange: (channel: ChannelType) => void }> = ({ showImage, search, onReset, channel, onChannelChange }) => {
+export const PosShelfView: React.FC<{ showImage: boolean; search: string; onReset: () => void; channel: ChannelType; onChannelChange: (channel: ChannelType) => void; posOnlyProducts: boolean; posOnlyOperation: boolean }> = ({ showImage, search, onReset, channel, onChannelChange, posOnlyProducts, posOnlyOperation }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const config = brandConfigs[activeBrandId];
   const united = config?.features.shelves_unite ?? true;
@@ -96,9 +96,11 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
   };
   const searching = !!search.trim();
   const mappedChannelIds = (item: typeof items[number]): ChannelType[] => CHANNEL_TABS.filter(tab => item.channels[tab.id] !== 'unmapped').map(tab => tab.id);
-  const matched = items.filter(item => shelfState(item) !== 'unmapped' && item.name.toLowerCase().includes(search.trim().toLowerCase()) && (searching || category === '全部' || item.category === category));
+  const scopedItems = items.filter(item => !posOnlyProducts || item.channels.pos !== 'unmapped');
+  const categories: string[] = ['全部', ...Array.from(new Set<string>(scopedItems.map(item => item.category)))];
+  const matched = scopedItems.filter(item => shelfState(item) !== 'unmapped' && item.name.toLowerCase().includes(search.trim().toLowerCase()) && (searching || category === '全部' || item.category === category));
   const visible = matched.filter(item => filter === 'all' || shelfState(item) !== 'on');
-  const otherChannelMatches = !united && searching ? items.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()) && shelfState(item) === 'unmapped' && mappedChannelIds(item).some(itemChannel => itemChannel !== channel)) : [];
+  const otherChannelMatches = !posOnlyProducts && !united && searching ? items.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()) && shelfState(item) === 'unmapped' && mappedChannelIds(item).some(itemChannel => itemChannel !== channel)) : [];
   useEffect(() => { setSelection(new Set()); }, [search, category, filter, channel]);
   useEffect(() => { if (searching) setCategory('全部'); }, [searching]);
   useEffect(() => {
@@ -143,7 +145,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
   return <div className="pos-view">
     <PosResult message={result} onClose={() => setResult('')} />
       <div className="pos-view">
-        <PosCategories items={MOCK_SHELF_CATEGORIES} value={category} onChange={setCategory} />
+        <PosCategories items={posOnlyProducts ? categories : MOCK_SHELF_CATEGORIES} value={category} onChange={setCategory} />
         <div className="pos-grid-scroll" key={category + filter + search + channel}><div className="pos-grid" data-status-view={filter !== 'all'}>{visible.map(item => {
           const state = shelfState(item);
           return <button key={item.id} data-product-id={item.id} className={'pos-card' + (state === 'off' ? ' is-disabled' : '') + (batch && selection.has(item.id) ? ' is-selected' : '') + (locatedProductId === item.id ? ' is-located' : '')} aria-label={item.name + ' · ' + (state === 'off' ? '已下架' : state === 'partial' ? '部分下架' : '已上架')} aria-pressed={batch ? selection.has(item.id) : undefined} onClick={() => click(item)}>
@@ -165,7 +167,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
         </div>
         <PosDock batch={batch} count={selection.size} allSelected={!!visible.length && visible.every(item => selection.has(item.id))} onSelectAll={() => setSelection(selection.size === visible.length ? new Set() : new Set(visible.map(item => item.id)))} onBatch={() => setBatch(true)} onExit={exit} filters={<PosStatusFilters value={filter} onChange={value => setFilter(value as 'all' | 'off')} options={[{ id: 'all', label: '全部', count: matched.length }, { id: 'off', label: '已下架', count: matched.filter(item => shelfState(item) !== 'on').length, attention: true }]} />}><button className="pos-button secondary" disabled={!selection.size} onClick={() => openAction(visible.filter(item => selection.has(item.id)), 'on')}>批量上架</button><button className="pos-button danger" disabled={!selection.size} onClick={() => openAction(visible.filter(item => selection.has(item.id)), 'off')}>批量下架</button></PosDock>
       </div>
-    {action && <ShelfActionDialog open data={action} onClose={() => setAction(null)} onConfirm={apply} isShelvesUnited={united} enableChannelGrouping={config?.enableChannelGrouping} channelGroups={config?.channelGroups} />}
+    {action && <ShelfActionDialog open data={action} onClose={() => setAction(null)} onConfirm={apply} isShelvesUnited={united} posOnlyOperation={posOnlyOperation} enableChannelGrouping={config?.enableChannelGrouping} channelGroups={config?.channelGroups} />}
     {crossChannelChoice && <PosDialog title="选择要切换的渠道" onClose={() => setCrossChannelChoice(null)}><div className="pos-channel-choice-intro"><strong>{crossChannelChoice.item.name}</strong><span>该商品不在当前渠道，请选择一个有此商品的渠道。</span></div><div className="pos-channel-choice-list">{crossChannelChoice.channels.map(itemChannel => { const status = crossChannelChoice.item.channels[itemChannel]; return <button key={itemChannel} onClick={() => chooseCrossChannel(itemChannel)}><span><strong>{CHANNEL_TABS.find(tab => tab.id === itemChannel)?.label}</strong><small>{status === 'off_shelf' ? '已下架' : '已上架'}</small></span><ChevronRight size={20} /></button>; })}</div></PosDialog>}
   </div>;
 };

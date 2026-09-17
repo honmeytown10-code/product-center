@@ -11,12 +11,13 @@ export const StockoutRecoveryDialog: React.FC<{
   mappedChannels: string[];
   currentChannel: ChannelType;
   shared: boolean;
+  hideChannels?: boolean;
   channelGroups?: ChannelGroup[];
   onClose: () => void;
   onConfirm: (channels: string[]) => void;
-}> = ({ products, mappedChannels, currentChannel, shared, channelGroups, onClose, onConfirm }) => {
+}> = ({ products, mappedChannels, currentChannel, shared, hideChannels = false, channelGroups, onClose, onConfirm }) => {
   const current = currentChannel !== 'all' && mappedChannels.includes(currentChannel) ? currentChannel : null;
-  const [selected, setSelected] = useState<string[]>(() => shared || !current ? mappedChannels : [current]);
+  const [selected, setSelected] = useState<string[]>(() => hideChannels ? mappedChannels.filter(id => id === 'pos') : shared || !current ? mappedChannels : [current]);
   const orderedChannels = current ? [current, ...mappedChannels.filter(id => id !== current)] : mappedChannels;
   const toggle = (id: string) => setSelected(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]);
   const toggleGroup = (ids: string[]) => setSelected(previous => ids.every(id => previous.includes(id))
@@ -34,17 +35,18 @@ export const StockoutRecoveryDialog: React.FC<{
   </>}>
     <div className="pos-recovery-product"><strong>{name}</strong></div>
     <div className="pos-recovery-effect"><RotateCcw size={20} /><div><strong>取消沽清，恢复无限库存</strong><span>商品可以继续售卖。</span></div></div>
-    <div className="pos-recovery-channel-title"><strong>生效渠道</strong><span>{shared ? '全部关联渠道统一恢复' : current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span></div>
-    {!shared && !!channelGroups?.length && <div className="pos-recovery-groups">{channelGroups.map(group => {
+    {shared && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>共享库存</strong><small>恢复后同步商品全部关联渠道。</small></span></div>}
+    {!shared && !hideChannels && <div className="pos-recovery-channel-title"><strong>生效渠道</strong><span>{current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span></div>}
+    {!shared && !hideChannels && !!channelGroups?.length && <div className="pos-recovery-groups">{channelGroups.map(group => {
       const ids = group.channels.filter(id => mappedChannels.includes(id));
       return ids.length ? <button key={group.id} type="button" aria-pressed={ids.every(id => selected.includes(id))} onClick={() => toggleGroup(ids)}>{group.name}</button> : null;
     })}</div>}
-    <div className="pos-recovery-channels">{orderedChannels.map(id => {
+    {!shared && !hideChannels && <div className="pos-recovery-channels">{orderedChannels.map(id => {
       const isCurrent = id === current;
       return <button key={id} type="button" disabled={shared || isCurrent} aria-pressed={selected.includes(id)} onClick={() => toggle(id)}>
         <span><strong>{CHANNEL_TABS.find(tab => tab.id === id)?.label}{isCurrent && <em>当前</em>}</strong>{!shared && <small>{statusFor(id)}</small>}</span><span className="pos-recovery-check">{shared ? <Lock size={13} /> : isCurrent ? <Lock size={13} /> : selected.includes(id) && <Check size={15} />}</span>
       </button>;
-    })}</div>
+    })}</div>}
   </PosDialog>;
 };
 
@@ -55,6 +57,7 @@ export const ShelfActionDialog = ({
   onClose,
   onConfirm,
   isShelvesUnited,
+  posOnlyOperation = false,
   enableChannelGrouping,
   channelGroups
 }: {
@@ -63,6 +66,7 @@ export const ShelfActionDialog = ({
   onClose: () => void;
   onConfirm: (updates: Record<string, 'on_shelf' | 'off_shelf'>) => void;
   isShelvesUnited: boolean;
+  posOnlyOperation?: boolean;
   enableChannelGrouping?: boolean;
   channelGroups?: ChannelGroup[];
 }) => {
@@ -90,9 +94,9 @@ export const ShelfActionDialog = ({
   useEffect(() => {
     if (!open) return;
 
-    const currentChannel = currentShelfChannel ? [currentShelfChannel] : validChannels;
+    const currentChannel = posOnlyOperation && validChannels.includes('pos') ? ['pos'] : currentShelfChannel ? [currentShelfChannel] : validChannels;
     setBatchSelectedChannels(isShelvesUnited ? unifiedChannels : currentChannel);
-  }, [open, validChannels, unifiedChannels, isShelvesUnited, currentShelfChannel]);
+  }, [open, validChannels, unifiedChannels, isShelvesUnited, currentShelfChannel, posOnlyOperation]);
 
   const toggleBatchChannel = (chId: string) => {
       if (isShelvesUnited || chId === currentShelfChannel) return;
@@ -140,13 +144,13 @@ export const ShelfActionDialog = ({
     <button className="pos-button" disabled={!(isShelvesUnited ? unifiedChannels : batchSelectedChannels).length} onClick={handleConfirm}>确认{actionLabel}</button>
   </>}>
     <div className="pos-shelf-product"><strong>{name}</strong></div>
-    <div className="pos-shelf-impact"><strong>{isShelvesUnited ? `全部关联渠道统一${actionLabel}` : `本次${actionLabel} ${batchSelectedChannels.length} 个渠道`}</strong><span>{data.action === 'on' ? '上架后商品可在生效渠道售卖。' : '下架后商品在生效渠道停止售卖。'}{!isShelvesUnited && '未选择的渠道保持原状。'}</span></div>
+    <div className="pos-shelf-impact"><strong>{isShelvesUnited ? `全部关联渠道统一${actionLabel}` : posOnlyOperation ? `${actionLabel} POS 商品` : `本次${actionLabel} ${batchSelectedChannels.length} 个渠道`}</strong><span>{data.action === 'on' ? '上架后商品可以继续售卖。' : '下架后商品将停止售卖。'}{!isShelvesUnited && !posOnlyOperation && '未选择的渠道保持原状。'}</span></div>
     {isShelvesUnited && !isBatch && <div className="pos-shelf-unified-status">
       <div><span>当前状态</span><strong className={unifiedCurrent}>{unifiedCurrent === 'on' ? '已上架' : '已下架'}</strong></div>
       <ChevronRight size={18} />
       <div><span>操作后</span><strong className={data.action === 'on' ? 'on' : 'off'}>{data.action === 'on' ? '已上架' : '已下架'}</strong></div>
     </div>}
-    {!isShelvesUnited && <>
+    {!isShelvesUnited && !posOnlyOperation && <>
     {enableChannelGrouping && !!channelGroups?.length && <div className="pos-shelf-groups">{channelGroups.map(group => {
       const ids = group.channels.filter(id => validChannels.includes(id));
       return ids.length ? <button key={group.id} type="button" onClick={() => toggleBatchGroup(ids)}>{group.name}</button> : null;
@@ -154,11 +158,7 @@ export const ShelfActionDialog = ({
     <div className="pos-shelf-section-title">生效渠道 · {currentShelfChannel ? '当前渠道固定，其他渠道可追加' : '选择需要操作的渠道'}</div>
     <div className="pos-shelf-other-channels">{(isBatch ? orderedShelfTabs.filter(tab => validChannels.includes(tab.id)) : orderedShelfTabs).map(renderChannel)}</div>
     </>}
-    {isShelvesUnited && <>
-      <div className="pos-shelf-section-title">{isBatch ? '全部渠道' : '商品关联渠道'} · 统一生效，不可单独选择</div>
-      <div className="pos-shelf-other-channels">{(isBatch ? CHANNEL_TABS : CHANNEL_TABS.filter(tab => unifiedChannels.includes(tab.id))).map(tab => <div key={tab.id} className="pos-shelf-channel pos-shelf-channel-locked" data-active={unifiedChannels.includes(tab.id)}><strong>{tab.label}</strong>{unifiedChannels.includes(tab.id) ? <Lock size={15} aria-hidden="true" /> : <small>未关联</small>}</div>)}</div>
-      {isBatch && <p className="pos-shelf-batch-note">本批次展示所选商品涉及的渠道；未铺货的商品不受该渠道操作影响。</p>}
-    </>}
+    {isShelvesUnited && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>统一上下架</strong><small>本次操作将同步商品全部关联渠道。</small></span></div>}
   </PosDialog>;
 };
 
@@ -368,7 +368,7 @@ export const ShelfManagementModal = ({ item, onClose, onConfirm, isShelvesUnited
 // --- Clearance Settings Modal ---
 export type ClearanceUpdate = { recover?: boolean; method: 'day' | 'long'; mode: 'spu' | 'sku'; values: { dayRemain: string; dayNextLimit: string; longLimit: string }; specValues: Record<string, { dayRemain: string; dayNextLimit: string; longLimit: string }>; selectedSpecs: string[]; channels: string[] };
 
-export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string[]; isBatch?: boolean; onClose: () => void; onConfirm: (update: ClearanceUpdate) => void; activeChannel: ChannelType | string }> = ({ product, batchIds, isBatch, onClose, onConfirm, activeChannel }) => {
+export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string[]; isBatch?: boolean; onClose: () => void; onConfirm: (update: ClearanceUpdate) => void; activeChannel: ChannelType | string; posOnlyOperation?: boolean }> = ({ product, batchIds, isBatch, onClose, onConfirm, activeChannel, posOnlyOperation = false }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const currentConfig = brandConfigs[activeBrandId];
   const isStockShared = currentConfig?.features.stock_shared ?? true;
@@ -380,13 +380,14 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
 
   // Resolve valid channels for stockout operation
   const resolvedChannels = useMemo(() => {
-      return CHANNEL_TABS.map(t => t.id).filter(chId => {
+      const channels = CHANNEL_TABS.map(t => t.id).filter(chId => {
           if (isBatch) return true; // simplified for batch
           if (!product) return false;
           const dataKey = chId;
           return !!product.channels[dataKey as ChannelTabType] && product.channels[dataKey as ChannelTabType] !== 'unmapped';
       });
-  }, [product, isBatch]);
+      return posOnlyOperation && !isStockShared ? channels.filter(id => id === 'pos') : channels;
+  }, [product, isBatch, posOnlyOperation, isStockShared]);
 
   const [selectedChannels, setSelectedChannels] = useState<string[]>(() => !isStockShared && resolvedChannels.includes(activeChannel as ChannelTabType) ? [activeChannel] : resolvedChannels);
   const currentChannel = !isStockShared && resolvedChannels.includes(activeChannel as ChannelTabType) ? String(activeChannel) : null;
@@ -718,30 +719,28 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                    )}
 
                    {/* Channel Selector Area */}
-                   <div>
+                   {isStockShared && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>共享库存</strong><small>本次修改将同步商品全部关联渠道。</small></span></div>}
+                   {!isStockShared && !posOnlyOperation && <div>
                        <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center">
                            操作生效渠道
-                           {isStockShared && <span className="ml-3 normal-case text-orange-500 bg-orange-50 px-2 py-0.5 rounded font-bold flex items-center text-[10px]"><Lock size={10} className="mr-1"/> 全渠道锁定</span>}
                        </div>
                        <div className="flex flex-wrap gap-3">
                            {renderChannelSelector()}
                        </div>
-                   </div>
+                   </div>}
                </div>
 
                {/* Global Lock Info Bar */}
-               <div className="px-8 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
+               {!isStockShared && !posOnlyOperation && <div className="px-8 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
                    <div className="text-xs font-bold text-gray-500 flex items-center">
                        当前库存规则：
-                       {isStockShared ? (
-                           <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded flex items-center ml-2"><Lock size={12} className="mr-1"/> 共享库存 (全局同步)</span>
-                       ) : enableChannelGrouping ? (
+                       {enableChannelGrouping ? (
                            <span className="text-[#3478F6] bg-[#3478F6]/10 px-2 py-1 rounded flex items-center ml-2"><Layers size={12} className="mr-1"/> 渠道分组独立</span>
                        ) : (
                            <span className="text-gray-600 bg-gray-200 px-2 py-1 rounded ml-2">全渠道完全独立</span>
                        )}
                    </div>
-               </div>
+               </div>}
             </div>
 
             {/* Right Panel: Numpad & Actions */}
@@ -773,7 +772,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
             </div>
         </div>
 
-        {showCancelConfirm && <StockoutRecoveryDialog products={product ? [product] : []} mappedChannels={resolvedChannels} currentChannel={activeChannel as ChannelType} shared={isStockShared} channelGroups={enableChannelGrouping ? channelGroups : []} onClose={() => setShowCancelConfirm(false)} onConfirm={channels => {
+        {showCancelConfirm && <StockoutRecoveryDialog products={product ? [product] : []} mappedChannels={resolvedChannels} currentChannel={activeChannel as ChannelType} shared={isStockShared} hideChannels={posOnlyOperation} channelGroups={enableChannelGrouping ? channelGroups : []} onClose={() => setShowCancelConfirm(false)} onConfirm={channels => {
             setShowCancelConfirm(false);
             onConfirm({ recover: true, method: globalMethod, mode: clearanceMode, values: targetValues, specValues, selectedSpecs, channels });
         }} />}

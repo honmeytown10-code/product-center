@@ -424,7 +424,7 @@ export const WebAdmin: React.FC = () => {
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
-  const [productSyncInitialTab, setProductSyncInitialTab] = useState<'publish' | 'records'>('publish');
+  const [productSyncInitialTab, setProductSyncInitialTab] = useState<'publish' | 'qimai-records' | 'platform-records'>('publish');
 
   // Creation/Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -519,7 +519,7 @@ export const WebAdmin: React.FC = () => {
 
   const openMasterChannelSyncRecords = () => {
     setMasterChannelSyncDialogContext(null);
-    setProductSyncInitialTab('records');
+    setProductSyncInitialTab('qimai-records');
     setCreationContext(null);
     setDetailContext(null);
     setActiveMenu('product_sync');
@@ -1201,7 +1201,7 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'channel_attributes') {
-          return <WebProductAttributeManager scope="channel" onOpenSyncRecords={() => { setProductSyncInitialTab('records'); setActiveMenu('product_sync'); }} />;
+          return <WebProductAttributeManager scope="channel" onOpenSyncRecords={() => { setProductSyncInitialTab('platform-records'); setActiveMenu('product_sync'); }} />;
       }
 
       if (activeMenu === 'channel_custom_attributes') {
@@ -1260,7 +1260,7 @@ export const WebAdmin: React.FC = () => {
             <WebChannelProductLibrary
               productOverrides={channelProductOverrides}
               onOpenSyncRecords={() => {
-                setProductSyncInitialTab('records');
+                setProductSyncInitialTab('platform-records');
                 setActiveMenu('product_sync');
               }}
               onBatchEdit={() => {

@@ -13,7 +13,7 @@ import {
     shouldShowChannelCatalog,
 } from '../../omnichannel';
 import type { OmnichannelChannelId } from '../../types';
-import { WebPublishRecords, type MasterChannelSyncRecord } from './WebPublishRecords';
+import { WebPublishRecords, type MasterChannelSyncRecord, type RecordView } from './WebPublishRecords';
 import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
 type ProductCategoryConfig = {
@@ -217,7 +217,7 @@ const getChangedFields = (product: EditableProduct) => {
 };
 
 export const WebProductSync: React.FC<{
-    initialTab?: 'publish' | 'records';
+    initialTab?: 'publish' | 'records' | 'qimai-records' | 'platform-records';
     masterChannelSyncRecords?: MasterChannelSyncRecord[];
 }> = ({ initialTab = 'publish', masterChannelSyncRecords = [] }) => {
     const { activeBrandId, brandConfigs } = useProducts();
@@ -226,7 +226,9 @@ export const WebProductSync: React.FC<{
     const channelCatalogEnabled = shouldShowChannelCatalog(omnichannelConfig) && channelCatalogGroups.length > 0;
     const [step, setStep] = useState(0);
     const [activeBatchTool, setActiveBatchTool] = useState<'addon-association' | null>(null);
-    const [pageTab, setPageTab] = useState<'publish' | 'records'>(initialTab);
+    const [pageTab, setPageTab] = useState<'publish' | 'qimai-records' | 'platform-records'>(
+        initialTab === 'records' ? 'qimai-records' : initialTab,
+    );
     const [operationMode, setOperationMode] = useState<'sync' | 'batch_standard' | 'batch_combo'>('sync');
     const [syncSource, setSyncSource] = useState<'master' | 'template' | 'channel_catalog'>(() => channelCatalogEnabled ? 'channel_catalog' : 'master');
     // 原型默认当前账号拥有全部固定渠道权限；生产环境需先按账号的 channelId 数据范围过滤，
@@ -1381,7 +1383,7 @@ export const WebProductSync: React.FC<{
             </p>
             <div className="flex space-x-4">
                 <button onClick={() => setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors">返回工具页</button>
-                <button onClick={() => setPageTab('records')} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">查看发布记录</button>
+                <button onClick={() => setPageTab('qimai-records')} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">查看企迈同步记录</button>
             </div>
         </div>
     );
@@ -1406,18 +1408,31 @@ export const WebProductSync: React.FC<{
                     <button
                         type="button"
                         role="tab"
-                        aria-selected={pageTab === 'records'}
-                        onClick={() => setPageTab('records')}
-                        className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'records' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
+                        aria-selected={pageTab === 'qimai-records'}
+                        onClick={() => setPageTab('qimai-records')}
+                        className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'qimai-records' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
                     >
-                        同步记录
+                        企迈商品同步记录
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={pageTab === 'platform-records'}
+                        onClick={() => setPageTab('platform-records')}
+                        className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'platform-records' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
+                    >
+                        平台商品同步记录
                     </button>
                 </div>
             </div>
 
             {/* Main Content Area */}
-            {pageTab === 'records' ? (
-                <WebPublishRecords masterChannelSyncRecords={masterChannelSyncRecords} />
+            {pageTab !== 'publish' ? (
+                <WebPublishRecords
+                    masterChannelSyncRecords={masterChannelSyncRecords}
+                    view={(pageTab === 'platform-records' ? 'platform' : 'qimai') as RecordView}
+                    onViewChange={view => setPageTab(view === 'platform' ? 'platform-records' : 'qimai-records')}
+                />
             ) : step === 0 ? (
                 renderToolsMenu()
             ) : (

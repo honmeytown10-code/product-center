@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, MoreHorizontal, Plus, Search, X } from 'lucide-react';
 import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
+export type RequiredPolicyScene = '堂食' | '外卖' | '外带';
+
 export type RequiredPolicyRecord = {
   id: string;
   name: string;
@@ -12,6 +14,7 @@ export type RequiredPolicyRecord = {
   orderMode: '自动加入购物车' | '下单前检查';
   selectionRule: '全部商品必选' | '任选一种';
   channels: string[];
+  scenarios: RequiredPolicyScene[];
   tableType: string;
   tableAreaScope: string;
   effectiveRule: string;
@@ -19,21 +22,42 @@ export type RequiredPolicyRecord = {
   updatedAt: string;
 };
 
+export type RequiredPolicyConflict = {
+  policy: RequiredPolicyRecord;
+  stores: string[];
+  channels: string[];
+  scenarios: RequiredPolicyScene[];
+};
+
+const intersect = <T,>(left: T[], right: T[]) => left.filter(item => right.includes(item));
+
+export const findRequiredPolicyConflicts = (candidate: RequiredPolicyRecord, policies: RequiredPolicyRecord[]): RequiredPolicyConflict[] => (
+  policies
+    .filter(item => item.status === 'enabled' && item.id !== candidate.id)
+    .map(item => ({
+      policy: item,
+      stores: intersect(candidate.applicableStores, item.applicableStores),
+      channels: intersect(candidate.channels, item.channels),
+      scenarios: intersect(candidate.scenarios, item.scenarios),
+    }))
+    .filter(conflict => conflict.stores.length > 0 && conflict.channels.length > 0 && conflict.scenarios.length > 0)
+);
+
 export const MOCK_REQUIRED_POLICIES: RequiredPolicyRecord[] = [
   {
     id: 'RP-1001', name: '火锅锅底必选', targetName: '经典牛油锅底、番茄锅底、菌汤锅底', targetType: '商品',
-    status: 'enabled', version: 6, orderMode: '自动加入购物车', selectionRule: '全部商品必选', channels: ['POS', '小程序'], tableType: '不限定桌位类型', tableAreaScope: '不限定桌位区域',
-    effectiveRule: '永久有效 · 每天全天', applicableStores: ['范先生的门店', '品牌直营', 'orgtest一级'], updatedAt: '2026-09-02 14:20',
+    status: 'enabled', version: 6, orderMode: '自动加入购物车', selectionRule: '全部商品必选', channels: ['POS', '小程序'], scenarios: ['堂食'], tableType: '不限定桌位类型', tableAreaScope: '不限定桌位区域',
+    effectiveRule: '永久有效 · 每天全天', applicableStores: ['orgtest一级'], updatedAt: '2026-09-02 14:20',
   },
   {
     id: 'RP-1002', name: '麻辣烫口味任选', targetName: '麻辣酱、芝麻酱、蒜泥酱、香辣酱', targetType: '商品',
-    status: 'enabled', version: 4, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS', '小程序'], tableType: '不限定桌位类型', tableAreaScope: '2 家门店限定区域',
-    effectiveRule: '永久有效 · 每天 10:00–22:00', applicableStores: ['范先生的门店', '一级071'], updatedAt: '2026-09-02 11:08',
+    status: 'enabled', version: 4, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS', '小程序'], scenarios: ['堂食', '外卖', '外带'], tableType: '不限定桌位类型', tableAreaScope: '1 家门店限定区域',
+    effectiveRule: '永久有效 · 每天 10:00–22:00', applicableStores: ['一级071'], updatedAt: '2026-09-02 11:08',
   },
   {
     id: 'RP-1003', name: '包间茶位必选', targetName: '精品茉莉花茶、陈皮白茶', targetType: '商品',
-    status: 'disabled', version: 3, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS'], tableType: '限定：包间', tableAreaScope: '1 家门店限定区域',
-    effectiveRule: '永久有效 · 每天全天', applicableStores: ['品牌直营'], updatedAt: '2026-09-01 16:30',
+    status: 'disabled', version: 3, orderMode: '下单前检查', selectionRule: '任选一种', channels: ['POS'], scenarios: ['堂食'], tableType: '限定：包间', tableAreaScope: '1 家门店限定区域',
+    effectiveRule: '永久有效 · 每天全天', applicableStores: ['orgtest一级'], updatedAt: '2026-09-01 16:30',
   },
 ];
 
@@ -66,6 +90,7 @@ export const WebRequiredProductPolicyList: React.FC<{
   const [exceptionSelectorOpen, setExceptionSelectorOpen] = useState(false);
   const [moreId, setMoreId] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [enableConflicts, setEnableConflicts] = useState<RequiredPolicyConflict[]>([]);
 
   useEffect(() => {
     if (!notice) return;
@@ -98,6 +123,19 @@ export const WebRequiredProductPolicyList: React.FC<{
     if (stores.length === 1) return stores[0];
     return `${stores[0]}、${stores[1]}${stores.length > 2 ? ` 等 ${stores.length} 家` : ''}`;
   };
+  const togglePolicyStatus = (policy: RequiredPolicyRecord) => {
+    if (policy.status === 'disabled') {
+      const conflicts = findRequiredPolicyConflicts({ ...policy, status: 'enabled' }, policies);
+      if (conflicts.length) {
+        setEnableConflicts(conflicts);
+        setMoreId(null);
+        return;
+      }
+    }
+    updatePolicies(current => current.map(item => item.id === policy.id ? { ...item, status: item.status === 'enabled' ? 'disabled' : 'enabled', updatedAt: '刚刚' } : item));
+    setMoreId(null);
+    feedback(policy.status === 'enabled' ? '方案已禁用' : '方案已启用');
+  };
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#F5F6FA] p-3">
@@ -124,12 +162,12 @@ export const WebRequiredProductPolicyList: React.FC<{
         </div>
         <div className="flex shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]">
           <span>共 <strong className="text-[#1D2129]">{filteredPolicies.length}</strong> 个方案</span>
-          <span>方案按适用门店生效，POS 与小程序直接读取品牌规则</span>
+          <span>方案按适用门店生效；同一门店、渠道、订单类型仅可启用一个方案</span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[1240px] table-fixed border-collapse text-left text-[13px]">
             <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]"><tr className="border-b border-[#E5E7EB]">
-              <th className="w-[210px] px-4 py-3 font-medium">方案名称 / ID</th><th className="px-3 py-3 font-medium">必选商品</th><th className="w-[160px] px-3 py-3 font-medium">必选类型</th><th className="w-[220px] px-3 py-3 font-medium">适用门店</th><th className="w-[200px] px-3 py-3 font-medium">渠道 / 堂食范围</th><th className="w-[100px] px-3 py-3 font-medium">状态</th><th className="w-[150px] px-3 py-3 font-medium">更新时间</th><th className="w-[150px] px-3 py-3 font-medium">操作</th>
+              <th className="w-[210px] px-4 py-3 font-medium">方案名称 / ID</th><th className="px-3 py-3 font-medium">必选商品</th><th className="w-[160px] px-3 py-3 font-medium">必选类型</th><th className="w-[220px] px-3 py-3 font-medium">适用门店</th><th className="w-[200px] px-3 py-3 font-medium">渠道 / 适用场景</th><th className="w-[100px] px-3 py-3 font-medium">状态</th><th className="w-[150px] px-3 py-3 font-medium">更新时间</th><th className="w-[150px] px-3 py-3 font-medium">操作</th>
             </tr></thead>
             <tbody>{filteredPolicies.map(policy => (
               <tr key={policy.id} className="border-b border-[#EEF0F3] hover:bg-[#FAFCFB]">
@@ -137,13 +175,13 @@ export const WebRequiredProductPolicyList: React.FC<{
                 <td className="px-3 py-3"><div className="line-clamp-2 text-[#344054]">{policy.targetName}</div></td>
                 <td className="px-3 py-3"><div className="text-[#344054]">{policy.orderMode}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.selectionRule}</div></td>
                 <td className="px-3 py-3"><div className="line-clamp-2 text-[#344054]">{storeSummary(policy.applicableStores)}</div><button onClick={() => setDetail(policy)} className="mt-1 text-[12px] text-[#008F4C]">查看全部 {policy.applicableStores.length} 家</button></td>
-                <td className="px-3 py-3"><div className="text-[#344054]">{policy.channels.join('、')}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableType}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableAreaScope}</div></td>
+                <td className="px-3 py-3"><div className="text-[#344054]">{policy.channels.join('、')}</div><div className="mt-1 text-[12px] text-[#667085]">{policy.scenarios.join('、')}</div>{policy.scenarios.includes('堂食') && <><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableType}</div><div className="mt-1 text-[12px] text-[#98A2B3]">{policy.tableAreaScope}</div></>}</td>
                 <td className="px-3 py-3"><span className={`inline-flex items-center gap-1.5 ${policy.status === 'enabled' ? 'text-[#008F4C]' : 'text-[#667085]'}`}><span className={`h-2 w-2 rounded-full ${policy.status === 'enabled' ? 'bg-[#00B460]' : 'bg-[#98A2B3]'}`} />{policy.status === 'enabled' ? '启用' : '禁用'}</span></td>
                 <td className="px-3 py-3 text-[#667085]">{policy.updatedAt}</td>
                 <td className="px-3 py-3"><div className="relative flex items-center gap-3">
                   <button onClick={() => setDetail(policy)} className="font-medium text-[#008F4C]">查看</button><button onClick={() => onEditPolicy?.(policy)} className="text-[#008F4C]">编辑</button><button aria-label="更多操作" onClick={() => setMoreId(moreId === policy.id ? null : policy.id)}><MoreHorizontal size={17} className="text-[#667085]" /></button>
                   {moreId === policy.id && <div className="absolute right-0 top-7 z-30 w-32 rounded-md border border-[#E5E7EB] bg-white py-1 shadow-lg">
-                    <button onClick={() => { updatePolicies(current => current.map(item => item.id === policy.id ? { ...item, status: item.status === 'enabled' ? 'disabled' : 'enabled', updatedAt: '刚刚' } : item)); setMoreId(null); feedback(policy.status === 'enabled' ? '方案已禁用' : '方案已启用'); }} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">{policy.status === 'enabled' ? '禁用' : '启用'}</button>
+                    <button onClick={() => togglePolicyStatus(policy)} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">{policy.status === 'enabled' ? '禁用' : '启用'}</button>
                     <button onClick={() => { updatePolicies(current => [{ ...policy, id: `RP-${Date.now()}`, name: `${policy.name}-副本`, status: 'disabled', updatedAt: '刚刚' }, ...current]); setMoreId(null); feedback('必选方案已复制，新方案默认为禁用'); }} className="w-full px-3 py-2 text-left hover:bg-[#F7F8FA]">复制</button>
                     <button disabled={policy.status === 'enabled'} title={policy.status === 'enabled' ? '请先禁用方案' : '删除方案'} onClick={() => { setDeletePolicy(policy); setMoreId(null); }} className="w-full px-3 py-2 text-left text-[#D92D20] hover:bg-[#FFF5F5] disabled:cursor-not-allowed disabled:text-[#B8C0CC] disabled:hover:bg-white">删除</button>
                   </div>}
@@ -158,9 +196,15 @@ export const WebRequiredProductPolicyList: React.FC<{
       {detail && <div className="fixed inset-0 z-[80] flex justify-end bg-black/35"><div className="flex h-full w-[560px] flex-col bg-white shadow-2xl">
         <div className="flex h-14 items-center justify-between border-b border-[#E5E7EB] px-5"><h3 className="text-[17px] font-semibold">必选方案详情</h3><button onClick={() => setDetail(null)} aria-label="关闭详情"><X size={20} className="text-[#667085]" /></button></div>
         <div className="flex-1 space-y-5 overflow-y-auto p-5 text-[13px]"><div className="rounded-md bg-[#F7F8FA] p-4"><div className="flex items-center justify-between"><div className="font-medium">{detail.name}</div><span className={detail.status === 'enabled' ? 'text-[#008F4C]' : 'text-[#667085]'}>{detail.status === 'enabled' ? '启用' : '禁用'}</span></div><div className="mt-1 text-[#667085]">ID：{detail.id} · 品牌版本 V{detail.version}</div></div>
-          <DetailField label="必选商品" value={detail.targetName} /><DetailField label="必选类型" value={detail.orderMode} /><DetailField label="选择规则" value={detail.selectionRule} /><DetailField label={`适用门店（${detail.applicableStores.length} 家）`} value={detail.applicableStores.join('、')} /><DetailField label="适用渠道" value={detail.channels.join('、')} /><DetailField label="桌位类型限定" value={detail.tableType} /><DetailField label="桌位区域限定" value={detail.tableAreaScope} /><DetailField label="生效规则" value={detail.effectiveRule} /><DetailField label="点单约束" value="门店命中多个启用方案时，各方案分别校验并同时满足。" />
+          <DetailField label="必选商品" value={detail.targetName} /><DetailField label="必选类型" value={detail.orderMode} /><DetailField label="选择规则" value={detail.selectionRule} /><DetailField label={`适用门店（${detail.applicableStores.length} 家）`} value={detail.applicableStores.join('、')} /><DetailField label="适用渠道" value={detail.channels.join('、')} /><DetailField label="适用场景" value={detail.scenarios.join('、')} />{detail.scenarios.includes('堂食') && <><DetailField label="桌位类型限定" value={detail.tableType} /><DetailField label="桌位区域限定" value={detail.tableAreaScope} /></>}<DetailField label="生效规则" value={detail.effectiveRule} /><DetailField label="重复规则" value="同一门店、同一渠道、同一订单类型只能有一个启用方案。" />
         </div>
         <div className="flex justify-end gap-2 border-t border-[#E5E7EB] px-5 py-3"><button onClick={() => setDetail(null)} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">关闭</button><button onClick={() => { setDetail(null); onEditPolicy?.(detail); }} className="h-9 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white">编辑方案</button></div>
+      </div></div>}
+
+      {enableConflicts.length > 0 && <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="方案启用冲突"><div className="w-[620px] overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-[#E5E7EB] px-5 py-4"><div><h3 className="font-semibold text-[#1D2939]">无法启用必选方案</h3><p className="mt-1 text-xs leading-5 text-[#667085]">同一门店、同一渠道、同一订单类型不可存在多个启用方案。</p></div><button onClick={() => setEnableConflicts([])} aria-label="关闭冲突结果"><X size={20} className="text-[#667085]" /></button></div>
+        <div className="max-h-[360px] space-y-3 overflow-y-auto p-5">{enableConflicts.map(conflict => <div key={conflict.policy.id} className="rounded-md border border-[#F3C7C3] bg-[#FFF7F6] p-3 text-sm"><div className="font-medium text-[#B42318]">与“{conflict.policy.name}”冲突</div><div className="mt-2 grid grid-cols-[72px_1fr] gap-y-1 text-xs leading-5 text-[#667085]"><span>门店</span><span>{conflict.stores.join('、')}</span><span>渠道</span><span>{conflict.channels.join('、')}</span><span>订单类型</span><span>{conflict.scenarios.join('、')}</span></div></div>)}</div>
+        <div className="flex items-center justify-between border-t border-[#E5E7EB] px-5 py-3"><span className="text-xs text-[#667085]">请先调整本方案范围，或禁用/修改冲突方案。</span><button onClick={() => setEnableConflicts([])} className="h-9 rounded-md bg-[#00B460] px-4 text-sm font-medium text-white">知道了</button></div>
       </div></div>}
 
       {exceptionOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35"><div className="w-[680px] rounded-lg bg-white shadow-2xl">

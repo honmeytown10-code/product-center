@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle, CheckCircle2, CheckSquare, ChevronLeft, CircleDot, Plus, Search, Square, X } from 'lucide-react';
-import type { RequiredPolicyRecord } from './WebRequiredProductPolicyList';
+import { findRequiredPolicyConflicts, type RequiredPolicyRecord, type RequiredPolicyScene } from './WebRequiredProductPolicyList';
 import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
 
 type QuantityMode = 'fixed' | 'diners';
@@ -9,6 +9,8 @@ type SelectionRule = 'all' | 'anyOne';
 type EffectiveMode = 'forever' | 'custom';
 type ActivityPeriod = 'daily' | 'weekly' | 'monthly';
 type ActivityTime = 'allDay' | 'specified';
+
+const REQUIRED_POLICY_SCENES: RequiredPolicyScene[] = ['堂食', '外卖', '外带'];
 
 type RequiredItemRow = {
   id: string;
@@ -53,7 +55,7 @@ const STORE_OPTIONS = [
   { id: 'store-5', name: '一级06', code: '101587', organization: '华东区域', tableAreas: ['大厅', '卡座区'] },
 ];
 
-const createRequiredItemRow = (name: string, id: string): RequiredItemRow => {
+const createRequiredItemRow = (name: string, id: string, scenarios: Set<RequiredPolicyScene> = new Set(REQUIRED_POLICY_SCENES)): RequiredItemRow => {
   const product = REQUIRED_PRODUCTS.find(item => item.name === name);
   return {
     id,
@@ -61,9 +63,9 @@ const createRequiredItemRow = (name: string, id: string): RequiredItemRow => {
     name,
     autoAddEligible: product?.autoAddEligible ?? true,
     autoAddRestriction: product?.autoAddRestriction,
-    dineInEnabled: true,
-    takeawayEnabled: id === 'item-1',
-    takeoutEnabled: false,
+    dineInEnabled: scenarios.has('堂食'),
+    takeawayEnabled: scenarios.has('外卖'),
+    takeoutEnabled: scenarios.has('外带'),
     dineInQuantityMode: 'fixed',
     dineInCount: id === 'item-1' ? 2 : 1,
     takeawayCount: id === 'item-1' ? 2 : 1,
@@ -74,12 +76,17 @@ const createRequiredItemRow = (name: string, id: string): RequiredItemRow => {
 export const WebRequiredProductPolicyEditor: React.FC<{
   mode: 'create' | 'edit';
   policy?: RequiredPolicyRecord | null;
+  policies: RequiredPolicyRecord[];
   onBack: () => void;
   onSave: (policy: RequiredPolicyRecord) => void;
-}> = ({ mode, policy, onBack, onSave }) => {
+}> = ({ mode, policy, policies, onBack, onSave }) => {
+  const initialScenarios = policy?.scenarios?.length
+    ? policy.scenarios
+    : policy?.orderMode === '自动加入购物车' ? (['堂食'] as RequiredPolicyScene[]) : REQUIRED_POLICY_SCENES;
   const [policyName, setPolicyName] = useState(policy?.name || '');
-  const [channels, setChannels] = useState<Set<string>>(new Set(['POS', '小程序']));
-  const [orderMode, setOrderMode] = useState<OrderMode>(() => policy?.orderMode === '自动加入购物车' ? 'auto' : 'check');
+  const [channels, setChannels] = useState<Set<string>>(() => new Set(policy?.channels?.length ? policy.channels : ['POS', '小程序']));
+  const [applicableScenes, setApplicableScenes] = useState<Set<RequiredPolicyScene>>(() => new Set(initialScenarios));
+  const [orderMode, setOrderMode] = useState<OrderMode>(() => policy?.orderMode === '自动加入购物车' && initialScenarios.length === 1 && initialScenarios[0] === '堂食' ? 'auto' : 'check');
   const [selectionRule, setSelectionRule] = useState<SelectionRule>(() => policy?.selectionRule === '任选一种' ? 'anyOne' : 'all');
   const [tableTypeEnabled, setTableTypeEnabled] = useState(false);
   const [tableType, setTableType] = useState('');
@@ -108,8 +115,11 @@ export const WebRequiredProductPolicyEditor: React.FC<{
   const [removeRowId, setRemoveRowId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [requiredRows, setRequiredRows] = useState<RequiredItemRow[]>([
-    createRequiredItemRow(policy?.targetName?.split('、')[0] || '方案商品111', 'item-1'),
+    createRequiredItemRow(policy?.targetName?.split('、')[0] || '方案商品111', 'item-1', new Set(initialScenarios)),
   ]);
+
+  const hasDineIn = applicableScenes.has('堂食');
+  const supportsAutoAdd = hasDineIn && applicableScenes.size === 1;
 
   const toggleChannel = (channel: string) => {
     setChannels(current => {
@@ -124,8 +134,42 @@ export const WebRequiredProductPolicyEditor: React.FC<{
     setRequiredRows(current => current.map(row => (row.id === rowId ? updater(row) : row)));
   };
 
+  const toggleApplicableScene = (scene: RequiredPolicyScene) => {
+    const selected = applicableScenes.has(scene);
+    const nextSelected = !selected;
+    setApplicableScenes(current => {
+      const next = new Set(current);
+      if (nextSelected) next.add(scene);
+      else next.delete(scene);
+      return next;
+    });
+    const enabledKey = scene === '堂食' ? 'dineInEnabled' : scene === '外卖' ? 'takeawayEnabled' : 'takeoutEnabled';
+    setRequiredRows(current => current.map(row => ({ ...row, [enabledKey]: nextSelected })));
+    if ((scene === '外卖' || scene === '外带') && nextSelected && orderMode === 'auto') {
+      setOrderMode('check');
+      setOrderModeNotice('已切换为下单前检查：自动加入购物车仅堂食多人点餐支持。');
+    } else {
+      setOrderModeNotice(null);
+    }
+    if (scene === '堂食' && !nextSelected) {
+      if (orderMode === 'auto') setOrderMode('check');
+      setTableAreaEnabled(false);
+      setStoreAreaSelections({});
+      setAreaConfigStoreId(null);
+      setTableTypeEnabled(false);
+      setTableType('');
+      setRetriggersWithDiners(false);
+      setAllowQuantityEdit(false);
+    }
+    setFeedback(null);
+  };
+
   const changeOrderMode = (nextMode: OrderMode) => {
     if (nextMode === 'auto') {
+      if (!supportsAutoAdd) {
+        setOrderModeNotice('自动加入购物车仅堂食多人点餐支持，请取消外卖、外带场景。');
+        return;
+      }
       const incompatibleItems = requiredRows.filter(item => !item.autoAddEligible);
       if (incompatibleItems.length) {
         setOrderModeNotice(`请先移除不支持自动加入的商品：${incompatibleItems.map(item => item.name).join('、')}`);
@@ -146,13 +190,26 @@ export const WebRequiredProductPolicyEditor: React.FC<{
   const savePolicy = () => {
     if (!policyName.trim()) return setFeedback({ kind: 'error', text: '请输入方案名称' });
     if (!channels.size) return setFeedback({ kind: 'error', text: '请至少选择一个适用渠道' });
+    if (!applicableScenes.size) return setFeedback({ kind: 'error', text: '请至少选择一个适用场景' });
     if (!selectedStoreIds.size) return setFeedback({ kind: 'error', text: '请至少选择一家适用门店' });
     if (!requiredRows.length) return setFeedback({ kind: 'error', text: '请至少选择一个必选商品' });
+    if (orderMode === 'auto' && !supportsAutoAdd) {
+      return setFeedback({ kind: 'error', text: '自动加入购物车仅堂食多人点餐支持，请调整适用场景' });
+    }
     if (orderMode === 'auto' && requiredRows.some(row => !row.autoAddEligible)) {
       return setFeedback({ kind: 'error', text: '自动加入购物车仅支持单规格且未配置做法、加料的商品，请调整必选商品' });
     }
     if (requiredRows.some(row => !row.dineInEnabled && !row.takeawayEnabled && !row.takeoutEnabled)) {
       return setFeedback({ kind: 'error', text: '每个必选商品至少选择堂食、外卖或外带中的一种订单类型' });
+    }
+    const sceneHasProduct: Record<RequiredPolicyScene, boolean> = {
+      堂食: requiredRows.some(row => row.dineInEnabled),
+      外卖: requiredRows.some(row => row.takeawayEnabled),
+      外带: requiredRows.some(row => row.takeoutEnabled),
+    };
+    const emptyScene = Array.from(applicableScenes).find(scene => !sceneHasProduct[scene]);
+    if (emptyScene) {
+      return setFeedback({ kind: 'error', text: `适用场景“${emptyScene}”未配置任何必选商品，请在必选设置中启用对应订单类型` });
     }
     if (requiredRows.some(row =>
       (row.dineInEnabled && row.dineInQuantityMode === 'fixed' && row.dineInCount < 1)
@@ -165,10 +222,10 @@ export const WebRequiredProductPolicyEditor: React.FC<{
     if (activityTime === 'specified' && (!timeStart || !timeEnd || timeStart >= timeEnd)) {
       return setFeedback({ kind: 'error', text: '请设置正确的活动时段' });
     }
-    if (tableTypeEnabled && !tableType) {
+    if (hasDineIn && tableTypeEnabled && !tableType) {
       return setFeedback({ kind: 'error', text: '已开启桌位类型限定，请选择一个桌位类型' });
     }
-    if (tableAreaEnabled) {
+    if (hasDineIn && tableAreaEnabled) {
       const pendingStores = selectedStores.filter(store => !(storeAreaSelections[store.id]?.length));
       if (pendingStores.length) {
         return setFeedback({ kind: 'error', text: `请完成 ${pendingStores.map(store => store.name).join('、')} 的桌位区域配置` });
@@ -177,7 +234,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
     const periodLabel = activityPeriod === 'daily' ? '每天' : activityPeriod === 'weekly' ? '每周' : '每月';
     const timeLabel = activityTime === 'allDay' ? '全天' : `${timeStart}–${timeEnd}`;
     const effectiveLabel = effectiveMode === 'forever' ? '永久有效' : `${effectiveStart} 至 ${effectiveEnd}`;
-    onSave({
+    const savedPolicy: RequiredPolicyRecord = {
       id: policy?.id || `RP-${String(Date.now()).slice(-6)}`,
       name: policyName.trim(),
       targetName: requiredRows.map(row => row.name).join('、'),
@@ -187,12 +244,24 @@ export const WebRequiredProductPolicyEditor: React.FC<{
       orderMode: orderMode === 'check' ? '下单前检查' : '自动加入购物车',
       selectionRule: selectionRule === 'anyOne' ? '任选一种' : '全部商品必选',
       channels: Array.from(channels),
-      tableType: tableTypeEnabled ? `限定：${tableType}` : '不限定桌位类型',
-      tableAreaScope: tableAreaEnabled ? `${selectedStores.length} 家门店限定区域` : '不限定桌位区域',
+      scenarios: Array.from(applicableScenes),
+      tableType: hasDineIn && tableTypeEnabled ? `限定：${tableType}` : '不限定桌位类型',
+      tableAreaScope: hasDineIn && tableAreaEnabled ? `${selectedStores.length} 家门店限定区域` : '不限定桌位区域',
       effectiveRule: `${effectiveLabel} · ${periodLabel}${timeLabel}`,
       applicableStores: selectedStores.map(store => store.name),
       updatedAt: '刚刚',
-    });
+    };
+    if (savedPolicy.status === 'enabled') {
+      const conflicts = findRequiredPolicyConflicts(savedPolicy, policies);
+      if (conflicts.length) {
+        const conflict = conflicts[0];
+        return setFeedback({
+          kind: 'error',
+          text: `与方案“${conflict.policy.name}”存在重复范围：${conflict.stores.join('、')} / ${conflict.channels.join('、')} / ${conflict.scenarios.join('、')}。请调整适用门店、渠道或适用场景。`,
+        });
+      }
+    }
+    onSave(savedPolicy);
   };
 
   const visibleStores = STORE_OPTIONS.filter(store => {
@@ -216,7 +285,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
       const existing = current.find(row => row.productId === productId);
       if (existing) return [existing];
       const product = productsById.get(productId);
-      return product ? [createRequiredItemRow(product.name, `item-${product.id}`)] : [];
+      return product ? [createRequiredItemRow(product.name, `item-${product.id}`, applicableScenes)] : [];
     }));
     setProductSelectorOpen(false);
     setOrderModeNotice(null);
@@ -293,11 +362,20 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                 </div>
               </EditorRow>
 
+              <EditorRow label="适用场景" required alignTop>
+                <div>
+                  <div className="flex h-9 items-center gap-6">
+                    {REQUIRED_POLICY_SCENES.map(scene => <CheckOption key={scene} checked={applicableScenes.has(scene)} onClick={() => toggleApplicableScene(scene)} label={scene} />)}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-[#667085]">方案场景决定必选商品中可配置的订单类型，每个商品仍可单独勾选或取消。</p>
+                </div>
+              </EditorRow>
+
               <EditorRow label="必选类型" required alignTop>
                 <div className="max-w-[820px]">
                   <div className="grid grid-cols-2 gap-3">
                     <ChoiceCard selected={orderMode === 'check'} title="下单前检查" description="默认方式。不自动加购，未满足时提示顾客选择必选商品。" onClick={() => changeOrderMode('check')} />
-                    <ChoiceCard selected={orderMode === 'auto'} title="自动加入购物车" description="系统按配置数量加入全部必选商品。" onClick={() => changeOrderMode('auto')} />
+                    <ChoiceCard selected={orderMode === 'auto'} title="自动加入购物车" description="系统按配置数量加入全部必选商品。仅堂食多人点餐支持。" disabled={!supportsAutoAdd} onClick={() => changeOrderMode('auto')} />
                   </div>
                   {orderMode === 'auto' && !orderModeNotice && <div className="mt-2 flex items-start rounded-md bg-[#FFF8E8] px-3 py-2 text-xs leading-5 text-[#8A5A00]"><AlertCircle size={14} className="mr-2 mt-0.5 shrink-0" />仅支持单规格且未配置做法、加料的商品；选择商品时仅展示符合条件的商品。</div>}
                   {orderModeNotice && <div className="mt-2 flex items-start rounded-md bg-[#FFF1F0] px-3 py-2 text-xs leading-5 text-[#B42318]"><AlertCircle size={14} className="mr-2 mt-0.5 shrink-0" />{orderModeNotice}</div>}
@@ -323,9 +401,10 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                             <td className="px-4 py-4 font-medium">{row.name}</td>
                             <td className="px-4 py-3">
                               <div className="overflow-hidden rounded-md border border-[#E8ECF1]">
-                                <OrderQuantitySetting label="堂食" active={row.dineInEnabled} supportsDiners mode={row.dineInQuantityMode} count={row.dineInCount} onToggle={() => updateRow(row.id, current => ({ ...current, dineInEnabled: !current.dineInEnabled }))} onModeChange={next => updateRow(row.id, current => ({ ...current, dineInQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, dineInCount: Math.max(1, current.dineInCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, dineInCount: current.dineInCount + 1 }))} />
-                                <OrderQuantitySetting label="外卖" active={row.takeawayEnabled} count={row.takeawayCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeawayEnabled: !current.takeawayEnabled }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: Math.max(1, current.takeawayCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: current.takeawayCount + 1 }))} />
-                                <OrderQuantitySetting label="外带" active={row.takeoutEnabled} count={row.takeoutCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeoutEnabled: !current.takeoutEnabled }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: Math.max(1, current.takeoutCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: current.takeoutCount + 1 }))} />
+                                {hasDineIn && <OrderQuantitySetting label="堂食" active={row.dineInEnabled} supportsDiners mode={row.dineInQuantityMode} count={row.dineInCount} onToggle={() => updateRow(row.id, current => ({ ...current, dineInEnabled: !current.dineInEnabled }))} onModeChange={next => updateRow(row.id, current => ({ ...current, dineInQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, dineInCount: Math.max(1, current.dineInCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, dineInCount: current.dineInCount + 1 }))} />}
+                                {applicableScenes.has('外卖') && <OrderQuantitySetting label="外卖" active={row.takeawayEnabled} count={row.takeawayCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeawayEnabled: !current.takeawayEnabled }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: Math.max(1, current.takeawayCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: current.takeawayCount + 1 }))} />}
+                                {applicableScenes.has('外带') && <OrderQuantitySetting label="外带" active={row.takeoutEnabled} count={row.takeoutCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeoutEnabled: !current.takeoutEnabled }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: Math.max(1, current.takeoutCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: current.takeoutCount + 1 }))} />}
+                                {!applicableScenes.size && <div className="px-4 py-5 text-sm text-[#98A2B3]">请先选择适用场景</div>}
                               </div>
                             </td>
                             <td className="px-4 py-4 text-right"><button onClick={() => setRemoveRowId(row.id)} className="font-medium text-[#D92D20] hover:text-[#B42318]">删除</button></td>
@@ -335,7 +414,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs leading-5 text-[#667085]">堂食可选择固定数量或与用餐人数相同；外卖与外带仅支持固定数量。{selectionRule === 'anyOne' && ' 下单时任一候选商品达到对应数量即视为本方案满足。'}</p>
+                  <p className="text-xs leading-5 text-[#667085]">{hasDineIn && '堂食可选择固定数量或与用餐人数相同。'}{(['外卖', '外带'] as RequiredPolicyScene[]).filter(scene => applicableScenes.has(scene)).length > 0 && `${hasDineIn ? ' ' : ''}${(['外卖', '外带'] as RequiredPolicyScene[]).filter(scene => applicableScenes.has(scene)).join('、')}仅支持固定数量。`}{selectionRule === 'anyOne' && ' 下单时任一候选商品达到对应数量即视为本方案满足。'}</p>
                 </div>
               </EditorRow>
             </div>
@@ -371,10 +450,10 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                 </div>
               </EditorRow>
 
-              <EditorRow label="桌位区域限定" alignTop>
+              {hasDineIn && <EditorRow label="桌位区域限定" alignTop>
                 <div className="max-w-[900px]">
                   <div className="flex min-h-9 items-center"><CheckOption checked={tableAreaEnabled} onClick={() => setTableAreaEnabled(value => !value)} label="按门店限定桌位区域" /></div>
-                  <p className="mt-1 text-xs leading-5 text-[#667085]">默认不限定。开启后需为每家适用门店分别选择区域，仅对堂食订单生效。</p>
+                  <p className="mt-1 text-xs leading-5 text-[#667085]">默认不限定。开启后需为每家适用门店分别选择区域，仅对堂食多人点餐生效。</p>
                   {tableAreaEnabled && <div className="mt-3 overflow-hidden rounded-md border border-[#E5E9EF]">
                     <div className="flex items-center justify-between border-b border-[#E5E9EF] bg-[#FAFBFC] px-4 py-2.5 text-xs text-[#667085]"><span>逐店配置区域，各门店区域数据相互独立</span><span>已配置 {selectedStores.filter(store => storeAreaSelections[store.id]?.length).length}/{selectedStores.length} 家</span></div>
                     {selectedStores.length ? <table className="w-full table-fixed border-collapse text-left text-sm">
@@ -392,22 +471,22 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                     </table> : <div className="px-4 py-8 text-center text-sm text-[#98A2B3]">请先选择适用门店，再逐店配置桌位区域</div>}
                   </div>}
                 </div>
-              </EditorRow>
+              </EditorRow>}
             </div>
           </section>
 
-          <section className="rounded-lg border border-[#E5E9EF] bg-white p-5">
+          {hasDineIn && <section className="rounded-lg border border-[#E5E9EF] bg-white p-5">
             <h3 className="mb-5 text-base font-semibold text-[#1D2939]">高级设置</h3>
             <div className="divide-y divide-[#EEF1F4]">
-              <SwitchSetting title="限定桌位类型" description="默认不限定。开启后仅指定桌位类型的堂食订单执行本方案。" checked={tableTypeEnabled} onChange={() => { setTableTypeEnabled(value => !value); setFeedback(null); }}>
+              <SwitchSetting title="限定桌位类型" description="默认不限定。开启后仅指定桌位类型执行本方案，仅对堂食多人点餐生效。" checked={tableTypeEnabled} onChange={() => { setTableTypeEnabled(value => !value); setFeedback(null); }}>
                 {tableTypeEnabled && <select value={tableType} onChange={event => setTableType(event.target.value)} className="h-9 w-[280px] rounded-md border border-[#DDE2E8] bg-white px-3 text-sm text-[#344054] outline-none focus:border-[#00B460]">
                   <option value="">请选择桌位类型</option><option>散台</option><option>包间</option><option>大厅卡座</option><option>露台</option>
                 </select>}
               </SwitchSetting>
-              <SwitchSetting title="增加人数再次触发必选" description="开启后，堂食订单增加用餐人数时，再次检查并补充对应必选商品。" checked={retriggersWithDiners} onChange={() => setRetriggersWithDiners(value => !value)} />
-              <SwitchSetting title="允许修改必选商品数量" description="开启后，门店点餐时可修改自动加入购物车的必选商品数量；仍需满足方案最低数量。" checked={allowQuantityEdit} onChange={() => setAllowQuantityEdit(value => !value)} />
+              <SwitchSetting title="增加人数再次触发必选" description="开启后，增加用餐人数时再次检查并补充对应必选商品，仅对堂食多人点餐生效。" checked={retriggersWithDiners} onChange={() => setRetriggersWithDiners(value => !value)} />
+              <SwitchSetting title="允许修改必选商品数量" description="开启后可修改自动加入购物车的必选商品数量，仍需满足方案最低数量；仅对堂食多人点餐生效。" checked={allowQuantityEdit} onChange={() => setAllowQuantityEdit(value => !value)} />
             </div>
-          </section>
+          </section>}
 
           {feedback && <div className={`flex items-start rounded-md border px-4 py-3 text-sm ${feedback.kind === 'success' ? 'border-[#CDEEDC] bg-[#F1FBF5] text-[#26734D]' : 'border-[#FECACA] bg-[#FFF7F6] text-[#B42318]'}`}>{feedback.kind === 'success' ? <CheckCircle2 size={16} className="mr-2 mt-0.5 shrink-0" /> : <AlertCircle size={16} className="mr-2 mt-0.5 shrink-0" />}{feedback.text}</div>}
         </div>

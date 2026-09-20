@@ -942,6 +942,7 @@ export const WebAdmin: React.FC = () => {
               <WebRequiredProductPolicyEditor
                   mode={requiredPolicyEditorContext.mode}
                   policy={requiredPolicyEditorContext.policy}
+                  policies={requiredPolicies}
                   onBack={() => setRequiredPolicyEditorContext(null)}
                   onSave={(savedPolicy) => {
                     setRequiredPolicies(current => requiredPolicyEditorContext.mode === 'create'

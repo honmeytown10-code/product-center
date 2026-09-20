@@ -15,7 +15,7 @@ export function PosSelection({ selected }: { selected: boolean }) {
 }
 
 export function PosStatusFilters({ options, value, onChange }: {
-  options: { id: string; label: string; count: number; attention?: boolean; tone?: 'danger' | 'warning' | 'long' }[];
+  options: { id: string; label: string; count: number; attention?: boolean; tone?: 'danger' | 'warning' | 'day' | 'long' }[];
   value: string;
   onChange: (value: string) => void;
 }) {

@@ -23,6 +23,8 @@ export const StockoutRecoveryDialog: React.FC<{
   const toggleGroup = (ids: string[]) => setSelected(previous => ids.every(id => previous.includes(id))
     ? previous.filter(id => !ids.includes(id) || id === current)
     : [...new Set([...previous, ...ids])]);
+  const allChannelsSelected = !!mappedChannels.length && mappedChannels.every(id => selected.includes(id));
+  const toggleAllChannels = () => setSelected(allChannelsSelected ? current ? [current] : [] : mappedChannels);
   const name = products.length === 1 ? products[0]?.name : `${products.length} 个商品`;
   const statusFor = (id: string) => {
     if (products.length !== 1) return '';
@@ -36,7 +38,7 @@ export const StockoutRecoveryDialog: React.FC<{
     <div className="pos-recovery-product"><strong>{name}</strong></div>
     <div className="pos-recovery-effect"><RotateCcw size={20} /><div><strong>取消沽清，恢复无限库存</strong><span>商品可以继续售卖。</span></div></div>
     {shared && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>共享库存</strong><small>恢复后同步商品全部关联渠道。</small></span></div>}
-    {!shared && !hideChannels && <div className="pos-recovery-channel-title"><strong>生效渠道</strong><span>{current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span></div>}
+    {!shared && !hideChannels && <div className="pos-recovery-channel-title"><div><strong>生效渠道</strong><span>{current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span></div><button type="button" className="pos-channel-select-all" onClick={toggleAllChannels}>{allChannelsSelected ? '取消全选' : '全选'}</button></div>}
     {!shared && !hideChannels && !!channelGroups?.length && <div className="pos-recovery-groups">{channelGroups.map(group => {
       const ids = group.channels.filter(id => mappedChannels.includes(id));
       return ids.length ? <button key={group.id} type="button" aria-pressed={ids.every(id => selected.includes(id))} onClick={() => toggleGroup(ids)}>{group.name}</button> : null;
@@ -75,15 +77,17 @@ export const ShelfActionDialog = ({
   const count = items.length;
   const name = isBatch ? `${count}个商品` : items[0]?.name;
 
-  // Calculate which channels are mapped for ALL selected items
+  // Batch operations always show the stable channel list. Unmapped combinations
+  // are skipped per item when the mock update is applied.
   const validChannels = useMemo(() => {
+     if (isBatch) return CHANNEL_TABS.map(tab => tab.id);
      return CHANNEL_TABS.map(t => t.id).filter(chId => {
          return items.every(i => {
              const dataKey = chId;
              return !!i.channels[dataKey as ChannelTabType] && i.channels[dataKey as ChannelTabType] !== 'unmapped';
          });
      });
-  }, [items]);
+  }, [items, isBatch]);
   const unifiedChannels = useMemo(() => CHANNEL_TABS.map(tab => tab.id).filter(id =>
     items.some(item => item.channels?.[id] && item.channels[id] !== 'unmapped')
   ), [items]);
@@ -116,6 +120,8 @@ export const ShelfActionDialog = ({
           setBatchSelectedChannels(prev => [...prev, ...toAdd]);
       }
   };
+  const allShelfChannelsSelected = !!validChannels.length && validChannels.every(id => batchSelectedChannels.includes(id));
+  const toggleAllShelfChannels = () => setBatchSelectedChannels(allShelfChannelsSelected ? currentShelfChannel ? [currentShelfChannel] : [] : validChannels);
 
   const handleConfirm = () => {
       const updates: Record<string, 'on_shelf' | 'off_shelf'> = {};
@@ -155,7 +161,7 @@ export const ShelfActionDialog = ({
       const ids = group.channels.filter(id => validChannels.includes(id));
       return ids.length ? <button key={group.id} type="button" onClick={() => toggleBatchGroup(ids)}>{group.name}</button> : null;
     })}</div>}
-    <div className="pos-shelf-section-title">生效渠道 · {currentShelfChannel ? '当前渠道固定，其他渠道可追加' : '选择需要操作的渠道'}</div>
+    <div className="pos-shelf-section-title"><span>生效渠道 · {currentShelfChannel ? '当前渠道固定，其他渠道可追加' : '选择需要操作的渠道'}</span><button type="button" className="pos-channel-select-all" onClick={toggleAllShelfChannels}>{allShelfChannelsSelected ? '取消全选' : '全选'}</button></div>
     <div className="pos-shelf-other-channels">{(isBatch ? orderedShelfTabs.filter(tab => validChannels.includes(tab.id)) : orderedShelfTabs).map(renderChannel)}</div>
     </>}
     {isShelvesUnited && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>统一上下架</strong><small>本次操作将同步商品全部关联渠道。</small></span></div>}
@@ -721,8 +727,8 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                    {/* Channel Selector Area */}
                    {isStockShared && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>共享库存</strong><small>本次修改将同步商品全部关联渠道。</small></span></div>}
                    {!isStockShared && !posOnlyOperation && <div>
-                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center">
-                           操作生效渠道
+                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+                            <span>操作生效渠道</span><button type="button" className="pos-channel-select-all" onClick={() => setSelectedChannels(resolvedChannels.every(id => selectedChannels.includes(id)) ? currentChannel ? [currentChannel] : [] : resolvedChannels)}>{resolvedChannels.length > 0 && resolvedChannels.every(id => selectedChannels.includes(id)) ? '取消全选' : '全选'}</button>
                        </div>
                        <div className="flex flex-wrap gap-3">
                            {renderChannelSelector()}
@@ -797,7 +803,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                 <p><span className="font-bold text-gray-800">操作步骤：</span></p>
                                 <ol className="list-decimal list-inside pl-1 space-y-3">
                                     <li>选择 <span className="font-bold text-blue-600 bg-blue-50 px-1 rounded">当日沽清</span> 类型；</li>
-                                    <li>将 <span className="font-bold text-gray-800">今日剩余</span> 修改为 <span className="font-mono font-bold text-red-500">0</span>；</li>
+                                    <li>按实际情况填写 <span className="font-bold text-gray-800">今日剩余</span>；填 0 表示立即售罄，填写大于 0 的数量则继续售卖，售完后自动变为已售罄；</li>
                                     <li>将 <span className="font-bold text-gray-800">次日补足</span> 修改为你明天计划备货的数量（不填则默认为无限库存）；</li>
                                     <li>点击“确认修改”。第二天营业时，该商品会自动按你设置的补足数量恢复售卖。</li>
                                 </ol>
@@ -843,7 +849,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
                                 <p><span className="font-bold text-gray-800">操作步骤：</span></p>
                                 <ol className="list-decimal list-inside pl-1 space-y-3">
                                     <li>选择 <span className="font-bold text-orange-600 bg-orange-50 px-1 rounded">长期沽清</span> 类型；</li>
-                                    <li>将 <span className="font-bold text-gray-800">剩余可售</span> 修改为 <span className="font-mono font-bold text-red-500">0</span>（如果仓库里还有最后几个，也可以填具体数字，卖完为止）；</li>
+                                    <li>按实际情况填写 <span className="font-bold text-gray-800">剩余可售</span>；填 0 表示立即售罄，填写大于 0 的数量则继续售卖，售完后自动变为已售罄；</li>
                                     <li>点击“确认修改”。该商品将一直保持售罄状态，<span className="text-red-500 font-bold">次日不会自动恢复</span>，直到你手动改回无限库存。</li>
                                 </ol>
                             </div>

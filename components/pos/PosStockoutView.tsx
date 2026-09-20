@@ -8,11 +8,11 @@ import { PosCategories, PosStatusFilters, PosDock, PosEmpty, PosResult, PosSelec
 // Most restaurant items have no selling limit. These samples represent the few items
 // that the store has explicitly limited or sold out through stockout management.
 const MOCK_LIMITED_PRODUCT_IDS = new Set(['p8', 'p9', 'p16', 'p18', 'p22', 'p23', 'p29', 'p30', 'p34', 'p38']);
-const MOCK_DAY_SOLD_OUT_IDS = new Set(['p8', 'p16', 'p30']);
+const MOCK_DAY_CLEARANCE_IDS = new Set(['p8', 'p9', 'p16', 'p22', 'p30', 'p34']);
 const createMockProduct = (id: string, name: string, price: number, spec: string, sampleStock: number, category: string, tags: { text: string; color: string }[] = []) => {
   const stock = MOCK_LIMITED_PRODUCT_IDS.has(id) ? sampleStock : Infinity;
   const soldOut = stock <= 0;
-  const clearanceType = MOCK_DAY_SOLD_OUT_IDS.has(id) ? '当日' : '长期';
+  const clearanceType = MOCK_DAY_CLEARANCE_IDS.has(id) ? '当日' : '长期';
   const status = soldOut ? 'sold_out' : stock < 30 ? 'warning' : 'normal';
   const specNames = spec.includes('/') && !spec.includes('约') ? spec.split('/') : [spec];
   const specs = specNames.length > 1 ? specNames.map((specName, index) => ({ id: `${id}_s${index + 1}`, name: specName, stock: stock === Infinity ? Infinity : Math.floor(stock / specNames.length) + (index < stock % specNames.length ? 1 : 0) })) : undefined;
@@ -22,7 +22,8 @@ const createMockProduct = (id: string, name: string, price: number, spec: string
     specs,
     channels: Object.fromEntries(CHANNEL_TABS.map(item => [item.id, soldOut ? 'sold_out' : 'normal'])),
     channelStocks: Object.fromEntries(CHANNEL_TABS.map(item => [item.id, stock])),
-    channelTypes: soldOut ? Object.fromEntries(CHANNEL_TABS.map(item => [item.id, clearanceType])) : {},
+    type: stock === Infinity ? '' : `${clearanceType}沽清`,
+    channelTypes: stock === Infinity ? {} : Object.fromEntries(CHANNEL_TABS.map(item => [item.id, clearanceType])),
   };
 };
 
@@ -96,10 +97,10 @@ const MOCK_LEFT_LOGS = [
   ...ADDITIONAL_MOCK_PRODUCTS.filter(item => item.stock < 30).map((item, index) => ({
     ...item,
     id: `l${index + 7}`,
-    type: item.stock <= 0 ? `${MOCK_DAY_SOLD_OUT_IDS.has(item.id) ? '当日' : '长期'}沽清` : '当日沽清',
+    type: item.type,
     time: `${String(9 + (index % 10)).padStart(2, '0')}:${index % 2 ? '45' : '20'}`,
     rank: index + 7,
-    channelTypes: Object.fromEntries(CHANNEL_TABS.map(channelItem => [channelItem.id, item.stock <= 0 ? MOCK_DAY_SOLD_OUT_IDS.has(item.id) ? '当日' : '长期' : '当日'])),
+    channelTypes: item.channelTypes,
   })),
 ];
 
@@ -113,7 +114,7 @@ export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onR
   const [products, setProducts] = useState<any[]>(MOCK_DISPLAY_PRODUCTS);
   const [logs, setLogs] = useState<any[]>(MOCK_LEFT_LOGS);
   const [category, setCategory] = useState('全部');
-  const [filter, setFilter] = useState<'all' | 'sold' | 'low' | 'long'>('all');
+  const [filter, setFilter] = useState<'all' | 'sold' | 'low' | 'day' | 'long'>('all');
   const [batch, setBatch] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<any>(null);
@@ -134,16 +135,18 @@ export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onR
     if (channel !== 'all') return item.channelTypes?.[channel] ? [item.channelTypes[channel]] : [];
     return CHANNEL_TABS.map(itemChannel => item.channelTypes?.[itemChannel.id]).filter(Boolean);
   };
-  const isLongClearance = (item: any) => clearanceTypes(item).some(type => String(type).includes('长期'));
-  const isLowStock = (item: any) => !isSold(item) && stock(item) > 0 && stock(item) < threshold;
+  const hasFiniteStock = (item: any) => Number.isFinite(stock(item));
+  const isDayClearance = (item: any) => hasFiniteStock(item) && clearanceTypes(item).some(type => String(type).includes('当日'));
+  const isLongClearance = (item: any) => hasFiniteStock(item) && clearanceTypes(item).some(type => String(type).includes('长期'));
+  const isLowStock = (item: any) => hasFiniteStock(item) && stock(item) < threshold;
   const match = (item: any) => item.name.toLowerCase().includes(search.trim().toLowerCase());
   const matchesCategory = (item: any) => category === '全部' || (category === '加料' ? item.tags?.some((tag: any) => tag.text === '加料') : item.category === category);
   const searching = !!search.trim();
   const mappedChannelIds = (item: any): ChannelType[] => CHANNEL_TABS.filter(itemChannel => item.channels?.[itemChannel.id] && item.channels[itemChannel.id] !== 'unmapped').map(itemChannel => itemChannel.id);
-  const isMappedToCurrentChannel = (item: any) => posOnlyProducts ? mappedChannelIds(item).includes('pos') : shared || channel === 'all' || mappedChannelIds(item).includes(channel);
+  const isMappedToCurrentChannel = (item: any) => posOnlyProducts ? mappedChannelIds(item).includes('pos') : channel === 'all' || mappedChannelIds(item).includes(channel);
   const scoped = products.filter(item => isMappedToCurrentChannel(item) && match(item) && (searching || matchesCategory(item)));
   const matched = displayMode === 'sku' ? scoped.flatMap(item => item.hasMultipleSpecs ? item.specs.map((sku: any) => ({ ...item, id: item.id + '_' + sku.id, parentId: item.id, skuId: sku.id, spec: sku.name, stock: sku.stock, channelStocks: sku.channelStocks || Object.fromEntries(CHANNEL_TABS.map(channel => [channel.id, sku.stock])), hasMultipleSpecs: false, specs: undefined })) : [item]) : scoped;
-  const visible = matched.filter(item => filter === 'all' || filter === 'sold' && isSold(item) || filter === 'low' && isLowStock(item) || filter === 'long' && isLongClearance(item));
+  const visible = matched.filter(item => filter === 'all' || filter === 'sold' && isSold(item) || filter === 'low' && isLowStock(item) || filter === 'day' && isDayClearance(item) || filter === 'long' && isLongClearance(item));
   const otherChannelMatches = !posOnlyProducts && !shared && searching ? products.filter(item => match(item) && !isMappedToCurrentChannel(item) && mappedChannelIds(item).some(itemChannel => itemChannel !== channel)) : [];
   useEffect(() => { setSelection(new Set()); setBatch(false); }, [search, category, filter, channel, displayMode]);
   useEffect(() => { if (searching) setCategory('全部'); }, [searching]);
@@ -178,7 +181,9 @@ export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onR
       const itemTargets = targets.filter(target => target.id === item.id || target.parentId === item.id || target.name === item.name);
       if (!itemTargets.length) return item;
       const selectedSkuIds = new Set(itemTargets.map(target => target.skuId).filter(Boolean));
-      const channels = shared ? CHANNEL_TABS.map(tab => tab.id).filter(id => item.channels?.[id] && item.channels[id] !== 'unmapped') : update.channels;
+      const channels = shared
+        ? CHANNEL_TABS.map(tab => tab.id).filter(id => item.channels?.[id] && item.channels[id] !== 'unmapped')
+        : update.channels.filter(id => item.channels?.[id] && item.channels[id] !== 'unmapped');
       const quantity = update.recover ? Infinity : Number(update.method === 'day' ? update.values.dayRemain || 0 : update.values.longLimit || 0);
       const patchSpec = (spec: any) => {
         if (selectedSkuIds.size && !selectedSkuIds.has(spec.id)) return spec;
@@ -214,12 +219,12 @@ export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onR
           const types = clearanceTypes(item);
           const clearanceType = types.some(type => String(type).includes('长期')) ? '长期沽清' : types.some(Boolean) ? '当日沽清' : '';
           const sold = isSold(item);
-          const badge = sold ? (isLongClearance(item) ? '长期沽清' : '当日沽清') : partial ? '部分售罄' : null;
+          const badge = clearanceType || (partial ? '部分售罄' : sold ? '已售罄' : null);
           const specialTags = [...new Set([item.specialType, ...(item.tags || []).map((tag: any) => tag.text)].filter(Boolean))];
           return <button key={item.id} data-product-id={item.parentId || item.id} className={'pos-card' + (sold ? ' is-disabled' : '') + (batch && selection.has(item.id) ? ' is-selected' : '') + (locatedProductId === (item.parentId || item.id) ? ' is-located' : '')} aria-label={item.name + ' · ' + (sold ? '已售罄' : qty === Infinity ? '无限库存' : '剩余 ' + qty)} aria-pressed={batch ? selection.has(item.id) : undefined} onClick={() => click(item)}>
             {showImage && <span className="pos-image-placeholder"><Image size={26} /></span>}
-            <div className="pos-card-heading"><h3>{item.name}</h3>{batch ? <PosSelection selected={selection.has(item.id)} /> : badge && <span className={'pos-tag ' + (badge === '长期沽清' ? 'long' : badge === '部分售罄' ? 'warning' : 'danger')}>{badge}</span>}</div>
-            {displayMode === 'sku' ? <div className="pos-card-meta"><span className="pos-card-spec">{item.spec || '默认规格'}</span>{specialTags.map(tag => <span key={tag} className="pos-special-tag">{tag}</span>)}</div> : filter === 'long' && clearanceType ? <div className="pos-card-meta"><span className="pos-tag long">{clearanceType}</span></div> : null}
+            <div className="pos-card-heading"><h3>{item.name}</h3>{batch ? <PosSelection selected={selection.has(item.id)} /> : badge && <span className={'pos-tag ' + (badge === '长期沽清' ? 'long' : badge === '当日沽清' ? 'day' : badge === '部分售罄' ? 'warning' : 'danger')}>{badge}</span>}</div>
+            {displayMode === 'sku' ? <div className="pos-card-meta"><span className="pos-card-spec">{item.spec || '默认规格'}</span>{specialTags.map(tag => <span key={tag} className="pos-special-tag">{tag}</span>)}</div> : null}
             <div className="pos-card-footer">{qty !== Infinity && <span className={'pos-state' + (sold ? ' danger' : isLowStock(item) ? ' warning' : '')}>{sold ? '已售罄' : '剩余 ' + qty}</span>}{sold && !batch ? <span className="pos-recover" onClick={event => { event.stopPropagation(); setRecovery([item]); }}><RotateCcw size={14} />恢复售卖</span> : <span className="pos-card-price"><small>¥</small>{item.price}</span>}</div>
           </button>;
         })}</div>
@@ -235,10 +240,10 @@ export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onR
           </section>}
           {!visible.length && !otherChannelMatches.length && <PosEmpty filtered={!!search || category !== '全部' || filter !== 'all'} onReset={() => { onReset(); setCategory('全部'); setFilter('all'); }} />}
         </div>
-        <PosDock batch={batch} count={selection.size} allSelected={!!visible.length && visible.every(item => selection.has(item.id))} onSelectAll={() => setSelection(selection.size === visible.length ? new Set() : new Set(visible.map(item => item.id)))} onBatch={() => setBatch(true)} onExit={exit} filters={<PosStatusFilters value={filter} onChange={value => setFilter(value as 'all' | 'sold' | 'low' | 'long')} options={[{ id: 'all', label: '全部', count: matched.length }, { id: 'sold', label: '已沽清', count: matched.filter(isSold).length, tone: 'danger' }, { id: 'low', label: '低库存', count: matched.filter(isLowStock).length, tone: 'warning' }, { id: 'long', label: '长期沽清', count: matched.filter(isLongClearance).length, tone: 'long' }]} />}><button className="pos-button danger" disabled={!selection.size} onClick={() => setBatchTargets(chosen)}>批量沽清</button><button className="pos-button secondary" disabled={!selection.size} onClick={() => setRecovery(chosen)}>恢复库存</button></PosDock>
+        <PosDock batch={batch} count={selection.size} allSelected={!!visible.length && visible.every(item => selection.has(item.id))} onSelectAll={() => setSelection(selection.size === visible.length ? new Set() : new Set(visible.map(item => item.id)))} onBatch={() => setBatch(true)} onExit={exit} filters={<PosStatusFilters value={filter} onChange={value => setFilter(value as 'all' | 'sold' | 'low' | 'day' | 'long')} options={[{ id: 'all', label: '全部', count: matched.length }, { id: 'sold', label: '已售罄', count: matched.filter(isSold).length, tone: 'danger' }, { id: 'low', label: '低库存', count: matched.filter(isLowStock).length, tone: 'warning' }, { id: 'day', label: '当日沽清', count: matched.filter(isDayClearance).length, tone: 'day' }, { id: 'long', label: '长期沽清', count: matched.filter(isLongClearance).length, tone: 'long' }]} />}><button className="pos-button danger" disabled={!selection.size} onClick={() => setBatchTargets(chosen)}>批量沽清</button><button className="pos-button secondary" disabled={!selection.size} onClick={() => setRecovery(chosen)}>恢复库存</button></PosDock>
       </div>
     {(editing || batchTargets) && <ClearanceSettingsModal product={editing} batchIds={batchTargets?.map(item => item.id)} isBatch={!!batchTargets} onClose={() => { setEditing(null); setBatchTargets(null); }} onConfirm={update => apply(update, batchTargets || [editing])} activeChannel={shared ? 'all' : channel} posOnlyOperation={posOnlyOperation} />}
-    {recovery && <StockoutRecoveryDialog products={recovery} mappedChannels={CHANNEL_TABS.map(tab => tab.id).filter(id => shared ? recovery.some(item => item.channels?.[id] && item.channels[id] !== 'unmapped') : recovery.every(item => item.channels?.[id] && item.channels[id] !== 'unmapped'))} currentChannel={channel} shared={shared} hideChannels={posOnlyOperation} channelGroups={config?.enableChannelGrouping ? config.channelGroups : []} onClose={() => setRecovery(null)} onConfirm={channels => apply({ recover: true, method: 'day', mode: 'spu', values: { dayRemain: '0', dayNextLimit: '', longLimit: '0' }, specValues: {}, selectedSpecs: [], channels }, recovery)} />}
+    {recovery && <StockoutRecoveryDialog products={recovery} mappedChannels={CHANNEL_TABS.map(tab => tab.id).filter(id => shared ? recovery.some(item => item.channels?.[id] && item.channels[id] !== 'unmapped') : recovery.length > 1 || recovery.some(item => item.channels?.[id] && item.channels[id] !== 'unmapped'))} currentChannel={channel} shared={shared} hideChannels={posOnlyOperation} channelGroups={config?.enableChannelGrouping ? config.channelGroups : []} onClose={() => setRecovery(null)} onConfirm={channels => apply({ recover: true, method: 'day', mode: 'spu', values: { dayRemain: '0', dayNextLimit: '', longLimit: '0' }, specValues: {}, selectedSpecs: [], channels }, recovery)} />}
     {crossChannelChoice && <PosDialog title="选择要切换的渠道" onClose={() => setCrossChannelChoice(null)}><div className="pos-channel-choice-intro"><strong>{crossChannelChoice.item.name}</strong><span>该商品不在当前渠道，请选择一个有此商品的渠道。</span></div><div className="pos-channel-choice-list">{crossChannelChoice.channels.map(itemChannel => { const qty = crossChannelChoice.item.channelStocks?.[itemChannel]; return <button key={itemChannel} onClick={() => chooseCrossChannel(itemChannel)}><span><strong>{CHANNEL_TABS.find(tab => tab.id === itemChannel)?.label}</strong><small>{qty === Infinity ? '无限' : typeof qty === 'number' ? qty <= 0 ? '已沽清' : '剩余 ' + qty : '可售'}</small></span><ChevronRight size={20} /></button>; })}</div></PosDialog>}
   </div>;
 };

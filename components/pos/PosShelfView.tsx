@@ -96,7 +96,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
   };
   const searching = !!search.trim();
   const mappedChannelIds = (item: typeof items[number]): ChannelType[] => CHANNEL_TABS.filter(tab => item.channels[tab.id] !== 'unmapped').map(tab => tab.id);
-  const scopedItems = items.filter(item => !posOnlyProducts || item.channels.pos !== 'unmapped');
+  const scopedItems = items.filter(item => posOnlyProducts ? item.channels.pos !== 'unmapped' : channel === 'all' || item.channels[channel as ChannelTabType] !== 'unmapped');
   const categories: string[] = ['全部', ...Array.from(new Set<string>(scopedItems.map(item => item.category)))];
   const matched = scopedItems.filter(item => shelfState(item) !== 'unmapped' && item.name.toLowerCase().includes(search.trim().toLowerCase()) && (searching || category === '全部' || item.category === category));
   const visible = matched.filter(item => filter === 'all' || shelfState(item) !== 'on');

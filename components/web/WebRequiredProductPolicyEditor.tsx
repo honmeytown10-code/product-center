@@ -20,8 +20,6 @@ type RequiredItemRow = {
   takeawayEnabled: boolean;
   takeoutEnabled: boolean;
   dineInQuantityMode: QuantityMode;
-  takeawayQuantityMode: QuantityMode;
-  takeoutQuantityMode: QuantityMode;
   dineInCount: number;
   takeawayCount: number;
   takeoutCount: number;
@@ -67,8 +65,6 @@ const createRequiredItemRow = (name: string, id: string): RequiredItemRow => {
     takeawayEnabled: id === 'item-1',
     takeoutEnabled: false,
     dineInQuantityMode: 'fixed',
-    takeawayQuantityMode: 'fixed',
-    takeoutQuantityMode: 'fixed',
     dineInCount: id === 'item-1' ? 2 : 1,
     takeawayCount: id === 'item-1' ? 2 : 1,
     takeoutCount: 1,
@@ -160,8 +156,8 @@ export const WebRequiredProductPolicyEditor: React.FC<{
     }
     if (requiredRows.some(row =>
       (row.dineInEnabled && row.dineInQuantityMode === 'fixed' && row.dineInCount < 1)
-      || (row.takeawayEnabled && row.takeawayQuantityMode === 'fixed' && row.takeawayCount < 1)
-      || (row.takeoutEnabled && row.takeoutQuantityMode === 'fixed' && row.takeoutCount < 1)
+      || (row.takeawayEnabled && row.takeawayCount < 1)
+      || (row.takeoutEnabled && row.takeoutCount < 1)
     )) return setFeedback({ kind: 'error', text: '固定必选数量必须大于 0' });
     if (effectiveMode === 'custom' && (!effectiveStart || !effectiveEnd || effectiveStart > effectiveEnd)) {
       return setFeedback({ kind: 'error', text: '请设置正确的生效日期范围' });
@@ -328,8 +324,8 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                             <td className="px-4 py-3">
                               <div className="overflow-hidden rounded-md border border-[#E8ECF1]">
                                 <OrderQuantitySetting label="堂食" active={row.dineInEnabled} supportsDiners mode={row.dineInQuantityMode} count={row.dineInCount} onToggle={() => updateRow(row.id, current => ({ ...current, dineInEnabled: !current.dineInEnabled }))} onModeChange={next => updateRow(row.id, current => ({ ...current, dineInQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, dineInCount: Math.max(1, current.dineInCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, dineInCount: current.dineInCount + 1 }))} />
-                                <OrderQuantitySetting label="外卖" active={row.takeawayEnabled} mode={row.takeawayQuantityMode} count={row.takeawayCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeawayEnabled: !current.takeawayEnabled }))} onModeChange={next => updateRow(row.id, current => ({ ...current, takeawayQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: Math.max(1, current.takeawayCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: current.takeawayCount + 1 }))} />
-                                <OrderQuantitySetting label="外带" active={row.takeoutEnabled} supportsDiners mode={row.takeoutQuantityMode} count={row.takeoutCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeoutEnabled: !current.takeoutEnabled }))} onModeChange={next => updateRow(row.id, current => ({ ...current, takeoutQuantityMode: next }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: Math.max(1, current.takeoutCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: current.takeoutCount + 1 }))} />
+                                <OrderQuantitySetting label="外卖" active={row.takeawayEnabled} count={row.takeawayCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeawayEnabled: !current.takeawayEnabled }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: Math.max(1, current.takeawayCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeawayCount: current.takeawayCount + 1 }))} />
+                                <OrderQuantitySetting label="外带" active={row.takeoutEnabled} count={row.takeoutCount} onToggle={() => updateRow(row.id, current => ({ ...current, takeoutEnabled: !current.takeoutEnabled }))} onDecrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: Math.max(1, current.takeoutCount - 1) }))} onIncrease={() => updateRow(row.id, current => ({ ...current, takeoutCount: current.takeoutCount + 1 }))} />
                               </div>
                             </td>
                             <td className="px-4 py-4 text-right"><button onClick={() => setRemoveRowId(row.id)} className="font-medium text-[#D92D20] hover:text-[#B42318]">删除</button></td>
@@ -339,7 +335,7 @@ export const WebRequiredProductPolicyEditor: React.FC<{
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs leading-5 text-[#667085]">堂食与外带可选择固定数量或与用餐人数相同；外卖仅支持固定数量。{selectionRule === 'anyOne' && ' 下单时任一候选商品达到对应数量即视为本方案满足。'}</p>
+                  <p className="text-xs leading-5 text-[#667085]">堂食可选择固定数量或与用餐人数相同；外卖与外带仅支持固定数量。{selectionRule === 'anyOne' && ' 下单时任一候选商品达到对应数量即视为本方案满足。'}</p>
                 </div>
               </EditorRow>
             </div>
@@ -465,17 +461,17 @@ const ChoiceCard = ({ selected, title, description, onClick, disabled = false }:
   <button type="button" onClick={onClick} disabled={disabled} className={`rounded-md border p-4 text-left ${disabled ? 'cursor-not-allowed border-[#E5E9EF] bg-[#F7F8FA] opacity-60' : selected ? 'border-[#00B460] bg-[#F1FBF5]' : 'border-[#DDE2E8] bg-white hover:border-[#AEB8C5]'}`}><div className={`flex items-center gap-2 text-sm font-semibold ${disabled ? 'text-[#98A2B3]' : selected ? 'text-[#008F4C]' : 'text-[#1D2939]'}`}><CircleDot size={16} className={disabled ? 'text-[#C3CAD3]' : selected ? 'text-[#00B460]' : 'text-[#C3CAD3]'} />{title}</div><div className="mt-2 pl-6 text-xs leading-5 text-[#667085]">{description}</div></button>
 );
 
-const OrderQuantitySetting = ({ label, active, supportsDiners = false, mode, count, onToggle, onModeChange, onDecrease, onIncrease }: { label: string; active: boolean; supportsDiners?: boolean; mode: QuantityMode; count: number; onToggle: () => void; onModeChange: (mode: QuantityMode) => void; onDecrease: () => void; onIncrease: () => void }) => (
+const OrderQuantitySetting = ({ label, active, supportsDiners = false, mode = 'fixed', count, onToggle, onModeChange, onDecrease, onIncrease }: { label: string; active: boolean; supportsDiners?: boolean; mode?: QuantityMode; count: number; onToggle: () => void; onModeChange?: (mode: QuantityMode) => void; onDecrease: () => void; onIncrease: () => void }) => (
   <div className="grid min-h-12 grid-cols-[96px_minmax(0,1fr)] items-center border-t border-[#EEF1F4] px-3 first:border-t-0">
     <CheckOption checked={active} onClick={onToggle} label={label} />
     <div className={`flex min-w-0 items-center gap-5 py-2 transition-opacity ${active ? '' : 'pointer-events-none opacity-40'}`}>
-      <RadioOption checked={!supportsDiners || mode === 'fixed'} onClick={() => onModeChange('fixed')} label="固定数量" />
+      <RadioOption checked={!supportsDiners || mode === 'fixed'} onClick={() => onModeChange?.('fixed')} label="固定数量" />
       <div className={`inline-flex h-8 items-center overflow-hidden rounded-md border border-[#DDE2E8] bg-white ${supportsDiners && mode !== 'fixed' ? 'invisible' : ''}`}>
         <button type="button" onClick={onDecrease} disabled={!active} aria-label={`${label}必选数量减一`} className="h-8 w-8 border-r border-[#E5E9EF] text-[#667085] hover:bg-[#F7F8FA] disabled:cursor-not-allowed">−</button>
         <div className="w-10 text-center text-sm tabular-nums">{count}</div>
         <button type="button" onClick={onIncrease} disabled={!active} aria-label={`${label}必选数量加一`} className="h-8 w-8 border-l border-[#E5E9EF] text-[#667085] hover:bg-[#F7F8FA] disabled:cursor-not-allowed">＋</button>
       </div>
-      {supportsDiners ? <RadioOption checked={mode === 'diners'} onClick={() => onModeChange('diners')} label="与用餐人数相同" /> : <span className="text-xs text-[#98A2B3]">不支持按用餐人数</span>}
+      {supportsDiners ? <RadioOption checked={mode === 'diners'} onClick={() => onModeChange?.('diners')} label="与用餐人数相同" /> : <span className="text-xs text-[#98A2B3]">不支持按用餐人数</span>}
     </div>
   </div>
 );

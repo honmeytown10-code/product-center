@@ -15,7 +15,7 @@ const RAW_SHELF_ITEMS = [
     { id: 'g7', name: '1027标品-02', status: 'on_shelf', category: '后台分类展示合集' },
     { id: 'g8', name: '1110商品', status: 'on_shelf', category: '测试分类B' },
     { id: 'g9', name: '新建电商商城商品2', status: 'on_shelf', category: '仅小程序分类' },
-    { id: 'g10', name: '0827beta单规格套餐-4', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'g10', name: '0827beta单规格套餐-4', status: 'on_shelf', category: '后台分类展示合集', specialType: '套餐' },
     { id: 'g11', name: '红烧排骨', status: 'off_shelf', category: '后台分类展示合集' },
     { id: 'g12', name: '清蒸鲈鱼', status: 'off_shelf', category: '测试分类A' },
     { id: 'g13', name: '麻婆豆腐', status: 'off_shelf', category: '测试分类B' },
@@ -30,11 +30,11 @@ const RAW_SHELF_ITEMS = [
     { id: 'g22', name: '杨枝甘露', status: 'off_shelf', category: '大雪花分类--小程序' },
     { id: 'g23', name: '手打柠檬茶', status: 'on_shelf', category: '仅小程序分类' },
     { id: 'g24', name: '桂花乌龙奶茶', status: 'on_shelf', category: '仅小程序分类' },
-    { id: 'g25', name: '香煎三文鱼', status: 'on_shelf', category: '测试分类A' },
+    { id: 'g25', name: '香煎三文鱼', status: 'on_shelf', category: '测试分类A', specialType: '称重' },
     { id: 'g26', name: '蜜汁叉烧饭', status: 'off_shelf', category: '测试分类A' },
     { id: 'g27', name: '老火例汤', status: 'on_shelf', category: '测试分类B' },
     { id: 'g28', name: '麻辣小龙虾', status: 'on_shelf', category: '测试分类B' },
-    { id: 'g29', name: '海盐芝士蛋糕', status: 'on_shelf', category: '后台分类展示合集' },
+    { id: 'g29', name: '海盐芝士蛋糕', status: 'on_shelf', category: '后台分类展示合集', specialType: '蛋糕' },
     { id: 'g30', name: '流心巴斯克', status: 'off_shelf', category: '后台分类展示合集' },
     { id: 'g31', name: '黄油可颂', status: 'on_shelf', category: '仅小程序分类' },
     { id: 'g32', name: '肉桂苹果卷', status: 'on_shelf', category: '仅小程序分类' },
@@ -51,6 +51,7 @@ const RAW_SHELF_ITEMS = [
     { id: 'g43', name: '坚果能量棒', status: 'off_shelf', category: '测试分类B' },
     { id: 'g44', name: '门店限定保温杯', status: 'on_shelf', category: '后台分类展示合集' },
     { id: 'g45', name: '美团限定香辣鸡排', status: 'on_shelf', category: '测试分类A' },
+    { id: 'g46', name: '顺丰咖啡礼盒', status: 'on_shelf', category: '测试分类A', specialType: '快递' },
 ];
 
 // Enrich mock data to have channel specific statuses for testing
@@ -151,6 +152,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
           return <button key={item.id} data-product-id={item.id} className={'pos-card' + (state === 'off' ? ' is-disabled' : '') + (batch && selection.has(item.id) ? ' is-selected' : '') + (locatedProductId === item.id ? ' is-located' : '')} aria-label={item.name + ' · ' + (state === 'off' ? '已下架' : state === 'partial' ? '部分下架' : '已上架')} aria-pressed={batch ? selection.has(item.id) : undefined} onClick={() => click(item)}>
             {showImage && <span className="pos-image-placeholder"><Image size={26} /></span>}
             <div className="pos-card-heading"><h3>{item.name}</h3>{batch ? <PosSelection selected={selection.has(item.id)} /> : state !== 'on' && <span className={'pos-tag ' + (state === 'off' ? 'danger' : 'warning')}>{state === 'off' ? '已下架' : '部分下架'}</span>}</div>
+            {item.specialType && <div className="pos-card-meta"><span className="pos-special-tag">{item.specialType}</span></div>}
             <div className="pos-card-footer">{state === 'on' ? <span className="pos-state">正常售卖</span> : <span />}{state !== 'on' && !batch && <span className="pos-recover" onClick={event => { event.stopPropagation(); openAction([item], 'on'); }}><RotateCcw size={14} />上架</span>}</div>
           </button>;
         })}</div>

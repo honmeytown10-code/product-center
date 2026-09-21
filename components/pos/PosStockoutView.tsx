@@ -9,7 +9,9 @@ import { PosCategories, PosStatusFilters, PosDock, PosEmpty, PosResult, PosSelec
 // that the store has explicitly limited or sold out through stockout management.
 const MOCK_LIMITED_PRODUCT_IDS = new Set(['p8', 'p9', 'p16', 'p18', 'p22', 'p23', 'p29', 'p30', 'p34', 'p38']);
 const MOCK_DAY_CLEARANCE_IDS = new Set(['p8', 'p9', 'p16', 'p22', 'p30', 'p34']);
-const createMockProduct = (id: string, name: string, price: number, spec: string, sampleStock: number, category: string, tags: { text: string; color: string }[] = []) => {
+type PosSpecialProductType = '套餐' | '称重' | '快递' | '蛋糕';
+const SPECIAL_PRODUCT_TYPES: PosSpecialProductType[] = ['套餐', '称重', '快递', '蛋糕'];
+const createMockProduct = (id: string, name: string, price: number, spec: string, sampleStock: number, category: string, tags: { text: string; color: string }[] = [], specialType?: PosSpecialProductType) => {
   const stock = MOCK_LIMITED_PRODUCT_IDS.has(id) ? sampleStock : Infinity;
   const soldOut = stock <= 0;
   const clearanceType = MOCK_DAY_CLEARANCE_IDS.has(id) ? '当日' : '长期';
@@ -17,7 +19,7 @@ const createMockProduct = (id: string, name: string, price: number, spec: string
   const specNames = spec.includes('/') && !spec.includes('约') ? spec.split('/') : [spec];
   const specs = specNames.length > 1 ? specNames.map((specName, index) => ({ id: `${id}_s${index + 1}`, name: specName, stock: stock === Infinity ? Infinity : Math.floor(stock / specNames.length) + (index < stock % specNames.length ? 1 : 0) })) : undefined;
   return {
-    id, name, price, spec, stock, category, status, tags,
+    id, name, price, spec, stock, category, status, tags, specialType,
     hasMultipleSpecs: !!specs,
     specs,
     channels: Object.fromEntries(CHANNEL_TABS.map(item => [item.id, soldOut ? 'sold_out' : 'normal'])),
@@ -65,10 +67,12 @@ const ADDITIONAL_MOCK_PRODUCTS = [
 ];
 
 const MOCK_DISPLAY_PRODUCTS = [
-  { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '标准套餐', specialType: '套餐', stock: Infinity, category: '中式正餐', status: 'normal', tags: [{ text: '套餐', color: 'green' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: Infinity, taobao: Infinity } },
-  { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '默认规格', specialType: '称重', stock: Infinity, category: '西式快餐', status: 'normal', tags: [{ text: '称重', color: 'blue' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, channelTypes: { mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日' } },
+  { id: 'p1', name: '招牌红烧肉盖饭', price: 38.00, spec: '标准套餐', specialType: '套餐', stock: Infinity, category: '中式正餐', status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: Infinity, taobao: Infinity } },
+  { id: 'p2', name: '香煎三文鱼', price: 0.58, spec: '默认规格', specialType: '称重', stock: Infinity, category: '西式快餐', status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, channelTypes: { mini_take: '当日', mini_pickup: '当日', meituan: '当日', taobao: '当日' } },
+  createMockProduct('p43', '顺丰咖啡礼盒', 88, '12袋装', 50, '零售商品', [], '快递'),
+  createMockProduct('p44', '草莓生日蛋糕', 168, '六英寸', 12, '烘焙甜品', [], '蛋糕'),
   { id: 'p3', name: '生椰拿铁', price: 18.00, spec: '多规格', stock: 15, category: '现制饮品', status: 'sold_out', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'sold_out', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: 15, mini_dine: 15, mini_take: 0, mini_pickup: 15, meituan: 0, taobao: 5 }, hasMultipleSpecs: true, specs: [{id: 's1', name: '大杯', stock: 10}, {id: 's2', name: '中杯', stock: 5}, {id: 's3', name: '小杯', stock: 0}], channelTypes: { mini_take: '当日', meituan: '长期' } },
-  { id: 'p4', name: '老火例汤', price: 12.00, spec: '标准份', specialType: '按餐段', stock: Infinity, category: '中式正餐', status: 'normal', tags: [{ text: '按餐段', color: 'orange' }], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: Infinity, taobao: Infinity } },
+  { id: 'p4', name: '老火例汤', price: 12.00, spec: '标准份', stock: Infinity, category: '中式正餐', status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'normal', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: Infinity, taobao: Infinity } },
   { id: 'p5', name: '麻辣小龙虾', price: 128.00, spec: '大份/约500g', stock: Infinity, category: '中式正餐', status: 'normal', tags: [], channels: { pos: 'normal', mini_dine: 'normal', mini_take: 'normal', mini_pickup: 'normal', meituan: 'sold_out', taobao: 'normal' }, channelStocks: { pos: Infinity, mini_dine: Infinity, mini_take: Infinity, mini_pickup: Infinity, meituan: 0, taobao: Infinity }, channelTypes: { meituan: '当日' } },
   { id: 'p6', name: '手打柠檬茶', price: 18.00, spec: '多规格', stock: 0, category: '现制饮品', status: 'sold_out', tags: [], channels: { pos: 'sold_out', mini_dine: 'sold_out', mini_take: 'sold_out', mini_pickup: 'sold_out', meituan: 'sold_out', taobao: 'sold_out' }, channelStocks: { pos: 0, mini_dine: 0, mini_take: 0, mini_pickup: 0, meituan: 0, taobao: 0 }, hasMultipleSpecs: true, specs: [{id: 's4', name: '标准', stock: 0}], channelTypes: { pos: '长期', mini_dine: '长期', mini_take: '长期', mini_pickup: '长期', meituan: '长期', taobao: '长期' } },
   { id: 'p41', name: '美团限定香辣鸡排', price: 26.00, spec: '单份', stock: 32, category: '西式快餐', status: 'normal', tags: [{ text: '渠道限定', color: 'blue' }], channels: { pos: 'unmapped', mini_dine: 'unmapped', mini_take: 'unmapped', mini_pickup: 'unmapped', meituan: 'normal', taobao: 'normal' }, channelStocks: { meituan: 22, taobao: 10 }, channelTypes: {} },
@@ -220,11 +224,11 @@ export const PosStockoutView: React.FC<{ showImage: boolean; search: string; onR
           const clearanceType = types.some(type => String(type).includes('长期')) ? '长期沽清' : types.some(Boolean) ? '当日沽清' : '';
           const sold = isSold(item);
           const badge = clearanceType || (partial ? '部分售罄' : sold ? '已售罄' : null);
-          const specialTags = [...new Set([item.specialType, ...(item.tags || []).map((tag: any) => tag.text)].filter(Boolean))];
+          const specialType = SPECIAL_PRODUCT_TYPES.includes(item.specialType) ? item.specialType : null;
           return <button key={item.id} data-product-id={item.parentId || item.id} className={'pos-card' + (sold ? ' is-disabled' : '') + (batch && selection.has(item.id) ? ' is-selected' : '') + (locatedProductId === (item.parentId || item.id) ? ' is-located' : '')} aria-label={item.name + ' · ' + (sold ? '已售罄' : qty === Infinity ? '无限库存' : '剩余 ' + qty)} aria-pressed={batch ? selection.has(item.id) : undefined} onClick={() => click(item)}>
             {showImage && <span className="pos-image-placeholder"><Image size={26} /></span>}
             <div className="pos-card-heading"><h3>{item.name}</h3>{batch ? <PosSelection selected={selection.has(item.id)} /> : badge && <span className={'pos-tag ' + (badge === '长期沽清' ? 'long' : badge === '当日沽清' ? 'day' : badge === '部分售罄' ? 'warning' : 'danger')}>{badge}</span>}</div>
-            {displayMode === 'sku' ? <div className="pos-card-meta"><span className="pos-card-spec">{item.spec || '默认规格'}</span>{specialTags.map(tag => <span key={tag} className="pos-special-tag">{tag}</span>)}</div> : null}
+            {(displayMode === 'sku' || specialType) && <div className="pos-card-meta">{displayMode === 'sku' && <span className="pos-card-spec">{item.spec || '默认规格'}</span>}{specialType && <span className="pos-special-tag">{specialType}</span>}</div>}
             <div className="pos-card-footer">{qty !== Infinity && <span className={'pos-state' + (sold ? ' danger' : isLowStock(item) ? ' warning' : '')}>{sold ? '已售罄' : '剩余 ' + qty}</span>}{sold && !batch ? <span className="pos-recover" onClick={event => { event.stopPropagation(); setRecovery([item]); }}><RotateCcw size={14} />恢复售卖</span> : <span className="pos-card-price"><small>¥</small>{item.price}</span>}</div>
           </button>;
         })}</div>

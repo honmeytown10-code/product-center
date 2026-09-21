@@ -52,6 +52,7 @@ type DeliveryRule = {
   timeMode: 'all_day' | 'custom';
   customTime: string;
   audience: Audience;
+  paidMemberCardId: string;
   nonMemberVisibility: NonMemberVisibility;
   stores: string[];
 };
@@ -72,6 +73,16 @@ const CUSTOM_ACTIVITY_LIMIT = 20;
 const CHANNELS = ['微信小程序', '支付宝小程序'];
 const SALE_TYPES = ['堂食', '外卖'];
 const STORE_OPTIONS = ['上海静安店', '上海虹桥店', '杭州湖滨店', '杭州城西店', '南京新街口店', '苏州中心店'];
+const PAID_MEMBER_CARDS = [
+  { id: 'CARD-SLIM-0', name: '减肥 0 元卡' },
+  { id: 'CARD-YIXIN', name: 'yixin 卡' },
+  { id: 'CARD-UNLOCK', name: '付费会员解锁' },
+  { id: 'CARD-GUOZI', name: '郭子权益卡' },
+  { id: 'CARD-VIP', name: '尊享会员权益卡' },
+  { id: 'CARD-0812', name: '权益卡 0812' },
+  { id: 'CARD-97', name: '97 的付费会员' },
+  { id: 'CARD-FANGYUAN', name: '测试权益卡方圆' },
+];
 const PRODUCT_OPTIONS = [
   { id: 'P10018', name: '招牌厚乳拿铁', category: '咖啡', price: '￥22' },
   { id: 'P10027', name: '茉莉轻乳茶', category: '茶饮', price: '￥18' },
@@ -100,6 +111,7 @@ const defaultRule = (overrides: Partial<DeliveryRule> = {}): DeliveryRule => ({
   timeMode: 'all_day',
   customTime: '09:00–22:00',
   audience: 'all',
+  paidMemberCardId: 'all',
   nonMemberVisibility: 'hidden',
   stores: [...STORE_OPTIONS],
   ...overrides,
@@ -466,9 +478,12 @@ const DeliveryRuleEditor = ({ template, onClose, onSave }: { template: Recommend
     if (!rule.saleTypes.length) return setError('请至少选择一个售卖类型');
     if (!rule.stores.length) return setError('请至少选择一家展示门店');
     if (rule.timeMode === 'custom' && !rule.customTime.trim()) return setError('请填写自定义展示时间');
+    if (rule.audience === 'paid_member' && rule.paidMemberCardId !== 'all' && !PAID_MEMBER_CARDS.some(card => card.id === rule.paidMemberCardId)) return setError('请选择有效的付费会员卡');
     onSave(rule);
   };
   const filteredStores = STORE_OPTIONS.filter(store => store.includes(storeKeyword.trim()));
+  const usesAllPaidMemberCards = rule.paidMemberCardId === 'all';
+  const selectedPaidMemberCard = PAID_MEMBER_CARDS.find(card => card.id === rule.paidMemberCardId);
   return (
     <ModalFrame width="w-[940px]" title="投放规则" subtitle={`推荐模板：${template.name}`} onClose={onClose} footer={<div className="mr-auto flex items-center gap-2 text-xs text-[#667085]"><Store size={14} />已选 {rule.stores.length} 家门店</div>} footerActions={<><button type="button" onClick={onClose} className="console-secondary-button">取消</button><button type="button" onClick={submit} className="console-primary-button">保存投放规则</button></>}>
       <div className="max-h-[680px] overflow-y-auto p-5 text-[13px]">
@@ -482,22 +497,39 @@ const DeliveryRuleEditor = ({ template, onClose, onSave }: { template: Recommend
         </section>
 
         <section className="border-b border-[#EEF0F3] py-5">
-          <SectionTitle icon={<Users size={16} />} title="用户范围" description="先设置目标用户，再配置未命中该范围的用户是否能看到推荐。" />
+          <SectionTitle icon={<Users size={16} />} title="用户范围" description="先设置目标用户及会员卡范围，再配置未命中该范围的用户是否能看到推荐。" />
           <div className="mt-4 space-y-4">
-            <FormRow label="目标用户" required><div className="flex flex-wrap gap-5"><RadioOption checked={rule.audience === 'all'} onChange={() => setRule(current => ({ ...current, audience: 'all', nonMemberVisibility: 'hidden' }))} label="全部用户" /><RadioOption checked={rule.audience === 'member_tag'} onChange={() => setRule(current => ({ ...current, audience: 'member_tag', nonMemberVisibility: 'hidden' }))} label="按会员标签" /><RadioOption checked={rule.audience === 'paid_member'} onChange={() => setRule(current => ({ ...current, audience: 'paid_member' }))} label="付费会员" /></div></FormRow>
+            <FormRow label="目标用户" required><div className="flex flex-wrap gap-5"><RadioOption checked={rule.audience === 'all'} onChange={() => setRule(current => ({ ...current, audience: 'all', paidMemberCardId: 'all', nonMemberVisibility: 'hidden' }))} label="全部用户" /><RadioOption checked={rule.audience === 'member_tag'} onChange={() => setRule(current => ({ ...current, audience: 'member_tag', paidMemberCardId: 'all', nonMemberVisibility: 'hidden' }))} label="按会员标签" /><RadioOption checked={rule.audience === 'paid_member'} onChange={() => setRule(current => ({ ...current, audience: 'paid_member' }))} label="付费会员" /></div></FormRow>
             {rule.audience === 'paid_member' && (
-              <FormRow label="非目标用户" required alignTop>
-                <div>
-                  <div className="mb-3">
-                    <div className="font-medium text-[#1D2129]">非目标用户的展示方式</div>
-                    <div className="mt-1 text-xs leading-5 text-[#667085]">以下设置仅影响未命中上述目标范围的用户；目标用户可正常查看并购买。</div>
+              <>
+                <FormRow label="付费会员卡" required>
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                      <RadioOption checked={usesAllPaidMemberCards} onChange={() => setRule(current => ({ ...current, paidMemberCardId: 'all' }))} label="全部付费会员卡" />
+                      <RadioOption checked={!usesAllPaidMemberCards} onChange={() => setRule(current => ({ ...current, paidMemberCardId: current.paidMemberCardId === 'all' ? '' : current.paidMemberCardId }))} label="指定付费会员卡" />
+                      {!usesAllPaidMemberCards && (
+                        <label className="relative block w-[280px] max-w-full">
+                          <select value={rule.paidMemberCardId} onChange={event => setRule(current => ({ ...current, paidMemberCardId: event.target.value }))} className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-9 text-[13px] outline-none focus:border-[#00B460]">
+                            <option value="" disabled>请选择付费会员卡</option>
+                            {PAID_MEMBER_CARDS.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                          </select>
+                          <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+                        </label>
+                      )}
+                    </div>
+                    <div className="text-xs leading-5 text-[#667085]">{usesAllPaidMemberCards ? '持有任一有效付费会员卡的用户均为目标用户；未持卡用户按非目标用户规则处理。' : selectedPaidMemberCard ? `仅持有“${selectedPaidMemberCard.name}”的用户为目标用户；其他用户（含持有其他付费会员卡的用户）均按非目标用户规则处理。` : '请选择一张付费会员卡。选中后，仅持有该卡的用户为目标用户。'}</div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <ChoiceCard selected={rule.nonMemberVisibility === 'hidden'} icon={<EyeOff size={18} />} title="不展示" description="非目标用户看不到该推荐。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'hidden' }))} />
-                    <ChoiceCard selected={rule.nonMemberVisibility === 'visible_locked'} icon={<Eye size={18} />} title="展示但不可购买" description="非目标用户可查看推荐商品，但不能购买；具体提示或引导由点单页处理。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'visible_locked' }))} />
+                </FormRow>
+                <FormRow label="非目标用户" required alignTop>
+                  <div>
+                    <div className="mb-3 text-xs leading-5 text-[#667085]">设置未命中上述目标范围的用户是否看到推荐；目标用户可正常查看并购买。</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <ChoiceCard selected={rule.nonMemberVisibility === 'hidden'} icon={<EyeOff size={18} />} title="不展示" description="非目标用户看不到当前模板中的推荐商品。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'hidden' }))} />
+                      <ChoiceCard selected={rule.nonMemberVisibility === 'visible_locked'} icon={<Eye size={18} />} title="展示但不可购买" description="非目标用户可看到当前模板中的推荐商品，但不能购买；具体提示或引导由点单页处理。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'visible_locked' }))} />
+                    </div>
                   </div>
-                </div>
-              </FormRow>
+                </FormRow>
+              </>
             )}
           </div>
         </section>
@@ -594,14 +626,24 @@ const ModeBadge = ({ mode, label }: { mode: ActivityMode; label: string }) => {
   return <span className="inline-flex items-center gap-1 rounded border border-[#E5E7EB] px-2 py-1 text-xs text-[#4E5969]">{icon}{label}</span>;
 };
 
-const RuleSummary = ({ rule }: { rule: DeliveryRule }) => (
-  <div className="space-y-1"><div>{rule.channels.join('、')} · {rule.saleTypes.join('、')}</div><div className="text-xs text-[#98A2B3]">{rule.audience === 'all' ? '全部用户可购买' : rule.audience === 'member_tag' ? '会员标签用户可购买' : rule.nonMemberVisibility === 'visible_locked' ? '付费会员可购买；非目标用户可见不可购买' : '仅付费会员可见并购买'} · {rule.stores.length === STORE_OPTIONS.length ? '全部门店' : `${rule.stores.length} 家门店`}</div></div>
-);
+const RuleSummary = ({ rule }: { rule: DeliveryRule }) => {
+  const paidMemberCardName = rule.paidMemberCardId === 'all'
+    ? '全部付费会员卡用户'
+    : `${PAID_MEMBER_CARDS.find(card => card.id === rule.paidMemberCardId)?.name || '指定付费会员卡'}用户`;
+  const audienceSummary = rule.audience === 'all'
+    ? '全部用户可购买'
+    : rule.audience === 'member_tag'
+      ? '会员标签用户可购买'
+      : rule.nonMemberVisibility === 'visible_locked'
+        ? `${paidMemberCardName}可购买；非目标用户可见不可购买`
+        : `仅${paidMemberCardName}可见并购买`;
+  return <div className="space-y-1"><div>{rule.channels.join('、')} · {rule.saleTypes.join('、')}</div><div className="text-xs text-[#98A2B3]">{audienceSummary} · {rule.stores.length === STORE_OPTIONS.length ? '全部门店' : `${rule.stores.length} 家门店`}</div></div>;
+};
 
 const FormRow = ({ label, required, alignTop = false, children }: { label: string; required?: boolean; alignTop?: boolean; children: React.ReactNode }) => <div className="flex items-start"><div className={`w-[116px] shrink-0 text-right text-[#4E5969] ${alignTop ? 'pt-0' : 'pt-2'}`}>{required && <span className="mr-1 text-[#D92D20]">*</span>}{label}：</div><div className="min-w-0 flex-1 pl-4">{children}</div></div>;
 const DetailField = ({ label, value }: { label: string; value: string }) => <div><div className="text-xs text-[#98A2B3]">{label}</div><div className="mt-2 rounded-md border border-[#E5E7EB] p-3 leading-6 text-[#4E5969]">{value}</div></div>;
 const CheckOption = ({ checked, onChange, label, disabled, suffix }: { checked: boolean; onChange: () => void; label: string; disabled?: boolean; suffix?: string }) => <label className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-[#B8C0CC]' : 'cursor-pointer'}`}><input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="accent-[#00B460]" />{label}{suffix && <span className="text-xs text-[#98A2B3]">{suffix}</span>}</label>;
-const RadioOption = ({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) => <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" checked={checked} onChange={onChange} className="accent-[#00B460]" />{label}</label>;
+const RadioOption = ({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) => <label className="inline-flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap"><input type="radio" checked={checked} onChange={onChange} className="accent-[#00B460]" />{label}</label>;
 
 const ChoiceCard = ({ selected, icon, title, description, onClick }: { selected: boolean; icon: React.ReactNode; title: string; description: string; onClick: () => void }) => (
   <button type="button" onClick={onClick} className={`relative flex min-h-[88px] gap-3 rounded-md border p-3 text-left ${selected ? 'border-[#00B460] bg-[#F3FCF7]' : 'border-[#DDE2E8] hover:border-[#9AD9BA]'}`}><span className={selected ? 'text-[#008F4C]' : 'text-[#667085]'}>{icon}</span><span><span className="block font-medium text-[#1D2129]">{title}</span><span className="mt-1 block text-xs leading-5 text-[#667085]">{description}</span></span>{selected && <span className="absolute right-2 top-2 rounded-full bg-[#00B460] p-0.5 text-white"><Check size={11} /></span>}</button>

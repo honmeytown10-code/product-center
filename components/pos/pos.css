@@ -160,15 +160,12 @@ body:has(.pos-system) { min-width: 0; }
 .pos-recovery-effect div { display: flex; flex-direction: column; gap: 5px; }
 .pos-recovery-effect strong { font-size: 15px; }
 .pos-recovery-effect span { color: #62748f; font-size: 13px; }
-.pos-channel-scope-summary { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 13px 15px; border: 1px solid #f3dfbd; border-radius: 13px; background: #fff8ec; color: #c87716; }
-.pos-channel-scope-summary svg { flex: none; margin-top: 2px; }
-.pos-channel-scope-summary > span { display: flex; flex-direction: column; gap: 3px; }
-.pos-channel-scope-summary strong { font-size: 13px; }
-.pos-channel-scope-summary small { color: #7c6d59; font-size: 12px; }
 .pos-recovery-channel-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 0 10px; }
 .pos-recovery-channel-title > div { display: flex; flex-direction: column; gap: 3px; }
 .pos-recovery-channel-title strong { color: #52627b; font-size: 14px; }
 .pos-recovery-channel-title span { color: #8390a5; font-size: 12px; text-align: right; }
+.pos-channel-lock-note { width: max-content; max-width: 100%; min-height: 23px; display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 4px !important; padding: 3px 8px; border-radius: 8px; color: #a86616 !important; background: #fff5e5; font-size: 11.5px !important; font-weight: 700 !important; line-height: 1.3; text-align: left !important; white-space: nowrap; }
+.pos-channel-lock-note svg { flex: none; }
 .pos-recovery-groups { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 8px; }
 .pos-recovery-groups button { min-height: 35px; padding: 0 10px; border: 1px solid #d9e5fb; border-radius: 9px; color: var(--pos-primary); font-size: 13px; }
 .pos-recovery-groups button[aria-pressed="true"] { border-color: var(--pos-primary); background: #edf4ff; font-weight: 700; }
@@ -221,6 +218,51 @@ body:has(.pos-system) { min-width: 0; }
 .pos-shelf-channel-locked[data-active="false"] { color: #9aa6b8; background: #f7f9fc; }
 .pos-shelf-channel-locked small { color: #a0abbb; font-size: 11px; }
 .pos-shelf-batch-note { margin-top: 10px; color: #8290a5; font-size: 12px; line-height: 1.4; }
+.pos-market-grid { grid-template-columns: repeat(auto-fill,minmax(min(210px,100%),1fr)); }
+.pos-market-card { min-height: 176px; }
+.pos-market-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.pos-market-meta span { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 8px; color: #64738c; background: #f1f4fa; font-size: 11px; font-weight: 700; }
+.pos-market-meta span:first-child { color: #8a5a10; background: #fff5e5; }
+.pos-market-reference { margin-top: 12px; color: #8994a6; font-size: 12px; font-weight: 600; }
+.pos-market-card-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 10px; }
+.pos-market-card-footer > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pos-market-card-footer > div small { color: #79879d; font-size: 11px; }
+.pos-market-card-footer > div strong { color: #1f2a3c; font-size: 22px; line-height: 1.15; font-weight: 900; font-variant-numeric: tabular-nums; }
+.pos-market-card-footer > div em { margin-left: 2px; color: #7d8aa0; font-size: 11px; font-style: normal; font-weight: 600; }
+.pos-market-card-footer > span { max-width: 92px; display: flex; align-items: center; justify-content: flex-end; gap: 3px; color: #98a2b3; font-size: 10.5px; text-align: right; }
+.pos-market-card-footer > span svg { flex: none; }
+.pos-market-dock { justify-content: center; }
+.pos-market-count { padding: 0 7px; color: #78869c; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.pos-market-price-dialog { width: min(820px,100%); }
+.pos-market-price-dialog .pos-dialog-body { padding: 0 24px 22px; overflow: hidden; }
+.pos-market-editor { display: grid; grid-template-columns: minmax(0,1fr) 286px; gap: 18px; }
+.pos-market-editor-main { min-width: 0; padding: 18px; border: 1px solid #e2e8f3; border-radius: 20px; background: #fff; }
+.pos-market-product-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.pos-market-product-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pos-market-product-head strong { font-size: 20px; line-height: 1.35; overflow-wrap: anywhere; }
+.pos-market-product-head span { color: #8290a5; font-size: 12px; }
+.pos-market-product-head em { flex: none; padding: 4px 9px; border-radius: 9px; color: #9b6515; background: #fff4df; font-size: 11.5px; font-style: normal; font-weight: 800; }
+.pos-market-price-compare { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 16px; }
+.pos-market-price-compare > div { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; background: #f3f6fb; }
+.pos-market-price-compare span { color: #8491a5; font-size: 11px; font-weight: 700; }
+.pos-market-price-compare strong { color: #35435a; font-size: 16px; font-weight: 800; }
+.pos-market-price-compare small { color: #7f8da3; font-size: 10.5px; font-weight: 600; }
+.pos-market-new-price { margin-top: 14px; padding: 13px 15px; border: 2px solid var(--pos-primary); border-radius: 16px; background: #f7faff; box-shadow: 0 0 0 4px rgba(47,107,255,.08); }
+.pos-market-new-price[data-invalid="true"] { border-color: var(--pos-danger); box-shadow: 0 0 0 4px rgba(229,72,77,.08); }
+.pos-market-new-price > span { color: var(--pos-primary); font-size: 11.5px; font-weight: 800; }
+.pos-market-new-price > div { min-width: 0; display: flex; align-items: baseline; gap: 5px; margin-top: 1px; }
+.pos-market-new-price b { color: #344158; font-size: 20px; }
+.pos-market-new-price strong { min-width: 0; color: #182033; font-size: 32px; line-height: 1.15; font-weight: 900; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pos-market-new-price small { margin-left: auto; color: #7d899d; font-size: 12px; }
+.pos-market-error { margin-top: 8px; color: var(--pos-danger) !important; font-size: 11.5px; line-height: 1.45; }
+.pos-market-adjust { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; margin-top: 13px; }
+.pos-market-adjust button { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 2px; border: 1px solid #dce5f2; border-radius: 10px; color: #53627a; background: #f8faff; font-size: 12px; font-weight: 800; }
+.pos-market-adjust button:active { border-color: var(--pos-primary); color: var(--pos-primary); background: var(--pos-primary-soft); }
+.pos-market-restore { min-height: 38px; display: inline-flex; align-items: center; gap: 5px; margin-top: 12px; padding: 0 10px; border-radius: 10px; color: var(--pos-primary); background: var(--pos-primary-soft); font-size: 12px; font-weight: 800; }
+.pos-market-keypad { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; padding: 14px; border-radius: 20px; background: #edf2fb; }
+.pos-market-keypad button { min-width: 0; min-height: 56px; display: grid; place-items: center; border: 1px solid #e0e5ef; border-radius: 13px; color: #1f2939; background: #fff; box-shadow: 0 2px 5px rgba(25,40,70,.06); font-size: 20px; font-weight: 900; }
+.pos-market-keypad button:active { border-color: var(--pos-primary); color: var(--pos-primary); background: #f4f7ff; transform: scale(.97); }
+.pos-market-keypad button.clear { grid-column: 1 / -1; min-height: 40px; color: #7e899b; background: transparent; border-color: transparent; box-shadow: none; font-size: 12px; }
 .pos-guide-dialog { width: min(900px,100%); background: #f5f7fc; }
 .pos-guide-dialog > header { min-height: 66px; padding: 0 24px; background: #fff; border-bottom: 1px solid #edf0f6; }
 .pos-guide-dialog > header h2 { font-size: 19px; font-weight: 800; }
@@ -300,6 +342,8 @@ body:has(.pos-system) { min-width: 0; }
   .pos-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
   .pos-method-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
   .pos-card { padding: 16px; }
+  .pos-market-editor { grid-template-columns: minmax(0,1fr) 260px; }
+  .pos-market-keypad button { min-height: 50px; }
   .pos-dock { padding: 8px; gap: 4px; }
   .pos-dock-filter, .pos-button { padding-inline: 12px; }
   .pos-guide-dialog .pos-dialog-body { grid-template-columns: 1fr; }

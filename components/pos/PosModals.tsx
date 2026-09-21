@@ -37,8 +37,7 @@ export const StockoutRecoveryDialog: React.FC<{
   </>}>
     <div className="pos-recovery-product"><strong>{name}</strong></div>
     <div className="pos-recovery-effect"><RotateCcw size={20} /><div><strong>取消沽清，恢复无限库存</strong><span>商品可以继续售卖。</span></div></div>
-    {shared && <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>共享库存</strong><small>恢复后同步商品全部关联渠道。</small></span></div>}
-    {!hideChannels && <div className="pos-recovery-channel-title"><div><strong>生效渠道</strong><span>{shared ? '已全部选中，不可修改' : current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span></div>{!shared && <button type="button" className="pos-channel-select-all" onClick={toggleAllChannels}>{allChannelsSelected ? '取消全选' : '全选'}</button>}</div>}
+    {!hideChannels && <div className="pos-recovery-channel-title"><div><strong>生效渠道</strong>{shared ? <span className="pos-channel-lock-note"><Lock size={12} />共享库存 · 全部关联渠道</span> : <span>{current ? '当前渠道固定，其他渠道可追加' : '选择需要恢复的渠道'}</span>}</div>{!shared && <button type="button" className="pos-channel-select-all" onClick={toggleAllChannels}>{allChannelsSelected ? '取消全选' : '全选'}</button>}</div>}
     {!shared && !hideChannels && !!channelGroups?.length && <div className="pos-recovery-groups">{channelGroups.map(group => {
       const ids = group.channels.filter(id => mappedChannels.includes(id));
       return ids.length ? <button key={group.id} type="button" aria-pressed={ids.every(id => selected.includes(id))} onClick={() => toggleGroup(ids)}>{group.name}</button> : null;
@@ -168,8 +167,7 @@ export const ShelfActionDialog = ({
     <div className="pos-shelf-other-channels">{(isBatch ? orderedShelfTabs.filter(tab => validChannels.includes(tab.id)) : orderedShelfTabs).map(renderChannel)}</div>
     </>}
     {isShelvesUnited && <>
-      <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>统一上下架</strong><small>本次操作将同步商品全部关联渠道。</small></span></div>
-      <div className="pos-shelf-section-title"><span>生效渠道</span><small>已全部选中，不可修改</small></div>
+      <div className="pos-shelf-section-title"><span>生效渠道</span><small className="pos-channel-lock-note"><Lock size={12} />统一上下架 · 全部关联渠道</small></div>
       <div className="pos-shelf-other-channels">{orderedShelfTabs.filter(tab => unifiedChannels.includes(tab.id)).map(renderChannel)}</div>
     </>}
   </PosDialog>;
@@ -735,8 +733,7 @@ export const ClearanceSettingsModal: React.FC<{ product?: any; batchIds?: string
 
                    {/* Channel Selector Area */}
                    {isStockShared && <div>
-                       <div className="pos-channel-scope-summary"><Lock size={16} /><span><strong>共享库存</strong><small>本次修改将同步商品全部关联渠道。</small></span></div>
-                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mt-4 mb-3 flex items-center justify-between"><span>操作生效渠道</span><span className="normal-case tracking-normal text-gray-400">已全部选中，不可修改</span></div>
+                       <div className="text-xs font-black text-gray-400 uppercase tracking-widest mt-4 mb-3 flex items-center justify-between gap-3"><span>操作生效渠道</span><span className="pos-channel-lock-note normal-case tracking-normal"><Lock size={12} />共享库存 · 全部关联渠道</span></div>
                        <div className="flex flex-wrap gap-3">{renderChannelSelector()}</div>
                    </div>}
                    {!isStockShared && !posOnlyOperation && <div>

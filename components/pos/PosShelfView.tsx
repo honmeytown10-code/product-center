@@ -135,7 +135,7 @@ export const PosShelfView: React.FC<{ showImage: boolean; search: string; onRese
     setItems(prev => prev.map(item => {
       if (!ids.has(item.id)) return item;
       const channels = { ...item.channels };
-      Object.entries(updates).forEach(([channel, status]) => { if (channels[channel] !== 'unmapped') channels[channel] = status; });
+      Object.entries(updates).forEach(([channel, status]) => { if (channel !== '11' && channels[channel] !== 'unmapped') channels[channel] = status; });
       const status = united ? Object.values(updates)[0] || item.status : Object.values(channels).filter(value => value !== 'unmapped').every(value => value === 'off_shelf') ? 'off_shelf' : 'on_shelf';
       return { ...item, status, channels };
     }));

@@ -34,8 +34,8 @@ body:has(.pos-system) { min-width: 0; }
 .pos-header-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .pos-icon-button { width: 40px; height: 40px; display: grid; place-items: center; flex-shrink: 0; border-radius: 14px; background: var(--pos-surface); color: #5a6577; box-shadow: 0 2px 10px rgba(20,30,60,.05); }
 .pos-guide-button { height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border-radius: 14px; background: #fff; color: var(--pos-primary); font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(20,30,60,.05); white-space: nowrap; }
-.pos-channel-select { min-height: 52px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; border-radius: 16px; background: var(--pos-surface); color: #8a93a6; padding: 0 14px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 10px rgba(20,30,60,.05); }
-.pos-channel-select select { min-width: 98px; height: 38px; border: 0; border-radius: 11px; padding: 0 24px 0 4px; background: white; color: var(--pos-primary); font-size: 14px; font-weight: 700; outline: 0; }
+.pos-channel-select { min-height: 52px; display: flex; align-items: center; flex-shrink: 0; border-radius: 16px; background: var(--pos-surface); padding: 0 10px; box-shadow: 0 2px 10px rgba(20,30,60,.05); }
+.pos-channel-select select { min-width: 116px; height: 38px; border: 0; border-radius: 11px; padding: 0 26px 0 8px; background: white; color: var(--pos-primary); font-size: 14px; font-weight: 700; outline: 0; }
 .pos-view { min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; position: relative; }
 .pos-view[hidden] { display: none; }
 .pos-categories { display: flex; align-items: center; gap: 2px; padding: 5px; min-height: 48px; flex-shrink: 0; border-radius: 16px; background: var(--pos-surface); overflow-x: auto; box-shadow: 0 2px 10px rgba(20,30,60,.05); }
@@ -199,6 +199,7 @@ body:has(.pos-system) { min-width: 0; }
 .pos-shelf-unified-status strong.off { color: #dc515a; }
 .pos-shelf-unified-status svg { flex: none; color: #93a2ba; }
 .pos-shelf-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 17px 0 8px; color: #697b97; font-size: 13px; font-weight: 700; }
+.pos-shelf-section-title small { color: #98a4b7; font-size: 12px; font-weight: 600; }
 .pos-channel-select-all { min-height: 30px; padding: 0 10px; border: 1px solid #ccdcf7; border-radius: 8px; background: #f3f7ff; color: var(--pos-primary); font-size: 12px; font-weight: 800; text-transform: none; letter-spacing: 0; }
 .pos-channel-select-all:hover { border-color: var(--pos-primary); background: #eaf1ff; }
 .pos-shelf-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }

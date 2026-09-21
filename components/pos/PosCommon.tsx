@@ -6,6 +6,7 @@ import { Printer, Coffee, ShoppingBag, Store, LayoutGrid, Link2Off, Lock } from 
 
 export type ChannelTabType = 'pos' | 'mini_dine' | 'mini_pickup' | 'mini_take' | 'meituan' | 'taobao' | 'meituan_dine' | 'douyin_dine';
 export type ChannelType = 'all' | ChannelTabType;
+export const ALL_CHANNEL_OPERATION_VALUE = '11';
 
 export const CHANNEL_TABS: { id: ChannelTabType; label: string; icon: React.ReactNode }[] = [
    { id: 'pos', label: 'POS', icon: <Printer size={14} className="mr-1"/> },

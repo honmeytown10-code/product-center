@@ -144,6 +144,10 @@ const BATCH_FIELD_GROUPS = [
     { title: '展示设置', fields: ['商品主图', '规格图片', '商品详情图', '列表页简述', '描述标签'] },
     { title: '销售属性', fields: ['售卖时间', '是否为套餐商品', '是否为小料商品', '起购限购', '单点不送', '包装费'] },
 ];
+const BATCH_BOOLEAN_FIELDS = new Set(['是否展示商品', '是否为套餐商品', '是否为小料商品', '单点不送']);
+const BATCH_NUMBER_FIELDS = new Set(['基础价格', '预计成本', '包装费']);
+const BATCH_IMAGE_FIELDS = new Set(['商品主图', '规格图片', '商品详情图']);
+type BatchFieldValue = string | number | boolean;
 const TEMPLATE_RANGE_OPTIONS = [
     { id: 'template-1', name: '华南直营门店模板', count: 56, channels: ['mini_program_dine_in', 'pos'] as OmnichannelChannelId[] },
     { id: 'template-2', name: '机场枢纽门店模板', count: 12, channels: ['pos', 'mini_program_dine_in'] as OmnichannelChannelId[] },
@@ -220,16 +224,18 @@ export const WebProductSync: React.FC<{
     initialTab?: 'publish' | 'records' | 'qimai-records' | 'platform-records';
     masterChannelSyncRecords?: MasterChannelSyncRecord[];
 }> = ({ initialTab = 'publish', masterChannelSyncRecords = [] }) => {
+    const batchStandardPreview = typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('tool') === 'batch-standard';
     const { activeBrandId, brandConfigs } = useProducts();
     const omnichannelConfig = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
     const channelCatalogGroups = getEffectiveChannelGroups(omnichannelConfig);
     const channelCatalogEnabled = shouldShowChannelCatalog(omnichannelConfig) && channelCatalogGroups.length > 0;
-    const [step, setStep] = useState(0);
+    const [step, setStep] = useState(batchStandardPreview ? 1 : 0);
     const [activeBatchTool, setActiveBatchTool] = useState<'addon-association' | null>(null);
     const [pageTab, setPageTab] = useState<'publish' | 'qimai-records' | 'platform-records'>(
         initialTab === 'records' ? 'qimai-records' : initialTab,
     );
-    const [operationMode, setOperationMode] = useState<'sync' | 'batch_standard' | 'batch_combo'>('sync');
+    const [operationMode, setOperationMode] = useState<'sync' | 'batch_standard' | 'batch_combo'>(batchStandardPreview ? 'batch_standard' : 'sync');
     const [syncSource, setSyncSource] = useState<'master' | 'template' | 'channel_catalog'>(() => channelCatalogEnabled ? 'channel_catalog' : 'master');
     // 原型默认当前账号拥有全部固定渠道权限；生产环境需先按账号的 channelId 数据范围过滤，
     // 再由当前动态分组反向计算可见/可选商品库，不能把菜单权限等同于全部商品库权限。
@@ -238,8 +244,6 @@ export const WebProductSync: React.FC<{
     const [selectedTargetChannelGroupIds, setSelectedTargetChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
     const [selectedTargetScopes, setSelectedTargetScopes] = useState<Array<'master' | 'template' | 'store' | 'channel_catalog'>>(['master', 'template', 'store']);
     const [batchChangeMode, setBatchChangeMode] = useState<'individual' | 'unified'>('individual');
-    const [batchProductSource, setBatchProductSource] = useState<'master' | 'channel_catalog'>('master');
-    const [batchChannelGroupId, setBatchChannelGroupId] = useState<string>(() => channelCatalogGroups[0]?.id || '');
     const [templateRangeMode, setTemplateRangeMode] = useState<'all' | 'selected'>('all');
     const [storeRangeMode, setStoreRangeMode] = useState<'all' | 'selected' | 'template'>('selected');
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(['template-1']);
@@ -251,6 +255,9 @@ export const WebProductSync: React.FC<{
     ));
     const [selectedBatchFields, setSelectedBatchFields] = useState<string[]>(['商品名称', '前台分类', '基础价格']);
     const [selectedBatchProductIds, setSelectedBatchProductIds] = useState<string[]>(['1', '2']);
+    const [selectedBatchRowIds, setSelectedBatchRowIds] = useState<string[]>([]);
+    const [batchDraftValues, setBatchDraftValues] = useState<Record<string, Record<string, BatchFieldValue>>>({});
+    const [unifiedBatchDraftValues, setUnifiedBatchDraftValues] = useState<Record<string, BatchFieldValue>>({});
     const [selectedSyncProductIds, setSelectedSyncProductIds] = useState<string[]>(['1', '2', '3']);
     const [selectedPublishChannelIds, setSelectedPublishChannelIds] = useState<OmnichannelChannelId[]>(() => (
         channelCatalogEnabled
@@ -367,6 +374,110 @@ export const WebProductSync: React.FC<{
         setProducts(prev => prev.map(product => (
             product.id === productId ? updater(product) : product
         )));
+    };
+
+    const getBatchFieldValue = (product: EditableProduct, field: string): BatchFieldValue => {
+        switch (field) {
+            case '商品名称': return product.name;
+            case '前台分类': return product.categories[0]?.name || '';
+            case '是否展示商品': return true;
+            case '基础价格': return product.price;
+            case '商品标识': return '新品';
+            case '商品条码': return product.code;
+            case '预计成本': return Number((product.price * 0.35).toFixed(2));
+            case '商品份量': return '1杯';
+            case '商品主图': return product.image ? '已配置' : '未配置';
+            case '规格图片': return `${product.specs.length}张`;
+            case '商品详情图': return '3张';
+            case '列表页简述': return '门店热销饮品';
+            case '描述标签': return '推荐';
+            case '售卖时间': return getListTimeSaleSummary(product.timeSale);
+            case '是否为套餐商品': return product.type.includes('套餐');
+            case '是否为小料商品': return false;
+            case '起购限购': return '1 / 99';
+            case '单点不送': return false;
+            case '包装费': return 0;
+            default: return '';
+        }
+    };
+
+    const updateBatchDraftValue = (productId: string, field: string, value: BatchFieldValue) => {
+        setBatchDraftValues(prev => ({
+            ...prev,
+            [productId]: {
+                ...prev[productId],
+                [field]: value,
+            },
+        }));
+    };
+
+    const renderBatchFieldControl = (
+        field: string,
+        value: BatchFieldValue,
+        onChange: (value: BatchFieldValue) => void,
+        unified = false,
+    ) => {
+        const controlClass = 'h-9 w-full min-w-[132px] border border-gray-200 bg-white px-2.5 text-sm text-gray-700 outline-none focus:border-[#00B460]';
+
+        if (field === '前台分类') {
+            return (
+                <select value={String(value)} onChange={event => onChange(event.target.value)} className={controlClass}>
+                    <option value="">请选择分类</option>
+                    {CATEGORY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+            );
+        }
+
+        if (BATCH_BOOLEAN_FIELDS.has(field)) {
+            return (
+                <select value={String(value)} onChange={event => onChange(event.target.value === 'true')} className={controlClass}>
+                    {unified && <option value="">请选择</option>}
+                    <option value="true">是</option>
+                    <option value="false">否</option>
+                </select>
+            );
+        }
+
+        if (BATCH_NUMBER_FIELDS.has(field)) {
+            return (
+                <input
+                    type="number"
+                    min="0"
+                    value={value === '' ? '' : Number(value)}
+                    placeholder={unified ? '请输入统一值' : undefined}
+                    onChange={event => onChange(event.target.value === '' ? '' : Number(event.target.value))}
+                    className={controlClass}
+                />
+            );
+        }
+
+        if (BATCH_IMAGE_FIELDS.has(field)) {
+            return (
+                <button type="button" onClick={() => onChange('已重新选择')} className={`${controlClass} flex items-center justify-between text-left hover:bg-[#F7FCF9]`}>
+                    <span className={value ? 'text-gray-700' : 'text-gray-400'}>{value || '选择图片'}</span>
+                    <FileUp size={15} className="ml-2 shrink-0 text-[#00A35B]" />
+                </button>
+            );
+        }
+
+        if (field === '售卖时间') {
+            return (
+                <select value={String(value)} onChange={event => onChange(event.target.value)} className={controlClass}>
+                    {unified && <option value="">请选择</option>}
+                    <option value="全时段售卖">全时段售卖</option>
+                    <option value="已开启分时段售卖">分时段售卖</option>
+                </select>
+            );
+        }
+
+        return (
+            <input
+                value={String(value)}
+                placeholder={unified ? '请输入统一值' : undefined}
+                onChange={event => onChange(event.target.value)}
+                className={controlClass}
+            />
+        );
     };
 
     const handleCategorySortChange = (categoryName: string, value: number) => {
@@ -865,79 +976,178 @@ export const WebProductSync: React.FC<{
         );
     };
 
-    const renderBatchStep1 = () => (
-        <div className="flex h-full flex-1 flex-col bg-white">
-            <div className="min-h-0 flex-1 overflow-auto p-7">
-                <div className="max-w-5xl">
-                    <div className="mb-7">
-                        <h2 className="text-xl font-black text-gray-900">{operationMode === 'batch_combo' ? '批量修改套餐商品' : '批量修改标准商品'}</h2>
-                    </div>
+    const renderBatchStep1 = () => {
+        const selectedBatchProducts = products.filter(product => selectedBatchProductIds.includes(product.id));
+        const allRowsSelected = selectedBatchProducts.length > 0 && selectedBatchProducts.every(product => selectedBatchRowIds.includes(product.id));
 
-                    <div className="mb-7 border-b border-gray-100 pb-6">
-                        <div className="mb-3 text-sm font-black text-gray-800">修改方式</div>
-                        <div className="flex items-center gap-8 text-sm">
-                            <label className={`flex cursor-pointer items-center font-bold ${batchChangeMode === 'individual' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" checked={batchChangeMode === 'individual'} onChange={() => setBatchChangeMode('individual')} className="mr-2" />个性修改</label>
-                            <label className={`flex cursor-pointer items-center font-bold ${batchChangeMode === 'unified' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" checked={batchChangeMode === 'unified'} onChange={() => setBatchChangeMode('unified')} className="mr-2" />统一修改</label>
+        return (
+            <div className="flex h-full flex-1 flex-col bg-white">
+                <div className="min-h-0 flex-1 overflow-auto p-7">
+                    <div className="w-full">
+                        <div className="mb-7">
+                            <h2 className="text-xl font-black text-gray-900">{operationMode === 'batch_combo' ? '批量修改套餐商品' : '批量修改标准商品'}</h2>
                         </div>
-                    </div>
 
-                    <div className="mb-7 border-b border-gray-100 pb-6">
-                        <div className="mb-3 text-sm font-black text-gray-800">选择商品</div>
-                        <div className="flex items-center gap-8 text-sm">
-                            <label className={`flex cursor-pointer items-center font-bold ${batchProductSource === 'master' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
-                                <input type="radio" name="batch-product-source" checked={batchProductSource === 'master'} onChange={() => { setBatchProductSource('master'); setSelectedBatchProductIds([]); }} className="mr-2" />
-                                商品主档
-                            </label>
-                            {channelCatalogEnabled && (
-                                <label className={`flex cursor-pointer items-center font-bold ${batchProductSource === 'channel_catalog' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
-                                    <input type="radio" name="batch-product-source" checked={batchProductSource === 'channel_catalog'} onChange={() => { setBatchProductSource('channel_catalog'); setSelectedBatchProductIds([]); }} className="mr-2" />
-                                    渠道商品库
-                                </label>
-                            )}
-                        </div>
-                        {batchProductSource === 'channel_catalog' && channelCatalogEnabled && (
-                            <div className="mt-4 flex flex-wrap gap-2">
-                                {authorizedChannelCatalogGroups.map(group => {
-                                    const selected = batchChannelGroupId === group.id;
-                                    return <button key={group.id} type="button" onClick={() => { setBatchChannelGroupId(group.id); setSelectedBatchProductIds([]); }} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-[#F0FBF5] text-[#008F53]' : 'border-gray-200 text-gray-500'}`}><span>{group.name}</span><span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>;
-                                })}
+                        <div className="mb-6 border-b border-gray-100 pb-6">
+                            <div className="mb-3 text-sm font-black text-gray-800">修改方式</div>
+                            <div className="flex items-center gap-8 text-sm">
+                                <label className={`flex cursor-pointer items-center font-bold ${batchChangeMode === 'individual' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" checked={batchChangeMode === 'individual'} onChange={() => setBatchChangeMode('individual')} className="mr-2" />个性修改</label>
+                                <label className={`flex cursor-pointer items-center font-bold ${batchChangeMode === 'unified' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" checked={batchChangeMode === 'unified'} onChange={() => setBatchChangeMode('unified')} className="mr-2" />统一修改</label>
                             </div>
-                        )}
-                        <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
-                            <span className="text-sm text-gray-500">已选 <span className="font-bold text-gray-800">{selectedBatchProductIds.length}</span> 个商品</span>
-                            <button type="button" onClick={() => openProductSelector('batch')} className="border border-[#00B460] bg-white px-4 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FBF5]">选择商品</button>
                         </div>
-                        {selectedBatchProductIds.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-2 border border-gray-200 bg-[#FAFBFC] px-4 py-3">
-                                {products.filter(product => selectedBatchProductIds.includes(product.id)).map(product => (
-                                    <span key={product.id} className="inline-flex items-center border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700">
-                                        {product.name}
-                                        <button type="button" aria-label={`移除${product.name}`} onClick={() => setSelectedBatchProductIds(prev => prev.filter(id => id !== product.id))} className="ml-2 text-gray-400 hover:text-red-500"><X size={13} /></button>
-                                    </span>
+
+                        <div className="mb-7 border-b border-gray-100 pb-7">
+                            <div className="mb-5 text-sm font-black text-gray-800">选择修改字段</div>
+                            <div className="space-y-5">
+                                {BATCH_FIELD_GROUPS.map(group => (
+                                    <div key={group.title} className="flex items-start">
+                                        <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
+                                        <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
+                                            {group.fields.map(field => {
+                                                const selected = selectedBatchFields.includes(field);
+                                                return <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />{field}</label>;
+                                            })}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
-                        )}
-                    </div>
+                        </div>
 
-                    <div className="mb-8 space-y-5">
-                        {BATCH_FIELD_GROUPS.map(group => (
-                            <div key={group.title} className="flex items-start">
-                                <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
-                                <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
-                                    {group.fields.map(field => {
-                                        const selected = selectedBatchFields.includes(field);
-                                        return <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />{field}</label>;
-                                    })}
+                        <section aria-labelledby="batch-product-list-title" className="mb-6">
+                            <div className="mb-3">
+                                <div>
+                                    <h3 id="batch-product-list-title" className="text-base font-black text-gray-900">选择商品</h3>
+                                    <p className="mt-1 text-xs text-gray-400">已选字段将作为可编辑列展示在商品列表中</p>
                                 </div>
                             </div>
-                        ))}
-                    </div>
 
+                            <div className="overflow-hidden border border-gray-200 bg-white">
+                                <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <button type="button" onClick={() => openProductSelector('batch')} className="h-9 bg-[#00B460] px-4 text-sm font-bold text-white hover:bg-[#00A35B]">添加标准商品</button>
+                                        <span className="text-xs text-gray-500">已添加 <strong className="text-gray-800">{selectedBatchProducts.length}</strong> 个，可编辑 <strong className="text-gray-800">{selectedBatchFields.length}</strong> 个字段</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={selectedBatchRowIds.length === 0}
+                                        onClick={() => {
+                                            setSelectedBatchProductIds(prev => prev.filter(id => !selectedBatchRowIds.includes(id)));
+                                            setSelectedBatchRowIds([]);
+                                        }}
+                                        className="h-9 border border-gray-200 bg-white px-4 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300"
+                                    >
+                                        删除商品
+                                    </button>
+                                </div>
+                                <div className="max-w-full overflow-x-auto">
+                                    <table className="w-full table-fixed text-left" style={{ minWidth: `${420 + selectedBatchFields.length * 180}px` }}>
+                                        <thead className="bg-[#F5F6F7] text-sm font-bold text-gray-700">
+                                            <tr>
+                                                <th className="w-12 px-4 py-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label="全选商品"
+                                                        checked={allRowsSelected}
+                                                        onChange={() => setSelectedBatchRowIds(allRowsSelected ? [] : selectedBatchProducts.map(product => product.id))}
+                                                        className="h-4 w-4 rounded border-gray-300 text-[#00C06B]"
+                                                    />
+                                                </th>
+                                                <th className="w-[240px] px-3 py-3">商品</th>
+                                                {selectedBatchFields.map(field => <th key={field} className="w-[180px] px-3 py-3">{field}</th>)}
+                                                <th className="w-20 px-3 py-3 text-center">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 text-sm">
+                                            {batchChangeMode === 'unified' && selectedBatchFields.length > 0 && (
+                                                <tr className="bg-[#F3FBF7]">
+                                                    <td className="px-4 py-3"></td>
+                                                    <td className="px-3 py-3">
+                                                        <div className="font-bold text-[#008F53]">统一修改值</div>
+                                                        <div className="mt-1 text-xs text-gray-400">应用于下方全部商品</div>
+                                                    </td>
+                                                    {selectedBatchFields.map(field => (
+                                                        <td key={field} className="px-3 py-3 align-top">
+                                                            {renderBatchFieldControl(
+                                                                field,
+                                                                unifiedBatchDraftValues[field] ?? '',
+                                                                value => setUnifiedBatchDraftValues(prev => ({ ...prev, [field]: value })),
+                                                                true,
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-3 py-3"></td>
+                                                </tr>
+                                            )}
+                                            {selectedBatchProducts.map(product => {
+                                                const rowSelected = selectedBatchRowIds.includes(product.id);
+                                                return (
+                                                    <tr key={product.id} className={rowSelected ? 'bg-[#F7FCF9]' : 'bg-white'}>
+                                                        <td className="px-4 py-3 align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                aria-label={`选择${product.name}`}
+                                                                checked={rowSelected}
+                                                                onChange={() => setSelectedBatchRowIds(prev => rowSelected ? prev.filter(id => id !== product.id) : [...prev, product.id])}
+                                                                className="mt-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-3 align-top">
+                                                            <div className="flex min-w-0 items-center gap-3">
+                                                                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center border border-gray-100 bg-[#F5F7F8] text-gray-300">
+                                                                    <PackagePlus size={18} />
+                                                                    <img src={product.image} alt="" onError={event => { event.currentTarget.style.display = 'none'; }} className="absolute inset-0 h-full w-full object-cover" />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate font-bold text-gray-800">{product.name}</div>
+                                                                    <div className="mt-1 truncate text-xs text-gray-400">ID：{product.code}</div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        {selectedBatchFields.map(field => (
+                                                            <td key={field} className="px-3 py-3 align-top">
+                                                                {batchChangeMode === 'individual'
+                                                                    ? renderBatchFieldControl(
+                                                                        field,
+                                                                        batchDraftValues[product.id]?.[field] ?? getBatchFieldValue(product, field),
+                                                                        value => updateBatchDraftValue(product.id, field, value),
+                                                                    )
+                                                                    : <div className="flex h-9 min-w-[132px] items-center border border-dashed border-[#B7E7CB] bg-white px-2.5 text-xs text-[#008F53]">使用统一修改值</div>}
+                                                            </td>
+                                                        ))}
+                                                        <td className="px-3 py-3 text-center align-top">
+                                                            <button
+                                                                type="button"
+                                                                aria-label={`移除${product.name}`}
+                                                                onClick={() => {
+                                                                    setSelectedBatchProductIds(prev => prev.filter(id => id !== product.id));
+                                                                    setSelectedBatchRowIds(prev => prev.filter(id => id !== product.id));
+                                                                }}
+                                                                className="h-9 text-sm font-bold text-[#00A35B] hover:text-red-500"
+                                                            >
+                                                                删除
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {selectedBatchProducts.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={selectedBatchFields.length + 3} className="h-36 px-6 text-center text-sm text-gray-400">
+                                                        暂未添加商品，请点击“添加标准商品”选择本次要修改的商品
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
                 </div>
+                <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchFields.length === 0 || selectedBatchProductIds.length === 0} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
             </div>
-            <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchFields.length === 0 || selectedBatchProductIds.length === 0} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
-        </div>
-    );
+        );
+    };
 
     const renderStep1 = () => (
         <div className="flex-1 flex flex-col h-full bg-white relative">
@@ -1481,9 +1691,9 @@ export const WebProductSync: React.FC<{
             )}
             <WebProductSelectorDialog
                 open={productSelectorMode !== null}
-                title={productSelectorMode === 'batch' ? '选择批量修改商品' : '选择同步商品'}
+                title={productSelectorMode === 'batch' ? '添加标准商品' : '选择同步商品'}
                 description={productSelectorMode === 'batch'
-                    ? `筛选并选择本次需要批量修改的商品；当前来源：${batchProductSource === 'master' ? '商品主档' : authorizedChannelCatalogGroups.find(group => group.id === batchChannelGroupId)?.name || '渠道商品库'}。`
+                    ? '筛选并选择本次需要批量修改的标准商品，确认后将添加到商品列表。'
                     : `筛选并选择本次需要同步下发的商品；当前来源：${syncSource === 'channel_catalog' ? authorizedChannelCatalogGroups.find(group => group.id === selectedChannelGroupIds[0])?.name || '渠道商品库' : syncSource === 'template' ? '商品模板' : '商品主档'}。`}
                 products={selectorProducts}
                 selectedIds={pendingSelectorProductIds}

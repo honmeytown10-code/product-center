@@ -245,26 +245,6 @@ export const WebGeneralSettings: React.FC<Props> = ({
 
                         <div className="h-px bg-gray-100 my-6"></div>
 
-                        <div className="space-y-4">
-                            <div className="flex items-start justify-between gap-8 rounded-lg border border-gray-100 bg-gray-50/50 p-4">
-                                <div className="min-w-0">
-                                    <h5 className="text-[15px] font-bold text-gray-900">允许 POS 跨渠道管理商品</h5>
-                                    <p className="mt-1 text-xs leading-relaxed text-gray-400">开启后，店员可查找门店其他渠道商品，并按权限切换或追加关联渠道操作；关闭后，沽清和上下架只展示、搜索并操作 POS 商品。</p>
-                                </div>
-                                <Switch
-                                    active={allowPosCrossChannelManagement}
-                                    label="允许 POS 跨渠道管理商品"
-                                    onClick={() => updatePosConfig({ allowPosCrossChannelManagement: !allowPosCrossChannelManagement })}
-                                />
-                            </div>
-                            <div className={`rounded-md px-3 py-2 text-[11px] leading-5 ${allowPosCrossChannelManagement ? 'bg-[#F1FBF6] text-[#087A49]' : 'bg-[#F5F6F7] text-[#667085]'}`}>
-                                当前：{allowPosCrossChannelManagement ? '允许跨渠道管理，POS 可搜索门店全部渠道商品。' : '仅管理 POS 渠道商品，页面和弹窗不展示渠道选择。'}
-                            </div>
-                            {(currentBrandConfig.features.stock_shared || currentBrandConfig.features.shelves_unite) && <p className="rounded-md bg-orange-50 px-3 py-2 text-[11px] leading-5 text-orange-700">如已开启全渠道共享库存或统一上下架，对应操作仍按全渠道规则同步；该设置只收敛 POS 可见和可发起操作的商品范围。</p>}
-                        </div>
-
-                        <div className="h-px bg-gray-100 my-6"></div>
-
                         {/* POS Stockout Warning Threshold Setting */}
                         <div className="flex items-start justify-between">
                             <div className="flex-1 pr-10">
@@ -286,6 +266,26 @@ export const WebGeneralSettings: React.FC<Props> = ({
                                 />
                                 <span className="text-sm font-bold text-gray-600 ml-3">时，归入低库存</span>
                             </div>
+                        </div>
+
+                        <div className="h-px bg-gray-100 my-6"></div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-start justify-between gap-8 rounded-lg border border-gray-100 bg-gray-50/50 p-4">
+                                <div className="min-w-0">
+                                    <h5 className="text-[15px] font-bold text-gray-900">允许 POS 跨渠道管理商品</h5>
+                                    <p className="mt-1 text-xs leading-relaxed text-gray-400">开启后，店员可查找门店其他渠道商品，并按权限切换或追加关联渠道操作；关闭后，沽清和上下架只展示、搜索并操作 POS 商品。</p>
+                                </div>
+                                <Switch
+                                    active={allowPosCrossChannelManagement}
+                                    label="允许 POS 跨渠道管理商品"
+                                    onClick={() => updatePosConfig({ allowPosCrossChannelManagement: !allowPosCrossChannelManagement })}
+                                />
+                            </div>
+                            <div className={`rounded-md px-3 py-2 text-[11px] leading-5 ${allowPosCrossChannelManagement ? 'bg-[#F1FBF6] text-[#087A49]' : 'bg-[#F5F6F7] text-[#667085]'}`}>
+                                当前：{allowPosCrossChannelManagement ? '允许跨渠道管理，POS 可搜索门店全部渠道商品。' : '仅管理 POS 渠道商品，页面和弹窗不展示渠道选择。'}
+                            </div>
+                            {(currentBrandConfig.features.stock_shared || currentBrandConfig.features.shelves_unite) && <p className="rounded-md bg-orange-50 px-3 py-2 text-[11px] leading-5 text-orange-700">如已开启全渠道共享库存或统一上下架，对应操作仍按全渠道规则同步；该设置只收敛 POS 可见和可发起操作的商品范围。</p>}
                         </div>
                     </div>
                 </section>

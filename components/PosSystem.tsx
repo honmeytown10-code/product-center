@@ -8,6 +8,7 @@ import { PosMarketPriceView } from './pos/PosMarketPriceView';
 import { PosSettingsView } from './pos/PosSettingsView';
 import { PosDialog } from './pos/PosWorkspace';
 import { CHANNEL_TABS, SHELF_VIEW_TABS, ChannelType } from './pos/PosCommon';
+import { resolveAllowPosCrossChannelManagement } from '../types';
 import './pos/pos.css';
 
 type SubTab = 'stockout' | 'method' | 'shelf' | 'item' | 'market';
@@ -16,7 +17,7 @@ export const PosSystem: React.FC = () => {
   const config = brandConfigs[activeBrandId];
   const stockShared = config?.features.stock_shared ?? true;
   const shelfUnited = config?.features.shelves_unite ?? true;
-  const posOnlyProducts = !(config?.allowPosCrossChannelManagement ?? true);
+  const posOnlyProducts = !resolveAllowPosCrossChannelManagement(config?.allowPosCrossChannelManagement);
   const posOnlyStockOperation = posOnlyProducts && !stockShared;
   const posOnlyShelfOperation = posOnlyProducts && !shelfUnited;
   const [module, setModule] = useState<'product' | 'settings'>('product');

@@ -99,9 +99,16 @@ export interface BrandConfig {
   channelGroups?: ChannelGroup[];
   posStockoutMode?: 'spu' | 'sku'; // POS沽清模式 (SPU / SKU)
   posStockoutWarningThreshold?: number; // POS已沽清列表预警阈值
-  allowPosCrossChannelManagement?: boolean; // 是否允许POS跨渠道管理商品
+  allowPosCrossChannelManagement?: boolean | null; // 是否允许POS跨渠道管理商品；历史空值按允许处理
   omnichannel?: OmnichannelBrandConfig;
 }
+
+/**
+ * POS 跨渠道管理兼容规则：
+ * - 新配置必须显式写入 true / false；
+ * - 历史数据为 null 或字段缺失时，继续按允许跨渠道处理，避免升级后能力被意外关闭。
+ */
+export const resolveAllowPosCrossChannelManagement = (value: boolean | null | undefined): boolean => value == null ? true : value;
 
 export const MOCK_BRANDS = [
   { id: 'b_1', name: '槐店王婆 (主品牌)', icon: '👑', type: '餐饮·火锅' },

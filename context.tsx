@@ -75,7 +75,7 @@ const INITIAL_BRAND_CONFIGS: Record<string, BrandConfig> = {
     ],
     posStockoutMode: 'spu',
     posStockoutWarningThreshold: 30,
-    allowPosCrossChannelManagement: true,
+    allowPosCrossChannelManagement: false,
     omnichannel: DEFAULT_OMNICHANNEL_CONFIG
   }
 };

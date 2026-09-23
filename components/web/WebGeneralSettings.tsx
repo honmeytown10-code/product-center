@@ -37,7 +37,7 @@ export const WebGeneralSettings: React.FC<Props> = ({
     const [dinerLimit, setDinerLimit] = useState(true);
     const [comboSplit, setComboSplit] = useState(true);
 
-    const [packageFeeSetting, setPackageFeeSetting] = useState<'product' | 'spec'>('product');
+    const packageFeeSetting = currentBrandConfig?.packageFeeSetting || 'product';
     const [hideMiniProgramProducts, setHideMiniProgramProducts] = useState(false);
     const [sameProductSort, setSameProductSort] = useState(true);
     const [categorySortSync, setCategorySortSync] = useState(true);
@@ -162,13 +162,13 @@ export const WebGeneralSettings: React.FC<Props> = ({
                         <div className="flex items-start">
                             <div className="w-[180px] text-right pr-6 text-gray-600 font-medium pt-1">包装费设置：</div>
                             <div className="flex-1 flex items-center space-x-6">
-                                <label className="flex items-center space-x-2 cursor-pointer" onClick={(e) => { e.preventDefault(); setPackageFeeSetting('product'); }}>
+                                <label className="flex items-center space-x-2 cursor-pointer" onClick={(e) => { e.preventDefault(); updateBrandConfig(activeBrandId, { ...currentBrandConfig, packageFeeSetting: 'product' }); }}>
                                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${packageFeeSetting === 'product' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
                                         {packageFeeSetting === 'product' && <div className="w-2 h-2 rounded-full bg-[#00C06B]"/>}
                                     </div>
                                     <span className={`text-sm ${packageFeeSetting === 'product' ? 'text-[#00C06B] font-bold' : 'text-gray-600'}`}>商品级别</span>
                                 </label>
-                                <label className="flex items-center space-x-2 cursor-pointer" onClick={(e) => { e.preventDefault(); setPackageFeeSetting('spec'); }}>
+                                <label className="flex items-center space-x-2 cursor-pointer" onClick={(e) => { e.preventDefault(); updateBrandConfig(activeBrandId, { ...currentBrandConfig, packageFeeSetting: 'spec' }); }}>
                                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${packageFeeSetting === 'spec' ? 'border-[#00C06B]' : 'border-gray-300'}`}>
                                         {packageFeeSetting === 'spec' && <div className="w-2 h-2 rounded-full bg-[#00C06B]"/>}
                                     </div>

@@ -1,94 +1,80 @@
-
-import React, { useState, useEffect } from 'react';
-import { LayoutGrid, Coffee, AlertCircle, ClipboardList, Power, ChevronLeft, Clock, User, Settings } from 'lucide-react';
-import { NavIcon, Tab } from './pos/PosCommon';
+import React, { useEffect, useState } from 'react';
+import { Monitor, ClipboardList, Settings, ShoppingBag, Search, X, RefreshCw, Printer, Wifi, HelpCircle, Volume2, Layers } from 'lucide-react';
+import { useProducts } from '../context';
 import { PosShelfView } from './pos/PosShelfView';
 import { PosStockoutView } from './pos/PosStockoutView';
 import { PosMethodView } from './pos/PosMethodView';
 import { PosSettingsView } from './pos/PosSettingsView';
+import { PosDialog } from './pos/PosWorkspace';
+import { CHANNEL_TABS, ChannelType } from './pos/PosCommon';
+import './pos/pos.css';
 
-type MainModule = 'product' | 'settings';
-type SubTab = 'shelf' | 'stockout' | 'method' | 'item';
-
+type SubTab = 'stockout' | 'method' | 'shelf' | 'item';
 export const PosSystem: React.FC = () => {
-  const [mainModule, setMainModule] = useState<MainModule>('product');
-  const [subTab, setSubTab] = useState<SubTab>('stockout');
-  const [showImage, setShowImage] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('pos_local_showImage');
-    if (stored !== null) {
-      setShowImage(stored === 'true');
-    } else {
-      // Ensure default is false if not set in local storage
-      setShowImage(false);
-    }
-  }, []);
-
-  const handleToggleImage = (val: boolean) => {
-    setShowImage(val);
-    localStorage.setItem('pos_local_showImage', String(val));
-  };
-
-  const handleModuleChange = (module: MainModule) => {
-    setMainModule(module);
-    setSubTab('stockout');
-  };
-
-  return (
-    <div className="flex w-full h-full bg-[#1F2129] text-gray-100 font-sans overflow-hidden">
-      
-      {/* --- A AREA: Main Sidebar --- */}
-      <div className="w-24 bg-[#1F2129] flex flex-col items-center py-6 space-y-8 z-20 shadow-xl border-r border-gray-800 shrink-0">
-         <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mb-4 cursor-pointer hover:ring-2 ring-gray-500 transition-all">
-             <User size={24} className="text-gray-300" />
-         </div>
-         <NavIcon icon={<LayoutGrid size={28} />} label="点单" />
-         <NavIcon icon={<Settings size={28} />} label="设置" active={mainModule === 'settings'} onClick={() => handleModuleChange('settings')} />
-         <div className="w-8 border-b border-gray-700 my-4"></div>
-         <NavIcon icon={<Coffee size={28} />} label="商品管理" active={mainModule === 'product'} onClick={() => handleModuleChange('product')} />
-         <NavIcon icon={<ClipboardList size={28} />} label="订单" />
-         <div className="mt-auto"><NavIcon icon={<Power size={28} />} label="退出" /></div>
-      </div>
-
-      <div className="flex-1 flex flex-col min-w-0 bg-[#F5F6FA]">
-        
-        {/* --- B AREA: Top Navigation --- */}
-        <div className="h-16 bg-[#1F2129] border-b border-gray-700 flex justify-between items-center px-8 shrink-0 z-20 text-white">
-           <div className="flex items-center space-x-8">
-              <div className="flex items-center font-bold text-xl">
-                 <ChevronLeft className="mr-3 text-gray-400 cursor-pointer hover:text-white" size={24}/>
-                 {mainModule === 'product' ? '商品管理' : '系统设置'}
-              </div>
-              {mainModule === 'product' && (
-                  <>
-                      <div className="h-8 w-px bg-gray-600 mx-2"></div>
-                      <div className="flex space-x-2">
-                         <Tab active={subTab === 'stockout'} label="商品沽清" onClick={() => setSubTab('stockout')}/>
-                         <Tab active={subTab === 'method'} label="做法沽清" onClick={() => setSubTab('method')}/>
-                         <Tab active={subTab === 'shelf'} label="商品上下架" onClick={() => setSubTab('shelf')}/>
-                         <Tab active={subTab === 'item'} label="品项沽清" onClick={() => setSubTab('item')}/>
-                      </div>
-                  </>
-              )}
-           </div>
-           <div className="flex items-center text-base text-gray-400">
-              <Clock size={18} className="mr-2"/> 2025年 12月 02日 星期二 17:47
-           </div>
-        </div>
-
-        {/* --- C AREA: Workspace --- */}
-        {mainModule === 'settings' ? (
-            <PosSettingsView showImage={showImage} setShowImage={handleToggleImage} />
-        ) : (
-            <>
-                {subTab === 'shelf' && <PosShelfView showImage={showImage} />}
-                {subTab === 'stockout' && <PosStockoutView showImage={showImage} />}
-                {subTab === 'method' && <PosMethodView />}
-                {subTab === 'item' && <div className="flex items-center justify-center h-full text-gray-400">暂未实装品项沽清功能</div>}
-            </>
-        )}
-      </div>
-    </div>
-  );
+  const { activeBrandId, brandConfigs } = useProducts();
+  const config = brandConfigs[activeBrandId];
+  const stockShared = config?.features.stock_shared ?? true;
+  const shelfUnited = config?.features.shelves_unite ?? true;
+  const [module, setModule] = useState<'product' | 'settings'>('product');
+  const [tab, setTab] = useState<SubTab>(() => {
+    const value = new URLSearchParams(window.location.search).get('posTab');
+    return value === 'method' || value === 'shelf' || value === 'item' ? value : 'stockout';
+  });
+  const [search, setSearch] = useState('');
+  const [channel, setChannel] = useState<ChannelType>('pos');
+  const [shelfChannel, setShelfChannel] = useState<ChannelType>('pos');
+  const [showImage, setShowImage] = useState(() => localStorage.getItem('pos_local_showImage') === 'true');
+  const [guideOpen, setGuideOpen] = useState(false);
+  const searchesStoreLibrary = module === 'product' && (tab === 'stockout' && !stockShared || tab === 'shelf' && !shelfUnited);
+  useEffect(() => { setChannel(stockShared ? 'all' : current => current === 'all' ? 'pos' : current); }, [stockShared]);
+  useEffect(() => { setShelfChannel(shelfUnited ? 'all' : current => current === 'all' ? 'pos' : current); }, [shelfUnited]);
+  const tabs: { id: SubTab; label: string }[] = [{ id: 'stockout', label: '商品沽清' }, { id: 'method', label: '做法管理' }, { id: 'shelf', label: '商品上下架' }, { id: 'item', label: '品项沽清' }];
+  return <div className="pos-system">
+    <aside className="pos-rail" aria-label="POS 主导航">
+      <div className="pos-brand">小丽</div>
+      <button className="pos-rail-button" disabled title="当前原型未接入点单模块"><Monitor size={25} /><span>点单</span></button>
+      <button className="pos-rail-button" disabled title="当前原型未接入订单模块"><ClipboardList size={25} /><span>订单</span></button>
+      <button className="pos-rail-button" disabled title="当前原型未接入取餐模块"><Volume2 size={25} /><span>取餐</span></button>
+      <button className={'pos-rail-button' + (module === 'settings' ? ' active' : '')} onClick={() => setModule('settings')}><Settings size={25} /><span>设置</span></button>
+      <button className={'pos-rail-button' + (module === 'product' ? ' active' : '')} onClick={() => setModule('product')}><ShoppingBag size={25} /><span>商品</span></button>
+    </aside>
+    <main className="pos-main">
+      <header className="pos-header">
+        {module === 'product' ? <nav className="pos-tabs" aria-label="商品管理功能">{tabs.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); setSearch(''); setGuideOpen(false); }}>{item.label}</button>)}</nav> : <h1 className="text-xl font-bold">系统设置</h1>}
+        {module === 'product' && tab === 'stockout' && (stockShared ? <div className="pos-header-scope"><Layers size={17} /><span>全渠道统一库存</span></div> : <label className="pos-channel-select"><span>渠道</span><select aria-label="商品沽清当前渠道" value={channel} onChange={event => setChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>)}
+        {module === 'product' && tab === 'shelf' && (shelfUnited ? <div className="pos-header-scope"><Layers size={17} /><span>全渠道统一上下架</span></div> : <label className="pos-channel-select"><span>渠道</span><select aria-label="商品上下架当前渠道" value={shelfChannel} onChange={event => setShelfChannel(event.target.value as ChannelType)}>{CHANNEL_TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>)}
+        {module === 'product' && tab !== 'item' && <label className="pos-search"><Search size={18} /><input aria-label={tab === 'method' ? '搜索做法' : '搜索商品'} placeholder={tab === 'method' ? '搜索做法名 / 首字母 / 标识码' : searchesStoreLibrary ? '搜索门店全部渠道商品 / 扫码' : '搜索商品名 / 首字母 / 扫码'} value={search} onChange={event => setSearch(event.target.value)} />{search && <button aria-label="清除搜索" onClick={() => setSearch('')}><X size={16} /></button>}</label>}
+        {module === 'product' && <div className="pos-header-tools">{tab === 'stockout' && <button className="pos-guide-button" onClick={() => setGuideOpen(true)}><HelpCircle size={17} />如何沽清</button>}<button className="pos-icon-button" aria-label="刷新商品" onClick={() => window.location.reload()}><RefreshCw size={18} /></button><span className="pos-icon-button" role="img" aria-label="打印机已连接"><Printer size={18} /></span><span className="pos-icon-button" role="img" aria-label="网络已连接"><Wifi size={18} /></span></div>}
+      </header>
+      <section className="pos-view" hidden={module !== 'settings'}><PosSettingsView showImage={showImage} setShowImage={value => { setShowImage(value); localStorage.setItem('pos_local_showImage', String(value)); }} /></section>
+      <section className="pos-view" hidden={module !== 'product' || tab !== 'stockout'}><PosStockoutView showImage={showImage} search={search} onReset={() => setSearch('')} channel={channel} onChannelChange={setChannel} /></section>
+      <section className="pos-view" hidden={module !== 'product' || tab !== 'shelf'}><PosShelfView showImage={showImage} search={search} onReset={() => setSearch('')} channel={shelfChannel} onChannelChange={setShelfChannel} /></section>
+      <section className="pos-view" hidden={module !== 'product' || tab !== 'method'}><PosMethodView search={search} onReset={() => setSearch('')} /></section>
+      <section className="pos-view" hidden={module !== 'product' || tab !== 'item'}><div className="pos-empty"><ShoppingBag size={36} /><h3>品项沽清</h3><p>当前原型尚未接入品项数据，此入口保留。</p><button className="pos-button secondary" onClick={() => setTab('stockout')}>返回商品沽清</button></div></section>
+      {guideOpen && <PosDialog title="如何沽清商品" className="pos-guide-dialog" onClose={() => setGuideOpen(false)}>
+        <section className="pos-guide-scene">
+          <span className="pos-guide-label blue">场景一</span>
+          <h3>今天不卖了<br />明天自动恢复</h3>
+          <p>选择「当日沽清」，把<b>今日剩余</b>填 0；如需明日按固定份数开卖，在<b>次日补足</b>填数量。</p>
+          <div className="pos-guide-inputs">
+            <div className="active"><small>今日剩余</small><strong>0</strong></div>
+            <div><small>次日补足</small><strong className="muted">20</strong></div>
+          </div>
+        </section>
+        <section className="pos-guide-scene">
+          <span className="pos-guide-label orange">场景二</span>
+          <h3>无限期停售<br />补货后人工恢复</h3>
+          <p>选择「长期沽清」，只需填<b>剩余可售数量</b>；卖完即停，不会自动恢复。</p>
+          <div className="pos-guide-inputs single"><div className="warning"><small>剩余可售数量</small><strong>0</strong></div></div>
+          <span className="pos-guide-tip">卡片显示「长期沽清」</span>
+        </section>
+        <section className="pos-guide-scene">
+          <span className="pos-guide-label green">场景三</span>
+          <h3>恢复正常售卖</h3>
+          <p>在已沽清卡片上点<b>恢复售卖</b>，或在弹窗内点「取消沽清」。二次确认后恢复为无限库存。</p>
+          <div className="pos-guide-product"><strong>生椰拿铁</strong><span>已沽清</span><button type="button">恢复售卖</button></div>
+        </section>
+      </PosDialog>}
+    </main>
+  </div>;
 };

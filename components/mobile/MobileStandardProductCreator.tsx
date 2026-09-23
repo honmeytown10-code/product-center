@@ -42,7 +42,11 @@ interface Props {
     listDesc: string;
     specItems: SpecItemDraft[];
     linkedStallIds: string[];
+    storePackFee: string;
+    takePackFee: string;
   }) => void;
+  /** 来自商品设置的包装费粒度，不能在规格编辑器内重复配置。 */
+  packageFeeLevel?: 'product' | 'spec';
   labelGroups: MobileLabelGroup[];
   badges: MobileBadgeItem[];
   onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
@@ -67,6 +71,8 @@ interface Props {
     specSelection?: SpecFlowSelection;
     specLibrary?: LocalSpec[];
     linkedStallIds?: string[];
+    storePackFee?: string;
+    takePackFee?: string;
   };
 }
 
@@ -89,6 +95,8 @@ interface SpecItemDraft {
   price: string;
   stock: string;
   unlimited: boolean;
+  storePackFee?: string;
+  takePackFee?: string;
 }
 
 interface SpecFlowSelection {
@@ -125,6 +133,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   showEffectiveChannels = false,
   channelSelectorHelperText,
   onBeforeChannelToggle,
+  packageFeeLevel = 'product',
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [showTimeSalesEditor, setShowTimeSalesEditor] = useState(false);
@@ -181,6 +190,8 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
     badgeEndDate: initialData?.badgeEndDate || '',
     specItems: initialData?.specItems || [] as SpecItemDraft[],
     linkedStallIds: initialData?.linkedStallIds || [] as string[],
+    storePackFee: initialData?.storePackFee || '',
+    takePackFee: initialData?.takePackFee || '',
   });
   const [specLibrary, setSpecLibrary] = useState<LocalSpec[]>(initialData?.specLibrary || DEFAULT_SPEC_LIBRARY);
   const [specFlowSelection, setSpecFlowSelection] = useState<SpecFlowSelection>(
@@ -266,14 +277,16 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
     setShowSpecFlow(true);
   };
 
-  const handleSpecItemChange = (index: number, field: 'name' | 'price' | 'stock', value: string) => {
+  const handleSpecItemChange = (index: number, field: 'name' | 'price' | 'stock' | 'storePackFee' | 'takePackFee', value: string) => {
     setFormData(prev => ({
       ...prev,
       specItems: prev.specItems.map((item, itemIndex) => (
         itemIndex === index
           ? {
               ...item,
-              [field]: field === 'price' || field === 'stock' ? value.replace(/[^\d.]/g, '') : value,
+              [field]: field === 'price' || field === 'stock' || field === 'storePackFee' || field === 'takePackFee'
+                ? value.replace(/[^\d.]/g, '')
+                : value,
             }
           : item
       )),
@@ -511,6 +524,15 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
         {/* 3. 销售属性 */}
         <div ref={sectionRefs.sales} className="bg-white p-5 rounded-2xl shadow-sm space-y-6">
             <h3 className="font-black text-base text-gray-800">销售属性</h3>
+            <PackagingFeeCard
+              level={packageFeeLevel}
+              specType={formData.specType}
+              specItems={formData.specItems}
+              storePackFee={formData.storePackFee}
+              takePackFee={formData.takePackFee}
+              onProductFeeChange={(field, value) => setFormData(prev => ({ ...prev, [field]: value }))}
+              onSpecFeeChange={handleSpecItemChange}
+            />
             <div className="space-y-6">
                 {/* 起购数量 */}
                 <div className="space-y-3">
@@ -832,6 +854,8 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
                 listDesc: formData.listDesc,
                 specItems: formData.specItems,
                 linkedStallIds: formData.linkedStallIds,
+                storePackFee: formData.storePackFee,
+                takePackFee: formData.takePackFee,
               })}
               className={`${hideSecondaryAction ? 'w-full bg-[#00C06B] text-white shadow-lg shadow-green-100 active:bg-[#00A35B] active:scale-[0.98]' : 'flex-1 bg-white border border-gray-200 text-gray-700 active:bg-gray-50 active:scale-95'} h-12 rounded-xl font-bold text-sm transition-all`}
             >
@@ -987,6 +1011,116 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
         />
       )}
     </div>
+  );
+};
+
+type ProductPackFeeField = 'storePackFee' | 'takePackFee';
+
+const PACKAGING_FEE_FIELDS: Array<{ key: ProductPackFeeField; label: string }> = [
+  { key: 'storePackFee', label: '到店外带包装费' },
+  { key: 'takePackFee', label: '外卖配送包装费' },
+];
+
+const PackagingFeeCard = ({
+  level,
+  specType,
+  specItems,
+  storePackFee,
+  takePackFee,
+  onProductFeeChange,
+  onSpecFeeChange,
+}: {
+  level: 'product' | 'spec';
+  specType: 'single' | 'multi';
+  specItems: SpecItemDraft[];
+  storePackFee: string;
+  takePackFee: string;
+  onProductFeeChange: (field: ProductPackFeeField, value: string) => void;
+  onSpecFeeChange: (index: number, field: 'storePackFee' | 'takePackFee', value: string) => void;
+}) => {
+  const renderMoneyInput = (value: string | undefined, onChange: (value: string) => void, label: string) => (
+    <label className="flex min-w-0 items-center rounded-xl border border-[#E7EBF0] bg-white px-3 py-2.5 focus-within:border-[#00C06B] focus-within:ring-2 focus-within:ring-[#00C06B]/10">
+      <span className="mr-2 text-[12px] text-[#98A1B3]">¥</span>
+      <input
+        aria-label={label}
+        type="number"
+        inputMode="decimal"
+        min="0"
+        step="0.01"
+        value={value || ''}
+        onChange={event => onChange(event.target.value.replace(/[^\d.]/g, ''))}
+        placeholder="未设置"
+        className="min-w-0 flex-1 bg-transparent text-right text-[14px] font-bold text-[#1F2129] outline-none placeholder:text-[#C5CBD5]"
+      />
+    </label>
+  );
+
+  return (
+    <section className="rounded-2xl border border-[#DDEFE5] bg-[#F8FCFA] p-4" aria-label="包装费配置">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E5F8EE] text-[#00A35B]"><Box size={16} /></div>
+          <div className="min-w-0">
+            <div className="text-sm font-black text-[#1F2129]">包装费</div>
+            <div className="mt-1 text-[11px] leading-5 text-[#7B8494]">
+              {level === 'product' ? '按商品设置，所有规格共用一组包装费' : '按规格设置，每个 SKU 可使用不同包装费'}
+            </div>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[#00A35B]">
+          {level === 'product' ? '商品级' : '规格级'}
+        </span>
+      </div>
+
+      {level === 'product' ? (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {PACKAGING_FEE_FIELDS.map(field => (
+            <div key={field.key} className="min-w-0">
+              <div className="mb-1.5 truncate text-[11px] font-bold text-[#667085]">{field.label}</div>
+              {renderMoneyInput(field.key === 'storePackFee' ? storePackFee : takePackFee, value => onProductFeeChange(field.key, value), field.label)}
+            </div>
+          ))}
+        </div>
+      ) : specType === 'multi' && specItems.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {specItems.map((item, index) => (
+            <div key={`${item.name}-${index}`} className="rounded-xl border border-[#E7EBF0] bg-white p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[13px] font-black text-[#1F2129]">{item.name || `规格 ${index + 1}`}</span>
+                <span className="shrink-0 text-[10px] text-[#98A1B3]">SKU 包装费</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {PACKAGING_FEE_FIELDS.map(field => (
+                  <div key={field.key} className="min-w-0">
+                    <div className="mb-1 truncate text-[10px] text-[#98A1B3]">{field.label.replace('包装费', '')}</div>
+                    {renderMoneyInput(item[field.key], value => onSpecFeeChange(index, field.key, value), `${item.name || `规格 ${index + 1}`} ${field.label}`)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : specType === 'single' ? (
+        <div className="mt-4 rounded-xl border border-[#E7EBF0] bg-white p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="text-[13px] font-black text-[#1F2129]">统一规格</span>
+            <span className="text-[10px] text-[#98A1B3]">SKU 包装费</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {PACKAGING_FEE_FIELDS.map(field => (
+              <div key={field.key} className="min-w-0">
+                <div className="mb-1 truncate text-[10px] text-[#98A1B3]">{field.label.replace('包装费', '')}</div>
+                {renderMoneyInput(field.key === 'storePackFee' ? storePackFee : takePackFee, value => onProductFeeChange(field.key, value), field.label)}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-dashed border-[#D8E6DE] bg-white px-3 py-3 text-[12px] leading-5 text-[#7B8494]">
+          请先在“商品属性”中完成规格设置，再为每个规格填写包装费。
+        </div>
+      )}
+    </section>
   );
 };
 

@@ -33,12 +33,24 @@ type SpecGroup = {
 type MethodGroup = {
   id: string;
   name: string;
+  alias: string;
+  temperatureEnabled: boolean;
+  description: string;
   remark: string;
   tip: string;
   relationCount: number;
   multi: boolean;
-  optionType: string;
-  values: Array<{ id: string; name: string; code: string }>;
+  optionType: '必选' | '非必选';
+  values: MethodValue[];
+};
+
+type MethodValue = {
+  id: string;
+  name: string;
+  code: string;
+  remark: string;
+  tip: string;
+  printOption: '打印' | '不打印';
 };
 
 type LabelGroup = {
@@ -122,6 +134,19 @@ type SpecEditorState = {
   name: string;
   description: string;
   values: SpecValue[];
+};
+
+type MethodEditorState = {
+  mode: 'create' | 'edit';
+  groupId?: string;
+  name: string;
+  alias: string;
+  temperatureEnabled: boolean;
+  description: string;
+  multi: boolean;
+  optionType: '必选' | '非必选';
+  values: MethodValue[];
+  relationCount: number;
 };
 
 type SpecValueEditorState = {
@@ -243,6 +268,27 @@ const createEmptySpecValue = (): SpecValue => ({
   relatedProducts: [],
 });
 
+const createEmptyMethodValue = (): MethodValue => ({
+  id: `method-value-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: '',
+  code: '',
+  remark: '',
+  tip: '',
+  printOption: '打印',
+});
+
+const createEmptyMethodEditor = (): MethodEditorState => ({
+  mode: 'create',
+  name: '',
+  alias: '',
+  temperatureEnabled: false,
+  description: '',
+  multi: false,
+  optionType: '必选',
+  values: [createEmptyMethodValue()],
+  relationCount: 0,
+});
+
 const createMockCustomComboItem = (index: number = 1): CustomComboItem => ({
   id: `custom-combo-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   name: `随心配商品${index}`,
@@ -287,20 +333,26 @@ const METHOD_GROUPS: MethodGroup[] = [
   {
     id: 'method-1',
     name: '配方做法组A',
+    alias: '咖啡浓度',
+    temperatureEnabled: false,
+    description: '适用于浓度范围 20-60 的特调饮品',
     remark: '',
     tip: '',
     relationCount: 4,
     multi: false,
     optionType: '必选',
     values: [
-      { id: 'mv-1', name: '050811', code: '050811' },
-      { id: 'mv-2', name: '050812', code: '050812' },
-      { id: 'mv-3', name: '050813', code: '050813' },
+      { id: 'mv-1', name: '050811', code: '050811', remark: '', tip: '', printOption: '打印' },
+      { id: 'mv-2', name: '050812', code: '050812', remark: '', tip: '', printOption: '打印' },
+      { id: 'mv-3', name: '050813', code: '050813', remark: '', tip: '', printOption: '打印' },
     ],
   },
   {
     id: 'method-2',
     name: '配方做法组B',
+    alias: '咖啡浓度',
+    temperatureEnabled: false,
+    description: '适用于浓度范围 30-80 的特调饮品',
     remark: '',
     tip: '',
     relationCount: 0,
@@ -311,6 +363,9 @@ const METHOD_GROUPS: MethodGroup[] = [
   {
     id: 'method-3',
     name: '测试做法组',
+    alias: '',
+    temperatureEnabled: false,
+    description: '',
     remark: '',
     tip: '',
     relationCount: 0,
@@ -581,6 +636,9 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   const [specValueEditor, setSpecValueEditor] = useState<SpecValueEditorState | null>(null);
   const [specDeleteDialog, setSpecDeleteDialog] = useState<SpecDeleteDialogState | null>(null);
   const [specProductsViewer, setSpecProductsViewer] = useState<SpecLinkedProductsViewer | null>(null);
+  const [methodGroups, setMethodGroups] = useState<MethodGroup[]>(METHOD_GROUPS);
+  const [methodEditor, setMethodEditor] = useState<MethodEditorState | null>(null);
+  const [methodEditorError, setMethodEditorError] = useState('');
   const [customComboRecords, setCustomComboRecords] = useState<CustomComboRecord[]>(CUSTOM_COMBO_RECORDS);
   const [customComboEditor, setCustomComboEditor] = useState<CustomComboEditorState | null>(null);
   const [expandedSpecGroups, setExpandedSpecGroups] = useState<Set<string>>(
@@ -633,9 +691,15 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   }, [normalizedSpecName, specGroups]);
 
   const filteredMethodGroups = useMemo(() => {
-    if (!normalizedKeyword) return METHOD_GROUPS;
-    return METHOD_GROUPS.filter(group => [group.name, group.optionType, ...group.values.map(value => `${value.name} ${value.code}`)].join(' ').toLowerCase().includes(normalizedKeyword));
-  }, [normalizedKeyword]);
+    if (!normalizedKeyword) return methodGroups;
+    return methodGroups.filter(group => [
+      group.name,
+      group.alias,
+      group.description,
+      group.optionType,
+      ...group.values.map(value => `${value.name} ${value.code} ${value.remark} ${value.tip}`),
+    ].join(' ').toLowerCase().includes(normalizedKeyword));
+  }, [methodGroups, normalizedKeyword]);
 
   const filteredLabelGroups = useMemo(() => {
     const source = labelGroups[activeLabelTab];
@@ -687,7 +751,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   const placeholderMap: Record<AttributeTab, string> = {
     category: '搜索分类名称',
     spec: '搜索规格名称',
-    method: '搜索做法名称',
+    method: '搜索做法名称/别名/做法值',
     label: '搜索标签分组/标签',
     badge: '搜索角标名称',
     series: '搜索系列名称',
@@ -956,6 +1020,82 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
 
   const handleOpenSpecProducts = (title: string, products: LinkedSpecProduct[]) => {
     setSpecProductsViewer({ title, products });
+  };
+
+  const handleOpenCreateMethod = () => {
+    setMethodEditorError('');
+    setMethodEditor(createEmptyMethodEditor());
+  };
+
+  const handleOpenEditMethod = (group: MethodGroup, appendValue = false) => {
+    const values = group.values.map(value => ({ ...value }));
+    if (appendValue) values.push(createEmptyMethodValue());
+    setMethodEditorError('');
+    setMethodEditor({
+      mode: 'edit',
+      groupId: group.id,
+      name: group.name,
+      alias: group.alias,
+      temperatureEnabled: group.temperatureEnabled,
+      description: group.description,
+      multi: group.multi,
+      optionType: group.optionType,
+      values: values.length ? values : [createEmptyMethodValue()],
+      relationCount: group.relationCount,
+    });
+  };
+
+  const handleSaveMethodEditor = () => {
+    if (!methodEditor) return;
+
+    const name = methodEditor.name.trim();
+    const alias = methodEditor.alias.trim();
+    const values = methodEditor.values.map(value => ({
+      ...value,
+      name: value.name.trim(),
+      code: value.code.trim(),
+      remark: value.remark.trim(),
+      tip: value.tip.trim(),
+    }));
+
+    if (!name) {
+      setMethodEditorError('请输入做法名称');
+      return;
+    }
+    if (methodGroups.some(group => group.id !== methodEditor.groupId && group.name === name)) {
+      setMethodEditorError('做法名称已存在，请更换后再保存');
+      return;
+    }
+    if (!values.length || values.some(value => !value.name)) {
+      setMethodEditorError('请至少填写一个完整的做法值');
+      return;
+    }
+
+    const nextGroup: MethodGroup = {
+      id: methodEditor.groupId || `method-${Date.now()}`,
+      name,
+      alias,
+      temperatureEnabled: methodEditor.temperatureEnabled,
+      description: methodEditor.description.trim(),
+      remark: methodGroups.find(group => group.id === methodEditor.groupId)?.remark || '',
+      tip: methodGroups.find(group => group.id === methodEditor.groupId)?.tip || '',
+      relationCount: methodEditor.relationCount,
+      multi: methodEditor.multi,
+      optionType: methodEditor.optionType,
+      values,
+    };
+
+    setMethodGroups(prev => methodEditor.mode === 'edit'
+      ? prev.map(group => group.id === methodEditor.groupId ? nextGroup : group)
+      : [nextGroup, ...prev]);
+    setExpandedMethodGroups(prev => new Set([...prev, nextGroup.id]));
+    setMethodEditor(null);
+    setMethodEditorError('');
+    showActionNotice(methodEditor.mode === 'edit' ? '做法已更新' : '做法已新增');
+  };
+
+  const handleToggleMethodMulti = (group: MethodGroup) => {
+    setMethodGroups(prev => prev.map(item => item.id === group.id ? { ...item, multi: !item.multi } : item));
   };
 
   const handleOpenCreateCustomCombo = () => {
@@ -1295,6 +1435,8 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
               <button
                 onClick={activeTab === 'custom_combo'
                   ? handleOpenCreateCustomCombo
+                  : activeTab === 'method'
+                    ? handleOpenCreateMethod
                   : ['label', 'badge', 'series'].includes(activeTab)
                     ? openPrimaryChannelLibraryEditor
                     : () => showActionNotice(`${buttonLabelMap[activeTab]}编辑器需按现有字段接入；当前不创建伪业务数据`)}
@@ -1325,6 +1467,9 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
               groups={filteredMethodGroups}
               expandedGroupIds={expandedMethodGroups}
               onToggleGroup={(id) => toggleExpanded(setExpandedMethodGroups, id)}
+              onCreateValue={(group) => handleOpenEditMethod(group, true)}
+              onEdit={(group) => handleOpenEditMethod(group)}
+              onToggleMulti={handleToggleMethodMulti}
               onAction={(action, name) => showActionNotice(`${name}：${action}操作已记录；正式保存需接入属性权限与关联商品校验`)}
             />
           )}
@@ -1402,6 +1547,21 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
               onClose={() => setSpecProductsViewer(null)}
             />
           )}
+          {methodEditor && (
+            <MethodEditorModal
+              draft={methodEditor}
+              error={methodEditorError}
+              onChange={(nextDraft) => {
+                setMethodEditor(nextDraft);
+                if (methodEditorError) setMethodEditorError('');
+              }}
+              onCancel={() => {
+                setMethodEditor(null);
+                setMethodEditorError('');
+              }}
+              onConfirm={handleSaveMethodEditor}
+            />
+          )}
           {customComboEditor && (
             <CustomComboEditorModal
               draft={customComboEditor}
@@ -1472,6 +1632,150 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
         </div>
       </div>
     </div>
+  );
+};
+
+const MethodEditorModal = ({
+  draft,
+  error,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  draft: MethodEditorState;
+  error: string;
+  onChange: (draft: MethodEditorState) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const patchDraft = (patch: Partial<MethodEditorState>) => onChange({ ...draft, ...patch });
+  const updateValue = (id: string, patch: Partial<MethodValue>) => {
+    patchDraft({ values: draft.values.map(value => value.id === id ? { ...value, ...patch } : value) });
+  };
+  const removeValue = (id: string) => {
+    const nextValues = draft.values.filter(value => value.id !== id);
+    patchDraft({ values: nextValues.length ? nextValues : [createEmptyMethodValue()] });
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[98] flex items-center justify-center bg-[#111827]/40 p-6" role="dialog" aria-modal="true" aria-labelledby="method-editor-title">
+      <div className="flex max-h-[88vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#EEF0F3] px-7 py-5">
+          <h2 id="method-editor-title" className="text-[18px] font-semibold text-[#1D2129]">{draft.mode === 'create' ? '新增做法' : '编辑做法'}</h2>
+          <button type="button" aria-label="关闭" onClick={onCancel} className="rounded-md p-1.5 text-[#7A8699] hover:bg-[#F2F4F7] hover:text-[#1D2129]"><X size={19} /></button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
+          <div className="space-y-5">
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
+              <label htmlFor="method-name" className="pt-2.5 text-right text-[13px] font-medium text-[#344054]"><span className="mr-1 text-[#E5484D]">*</span>做法名称</label>
+              <div className="max-w-[480px]">
+                <div className="relative">
+                  <input id="method-name" value={draft.name} maxLength={30} onChange={event => patchDraft({ name: event.target.value })} placeholder="请输入做法名称" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 pr-14 text-[13px] outline-none focus:border-[#00B460]" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#98A2B3]">{draft.name.length}/30</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
+              <label htmlFor="method-alias" className="pt-2.5 text-right text-[13px] font-medium text-[#344054]">做法别名</label>
+              <div className="max-w-[480px]">
+                <div className="relative">
+                  <input id="method-alias" value={draft.alias} maxLength={30} onChange={event => patchDraft({ alias: event.target.value })} placeholder="请输入做法别名" className="h-10 w-full rounded-md border border-[#D9DDE3] px-3 pr-14 text-[13px] outline-none focus:border-[#00B460]" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#98A2B3]">{draft.alias.length}/30</span>
+                </div>
+                <p className="mt-1.5 text-[12px] leading-5 text-[#98A2B3]">三方定制对接场景使用，无对接需求可不填</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+              <div className="text-right text-[13px] font-medium text-[#344054]">温度属性</div>
+              <div className="flex items-center gap-3">
+                <button type="button" role="switch" aria-checked={draft.temperatureEnabled} onClick={() => patchDraft({ temperatureEnabled: !draft.temperatureEnabled })} className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${draft.temperatureEnabled ? 'border-[#00B460] bg-[#00B460]' : 'border-[#D9DDE3] bg-[#EAECF0]'}`}>
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${draft.temperatureEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-[12px] leading-5 text-[#98A2B3]">若设置温度属性，可设置温度区间，根据当时温度自动排序冷、热的显示位置</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
+              <div className="pt-3 text-right text-[13px] font-medium text-[#344054]"><span className="mr-1 text-[#E5484D]">*</span>做法值</div>
+              <div className="min-w-0">
+                <div className="overflow-x-auto border-y border-[#EEF0F3]">
+                  <div className="grid min-w-[850px] grid-cols-[1.15fr_1fr_0.9fr_0.9fr_0.9fr_64px] gap-3 bg-[#F7F8FA] px-3 py-3 text-[12px] font-semibold text-[#4E5969]">
+                    <div>做法值</div>
+                    <div>做法标识码</div>
+                    <div>备注</div>
+                    <div>温馨提示</div>
+                    <div>是否打印</div>
+                    <div className="text-center">操作</div>
+                  </div>
+                  <div className="min-w-[850px] divide-y divide-[#EEF0F3]">
+                    {draft.values.map(value => (
+                      <div key={value.id} className="grid grid-cols-[1.15fr_1fr_0.9fr_0.9fr_0.9fr_64px] items-center gap-3 px-3 py-3">
+                        <div className="relative">
+                          <input value={value.name} maxLength={30} onChange={event => updateValue(value.id, { name: event.target.value })} placeholder="请输入做法值" className="h-9 w-full rounded-md border border-[#D9DDE3] px-3 pr-10 text-[13px] outline-none focus:border-[#00B460]" />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#98A2B3]">{value.name.length}/30</span>
+                        </div>
+                        <input value={value.code} onChange={event => updateValue(value.id, { code: event.target.value })} placeholder="做法标识码" className="h-9 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" />
+                        <input value={value.remark} onChange={event => updateValue(value.id, { remark: event.target.value })} placeholder="备注" className="h-9 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" />
+                        <input value={value.tip} onChange={event => updateValue(value.id, { tip: event.target.value })} placeholder="温馨提示" className="h-9 w-full rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" />
+                        <select value={value.printOption} onChange={event => updateValue(value.id, { printOption: event.target.value as MethodValue['printOption'] })} className="h-9 w-full rounded-md border border-[#D9DDE3] bg-white px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
+                          <option value="打印">打印</option>
+                          <option value="不打印">不打印</option>
+                        </select>
+                        <button type="button" onClick={() => removeValue(value.id)} className="text-[13px] text-[#E5484D] hover:text-[#C93C41]">删除</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button type="button" onClick={() => patchDraft({ values: [...draft.values, createEmptyMethodValue()] })} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#D9DDE3] bg-white px-3 text-[13px] font-medium text-[#4E5969] hover:border-[#00B460] hover:text-[#00B460]"><Plus size={15} />添加做法值</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4">
+              <label htmlFor="method-description" className="pt-2.5 text-right text-[13px] font-medium text-[#344054]">做法描述</label>
+              <div className="flex max-w-[620px] items-start gap-3">
+                <input id="method-description" value={draft.description} onChange={event => patchDraft({ description: event.target.value })} placeholder="请输入做法描述" className="h-10 min-w-0 flex-1 rounded-md border border-[#D9DDE3] px-3 text-[13px] outline-none focus:border-[#00B460]" />
+                <details className="relative pt-2">
+                  <summary className="cursor-pointer list-none whitespace-nowrap text-[13px] font-medium text-[#00B460]">查看示例</summary>
+                  <div className="absolute right-0 top-9 z-10 w-[280px] rounded-md border border-[#E5E7EB] bg-white p-3 text-[12px] leading-5 text-[#667085] shadow-lg">例如：用于特调咖啡浓度选择，支持 20%-60% 的做法值。</div>
+                </details>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+              <div className="text-right text-[13px] font-medium text-[#344054]">做法值多选</div>
+              <button type="button" role="switch" aria-checked={draft.multi} onClick={() => patchDraft({ multi: !draft.multi })} className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${draft.multi ? 'border-[#00B460] bg-[#00B460]' : 'border-[#D9DDE3] bg-[#EAECF0]'}`}>
+                <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${draft.multi ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-4">
+              <div className="text-right text-[13px] font-medium text-[#344054]">做法选项</div>
+              <div className="flex items-center gap-8">
+                {(['必选', '非必选'] as const).map(option => (
+                  <label key={option} className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#4E5969]">
+                    <input type="radio" name="method-option-type" checked={draft.optionType === option} onChange={() => patchDraft({ optionType: option })} className="h-4 w-4 accent-[#00B460]" />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {error && <div className="ml-[128px] rounded-md border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[12px] text-[#B42318]">{error}</div>}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-[#EEF0F3] bg-[#FAFBFC] px-7 py-4">
+          <button type="button" onClick={onCancel} className="rounded-md border border-[#D9DDE3] bg-white px-5 py-2 text-[13px] font-medium text-[#4E5969] hover:bg-[#F7F8FA]">取消</button>
+          <button type="button" onClick={onConfirm} className="rounded-md bg-[#00B460] px-5 py-2 text-[13px] font-semibold text-white hover:bg-[#009D54]">确定</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -2082,19 +2386,26 @@ const MethodTable = ({
   groups,
   expandedGroupIds,
   onToggleGroup,
+  onCreateValue,
+  onEdit,
+  onToggleMulti,
   onAction,
 }: {
   groups: MethodGroup[];
   expandedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
+  onCreateValue: (group: MethodGroup) => void;
+  onEdit: (group: MethodGroup) => void;
+  onToggleMulti: (group: MethodGroup) => void;
   onAction: (action: string, name: string) => void;
 }) => (
   <div className="overflow-auto">
-    <table className="w-full min-w-[1100px] border-collapse text-left">
+    <table className="w-full min-w-[1460px] border-collapse text-left">
       <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
         <tr>
-          <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">做法名称</th>
-          <th className="w-[160px] border-b border-[#E8E8E8] px-4 py-4">做法值</th>
+          <th className="w-[200px] border-b border-[#E8E8E8] px-4 py-4">做法名称</th>
+          <th className="w-[160px] border-b border-[#E8E8E8] px-4 py-4">做法别名</th>
+          <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">做法值</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">做法标识码</th>
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">备注</th>
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">温馨提示</th>
@@ -2116,33 +2427,42 @@ const MethodTable = ({
                   onClick={() => onToggleGroup(group.id)}
                 />
               </td>
+              <td className="px-4 py-4 text-[#666]">{group.alias || '--'}</td>
               <td className="px-4 py-4 text-[#999]"></td>
               <td className="px-4 py-4 text-[#999]"></td>
               <td className="px-4 py-4 text-[#666]">{group.remark || '-'}</td>
               <td className="px-4 py-4 text-[#666]">{group.tip || '-'}</td>
               <td className="px-4 py-4 text-[#00C06B]">{group.relationCount || '-'}</td>
               <td className="px-4 py-4">
-                <button onClick={() => onAction(group.multi ? '关闭做法值多选' : '开启做法值多选', group.name)} className={`relative inline-flex h-6 w-11 items-center rounded-full border ${group.multi ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
+                <button type="button" aria-label={group.multi ? '关闭做法值多选' : '开启做法值多选'} onClick={() => onToggleMulti(group)} className={`relative inline-flex h-6 w-11 items-center rounded-full border ${group.multi ? 'border-[#0FBE6C] bg-[#0FBE6C]' : 'border-[#E5E7EB] bg-[#F3F4F6]'}`}>
                   <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm ${group.multi ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </td>
               <td className="px-4 py-4 text-[#666]">{group.optionType}</td>
               <td className="px-4 py-4 text-right">
-                <ActionButtons actions={['新增做法值', '编辑', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => onAction(label, group.name) }))} />
+                <ActionButtons actions={[
+                  { label: '新增做法值', onClick: () => onCreateValue(group) },
+                  { label: '编辑', onClick: () => onEdit(group) },
+                  { label: '删除', danger: true, onClick: () => onAction('删除', group.name) },
+                ]} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.values.map(value => (
               <tr key={value.id} className="border-b border-[#F7F7F7] bg-[#FCFCFC]">
                 <td className="px-4 py-4 text-[#666]"><TreeChildName /></td>
+                <td className="px-4 py-4 text-[#999]"></td>
                 <td className="px-4 py-4 text-[#666]">{value.name}</td>
                 <td className="px-4 py-4 text-[#666]">{value.code}</td>
-                <td className="px-4 py-4 text-[#666]"></td>
-                <td className="px-4 py-4 text-[#666]"></td>
+                <td className="px-4 py-4 text-[#666]">{value.remark || '--'}</td>
+                <td className="px-4 py-4 text-[#666]">{value.tip || '--'}</td>
                 <td className="px-4 py-4 text-[#00C06B]">{group.relationCount ? Math.max(1, group.relationCount - 1) : '-'}</td>
                 <td className="px-4 py-4"></td>
                 <td className="px-4 py-4"></td>
                 <td className="px-4 py-4 text-right">
-                  <ActionButtons actions={['编辑', '关联商品', '解除关联'].map(label => ({ label, danger: label === '解除关联', onClick: () => onAction(label, `${group.name}/${value.name}`) }))} />
+                  <ActionButtons actions={[
+                    { label: '编辑', onClick: () => onEdit(group) },
+                    ...['关联商品', '解除关联'].map(label => ({ label, danger: label === '解除关联', onClick: () => onAction(label, `${group.name}/${value.name}`) })),
+                  ]} />
                 </td>
               </tr>
             ))}

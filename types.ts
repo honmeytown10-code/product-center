@@ -82,6 +82,8 @@ export interface OmnichannelBrandConfig {
 
 export interface BrandConfig {
   policyId: string;
+  /** 商品设置中的包装费配置粒度。 */
+  packageFeeSetting?: 'product' | 'spec';
   customPolicy?: ManagementPolicy;
   features: {
     stock_shared: boolean;
@@ -377,7 +379,11 @@ export interface Product {
   // 新增多规格支持
   isMultiSpec?: boolean;
   stock?: number; // 单规格库存，-1表示无限(9999)
-  specs?: { name: string; stock: number; price?: number; unlimited?: boolean }[];
+  /** 商品级包装费（商品设置为商品级时使用）。 */
+  storePackFee?: number;
+  takePackFee?: number;
+  /** 规格级包装费（商品设置为规格级时使用）。 */
+  specs?: { name: string; stock: number; price?: number; unlimited?: boolean; storePackFee?: number; takePackFee?: number }[];
   timeSales?: TimeSalesConfig | null;
   linkedStallIds?: string[];
   comboItemIds?: string[];

@@ -75,6 +75,7 @@ export const MobileApp: React.FC = () => {
   const currentConfig = brandConfigs[activeBrandId] || brandConfigs['b_1'];
   const isStockShared = currentConfig?.features.stock_shared ?? true;
   const isShelvesUnited = currentConfig?.features.shelves_unite ?? true;
+  const packageFeeLevel = currentConfig?.packageFeeSetting ?? 'product';
 
   const handleSwitchOrg = (node: OrgNode) => {
       setActiveOrg(node);
@@ -371,6 +372,7 @@ export const MobileApp: React.FC = () => {
                 badges={storeBadges}
                 onLabelGroupsChange={setStoreLabelGroups}
                 onBadgesChange={setStoreBadges}
+                packageFeeLevel={packageFeeLevel}
               />
             );
           case 'product_edit':
@@ -384,6 +386,7 @@ export const MobileApp: React.FC = () => {
                 badges={storeBadges}
                 onLabelGroupsChange={setStoreLabelGroups}
                 onBadgesChange={setStoreBadges}
+                packageFeeLevel={packageFeeLevel}
                 onSave={(updates, options) => {
                   if (editingProduct?.product?.id) {
                     updateProduct(editingProduct.product.id, updates);
@@ -443,7 +446,7 @@ export const MobileApp: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full bg-[#F5F6FA] flex flex-col font-sans text-gray-800 relative">
+    <div className="mobile-app-shell w-full h-full bg-[#F5F6FA] flex flex-col font-sans text-gray-800 relative">
       {/* Content Render */}
       {renderContent()}
 

@@ -4,7 +4,7 @@ import { Printer, Coffee, ShoppingBag, Store, LayoutGrid, Link2Off, Lock } from 
 
 // --- Constants ---
 
-export type ChannelTabType = 'pos' | 'mini_dine' | 'mini_pickup' | 'mini_take' | 'meituan' | 'taobao';
+export type ChannelTabType = 'pos' | 'mini_dine' | 'mini_pickup' | 'mini_take' | 'meituan' | 'taobao' | 'meituan_dine' | 'douyin_dine';
 export type ChannelType = 'all' | ChannelTabType;
 
 export const CHANNEL_TABS: { id: ChannelTabType; label: string; icon: React.ReactNode }[] = [
@@ -13,7 +13,9 @@ export const CHANNEL_TABS: { id: ChannelTabType; label: string; icon: React.Reac
    { id: 'mini_pickup', label: '小程序自提', icon: <ShoppingBag size={14} className="mr-1"/> },
    { id: 'mini_take', label: '小程序外卖', icon: <ShoppingBag size={14} className="mr-1"/> },
    { id: 'meituan', label: '美团外卖', icon: <Store size={14} className="mr-1"/> },
-   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={14} className="mr-1"/> }
+   { id: 'taobao', label: '淘宝闪购', icon: <ShoppingBag size={14} className="mr-1"/> },
+   { id: 'meituan_dine', label: '美团在线点', icon: <Store size={14} className="mr-1"/> },
+   { id: 'douyin_dine', label: '抖音在线点', icon: <Store size={14} className="mr-1"/> }
 ];
 
 export const FILTER_CHANNEL_OPTIONS: { id: ChannelType; label: string; shortLabel: string; icon?: React.ReactNode }[] = [
@@ -23,7 +25,9 @@ export const FILTER_CHANNEL_OPTIONS: { id: ChannelType; label: string; shortLabe
    { id: 'mini_pickup', label: '小程序自提', shortLabel: '自提', icon: <ShoppingBag size={14}/> },
    { id: 'mini_take', label: '小程序外卖', shortLabel: '外卖', icon: <ShoppingBag size={14}/> },
    { id: 'meituan', label: '美团外卖', shortLabel: '美团', icon: <Store size={14}/> },
-   { id: 'taobao', label: '淘宝闪购', shortLabel: '淘宝闪购', icon: <ShoppingBag size={14}/> }
+   { id: 'taobao', label: '淘宝闪购', shortLabel: '淘宝闪购', icon: <ShoppingBag size={14}/> },
+   { id: 'meituan_dine', label: '美团在线点', shortLabel: '美团在线点', icon: <Store size={14}/> },
+   { id: 'douyin_dine', label: '抖音在线点', shortLabel: '抖音在线点', icon: <Store size={14}/> }
 ];
 
 export const SHELF_VIEW_TABS: { id: ChannelType; label: string; icon: React.ReactNode }[] = [
@@ -43,17 +47,21 @@ export const NumpadInput: React.FC<{
 }> = ({ label, value, active, onFocus, placeholder, large }) => (
    <div 
       onClick={onFocus}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onFocus(); } }}
       className={`
-         relative rounded-2xl border-2 transition-all cursor-pointer bg-white group hover:border-[#00C06B]/50
-         ${active ? 'border-[#00C06B] ring-4 ring-[#00C06B]/10 z-10' : 'border-gray-200'}
+         relative rounded-2xl border-2 transition-all cursor-pointer bg-white group hover:border-[#3478F6]/50
+         ${active ? 'border-[#3478F6] ring-4 ring-[#3478F6]/10 z-10' : 'border-gray-200'}
          ${large ? 'p-6' : 'p-4'}
       `}
    >
-      <div className={`text-xs font-bold uppercase mb-1 transition-colors ${active ? 'text-[#00C06B]' : 'text-gray-400'}`}>{label}</div>
+      <div className={`text-xs font-bold uppercase mb-1 transition-colors ${active ? 'text-[#3478F6]' : 'text-gray-400'}`}>{label}</div>
       <div className={`font-mono font-black text-gray-800 ${large ? 'text-4xl' : 'text-2xl'} ${!value ? 'text-gray-300' : ''}`}>
          {value || placeholder || '0'}
       </div>
-      {active && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#00C06B] animate-pulse rounded-full"></div>}
+      {active && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#3478F6] animate-pulse rounded-full"></div>}
    </div>
 );
 

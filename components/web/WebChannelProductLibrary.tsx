@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Boxes,
+  ChevronRight,
   ChevronUp,
   ChevronDown,
   Download,
@@ -9,6 +11,7 @@ import {
   PanelLeftOpen,
   Plus,
   RefreshCw,
+  Send,
   Search,
   Trash2,
   Upload,
@@ -23,15 +26,35 @@ import {
   isThirdPartyChannelId,
 } from '../../omnichannel';
 import type { OmnichannelChannelId, Product, ThirdPartyChannelId } from '../../types';
+import {
+  WebOnlineOrderingPlatformHub,
+  type OnlineOrderingPlatform,
+  type OnlineOrderingPlatformView,
+} from './WebOnlineOrderingPlatformHub';
 import { WebProductSelectorDialog } from './WebProductSelectorDialog';
 
-type PlatformStatus = 'reviewing' | 'approved' | 'rejected';
+type PlatformStatus = 'not_synced' | 'initial_reviewing' | 'initial_rejected' | 'effective' | 'update_reviewing' | 'update_rejected';
+type DouyinProductView = 'all' | 'douyin';
+
+type PlatformAuditRecord = {
+  id: string;
+  version: number;
+  submitType: 'initial' | 'update';
+  status: 'reviewing' | 'approved' | 'rejected';
+  submittedAt: string;
+  completedAt?: string;
+  operator: string;
+  changedFields: string[];
+  rejectReason?: string;
+  effective: boolean;
+};
 
 const DEFAULT_FILTERS = {
   productId: '',
   skuId: '',
   frontendCategory: 'all',
   productType: 'all',
+  platformStatus: 'all',
 };
 
 const getFrontendCategoryName = (product: Product) => {
@@ -59,17 +82,114 @@ const getSaleStatus = (product: Product) => {
   if (product.status === 'off_shelf') {
     return { label: '停售', className: 'border-gray-200 bg-gray-50 text-gray-500' };
   }
-  if (product.status === 'draft') {
-    return { label: '草稿', className: 'border-amber-200 bg-amber-50 text-amber-700' };
-  }
   return { label: '可售', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
 };
 
-const STATUS_META: Record<PlatformStatus, { label: string; className: string }> = {
-  reviewing: { label: '审核中', className: 'border-blue-200 bg-blue-50 text-blue-700' },
-  approved: { label: '审核通过', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-  rejected: { label: '审核失败', className: 'border-red-200 bg-red-50 text-red-700' },
+const STATUS_META: Record<PlatformStatus, {
+  filterLabel: string;
+  primaryLabel: string;
+  primaryClassName: string;
+  changeLabel?: string;
+  changeClassName?: string;
+}> = {
+  not_synced: {
+    filterLabel: '未同步',
+    primaryLabel: '未同步',
+    primaryClassName: 'border-gray-200 bg-white text-gray-500',
+  },
+  initial_reviewing: {
+    filterLabel: '首次审核中',
+    primaryLabel: '未生效',
+    primaryClassName: 'border-gray-200 bg-gray-50 text-gray-600',
+    changeLabel: '首次审核中',
+    changeClassName: 'text-blue-600',
+  },
+  initial_rejected: {
+    filterLabel: '首次审核失败',
+    primaryLabel: '未生效',
+    primaryClassName: 'border-gray-200 bg-gray-50 text-gray-600',
+    changeLabel: '首次审核失败',
+    changeClassName: 'text-red-600',
+  },
+  effective: {
+    filterLabel: '已生效',
+    primaryLabel: '已生效',
+    primaryClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  update_reviewing: {
+    filterLabel: '更新审核中',
+    primaryLabel: '已生效',
+    primaryClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    changeLabel: '更新审核中',
+    changeClassName: 'text-blue-600',
+  },
+  update_rejected: {
+    filterLabel: '更新审核失败',
+    primaryLabel: '已生效',
+    primaryClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    changeLabel: '更新审核失败',
+    changeClassName: 'text-red-600',
+  },
 };
+
+const isPlatformReviewing = (status: PlatformStatus | null) => (
+  status === 'initial_reviewing' || status === 'update_reviewing'
+);
+
+const hasEffectivePlatformVersion = (status: PlatformStatus | null) => (
+  status === 'effective' || status === 'update_reviewing' || status === 'update_rejected'
+);
+
+const createDefaultAuditRecords = (productId: string, status: PlatformStatus): PlatformAuditRecord[] => {
+  const approvedRecord: PlatformAuditRecord = {
+    id: `${productId}-v1`,
+    version: 1,
+    submitType: 'initial',
+    status: 'approved',
+    submittedAt: '2026-08-16 10:24',
+    completedAt: '2026-08-16 11:08',
+    operator: '张晓明',
+    changedFields: ['商品名称', '商品主图', '抖音商品分类', '规格信息'],
+    effective: true,
+  };
+  if (status === 'not_synced') return [];
+  if (status === 'initial_reviewing') {
+    return [{ ...approvedRecord, status: 'reviewing', completedAt: undefined, effective: false }];
+  }
+  if (status === 'initial_rejected') {
+    return [{
+      ...approvedRecord,
+      status: 'rejected',
+      completedAt: '2026-08-16 11:02',
+      rejectReason: '商品图片包含平台不支持的营销文字，请修改后重新提交。',
+      effective: false,
+    }];
+  }
+  if (status === 'effective') return [approvedRecord];
+
+  const updateRecord: PlatformAuditRecord = {
+    id: `${productId}-v2`,
+    version: 2,
+    submitType: 'update',
+    status: status === 'update_reviewing' ? 'reviewing' : 'rejected',
+    submittedAt: '2026-08-19 15:22',
+    completedAt: status === 'update_rejected' ? '2026-08-19 16:10' : undefined,
+    operator: '李强',
+    changedFields: ['商品名称', '商品主图', '商品描述'],
+    rejectReason: status === 'update_rejected' ? '商品描述中包含绝对化宣传用语，当前生效版本未受影响。' : undefined,
+    effective: false,
+  };
+  return [updateRecord, approvedRecord];
+};
+
+const getDouyinCategory = (product: Product) => {
+  if (product.type === 'combo') return '餐饮 / 套餐组合';
+  if (product.category === '现制饮品') return '餐饮 / 饮品 / 茶饮咖啡';
+  if (product.category === '烘焙甜品') return '餐饮 / 烘焙甜品';
+  return `餐饮 / ${product.category || '其他餐饮'}`;
+};
+
+const getDouyinProductId = (productId: string) => `DY${String(productId).padStart(10, '0')}`;
 
 const getStatusKey = (groupId: string, productId: string, channelId: ThirdPartyChannelId) => `${groupId}:${productId}:${channelId}`;
 const getChannelProductKey = (groupId: string, productId: string) => `${groupId}:${productId}`;
@@ -115,6 +235,7 @@ interface Props {
   onSyncFromMaster?: (request: ChannelProductsSyncRequest) => void;
   onCreateProduct?: (request: ChannelProductCreateRequest) => void;
   onBatchEdit?: (catalogId: string) => void;
+  onOpenSyncRecords?: () => void;
   productOverrides?: Record<string, any>;
   initialGroupId?: string;
 }
@@ -125,6 +246,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   onSyncFromMaster,
   onCreateProduct,
   onBatchEdit,
+  onOpenSyncRecords,
   productOverrides = {},
   initialGroupId,
 }) => {
@@ -169,14 +291,28 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     )))
   ));
   const [platformStatuses, setPlatformStatuses] = useState<Record<string, PlatformStatus>>({});
+  const [platformAuditOverrides, setPlatformAuditOverrides] = useState<Record<string, PlatformAuditRecord[]>>({});
+  const [auditProductId, setAuditProductId] = useState<string | null>(null);
+  const [douyinProductView, setDouyinProductView] = useState<DouyinProductView>('all');
+  const [syncDialogProductIds, setSyncDialogProductIds] = useState<string[]>([]);
+  const [platformSyncTargets, setPlatformSyncTargets] = useState<OnlineOrderingPlatform[]>([]);
+  const [showPlatformSyncDialog, setShowPlatformSyncDialog] = useState(false);
+  const [showPlatformProductPicker, setShowPlatformProductPicker] = useState(false);
+  const [pendingPlatformSyncIds, setPendingPlatformSyncIds] = useState<string[]>([]);
+  const [platformProductIds, setPlatformProductIds] = useState<Record<string, string[]>>({});
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
+  const [showPlatformMenu, setShowPlatformMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [importFileName, setImportFileName] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
   const [showSortDialog, setShowSortDialog] = useState(false);
   const [sortDraftProductIds, setSortDraftProductIds] = useState<string[]>([]);
   const [categoryProductOrders, setCategoryProductOrders] = useState<Record<string, string[]>>({});
+  const [platformWorkspace, setPlatformWorkspace] = useState<{
+    platform: OnlineOrderingPlatform;
+    view: OnlineOrderingPlatformView;
+  } | null>(null);
 
   useEffect(() => {
     if (initialGroupId && availableGroups.some(group => group.id === initialGroupId)) {
@@ -186,6 +322,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   useEffect(() => {
     setSelectedProductIds([]);
+    setShowPlatformMenu(false);
   }, [activeGroupId]);
 
   useEffect(() => {
@@ -236,6 +373,8 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   const activeGroup = availableGroups.find(group => group.id === activeGroupId) || availableGroups[0];
   const activeProductIds = activeGroup ? (groupProductIds[activeGroup.id] || []) : [];
+  const hasDouyinOnlineOrdering = activeGroup?.channels.includes('douyin') || false;
+  const hasMeituanOnlineOrdering = activeGroup?.channels.includes('meituan_dine') || false;
   const effectiveProducts = useMemo(() => products.map(product => {
     const productKey = activeGroup ? getChannelProductKey(activeGroup.id, product.id) : '';
     const snapshot = channelProductSnapshots[productKey] || createChannelProductSnapshot(product);
@@ -287,16 +426,6 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       if (secondIndex === -1) return -1;
       return firstIndex - secondIndex;
     });
-  const allVisibleSelected = visibleProducts.length > 0
-    && visibleProducts.every(product => selectedProductIds.includes(product.id));
-
-  const toggleVisibleSelection = () => {
-    const visibleIds = visibleProducts.map(product => product.id);
-    setSelectedProductIds(current => allVisibleSelected
-      ? current.filter(id => !visibleIds.includes(id))
-      : Array.from(new Set([...current, ...visibleIds])));
-  };
-
   const toggleProductSelection = (productId: string) => {
     setSelectedProductIds(current => current.includes(productId)
       ? current.filter(id => id !== productId)
@@ -316,8 +445,14 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const thirdPartyChannelIds = activeGroup?.channels.filter(isThirdPartyChannelId) || [];
 
   const getDefaultPlatformStatus = (productId: string): PlatformStatus => {
+    const representativeStatuses: Record<string, PlatformStatus> = {
+      '2': 'effective',
+      '3': 'update_reviewing',
+      '10': 'update_rejected',
+    };
+    if (representativeStatuses[productId]) return representativeStatuses[productId];
     const productIndex = Math.max(products.findIndex(product => product.id === productId), 0);
-    return (['approved', 'rejected', 'reviewing', 'approved'] as PlatformStatus[])[productIndex % 4];
+    return (['not_synced', 'initial_reviewing', 'initial_rejected', 'effective', 'update_reviewing', 'update_rejected'] as PlatformStatus[])[productIndex % 6];
   };
 
   const getPlatformStatus = (productId: string) => (
@@ -326,12 +461,147 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       : null
   );
 
-  const submitPlatformProduct = (productId: string) => {
-    if (!reviewChannel) return;
-    setPlatformStatuses(prev => ({
-      ...prev,
-      [getStatusKey(activeGroup.id, productId, reviewChannel.id)]: 'reviewing',
+  const getPlatformAuditRecords = (productId: string) => {
+    if (!reviewChannel) return [];
+    const key = getStatusKey(activeGroup.id, productId, reviewChannel.id);
+    return platformAuditOverrides[key]
+      || createDefaultAuditRecords(productId, getPlatformStatus(productId) as PlatformStatus);
+  };
+
+  const renderPlatformStatus = (productId: string) => {
+    const status = getPlatformStatus(productId) as PlatformStatus;
+    const meta = STATUS_META[status];
+    const hasRecords = getPlatformAuditRecords(productId).length > 0;
+    return (
+      <button
+        type="button"
+        onClick={() => hasRecords && setAuditProductId(productId)}
+        className={`text-left ${hasRecords ? 'cursor-pointer' : 'cursor-default'}`}
+        title={hasRecords ? '查看平台审核记录' : '尚未提交平台审核'}
+      >
+        <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.primaryClassName}`}>{meta.primaryLabel}</span>
+        {meta.changeLabel && <div className={`mt-1.5 text-[11px] font-medium leading-4 ${meta.changeClassName}`}>{meta.changeLabel}</div>}
+        {(status === 'initial_rejected' || status === 'update_rejected') && <div className="mt-1 text-[10px] leading-4 text-red-500">点击查看失败原因</div>}
+      </button>
+    );
+  };
+
+  const activeDouyinProductIds = reviewChannel
+    ? activeProductIds.filter(productId => getPlatformStatus(productId) !== 'not_synced')
+    : [];
+
+  const displayedProducts = visibleProducts;
+
+  const getPlatformWorkspaceKey = (platform: OnlineOrderingPlatform) => `${activeGroup.id}:${platform}`;
+
+  const getGeneratedPlatformProductIds = (platform: OnlineOrderingPlatform) => {
+    const generatedIds = platformProductIds[getPlatformWorkspaceKey(platform)] || activeProductIds.slice(0, 3);
+    return platform === 'meituan'
+      ? generatedIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : generatedIds;
+  };
+
+  const getPlatformSyncEligibility = (platform: OnlineOrderingPlatform, productIds: string[]) => {
+    const supportedIds = platform === 'meituan'
+      ? productIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : productIds;
+    const eligibleIds = platform === 'douyin' && reviewChannel
+      ? supportedIds.filter(productId => !isPlatformReviewing(getPlatformStatus(productId) as PlatformStatus))
+      : supportedIds;
+    return {
+      eligibleIds,
+      excludedCount: productIds.length - eligibleIds.length,
+    };
+  };
+
+  const getAvailablePlatformTargets = () => ([
+    ...(hasDouyinOnlineOrdering ? ['douyin' as OnlineOrderingPlatform] : []),
+    ...(hasMeituanOnlineOrdering ? ['meituan' as OnlineOrderingPlatform] : []),
+  ]);
+
+  const openPlatformProductPicker = () => {
+    setPendingPlatformSyncIds([]);
+    setShowPlatformProductPicker(true);
+  };
+
+  const openPlatformSyncDialog = (productIds: string[]) => {
+    if (productIds.length === 0) {
+      openPlatformProductPicker();
+      return;
+    }
+    const availableTargets = getAvailablePlatformTargets();
+    const defaultTargets = availableTargets.filter(platform => (
+      getPlatformSyncEligibility(platform, productIds).eligibleIds.length > 0
+    ));
+    if (defaultTargets.length === 0) {
+      setOperationMessage('所选商品暂无可同步的平台，请查看各平台的排除原因后调整商品范围。');
+      return;
+    }
+    setSyncDialogProductIds(productIds);
+    setPlatformSyncTargets(defaultTargets);
+    setShowPlatformSyncDialog(true);
+  };
+
+  const submitPlatformSync = (platform: OnlineOrderingPlatform, productIds: string[]) => {
+    const syncableProductIds = platform === 'meituan'
+      ? productIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : productIds;
+    if (syncableProductIds.length === 0) return;
+    if (platform === 'douyin' && reviewChannel) {
+      const submittedAt = '2026-08-20 14:30';
+      setPlatformAuditOverrides(prev => {
+        const next = { ...prev };
+        syncableProductIds.forEach(productId => {
+          const key = getStatusKey(activeGroup.id, productId, reviewChannel.id);
+          const currentStatus = getPlatformStatus(productId) as PlatformStatus;
+          const existingRecords = prev[key] || createDefaultAuditRecords(productId, currentStatus);
+          const nextVersion = Math.max(0, ...existingRecords.map(record => record.version)) + 1;
+          next[key] = [{
+            id: `${productId}-v${nextVersion}`,
+            version: nextVersion,
+            submitType: hasEffectivePlatformVersion(currentStatus) ? 'update' : 'initial',
+            status: 'reviewing',
+            submittedAt,
+            operator: '企迈静静',
+            changedFields: hasEffectivePlatformVersion(currentStatus)
+              ? ['商品名称', '商品主图', '商品描述']
+              : ['商品名称', '商品主图', '抖音商品分类', '规格信息'],
+            effective: false,
+          }, ...existingRecords];
+        });
+        return next;
+      });
+      setPlatformStatuses(prev => ({
+        ...prev,
+        ...Object.fromEntries(syncableProductIds.map(productId => [
+          getStatusKey(activeGroup.id, productId, reviewChannel.id),
+          (hasEffectivePlatformVersion(getPlatformStatus(productId) as PlatformStatus)
+            ? 'update_reviewing'
+            : 'initial_reviewing') as PlatformStatus,
+        ])),
+      }));
+    }
+    const workspaceKey = getPlatformWorkspaceKey(platform);
+    setPlatformProductIds(current => ({
+      ...current,
+      [workspaceKey]: Array.from(new Set([
+        ...(current[workspaceKey] || getGeneratedPlatformProductIds(platform)),
+        ...syncableProductIds,
+      ])),
     }));
+  };
+
+  const confirmPlatformSync = () => {
+    if (platformSyncTargets.length === 0) return;
+    const taskSummaries = platformSyncTargets.map(platform => {
+      const { eligibleIds } = getPlatformSyncEligibility(platform, syncDialogProductIds);
+      submitPlatformSync(platform, eligibleIds);
+      return `${platform === 'douyin' ? '抖音在线点' : '美团在线点'} ${eligibleIds.length} 个`;
+    });
+    setShowPlatformSyncDialog(false);
+    setPlatformSyncTargets([]);
+    setSelectedProductIds([]);
+    setOperationMessage(`已创建 ${taskSummaries.length} 个平台同步子任务（${taskSummaries.join('、')}），各平台独立执行，可在发布中心「同步记录」查看进度。`);
   };
 
   const openProductScopeEditor = () => {
@@ -403,7 +673,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     if (reviewChannel) {
       setPlatformStatuses(prev => ({
         ...prev,
-        ...Object.fromEntries(addedProductIds.map(productId => [getStatusKey(activeGroup.id, productId, reviewChannel.id), 'reviewing' as PlatformStatus])),
+        ...Object.fromEntries(addedProductIds.map(productId => [getStatusKey(activeGroup.id, productId, reviewChannel.id), 'not_synced' as PlatformStatus])),
       }));
     }
     setGroupProductIds(prev => ({ ...prev, [activeGroup.id]: nextProductIds }));
@@ -472,7 +742,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
   const exportChannelProducts = () => {
     const header = ['商品ID', '商品主档SKUID', '渠道商品名称', '商品类型', '前台分类', '基础价格', '售卖状态'];
-    const rows = visibleProducts.map(product => [
+    const rows = displayedProducts.map(product => [
       product.id,
       product.skuCode,
       product.name,
@@ -490,7 +760,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     link.download = `${activeGroup.name}-渠道商品.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    setOperationMessage(`已导出 ${visibleProducts.length} 个渠道商品。`);
+    setOperationMessage(`已导出 ${displayedProducts.length} 个渠道商品。`);
   };
 
   if (!activeGroup) {
@@ -502,6 +772,22 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
           <div className="mt-2 text-sm leading-6 text-gray-500">请联系交付人员在 OP 品牌配置中，为自营渠道和企迈管理的三方渠道设置渠道商品库分组。</div>
         </div>
       </main>
+    );
+  }
+
+  if (platformWorkspace) {
+    return (
+      <WebOnlineOrderingPlatformHub
+        platform={platformWorkspace.platform}
+        initialView={platformWorkspace.view}
+        catalogName={activeGroup.name}
+        products={effectiveProducts.filter(product => activeProductIds.includes(product.id))}
+        platformProductIds={getGeneratedPlatformProductIds(platformWorkspace.platform)}
+        onBack={() => setPlatformWorkspace(null)}
+        onEditProduct={editChannelProduct}
+        onOpenSyncRecords={onOpenSyncRecords}
+        onSyncProducts={(platform, productIds) => submitPlatformSync(platform, productIds)}
+      />
     );
   }
 
@@ -529,6 +815,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                       setActiveGroupId(group.id);
                       setSelectedQuickCategory(null);
                       setSelectedProductIds([]);
+                      setPlatformWorkspace(null);
                     }}
                     className={`min-w-[176px] rounded-md border px-3 py-2 text-left transition-colors ${
                       active
@@ -616,30 +903,110 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
 
         <section className="console-panel flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E8E8E8] px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-[320px] items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-[300px] min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
                 <Search size={15} className="mr-2 text-gray-400" />
                 <input value={quickSearch} onChange={event => setQuickSearch(event.target.value)} className="w-full text-sm outline-none" placeholder="搜索商品名称、商品ID、SKUID" />
               </div>
-              {selectedProductIds.length > 0 && <span className="text-xs font-medium text-[#667085]">已选 {selectedProductIds.length} 个商品</span>}
+              {selectedProductIds.length > 0 && (
+                <div className="flex shrink-0 items-center gap-2 text-xs text-[#4E5969]">
+                  <span>已选 <b className="text-[#008F53]">{selectedProductIds.length}</b> 个</span>
+                  <button type="button" onClick={() => setSelectedProductIds([])} className="text-[#86909C] hover:text-[#1D2129]">清空</button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={selectedProductIds.length === 0}
-                onClick={syncSelectedFromMaster}
-                className="console-secondary-button border-[#8BD7AE] text-[#008F53] disabled:cursor-not-allowed disabled:border-[#E5E6EB] disabled:text-[#C9CDD4]"
-                title={selectedProductIds.length === 0 ? '请先勾选需要更新的渠道商品' : `从主档更新已选 ${selectedProductIds.length} 个商品`}
-              >
-                <RefreshCw size={15} />从主档更新
-              </button>
-              <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
-                <ListFilter size={15} />排序管理
-              </button>
-              <div className="relative">
+              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPlatformMenu(value => !value);
+                      setShowImportExportMenu(false);
+                    }}
+                    className="console-secondary-button min-w-[112px] justify-center"
+                    aria-haspopup="menu"
+                    aria-expanded={showPlatformMenu}
+                    title="管理当前商品库生成的平台商品"
+                  >
+                    <Boxes size={15} />
+                    平台商品
+                    <ChevronDown size={14} className={`transition-transform ${showPlatformMenu ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showPlatformMenu && (
+                    <div role="menu" className="absolute right-0 top-[42px] z-50 w-[336px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 shadow-xl">
+                      {hasDouyinOnlineOrdering && (
+                        <>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setShowPlatformMenu(false);
+                              setPlatformWorkspace({ platform: 'douyin', view: 'products' });
+                            }}
+                            className="group flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-medium text-[#1D2129]">抖音在线点商品</span>
+                              <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">查看商品资料、同步与审核状态</span>
+                            </span>
+                            <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('douyin').length}</span>
+                            <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setShowPlatformMenu(false);
+                              setPlatformWorkspace({ platform: 'douyin', view: 'addons' });
+                            }}
+                            className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-medium text-[#1D2129]">抖音在线点加料</span>
+                              <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">维护加料资料并查看同步状态</span>
+                            </span>
+                            <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
+                          </button>
+                        </>
+                      )}
+                      {hasMeituanOnlineOrdering && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setShowPlatformMenu(false);
+                            setPlatformWorkspace({ platform: 'meituan', view: 'products' });
+                          }}
+                          className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#FFF5D6] text-[11px] font-bold text-[#9A6A00]">美</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium text-[#1D2129]">美团在线点商品</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">查看商品资料与平台同步结果</span>
+                          </span>
+                          <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('meituan').length}</span>
+                          <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {selectedProductIds.length > 0 ? <button type="button" onClick={syncSelectedFromMaster} className="console-secondary-button" title={`从主档更新已选 ${selectedProductIds.length} 个商品`}><RefreshCw size={15} />从主档更新</button> : (
+                <>
+                  <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
+                    <ListFilter size={15} />排序管理
+                  </button>
+                  <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowImportExportMenu(value => !value)}
+                  onClick={() => {
+                    setShowImportExportMenu(value => !value);
+                    setShowPlatformMenu(false);
+                  }}
                   className="console-secondary-button"
                   aria-haspopup="menu"
                   aria-expanded={showImportExportMenu}
@@ -673,7 +1040,14 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     </button>
                   </div>
                 )}
-              </div>
+                  </div>
+                </>
+              )}
+              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
+                <button type="button" onClick={() => openPlatformSyncDialog(selectedProductIds)} className="console-primary-button">
+                  <Send size={15} />同步至平台{selectedProductIds.length > 0 ? `（${selectedProductIds.length}）` : ''}
+                </button>
+              )}
             </div>
           </div>
 
@@ -726,24 +1100,31 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               </button>
             )}
             <div className="min-w-0 flex-1 overflow-auto">
-            <table className={`${reviewChannel ? 'min-w-[1370px]' : 'min-w-[1190px]'} w-full table-fixed text-left text-sm`}>
+            <table className="w-full min-w-[1190px] table-fixed text-left text-sm">
               <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-gray-500">
                 <tr>
                   <th className="w-[50px] border-b border-[#E8E8E8] px-4 py-3 text-center">
-                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="选择当前列表全部商品" className="h-4 w-4 rounded border-gray-300 accent-[#00B460]" />
+                    <input
+                      type="checkbox"
+                      checked={displayedProducts.length > 0 && displayedProducts.every(product => selectedProductIds.includes(product.id))}
+                      onChange={event => setSelectedProductIds(current => event.target.checked
+                        ? Array.from(new Set([...current, ...displayedProducts.map(product => product.id)]))
+                        : current.filter(id => !displayedProducts.some(product => product.id === id)))}
+                      aria-label="选择当前列表全部商品"
+                      className="h-4 w-4 rounded border-gray-300 accent-[#00B460]"
+                    />
                   </th>
                   <th className="w-[250px] border-b border-[#E8E8E8] px-5 py-3">商品</th>
                   <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">商品类型</th>
                   <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">前台分类</th>
                   <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">基础价格</th>
                   <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-3">售卖状态</th>
-                  {reviewChannel && <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-3">抖音审核状态</th>}
                   <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-3">更新时间</th>
-                  <th className="sticky right-0 z-20 w-[340px] border-b border-l border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">操作</th>
+                  <th className="sticky right-0 z-20 w-[280px] border-b border-l border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleProducts.map((product, index) => (
+                {displayedProducts.map((product, index) => (
                   <tr key={product.id} className="group hover:bg-[#FAFBFC]">
                     <td className="border-b border-[#F0F0F0] px-4 py-4 text-center">
                       <input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} aria-label={`选择${product.name}`} className="h-4 w-4 rounded border-gray-300 accent-[#00B460]" />
@@ -757,34 +1138,206 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getProductTypeName(product)}</td>
                     <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getFrontendCategoryName(product)}</td>
                     <td className="border-b border-[#F0F0F0] px-4 py-4 font-medium text-gray-700">¥{Number(product.price || 0).toFixed(2)}</td>
-                    <td className="border-b border-[#F0F0F0] px-4 py-4">
-                      <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${getSaleStatus(product).className}`}>
-                        {getSaleStatus(product).label}
-                      </span>
-                    </td>
-                    {reviewChannel && (() => {
-                      const status = getPlatformStatus(product.id) as PlatformStatus;
-                      const meta = STATUS_META[status];
-                      return <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.className}`}>{meta.label}</span>{status === 'rejected' && <div className="mt-1.5 text-[10px] leading-4 text-red-500">商品图片包含平台不支持的营销文字</div>}</td>;
-                    })()}
+                    <td className="border-b border-[#F0F0F0] px-4 py-4"><span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${getSaleStatus(product).className}`}>{getSaleStatus(product).label}</span></td>
                     <td className="border-b border-[#F0F0F0] px-4 py-4 text-xs text-gray-500">2026-07-15 10:{20 + index}</td>
                     <td className="sticky right-0 z-[5] border-b border-l border-[#F0F0F0] bg-white px-4 py-4 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)] group-hover:bg-[#FAFBFC]">
                       <div className="flex items-center gap-4 whitespace-nowrap text-xs font-bold">
                         <button type="button" onClick={() => editChannelProduct(product)} className="text-[#00A35B] hover:text-[#008F53]">维护渠道资料</button>
                         {canCreateMasterFromCatalog && <button type="button" onClick={() => editMasterProduct(product)} className="text-[#245B8A] hover:text-[#17476F]" title="进入独立的商品主档编辑页；正式产品还需校验商品主档编辑权限">编辑商品主档</button>}
-                        {reviewChannel && getPlatformStatus(product.id) === 'rejected' && <button type="button" onClick={() => submitPlatformProduct(product.id)} className="flex items-center text-red-600"><RefreshCw size={12} className="mr-1" />重新提交审核</button>}
                         {!unifiedCatalog && <button type="button" onClick={() => removeProductFromGroup(product.id)} className="flex items-center text-gray-400 hover:text-red-500"><Trash2 size={12} className="mr-1" />移出</button>}
                       </div>
                     </td>
                   </tr>
                 ))}
-                {visibleProducts.length === 0 && <tr><td colSpan={reviewChannel ? 9 : 8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
+                {displayedProducts.length === 0 && <tr><td colSpan={8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
               </tbody>
             </table>
             </div>
           </div>
         </section>
       </div>
+
+      <WebProductSelectorDialog
+        open={showPlatformProductPicker}
+        title="选择需要同步的平台商品"
+        description={`商品仅来自当前“${activeGroup.name}”；下一步可同时选择抖音在线点和美团在线点。已生成的平台商品也可再次选择并同步更新。`}
+        products={effectiveProducts.filter(product => activeProductIds.includes(product.id)).map(product => ({
+          ...product,
+          frontendCategory: getFrontendCategoryName(product),
+          productCode: product.skuCode,
+        }))}
+        selectedIds={pendingPlatformSyncIds}
+        onSelectedIdsChange={setPendingPlatformSyncIds}
+        confirmLabel="下一步"
+        onCancel={() => { setShowPlatformProductPicker(false); setPendingPlatformSyncIds([]); }}
+        onConfirm={() => {
+          if (pendingPlatformSyncIds.length === 0) {
+            setOperationMessage('请至少选择一个渠道商品。');
+            return;
+          }
+          setShowPlatformProductPicker(false);
+          openPlatformSyncDialog(pendingPlatformSyncIds);
+          setPendingPlatformSyncIds([]);
+        }}
+      />
+
+      {showPlatformSyncDialog && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="同步商品至平台">
+          <div className="w-[720px] overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
+              <div>
+                <div className="text-[18px] font-bold text-[#1D2129]">同步商品至平台</div>
+                <div className="mt-1 text-[12px] text-[#86909C]">一次选择多个目标平台；系统按平台拆分任务，互不影响执行结果。</div>
+              </div>
+              <button type="button" onClick={() => setShowPlatformSyncDialog(false)} title="关闭"><X size={18} className="text-[#667085]" /></button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-[#E5E6EB] bg-[#F7F8FA] p-4 text-sm">
+                <div><div className="text-xs text-[#86909C]">商品来源</div><div className="mt-1 font-bold text-[#1D2129]">{activeGroup.name}</div></div>
+                <div><div className="text-xs text-[#86909C]">已选商品</div><div className="mt-1 font-bold text-[#1D2129]">{syncDialogProductIds.length} 个</div></div>
+              </div>
+              <div>
+                <div className="mb-2 text-[13px] font-bold text-[#1D2129]">选择目标平台</div>
+                <div className="space-y-2">
+                  {getAvailablePlatformTargets().map(platform => {
+                    const { eligibleIds, excludedCount } = getPlatformSyncEligibility(platform, syncDialogProductIds);
+                    const checked = platformSyncTargets.includes(platform);
+                    const disabled = eligibleIds.length === 0;
+                    const label = platform === 'douyin' ? '抖音在线点' : '美团在线点';
+                    return (
+                      <label key={platform} className={`flex items-start gap-3 rounded-md border px-4 py-3 ${disabled ? 'cursor-not-allowed border-[#E5E6EB] bg-[#F7F8FA] opacity-70' : checked ? 'cursor-pointer border-[#80D8AF] bg-[#F5FCF8]' : 'cursor-pointer border-[#E5E6EB] bg-white hover:border-[#B8C1CC]'}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => setPlatformSyncTargets(current => (
+                            checked ? current.filter(item => item !== platform) : [...current, platform]
+                          ))}
+                          className="mt-0.5 h-4 w-4 accent-[#00A35B]"
+                        />
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] font-bold ${platform === 'douyin' ? 'bg-[#E8FAF7] text-[#00A6A6]' : 'bg-[#FFF5D6] text-[#9A6A00]'}`}>{platform === 'douyin' ? '抖' : '美'}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="text-[14px] font-bold text-[#1D2129]">{label}</span>
+                            <span className="text-[12px] font-medium text-[#008F53]">可同步 {eligibleIds.length} 个</span>
+                          </span>
+                          <span className="mt-1 block text-[12px] leading-5 text-[#667085]">
+                            {platform === 'douyin' ? '创建或更新抖音标品，并提交平台审核。' : '创建或更新美团品牌商品，无需平台审核。'}
+                            {excludedCount > 0 && <span className="ml-1 text-[#C46A00]">{excludedCount} 个将被排除：{platform === 'douyin' ? '商品正在审核中' : '一期暂不支持套餐商品'}。</span>}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex max-h-[180px] flex-wrap gap-2 overflow-y-auto">
+                {syncDialogProductIds.map(productId => {
+                  const product = effectiveProducts.find(item => item.id === productId);
+                  return product ? <span key={productId} className="rounded border border-[#E5E6EB] bg-white px-2.5 py-1.5 text-xs text-[#4E5969]">{product.name}</span> : null;
+                })}
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
+              <button type="button" onClick={onOpenSyncRecords} className="text-[13px] font-medium text-[#008F4C] hover:text-[#006E3A]">查看历史同步记录</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowPlatformSyncDialog(false)} className="console-secondary-button">取消</button>
+                <button type="button" onClick={confirmPlatformSync} disabled={platformSyncTargets.length === 0} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-50"><Send size={15} />确认同步{platformSyncTargets.length > 0 ? `（${platformSyncTargets.length} 个平台）` : ''}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {auditProductId && reviewChannel && (() => {
+        const product = effectiveProducts.find(item => item.id === auditProductId);
+        if (!product) return null;
+        const status = getPlatformStatus(product.id) as PlatformStatus;
+        const meta = STATUS_META[status];
+        const records = getPlatformAuditRecords(product.id);
+        const auditStatusMeta: Record<PlatformAuditRecord['status'], { label: string; className: string }> = {
+          reviewing: { label: '审核中', className: 'border-blue-200 bg-blue-50 text-blue-600' },
+          approved: { label: '审核通过', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+          rejected: { label: '审核失败', className: 'border-red-200 bg-red-50 text-red-600' },
+        };
+        return (
+          <div className="absolute inset-0 z-[60] flex bg-black/30" role="dialog" aria-modal="true" aria-label={`${product.name}平台审核记录`}>
+            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setAuditProductId(null)} aria-label="关闭审核记录" />
+            <aside className="relative ml-auto flex h-full w-[720px] flex-col bg-white shadow-2xl">
+              <div className="flex shrink-0 items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
+                <div>
+                  <div className="text-[18px] font-bold text-[#1D2129]">抖音平台审核记录</div>
+                  <div className="mt-1 text-[12px] text-[#86909C]">查看首次提交与后续更新的独立审核结果。</div>
+                </div>
+                <button type="button" onClick={() => setAuditProductId(null)} title="关闭"><X size={18} className="text-[#667085]" /></button>
+              </div>
+
+              <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="flex items-center gap-3 rounded-lg border border-[#E5E6EB] bg-[#F7F8FA] p-4">
+                  <img src={product.image} alt="" className="h-12 w-12 shrink-0 rounded border border-[#E5E6EB] object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-bold text-[#1D2129]">{product.name}</div>
+                    <div className="mt-1 text-xs text-[#86909C]">渠道商品 ID {product.id} · 抖音标品 {hasEffectivePlatformVersion(status) ? getDouyinProductId(product.id) : '--'}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-[#E5E6EB] p-4">
+                    <div className="text-xs text-[#86909C]">当前平台版本</div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${meta.primaryClassName}`}>{meta.primaryLabel}</span>
+                      <span className="text-sm font-bold text-[#1D2129]">{hasEffectivePlatformVersion(status) ? 'V1' : '暂无生效版本'}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[#E5E6EB] p-4">
+                    <div className="text-xs text-[#86909C]">本次资料更新</div>
+                    <div className={`mt-2 text-sm font-bold ${meta.changeClassName || 'text-[#4E5969]'}`}>{meta.changeLabel || '无待审核更新'}</div>
+                    {hasEffectivePlatformVersion(status) && meta.changeLabel && <div className="mt-1 text-[11px] text-[#86909C]">审核期间 V1 继续生效</div>}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="font-bold text-[#1D2129]">审核记录</div>
+                  <div className="text-xs text-[#86909C]">共 {records.length} 次提交</div>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {records.map(record => {
+                    const recordStatus = auditStatusMeta[record.status];
+                    return (
+                      <div key={record.id} className="rounded-lg border border-[#E5E6EB] p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[#1D2129]">V{record.version}</span>
+                              <span className="text-xs text-[#4E5969]">{record.submitType === 'initial' ? '首次提交' : '资料更新'}</span>
+                              {record.effective && <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">当前生效版本</span>}
+                            </div>
+                            <div className="mt-1 text-[11px] text-[#86909C]">提交 {record.submittedAt} · {record.operator}</div>
+                          </div>
+                          <span className={`inline-flex border px-2 py-1 text-[11px] font-bold ${recordStatus.className}`}>{recordStatus.label}</span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {record.changedFields.map(field => <span key={field} className="rounded border border-[#E5E6EB] bg-[#F7F8FA] px-2 py-1 text-[11px] text-[#4E5969]">{field}</span>)}
+                        </div>
+                        {record.completedAt && <div className="mt-3 text-[11px] text-[#86909C]">平台返回 {record.completedAt}</div>}
+                        {record.rejectReason && <div className="mt-3 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-600"><span className="font-bold">失败原因：</span>{record.rejectReason}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
+                <div className="text-[11px] text-[#86909C]">审核结果以抖音平台回调为准；同步执行明细仍在发布中心查看。</div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={onOpenSyncRecords} className="console-secondary-button">查看同步记录</button>
+                  <button type="button" onClick={() => setAuditProductId(null)} className="console-primary-button">关闭</button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        );
+      })()}
 
       <WebProductSelectorDialog
         open={showProductScopeEditor}

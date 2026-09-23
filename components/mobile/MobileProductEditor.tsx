@@ -11,6 +11,8 @@ interface SpecItemDraft {
   price: string;
   stock: string;
   unlimited: boolean;
+  storePackFee?: string;
+  takePackFee?: string;
 }
 
 const DEFAULT_SPEC_LIBRARY: LocalSpec[] = [
@@ -32,6 +34,7 @@ interface Props {
   onSave?: (updates: Partial<Product>, options?: { mode: 'all' | 'partial'; channels: string[] }) => void;
   draftBasePrice?: string;
   draftSpecItems?: SpecItemDraft[];
+  packageFeeLevel?: 'product' | 'spec';
 }
 
 export const MobileProductEditor: React.FC<Props> = ({
@@ -46,6 +49,7 @@ export const MobileProductEditor: React.FC<Props> = ({
   onSave,
   draftBasePrice,
   draftSpecItems,
+  packageFeeLevel = 'product',
 }) => {
   const { products } = useProducts();
   const initialChannels = getInitialChannels(activeChannel);
@@ -55,6 +59,8 @@ export const MobileProductEditor: React.FC<Props> = ({
     basePrice: string;
     specItems: SpecItemDraft[];
     linkedStallIds: string[];
+    storePackFee: string;
+    takePackFee: string;
   }>(null);
   const [effectiveChannels, setEffectiveChannels] = useState<string[]>(['mini', 'meituan', 'taobao', 'pos']);
 
@@ -70,7 +76,7 @@ export const MobileProductEditor: React.FC<Props> = ({
   };
 
   const submitEdit = (
-    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[] },
+    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[]; storePackFee: string; takePackFee: string },
     options?: { mode: 'all' | 'partial'; channels: string[] }
   ) => {
     const nextPrice = Number(payload.basePrice) || product.price;
@@ -81,6 +87,8 @@ export const MobileProductEditor: React.FC<Props> = ({
           price: Number(item.price) || product.specs?.[index]?.price || nextPrice,
           stock: item.unlimited ? -1 : (Number(item.stock) || product.specs?.[index]?.stock || 0),
           unlimited: item.unlimited,
+          storePackFee: parseOptionalMoney(item.storePackFee),
+          takePackFee: parseOptionalMoney(item.takePackFee),
         }))
       : product.specs;
 
@@ -89,6 +97,8 @@ export const MobileProductEditor: React.FC<Props> = ({
       category: payload.category,
       price: nextPrice,
       specs: nextSpecs,
+      storePackFee: parseOptionalMoney(payload.storePackFee),
+      takePackFee: parseOptionalMoney(payload.takePackFee),
       linkedStallIds: payload.linkedStallIds,
     }, options);
     onBack();
@@ -106,6 +116,7 @@ export const MobileProductEditor: React.FC<Props> = ({
         primaryActionText="保存修改"
         lockSpecEdit
         lockStockEdit
+        packageFeeLevel={packageFeeLevel}
         channelSelectorHelperText="渠道开启后商品将在门店上架售卖，关闭后商品将从渠道移除。"
         onBeforeChannelToggle={guardChannelClose}
         labelGroups={labelGroups}
@@ -130,7 +141,11 @@ export const MobileProductEditor: React.FC<Props> = ({
             price: String(spec.price ?? product.price),
             stock: spec.unlimited || spec.stock === -1 ? '' : String(spec.stock ?? ''),
             unlimited: !!spec.unlimited || spec.stock === -1,
+            storePackFee: spec.storePackFee === undefined ? '' : String(spec.storePackFee),
+            takePackFee: spec.takePackFee === undefined ? '' : String(spec.takePackFee),
           })),
+          storePackFee: product.storePackFee === undefined ? '' : String(product.storePackFee),
+          takePackFee: product.takePackFee === undefined ? '' : String(product.takePackFee),
           specSelection: inferSpecSelection((product.specs || []).map(spec => spec.name), DEFAULT_SPEC_LIBRARY),
           specLibrary: DEFAULT_SPEC_LIBRARY,
           linkedStallIds: product.linkedStallIds || [],
@@ -142,6 +157,8 @@ export const MobileProductEditor: React.FC<Props> = ({
             basePrice: data.basePrice,
             specItems: data.specItems,
             linkedStallIds: data.linkedStallIds,
+            storePackFee: data.storePackFee,
+            takePackFee: data.takePackFee,
           };
           if (activeChannel === 'all') {
             setPendingPayload(payload);
@@ -196,6 +213,13 @@ const inferSpecSelection = (specNames: string[], library: LocalSpec[]) => {
     groupIds: library.filter(group => (valueMap[group.id] || []).length > 0).map(group => group.id),
     valueMap,
   };
+};
+
+const parseOptionalMoney = (value?: string) => {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 };
 
 const ApplyChannelModal = ({

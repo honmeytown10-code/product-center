@@ -525,7 +525,7 @@ const DeliveryRuleEditor = ({ template, onClose, onSave }: { template: Recommend
                     <div className="mb-3 text-xs leading-5 text-[#667085]">设置未命中上述目标范围的用户是否看到推荐；目标用户可正常查看并购买。</div>
                     <div className="grid grid-cols-2 gap-3">
                       <ChoiceCard selected={rule.nonMemberVisibility === 'hidden'} icon={<EyeOff size={18} />} title="不展示" description="非目标用户看不到当前模板中的推荐商品。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'hidden' }))} />
-                      <ChoiceCard selected={rule.nonMemberVisibility === 'visible_locked'} icon={<Eye size={18} />} title="展示但不可购买" description="非目标用户仅可在“商品推荐”分类看到当前模板中的推荐商品，其他分类不展示；商品不可购买，具体提示或引导由点单页处理。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'visible_locked' }))} />
+                      <ChoiceCard selected={rule.nonMemberVisibility === 'visible_locked'} icon={<Eye size={18} />} title="展示但不可购买" description="非目标用户仅可在“商品推荐”分类看到当前模板中的推荐商品，其他分类不展示。" onClick={() => setRule(current => ({ ...current, nonMemberVisibility: 'visible_locked' }))} />
                     </div>
                   </div>
                 </FormRow>

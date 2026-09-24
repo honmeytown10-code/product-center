@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Product, ThirdPartyChannelId } from '../../types';
+import { WebStoreScopeSelector, type StoreScopeOption } from './WebStoreScopeSelector';
 
 type BatchProduct = {
   id: string;
@@ -86,6 +87,20 @@ const stores = [
   ['坪山益田店', '100116'], ['盐田壹海城店', '100117'], ['大鹏中心店', '100118'],
 ] as const;
 
+const storeScopeOptions: StoreScopeOption[] = stores.map(([name, code], index) => ({
+  id: code,
+  name,
+  code,
+  organization: index < 6 ? '深圳核心商圈直营区' : index < 12 ? '深圳城市直营区' : '华南加盟事业部',
+  tags: [
+    '华南区域',
+    index < 12 ? '直营门店' : '加盟门店',
+    ...(index % 3 === 0 ? ['核心商圈'] : []),
+    ...(index % 4 === 0 ? ['24 小时营业'] : []),
+    ...(index >= 15 ? ['新开门店'] : []),
+  ],
+}));
+
 const relationPlans: Record<string, { total: number; bound: number; productIds: string[] }> = {
   bp1: { total: 18, bound: 12, productIds: ['1', '2', '3'] },
   bp2: { total: 18, bound: 7, productIds: ['2', '4'] },
@@ -151,7 +166,8 @@ export const WebBatchProductMapping: React.FC<Props> = ({
     const requested = new URLSearchParams(window.location.search).get('batchDetail');
     return batchProducts.some(item => item.id === requested) ? requested : null;
   });
-  const [detailStoreKeyword, setDetailStoreKeyword] = useState('');
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+  const [detailStoreIds, setDetailStoreIds] = useState<string[]>([]);
   const [detailPlatformKeyword, setDetailPlatformKeyword] = useState('');
   const [detailQimaiKeyword, setDetailQimaiKeyword] = useState('');
   const [detailStatus, setDetailStatus] = useState<'all' | 'mapped' | 'unmapped'>('all');
@@ -171,8 +187,9 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   const [selectedTags, setSelectedTags] = useState(['华南区域', '直营门店']);
 
   const productById = (id?: string) => products.find(item => item.id === id);
-  const statsFor = (batchProductId: string) => {
-    const scoped = relations.filter(item => item.batchProductId === batchProductId);
+  const relationIsInScope = (relation: StoreRelation, storeIds: string[]) => !storeIds.length || storeIds.includes(relation.storeCode);
+  const statsFor = (batchProductId: string, storeIds = selectedStoreIds) => {
+    const scoped = relations.filter(item => item.batchProductId === batchProductId && relationIsInScope(item, storeIds));
     const mapped = scoped.filter(item => item.status === 'mapped');
     return {
       total: scoped.length,
@@ -185,7 +202,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   const filteredProducts = useMemo(() => batchProducts.filter(item => {
     if (exemptRowIds.includes(item.platformRowId)) return false;
     const stats = statsFor(item.id);
-    const itemRelations = relations.filter(relation => relation.batchProductId === item.id);
+    const itemRelations = relations.filter(relation => relation.batchProductId === item.id && relationIsInScope(relation, selectedStoreIds));
     const qimaiMatched = !qimaiKeyword || itemRelations.some(relation => {
       const product = productById(relation.qimaiProductId);
       return `${product?.name || ''}${product?.skuCode || ''}`.toLowerCase().includes(qimaiKeyword.trim().toLowerCase());
@@ -194,11 +211,12 @@ export const WebBatchProductMapping: React.FC<Props> = ({
       || (bindingStatus === 'mapped' && stats.unmapped === 0)
       || (bindingStatus === 'unmapped' && stats.mapped === 0)
       || (bindingStatus === 'partial' && stats.mapped > 0 && stats.unmapped > 0);
-    return (!keyword || `${item.name}${item.specName}`.toLowerCase().includes(keyword.trim().toLowerCase()))
+    return stats.total > 0
+      && (!keyword || `${item.name}${item.specName}`.toLowerCase().includes(keyword.trim().toLowerCase()))
       && statusMatched
       && qimaiMatched;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [bindingStatus, exemptRowIds, keyword, qimaiKeyword, relations, products]);
+  }), [bindingStatus, exemptRowIds, keyword, qimaiKeyword, relations, products, selectedStoreIds]);
 
   const activeProduct = batchProducts.find(item => item.id === detailProductId);
   const scenarioCounts = useMemo(() => filteredProducts.reduce((counts, item) => {
@@ -207,16 +225,16 @@ export const WebBatchProductMapping: React.FC<Props> = ({
     else if (stats.unmapped === 0) counts.mapped += 1;
     else counts.partial += 1;
     return counts;
-  }, { mapped: 0, partial: 0, unmapped: 0 }), [filteredProducts, relations]);
+  }, { mapped: 0, partial: 0, unmapped: 0 }), [filteredProducts, relations, selectedStoreIds]);
   const detailRelations = useMemo(() => relations.filter(item => {
     if (!detailProductId || item.batchProductId !== detailProductId) return false;
     const qimai = productById(item.qimaiProductId);
     return (detailStatus === 'all' || item.status === detailStatus)
-      && (!detailStoreKeyword || `${item.storeName}${item.storeCode}`.toLowerCase().includes(detailStoreKeyword.trim().toLowerCase()))
+      && relationIsInScope(item, detailStoreIds)
       && (!detailPlatformKeyword || `${item.platformProductId}${item.platformSkuId}${item.platformSkuCode}`.toLowerCase().includes(detailPlatformKeyword.trim().toLowerCase()))
       && (!detailQimaiKeyword || `${qimai?.name || ''}${qimai?.specs?.[item.qimaiSpecIndex || 0]?.name || item.qimaiSpec || ''}${qimai?.skuCode || ''}`.toLowerCase().includes(detailQimaiKeyword.trim().toLowerCase()));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [detailPlatformKeyword, detailProductId, detailQimaiKeyword, detailStatus, detailStoreKeyword, relations, products]);
+  }), [detailPlatformKeyword, detailProductId, detailQimaiKeyword, detailStatus, detailStoreIds, relations, products]);
 
   const candidateProducts = useMemo(() => products.filter(item =>
     !candidateKeyword || `${item.name}${item.id}${item.skuCode}${item.category}`.toLowerCase().includes(candidateKeyword.trim().toLowerCase()),
@@ -225,7 +243,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   const openDetails = (batchProductId: string) => {
     setDetailProductId(batchProductId);
     setSelectedRelationIds([]);
-    setDetailStoreKeyword('');
+    setDetailStoreIds([]);
     setDetailPlatformKeyword('');
     setDetailQimaiKeyword('');
     setDetailStatus('all');
@@ -286,7 +304,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   };
 
   const batchUnbind = () => {
-    const relationIds = relations.filter(relation => selectedProductIds.includes(relation.batchProductId) && relation.status === 'mapped').map(relation => relation.id);
+    const relationIds = relations.filter(relation => selectedProductIds.includes(relation.batchProductId) && relation.status === 'mapped' && relationIsInScope(relation, selectedStoreIds)).map(relation => relation.id);
     unbindRelations(relationIds);
     setSelectedProductIds([]);
   };
@@ -304,12 +322,12 @@ export const WebBatchProductMapping: React.FC<Props> = ({
         </div>
 
         <div className="flex h-[52px] items-center gap-2 px-4">
-          <button type="button" onClick={() => setShowScope(true)} className="inline-flex h-8 w-[180px] shrink-0 items-center justify-between rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]"><span className="truncate">华南区域、直营门店 · 18 家</span><ChevronDown size={13} className="ml-2 shrink-0" /></button>
+          <WebStoreScopeSelector stores={storeScopeOptions} value={selectedStoreIds} onChange={storeIds => { setSelectedStoreIds(storeIds); setSelectedProductIds([]); }} />
           <label className="flex h-8 min-w-[180px] flex-[1.2] items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={14} className="mr-2 shrink-0 text-[#86909C]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="平台商品名称 / 规格" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label>
           <label className="flex h-8 min-w-[150px] flex-1 items-center rounded-md border border-[#C9CDD4] bg-white px-3"><Search size={14} className="mr-2 shrink-0 text-[#86909C]" /><input value={qimaiKeyword} onChange={event => setQimaiKeyword(event.target.value)} placeholder="已绑定企迈商品 / SKU" className="min-w-0 flex-1 bg-transparent text-[12px] outline-none" /></label>
           <select value={bindingStatus} onChange={event => setBindingStatus(event.target.value as typeof bindingStatus)} className="h-8 w-[140px] shrink-0 rounded-md border border-[#C9CDD4] bg-white px-2 text-[12px] text-[#4E5969]"><option value="all">全部绑定情况</option><option value="partial">部分门店已绑定</option><option value="mapped">全部门店已绑定</option><option value="unmapped">全部门店未绑定</option></select>
           <button type="button" onClick={() => onMessage(`已按当前条件查询，共 ${filteredProducts.length} 个平台商品规格。`)} className="h-8 shrink-0 whitespace-nowrap rounded-md bg-[#00B460] px-3 text-[12px] font-bold text-white">查询</button>
-          <button type="button" onClick={() => { setKeyword(''); setQimaiKeyword(''); setBindingStatus('all'); }} className="h-8 shrink-0 whitespace-nowrap rounded-md px-2 text-[12px] text-[#4E5969]">重置</button>
+          <button type="button" onClick={() => { setSelectedStoreIds([]); setKeyword(''); setQimaiKeyword(''); setBindingStatus('all'); }} className="h-8 shrink-0 whitespace-nowrap rounded-md px-2 text-[12px] text-[#4E5969]">重置</button>
         </div>
       </section>
 
@@ -334,7 +352,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
             </div>
             {filteredProducts.map(item => {
               const stats = statsFor(item.id);
-              const itemRelations = relations.filter(relation => relation.batchProductId === item.id);
+              const itemRelations = relations.filter(relation => relation.batchProductId === item.id && relationIsInScope(relation, selectedStoreIds));
               const mappedNames = Array.from(new Set(itemRelations.filter(relation => relation.status === 'mapped').map(relation => productById(relation.qimaiProductId)?.name).filter(Boolean))) as string[];
               const selected = selectedProductIds.includes(item.id);
               return <div key={item.id} className="grid min-h-[74px] grid-cols-[36px_minmax(200px,1.2fr)_145px_205px_minmax(170px,1fr)_170px] items-center border-t border-[#F0F1F2] px-4 py-3 text-[13px]">
@@ -369,14 +387,14 @@ export const WebBatchProductMapping: React.FC<Props> = ({
               <div className="ml-auto rounded-md bg-[#F2F8FF] px-3 py-2 text-[12px] text-[#245B8A]">门店级绑定关系可独立维护</div>
             </div>
             <div className="grid shrink-0 grid-cols-4 gap-3 border-b border-[#E5E6EB] bg-[#FAFBFC] px-6 py-4">
-              {(() => { const stats = statsFor(detailProductId); return <><div className="rounded-md border border-[#E5E6EB] bg-white px-4 py-3"><div className="text-[12px] text-[#86909C]">范围内门店</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{stats.total}</div></div><div className="rounded-md border border-[#BFEBD3] bg-[#F5FFF9] px-4 py-3"><div className="text-[12px] text-[#4E8B68]">已绑定门店</div><div className="mt-1 text-[20px] font-bold text-[#008A4B]">{stats.mapped}</div></div><div className="rounded-md border border-[#F3D29C] bg-[#FFF9F0] px-4 py-3"><div className="text-[12px] text-[#A66B1F]">未绑定门店</div><div className="mt-1 text-[20px] font-bold text-[#D46B08]">{stats.unmapped}</div></div><div className="rounded-md border border-[#D9DDE2] bg-white px-4 py-3"><div className="text-[12px] text-[#86909C]">已绑定企迈商品</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{stats.distinctQimai} 种</div></div></>; })()}
+              {(() => { const stats = statsFor(detailProductId, detailStoreIds); return <><div className="rounded-md border border-[#E5E6EB] bg-white px-4 py-3"><div className="text-[12px] text-[#86909C]">范围内门店</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{stats.total}</div></div><div className="rounded-md border border-[#BFEBD3] bg-[#F5FFF9] px-4 py-3"><div className="text-[12px] text-[#4E8B68]">已绑定门店</div><div className="mt-1 text-[20px] font-bold text-[#008A4B]">{stats.mapped}</div></div><div className="rounded-md border border-[#F3D29C] bg-[#FFF9F0] px-4 py-3"><div className="text-[12px] text-[#A66B1F]">未绑定门店</div><div className="mt-1 text-[20px] font-bold text-[#D46B08]">{stats.unmapped}</div></div><div className="rounded-md border border-[#D9DDE2] bg-white px-4 py-3"><div className="text-[12px] text-[#86909C]">已绑定企迈商品</div><div className="mt-1 text-[20px] font-bold text-[#1D2129]">{stats.distinctQimai} 种</div></div></>; })()}
             </div>
             <div className="flex shrink-0 flex-wrap items-end gap-2 border-b border-[#E5E6EB] px-6 py-3">
-              <label className="flex h-9 min-w-[190px] flex-1 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailStoreKeyword} onChange={event => setDetailStoreKeyword(event.target.value)} placeholder="门店名称 / 编号" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+              <WebStoreScopeSelector stores={storeScopeOptions} value={detailStoreIds} onChange={storeIds => { setDetailStoreIds(storeIds); setSelectedRelationIds([]); }} widthClassName="w-[210px]" />
               <label className="flex h-9 min-w-[240px] flex-[1.3] items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailPlatformKeyword} onChange={event => setDetailPlatformKeyword(event.target.value)} placeholder="平台 SPU ID / SKU ID / SKU码" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
               <label className="flex h-9 min-w-[200px] flex-1 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailQimaiKeyword} onChange={event => setDetailQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / 规格 / SKU" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
               <select value={detailStatus} onChange={event => setDetailStatus(event.target.value as typeof detailStatus)} className="h-9 w-[160px] rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部绑定状态</option><option value="mapped">已绑定</option><option value="unmapped">未绑定</option></select>
-              <button type="button" onClick={() => { setDetailStoreKeyword(''); setDetailPlatformKeyword(''); setDetailQimaiKeyword(''); setDetailStatus('all'); }} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]">重置</button>
+              <button type="button" onClick={() => { setDetailStoreIds([]); setDetailPlatformKeyword(''); setDetailQimaiKeyword(''); setDetailStatus('all'); }} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]">重置</button>
             </div>
             <div className="flex shrink-0 items-center gap-2 border-b border-[#E5E6EB] px-6 py-2.5"><span className="mr-auto text-[12px] text-[#667085]">已选 {selectedRelationIds.length} 家门店</span><button type="button" disabled={!selectedRelationIds.length} onClick={() => startBinding(detailProductId, selectedRelationIds, `批量换绑 ${selectedRelationIds.length} 家门店`)} className="h-8 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] font-medium text-[#00A35B] disabled:text-[#BFC5D0]">批量绑定 / 换绑</button><button type="button" disabled={!selectedRelationIds.some(id => relations.find(item => item.id === id)?.status === 'mapped')} onClick={() => unbindRelations(selectedRelationIds.filter(id => relations.find(item => item.id === id)?.status === 'mapped'))} className="h-8 whitespace-nowrap rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969] disabled:text-[#BFC5D0]">批量解绑</button></div>
             <div className="min-h-0 flex-1 overflow-auto">

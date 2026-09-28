@@ -1074,7 +1074,7 @@ export const WebProductSync: React.FC<{
                                             <tr>
                                                 <th className="sticky left-0 z-10 min-w-64 border-r border-gray-200 bg-[#F7F8FA] px-4 py-3">商品</th>
                                                 {batchChangeMode === 'individual' && selectedBatchFields.map(field => <th key={field} className="min-w-44 border-r border-gray-200 px-4 py-3">{field}</th>)}
-                                                <th className="min-w-20 px-4 py-3">操作</th>
+                                                <th className="sticky right-0 z-30 w-20 min-w-20 border-l border-gray-200 bg-[#F7F8FA] px-4 py-3 text-center shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.18)]">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 bg-white">
@@ -1092,7 +1092,7 @@ export const WebProductSync: React.FC<{
                                                     {batchChangeMode === 'individual' && selectedBatchFields.map(field => (
                                                         <td key={field} className="border-r border-gray-100 px-3 py-3 align-middle">{renderBatchFieldEditor(product, field)}</td>
                                                     ))}
-                                                    <td className="px-4 py-3 align-middle">
+                                                    <td className="sticky right-0 z-20 border-l border-gray-100 bg-white px-4 py-3 text-center align-middle shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.14)]">
                                                         <button type="button" onClick={() => setSelectedBatchProductIds(current => current.filter(id => id !== product.id))} className="text-sm font-bold text-red-500 hover:text-red-600">移除</button>
                                                     </td>
                                                 </tr>

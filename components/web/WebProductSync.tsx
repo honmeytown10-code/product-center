@@ -144,10 +144,17 @@ const BATCH_FIELD_GROUPS = [
     { title: '展示设置', fields: ['商品主图', '规格图片', '商品详情图', '列表页简述', '描述标签'] },
     { title: '销售属性', fields: ['售卖时间', '是否为套餐商品', '是否为小料商品', '起购限购', '单点不送', '包装费'] },
 ];
+const BATCH_PLATFORM_FIELD_SUPPORT: Record<string, Array<'douyin' | 'meituan'>> = {
+    商品名称: ['douyin', 'meituan'],
+    基础价格: ['douyin', 'meituan'],
+    商品主图: ['douyin', 'meituan'],
+    售卖时间: ['douyin', 'meituan'],
+    包装费: ['douyin'],
+};
 const TEMPLATE_RANGE_OPTIONS = [
-    { id: 'template-1', name: '华南直营门店模板', count: 56, channels: ['mini_program_dine_in', 'pos'] as OmnichannelChannelId[] },
-    { id: 'template-2', name: '机场枢纽门店模板', count: 12, channels: ['pos', 'mini_program_dine_in'] as OmnichannelChannelId[] },
-    { id: 'template-3', name: '外卖渠道模板', count: 128, channels: ['mini_program_delivery', 'meituan', 'taobao'] as OmnichannelChannelId[] },
+    { id: 'template-1', name: '华南直营门店模板', description: '华南区域直营门店统一商品配置', count: 56, channels: ['mini_program_dine_in', 'pos'] as OmnichannelChannelId[] },
+    { id: 'template-2', name: '机场枢纽门店模板', description: '机场及交通枢纽门店差异化配置', count: 12, channels: ['pos', 'mini_program_dine_in'] as OmnichannelChannelId[] },
+    { id: 'template-3', name: '外卖渠道模板', description: '外卖渠道商品与价格配置', count: 128, channels: ['mini_program_delivery', 'meituan', 'taobao'] as OmnichannelChannelId[] },
 ];
 const STORE_RANGE_OPTIONS = [
     { id: 'store-1', name: '南山万象店', code: 'SZ001' },
@@ -236,11 +243,15 @@ export const WebProductSync: React.FC<{
     const [selectedTargetChannelGroupIds, setSelectedTargetChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
     const [selectedTargetScopes, setSelectedTargetScopes] = useState<Array<'master' | 'template' | 'store' | 'channel_catalog'>>(['master', 'template', 'store']);
     const [batchChangeMode, setBatchChangeMode] = useState<'individual' | 'unified'>('individual');
+    const [unifiedShelfStatus, setUnifiedShelfStatus] = useState<'on' | 'off'>('on');
     const [batchProductSource, setBatchProductSource] = useState<'master' | 'channel_catalog'>('master');
     const [batchChannelGroupId, setBatchChannelGroupId] = useState<string>(() => channelCatalogGroups[0]?.id || '');
     const [templateRangeMode, setTemplateRangeMode] = useState<'all' | 'selected'>('all');
     const [storeRangeMode, setStoreRangeMode] = useState<'all' | 'selected' | 'template'>('selected');
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(['template-1']);
+    const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
+    const [pendingTemplateIds, setPendingTemplateIds] = useState<string[]>([]);
+    const [templateKeyword, setTemplateKeyword] = useState('');
     const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(['store-1', 'store-2']);
     const [selectedBatchChannelIds, setSelectedBatchChannelIds] = useState<OmnichannelChannelId[]>(() => (
         channelCatalogEnabled
@@ -249,6 +260,7 @@ export const WebProductSync: React.FC<{
     ));
     const [selectedBatchFields, setSelectedBatchFields] = useState<string[]>(['商品名称', '前台分类', '基础价格']);
     const [selectedBatchProductIds, setSelectedBatchProductIds] = useState<string[]>(['1', '2']);
+    const [batchFieldValues, setBatchFieldValues] = useState<Record<string, Record<string, string>>>({});
     const [selectedSyncProductIds, setSelectedSyncProductIds] = useState<string[]>(['1', '2', '3']);
     const [selectedPublishChannelIds, setSelectedPublishChannelIds] = useState<OmnichannelChannelId[]>(() => (
         channelCatalogEnabled
@@ -282,6 +294,10 @@ export const WebProductSync: React.FC<{
     const selectedSyncProducts = useMemo(
         () => products.filter(product => selectedSyncProductIds.includes(product.id)),
         [products, selectedSyncProductIds]
+    );
+    const selectedBatchProducts = useMemo(
+        () => products.filter(product => selectedBatchProductIds.includes(product.id)),
+        [products, selectedBatchProductIds]
     );
     const batchRangeInvalid = operationMode !== 'sync' && (
         selectedTargetScopes.length === 0
@@ -357,10 +373,91 @@ export const WebProductSync: React.FC<{
         setProductSelectorMode(null);
     };
 
+    const openTemplateSelector = () => {
+        setPendingTemplateIds(selectedTemplateIds);
+        setTemplateKeyword('');
+        setTemplateSelectorOpen(true);
+    };
+
+    const filteredTemplateOptions = TEMPLATE_RANGE_OPTIONS.filter(template => {
+        const keyword = templateKeyword.trim().toLowerCase();
+        if (!keyword) return true;
+        return `${template.name}${template.description}`.toLowerCase().includes(keyword);
+    });
+
+    const allVisibleTemplatesSelected = filteredTemplateOptions.length > 0
+        && filteredTemplateOptions.every(template => pendingTemplateIds.includes(template.id));
+
+    const toggleAllVisibleTemplates = () => {
+        const visibleIds = filteredTemplateOptions.map(template => template.id);
+        setPendingTemplateIds(current => (
+            allVisibleTemplatesSelected
+                ? current.filter(id => !visibleIds.includes(id))
+                : Array.from(new Set([...current, ...visibleIds]))
+        ));
+    };
+
     const updateProduct = (productId: string, updater: (product: EditableProduct) => EditableProduct) => {
         setProducts(prev => prev.map(product => (
             product.id === productId ? updater(product) : product
         )));
+    };
+
+    const getBatchFieldValue = (product: EditableProduct, field: string) => {
+        const draftValue = batchFieldValues[product.id]?.[field];
+        if (draftValue !== undefined) return draftValue;
+
+        if (field === '商品名称') return product.name;
+        if (field === '前台分类') return product.categories[0]?.name || '';
+        if (field === '基础价格') return String(product.price);
+        if (field === '是否展示商品') return '展示';
+        if (field === '售卖时间') return getListTimeSaleSummary(product.timeSale);
+        if (field === '是否为套餐商品') return product.type.includes('套餐') ? '是' : '否';
+        if (field === '商品主图') return product.image ? '已配置' : '未配置';
+        if (field === '规格图片') return `${product.specs.length} 张`;
+        return '';
+    };
+
+    const updateBatchFieldValue = (productId: string, field: string, value: string) => {
+        setBatchFieldValues(current => ({
+            ...current,
+            [productId]: {
+                ...(current[productId] || {}),
+                [field]: value,
+            },
+        }));
+    };
+
+    const renderBatchFieldEditor = (product: EditableProduct, field: string) => {
+        const value = getBatchFieldValue(product, field);
+        const selectOptions: Record<string, string[]> = {
+            是否展示商品: ['展示', '不展示'],
+            售卖时间: ['全时段售卖', '已开启分时段售卖'],
+            是否为套餐商品: ['是', '否'],
+            是否为小料商品: ['是', '否'],
+            单点不送: ['是', '否'],
+        };
+
+        if (selectOptions[field]) {
+            return (
+                <select value={value} onChange={event => updateBatchFieldValue(product.id, field, event.target.value)} className="h-9 w-full min-w-32 border border-gray-200 bg-white px-2 text-sm text-gray-700 outline-none focus:border-[#00B460]">
+                    {selectOptions[field].map(option => <option key={option}>{option}</option>)}
+                </select>
+            );
+        }
+
+        if (['商品主图', '规格图片', '商品详情图'].includes(field)) {
+            return (
+                <button type="button" onClick={() => updateBatchFieldValue(product.id, field, value === '已配置' ? '待配置' : '已配置')} className="h-9 w-full min-w-28 border border-gray-200 bg-white px-3 text-left text-sm text-gray-700 hover:border-[#8BD7AE] hover:bg-[#F6FCF8]">
+                    {value || '配置图片'}
+                </button>
+            );
+        }
+
+        const numericField = ['基础价格', '预计成本', '商品份量', '起购限购', '包装费'].includes(field);
+        return (
+            <input type={numericField ? 'number' : 'text'} value={value} onChange={event => updateBatchFieldValue(product.id, field, event.target.value)} placeholder={`填写${field}`} className="h-9 w-full min-w-32 border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#00B460]" />
+        );
     };
 
     const handleCategorySortChange = (categoryName: string, value: number) => {
@@ -862,7 +959,7 @@ export const WebProductSync: React.FC<{
     const renderBatchStep1 = () => (
         <div className="flex h-full flex-1 flex-col bg-white">
             <div className="min-h-0 flex-1 overflow-auto p-7">
-                <div className="max-w-5xl">
+                <div className="max-w-6xl">
                     <div className="mb-7">
                         <h2 className="text-xl font-black text-gray-900">{operationMode === 'batch_combo' ? '批量修改套餐商品' : '批量修改标准商品'}</h2>
                     </div>
@@ -875,9 +972,71 @@ export const WebProductSync: React.FC<{
                         </div>
                     </div>
 
+                    {batchChangeMode === 'individual' ? (
                     <div className="mb-7 border-b border-gray-100 pb-6">
-                        <div className="mb-3 text-sm font-black text-gray-800">选择商品</div>
-                        <div className="flex items-center gap-8 text-sm">
+                        <div className="mb-5 border-b border-gray-100 pb-4">
+                            <div>
+                                <div className="text-sm font-black text-gray-800">选择修改字段</div>
+                                <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
+                                    <span>字段后的标识表示可同步的平台</span>
+                                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#E9FAF8] px-1.5 font-medium text-[#087F7A]">抖</span>
+                                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#FFF5DC] px-1.5 font-medium text-[#9A6400]">美</span>
+                                    <span>无标识仅更新企迈资料</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-5">
+                            {BATCH_FIELD_GROUPS.map(group => {
+                                return (
+                                    <div key={group.title} className="flex items-start">
+                                        <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
+                                        <div className="flex flex-1 flex-wrap gap-x-7 gap-y-3">
+                                            {group.fields.map(field => {
+                                                const selected = selectedBatchFields.includes(field);
+                                                const support = BATCH_PLATFORM_FIELD_SUPPORT[field] || [];
+                                                return (
+                                                    <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
+                                                        <input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                                        <span>{field}</span>
+                                                        {support.includes('douyin') && <span title="支持同步到抖音在线点" className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#E9FAF8] px-1.5 text-[11px] font-medium text-[#087F7A]">抖</span>}
+                                                        {support.includes('meituan') && <span title="支持同步到美团在线点" className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#FFF5DC] px-1.5 text-[11px] font-medium text-[#9A6400]">美</span>}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    ) : (
+                        <div className="mb-7 border-b border-gray-100 pb-6">
+                            <div className="mb-3 text-sm font-black text-gray-800">统一设置上下架状态</div>
+                            <div className="flex items-center gap-8 text-sm">
+                                <label className={`flex cursor-pointer items-center font-bold ${unifiedShelfStatus === 'on' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
+                                    <input type="radio" name="unified-shelf-status" checked={unifiedShelfStatus === 'on'} onChange={() => setUnifiedShelfStatus('on')} className="mr-2" />
+                                    上架
+                                </label>
+                                <label className={`flex cursor-pointer items-center font-bold ${unifiedShelfStatus === 'off' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
+                                    <input type="radio" name="unified-shelf-status" checked={unifiedShelfStatus === 'off'} onChange={() => setUnifiedShelfStatus('off')} className="mr-2" />
+                                    下架
+                                </label>
+                            </div>
+                            <div className="mt-3 text-xs text-gray-400">所选商品将统一调整为该状态，并按下一步选择的生效范围执行。</div>
+                        </div>
+                    )}
+
+                    <div className="mb-8">
+                        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <div className="text-sm font-black text-gray-800">选择商品</div>
+                                <div className="mt-1 text-xs text-gray-400">{batchChangeMode === 'individual' ? '添加商品后，可在列表中直接修改上方已勾选的字段。' : `添加需要统一${unifiedShelfStatus === 'on' ? '上架' : '下架'}的商品。`}</div>
+                            </div>
+                            <button type="button" onClick={() => openProductSelector('batch')} className="bg-[#00C06B] px-4 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">添加商品</button>
+                        </div>
+
+                        <div className="mb-4 flex flex-wrap items-center gap-x-8 gap-y-3 border border-gray-200 bg-[#FAFBFC] px-4 py-3 text-sm">
                             <label className={`flex cursor-pointer items-center font-bold ${batchProductSource === 'master' ? 'text-[#00A35B]' : 'text-gray-500'}`}>
                                 <input type="radio" name="batch-product-source" checked={batchProductSource === 'master'} onChange={() => { setBatchProductSource('master'); setSelectedBatchProductIds([]); }} className="mr-2" />
                                 商品主档
@@ -888,48 +1047,66 @@ export const WebProductSync: React.FC<{
                                     渠道商品库
                                 </label>
                             )}
-                        </div>
-                        {batchProductSource === 'channel_catalog' && channelCatalogEnabled && (
-                            <div className="mt-4 flex flex-wrap gap-2">
-                                {authorizedChannelCatalogGroups.map(group => {
-                                    const selected = batchChannelGroupId === group.id;
-                                    return <button key={group.id} type="button" onClick={() => { setBatchChannelGroupId(group.id); setSelectedBatchProductIds([]); }} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-[#F0FBF5] text-[#008F53]' : 'border-gray-200 text-gray-500'}`}><span>{group.name}</span><span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>;
-                                })}
-                            </div>
-                        )}
-                        <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
-                            <span className="text-sm text-gray-500">已选 <span className="font-bold text-gray-800">{selectedBatchProductIds.length}</span> 个商品</span>
-                            <button type="button" onClick={() => openProductSelector('batch')} className="border border-[#00B460] bg-white px-4 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FBF5]">选择商品</button>
-                        </div>
-                        {selectedBatchProductIds.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-2 border border-gray-200 bg-[#FAFBFC] px-4 py-3">
-                                {products.filter(product => selectedBatchProductIds.includes(product.id)).map(product => (
-                                    <span key={product.id} className="inline-flex items-center border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700">
-                                        {product.name}
-                                        <button type="button" aria-label={`移除${product.name}`} onClick={() => setSelectedBatchProductIds(prev => prev.filter(id => id !== product.id))} className="ml-2 text-gray-400 hover:text-red-500"><X size={13} /></button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="mb-8 space-y-5">
-                        {BATCH_FIELD_GROUPS.map(group => (
-                            <div key={group.title} className="flex items-start">
-                                <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
-                                <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
-                                    {group.fields.map(field => {
-                                        const selected = selectedBatchFields.includes(field);
-                                        return <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />{field}</label>;
+                            {batchProductSource === 'channel_catalog' && channelCatalogEnabled && (
+                                <div className="flex flex-wrap gap-2 border-l border-gray-200 pl-5">
+                                    {authorizedChannelCatalogGroups.map(group => {
+                                        const selected = batchChannelGroupId === group.id;
+                                        return <button key={group.id} type="button" onClick={() => { setBatchChannelGroupId(group.id); setSelectedBatchProductIds([]); }} className={`border px-3 py-1.5 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-white text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{group.name}</button>;
                                     })}
                                 </div>
+                            )}
+                        </div>
+
+                        <div className="overflow-hidden border border-gray-200">
+                            <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+                                <span className="text-sm text-gray-500">已添加 <strong className="text-gray-900">{selectedBatchProducts.length}</strong> 个商品{batchChangeMode === 'individual' ? <>，编辑 <strong className="text-gray-900">{selectedBatchFields.length}</strong> 个字段</> : <>，统一<strong className="ml-1 text-[#00A35B]">{unifiedShelfStatus === 'on' ? '上架' : '下架'}</strong></>}</span>
+                                {batchChangeMode === 'individual' && selectedBatchProducts.length > 0 && <span className="text-xs text-gray-400">横向滚动可查看全部字段</span>}
                             </div>
-                        ))}
+                            {selectedBatchProducts.length === 0 ? (
+                                <div className="flex min-h-36 flex-col items-center justify-center bg-[#FAFBFC] text-center">
+                                    <div className="text-sm font-bold text-gray-600">暂未添加商品</div>
+                                    <div className="mt-1 text-xs text-gray-400">点击“添加商品”选择本次需要修改的商品</div>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full border-collapse text-left">
+                                        <thead className="bg-[#F7F8FA] text-xs font-bold text-gray-600">
+                                            <tr>
+                                                <th className="sticky left-0 z-10 min-w-64 border-r border-gray-200 bg-[#F7F8FA] px-4 py-3">商品</th>
+                                                {batchChangeMode === 'individual' && selectedBatchFields.map(field => <th key={field} className="min-w-44 border-r border-gray-200 px-4 py-3">{field}</th>)}
+                                                <th className="min-w-20 px-4 py-3">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                            {selectedBatchProducts.map(product => (
+                                                <tr key={product.id}>
+                                                    <td className="sticky left-0 z-10 border-r border-gray-200 bg-white px-4 py-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <img src={product.image} alt="" className="h-10 w-10 shrink-0 border border-gray-100 object-cover" />
+                                                            <div className="min-w-0">
+                                                                <div className="truncate text-sm font-bold text-gray-800">{product.name}</div>
+                                                                <div className="mt-0.5 text-xs text-gray-400">商品ID {product.code}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    {batchChangeMode === 'individual' && selectedBatchFields.map(field => (
+                                                        <td key={field} className="border-r border-gray-100 px-3 py-3 align-middle">{renderBatchFieldEditor(product, field)}</td>
+                                                    ))}
+                                                    <td className="px-4 py-3 align-middle">
+                                                        <button type="button" onClick={() => setSelectedBatchProductIds(current => current.filter(id => id !== product.id))} className="text-sm font-bold text-red-500 hover:text-red-600">移除</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                 </div>
             </div>
-            <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchFields.length === 0 || selectedBatchProductIds.length === 0} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
+            <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchProductIds.length === 0 || (batchChangeMode === 'individual' && selectedBatchFields.length === 0)} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
         </div>
     );
 
@@ -1199,7 +1376,52 @@ export const WebProductSync: React.FC<{
                                                 <label className={`flex cursor-pointer items-center text-sm ${templateRangeMode === 'all' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="templateRange" checked={templateRangeMode === 'all'} onChange={() => setTemplateRangeMode('all')} className="mr-2" />全部模板</label>
                                                 <label className={`flex cursor-pointer items-center text-sm ${templateRangeMode === 'selected' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="templateRange" checked={templateRangeMode === 'selected'} onChange={() => setTemplateRangeMode('selected')} className="mr-2" />指定模板</label>
                                             </div>
-                                            {templateRangeMode === 'selected' && <div className="mt-3 flex flex-wrap gap-2">{TEMPLATE_RANGE_OPTIONS.map(template => { const selected = selectedTemplateIds.includes(template.id); return <button key={template.id} type="button" onClick={() => setSelectedTemplateIds(prev => selected ? prev.filter(id => id !== template.id) : [...prev, template.id])} className={`border px-3 py-2 text-xs ${selected ? 'border-[#8BD7AE] bg-white font-bold text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{template.name}<span className="ml-2 font-normal">{template.count} 家门店</span></button>; })}</div>}
+                                            {templateRangeMode === 'selected' && (
+                                                <div className="mt-3 overflow-hidden border border-[#E5E7EB] bg-white">
+                                                    <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3">
+                                                        <div>
+                                                            <div className="text-sm font-bold text-gray-800">已选 {selectedTemplateIds.length} 个模板</div>
+                                                            <div className="mt-1 text-xs text-gray-400">每个模板都将处理本次选择的 {selectedBatchProductIds.length} 个商品</div>
+                                                        </div>
+                                                        <button type="button" onClick={openTemplateSelector} className="border border-[#00B460] bg-white px-4 py-2 text-sm font-bold text-[#00A35B] hover:bg-[#F0FBF5]">
+                                                            {selectedTemplateIds.length > 0 ? '调整模板' : '选择模板'}
+                                                        </button>
+                                                    </div>
+                                                    {selectedTemplateIds.length > 0 ? (
+                                                        <div className="overflow-x-auto">
+                                                            <table className="min-w-[760px] w-full table-fixed text-left text-xs">
+                                                                <thead className="bg-[#F7F8FA] text-gray-500">
+                                                                    <tr>
+                                                                        <th className="w-[190px] px-4 py-2.5 font-medium">模板名称</th>
+                                                                        <th className="w-[220px] px-4 py-2.5 font-medium">模板说明</th>
+                                                                        <th className="w-[110px] px-4 py-2.5 font-medium">关联门店</th>
+                                                                        <th className="w-[190px] px-4 py-2.5 font-medium">适用渠道</th>
+                                                                        <th className="w-[110px] px-4 py-2.5 font-medium">修改商品</th>
+                                                                        <th className="w-[70px] px-4 py-2.5 text-right font-medium">操作</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {TEMPLATE_RANGE_OPTIONS.filter(template => selectedTemplateIds.includes(template.id)).map(template => (
+                                                                        <tr key={template.id} className="border-t border-[#EEF1F4] text-gray-600">
+                                                                            <td className="px-4 py-3 font-medium text-gray-800">{template.name}</td>
+                                                                            <td className="px-4 py-3">{template.description}</td>
+                                                                            <td className="px-4 py-3">{template.count} 家</td>
+                                                                            <td className="px-4 py-3">{template.channels.map(channelId => getOmnichannelChannel(channelId).shortName).join('、')}</td>
+                                                                            <td className="px-4 py-3">{selectedBatchProductIds.length} 个</td>
+                                                                            <td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedTemplateIds(current => current.filter(id => id !== template.id))} className="text-gray-500 hover:text-red-500">移除</button></td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    ) : (
+                                                        <button type="button" onClick={openTemplateSelector} className="flex w-full flex-col items-center justify-center py-7 text-sm text-gray-400 hover:bg-[#FAFBFC]">
+                                                            <span>暂未选择模板</span>
+                                                            <span className="mt-1 text-xs text-[#00A35B]">选择一个或多个模板</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -1285,7 +1507,7 @@ export const WebProductSync: React.FC<{
                                 <p className="text-xs text-gray-400 mt-4 border-t border-gray-200 pt-3">勾选以上任意选项后，将覆盖门店对应的商品属性</p>
                             </div>
                         </div>
-                    </div> : <div className="mb-6 flex items-start"><span className="w-24 text-sm text-gray-500">修改内容</span><div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div></div>}
+                    </div> : <div className="mb-6 flex items-start"><span className="w-24 shrink-0 text-sm text-gray-500">修改内容</span>{batchChangeMode === 'unified' ? <span className={`border px-3 py-1 text-xs font-bold ${unifiedShelfStatus === 'on' ? 'border-[#B7E7CB] bg-[#F4FBF7] text-[#008F53]' : 'border-gray-300 bg-gray-50 text-gray-700'}`}>统一{unifiedShelfStatus === 'on' ? '上架' : '下架'}</span> : <div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div>}</div>}
 
                     <div className="flex items-center mb-8">
                         <span className="w-24 text-gray-500 text-sm">同步时间</span>
@@ -1440,6 +1662,65 @@ export const WebProductSync: React.FC<{
                 onConfirm={confirmProductSelector}
                 fixedType={productSelectorMode === 'batch' ? (operationMode === 'batch_combo' ? 'combo' : 'standard') : undefined}
             />
+            {templateSelectorOpen && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="选择模板">
+                    <div className="flex max-h-[78vh] w-[860px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+                        <div className="flex items-start justify-between border-b border-[#E5E7EB] px-6 py-5">
+                            <div>
+                                <h3 className="text-lg font-bold text-[#1F2129]">选择模板</h3>
+                                <p className="mt-1 text-sm text-gray-400">可同时选择多个模板；确认后，本次选择的 {selectedBatchProductIds.length} 个商品将在所选模板中更新。</p>
+                            </div>
+                            <button type="button" aria-label="关闭选择模板" onClick={() => setTemplateSelectorOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X size={18} /></button>
+                        </div>
+
+                        <div className="border-b border-[#E5E7EB] px-6 py-4">
+                            <div className="relative w-[360px]">
+                                <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+                                <input value={templateKeyword} onChange={event => setTemplateKeyword(event.target.value)} placeholder="搜索模板名称或说明" className="h-9 w-full rounded border border-[#DDE2E8] pl-9 pr-3 text-sm outline-none focus:border-[#00B460]" />
+                            </div>
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
+                            <div className="overflow-hidden border border-[#E5E7EB]">
+                                <table className="w-full table-fixed text-left text-sm">
+                                    <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs text-gray-500">
+                                        <tr>
+                                            <th className="w-12 px-4 py-3"><input type="checkbox" checked={allVisibleTemplatesSelected} onChange={toggleAllVisibleTemplates} aria-label="选择当前结果中的全部模板" className="h-4 w-4 rounded border-gray-300 text-[#00C06B]" /></th>
+                                            <th className="w-[230px] px-4 py-3 font-medium">模板名称</th>
+                                            <th className="px-4 py-3 font-medium">模板说明</th>
+                                            <th className="w-[110px] px-4 py-3 font-medium">关联门店</th>
+                                            <th className="w-[220px] px-4 py-3 font-medium">适用渠道</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredTemplateOptions.map(template => {
+                                            const checked = pendingTemplateIds.includes(template.id);
+                                            return (
+                                                <tr key={template.id} onClick={() => setPendingTemplateIds(current => checked ? current.filter(id => id !== template.id) : [...current, template.id])} className={`cursor-pointer border-t border-[#EEF1F4] ${checked ? 'bg-[#F4FBF7]' : 'hover:bg-[#FAFBFC]'}`}>
+                                                    <td className="px-4 py-3"><input type="checkbox" checked={checked} onChange={() => setPendingTemplateIds(current => checked ? current.filter(id => id !== template.id) : [...current, template.id])} onClick={event => event.stopPropagation()} aria-label={`选择${template.name}`} className="h-4 w-4 rounded border-gray-300 text-[#00C06B]" /></td>
+                                                    <td className="px-4 py-3 font-medium text-gray-800">{template.name}</td>
+                                                    <td className="px-4 py-3 text-gray-500">{template.description}</td>
+                                                    <td className="px-4 py-3 text-gray-500">{template.count} 家</td>
+                                                    <td className="px-4 py-3 text-gray-500">{template.channels.map(channelId => getOmnichannelChannel(channelId).shortName).join('、')}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {filteredTemplateOptions.length === 0 && <tr><td colSpan={5} className="py-14 text-center text-sm text-gray-400">没有符合条件的模板</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-[#E5E7EB] px-6 py-4">
+                            <span className="text-sm text-gray-500">已选择 <strong className="text-gray-800">{pendingTemplateIds.length}</strong> 个模板</span>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setTemplateSelectorOpen(false)} className="rounded border border-[#DDE2E8] px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">取消</button>
+                                <button type="button" disabled={pendingTemplateIds.length === 0} onClick={() => { setSelectedTemplateIds(pendingTemplateIds); setTemplateSelectorOpen(false); }} className="rounded bg-[#00B460] px-5 py-2 text-sm font-bold text-white hover:bg-[#009E54] disabled:bg-gray-300">确认选择</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

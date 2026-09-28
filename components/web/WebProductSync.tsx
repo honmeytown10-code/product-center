@@ -144,6 +144,13 @@ const BATCH_FIELD_GROUPS = [
     { title: '展示设置', fields: ['商品主图', '规格图片', '商品详情图', '列表页简述', '描述标签'] },
     { title: '销售属性', fields: ['售卖时间', '是否为套餐商品', '是否为小料商品', '起购限购', '单点不送', '包装费'] },
 ];
+const BATCH_PLATFORM_FIELD_SUPPORT: Record<string, Array<'douyin' | 'meituan'>> = {
+    商品名称: ['douyin', 'meituan'],
+    基础价格: ['douyin', 'meituan'],
+    商品主图: ['douyin', 'meituan'],
+    售卖时间: ['douyin', 'meituan'],
+    包装费: ['douyin'],
+};
 const BATCH_BOOLEAN_FIELDS = new Set(['是否展示商品', '是否为套餐商品', '是否为小料商品', '单点不送']);
 const BATCH_NUMBER_FIELDS = new Set(['基础价格', '预计成本', '包装费']);
 const BATCH_IMAGE_FIELDS = new Set(['商品主图', '规格图片', '商品详情图']);
@@ -244,6 +251,7 @@ export const WebProductSync: React.FC<{
     const [selectedTargetChannelGroupIds, setSelectedTargetChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
     const [selectedTargetScopes, setSelectedTargetScopes] = useState<Array<'master' | 'template' | 'store' | 'channel_catalog'>>(['master', 'template', 'store']);
     const [batchChangeMode, setBatchChangeMode] = useState<'individual' | 'unified'>('individual');
+    const [unifiedShelfStatus, setUnifiedShelfStatus] = useState<'on' | 'off'>('on');
     const [templateRangeMode, setTemplateRangeMode] = useState<'all' | 'selected'>('all');
     const [storeRangeMode, setStoreRangeMode] = useState<'all' | 'selected' | 'template'>('selected');
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(['template-1']);
@@ -257,7 +265,6 @@ export const WebProductSync: React.FC<{
     const [selectedBatchProductIds, setSelectedBatchProductIds] = useState<string[]>(['1', '2']);
     const [selectedBatchRowIds, setSelectedBatchRowIds] = useState<string[]>([]);
     const [batchDraftValues, setBatchDraftValues] = useState<Record<string, Record<string, BatchFieldValue>>>({});
-    const [unifiedBatchDraftValues, setUnifiedBatchDraftValues] = useState<Record<string, BatchFieldValue>>({});
     const [selectedSyncProductIds, setSelectedSyncProductIds] = useState<string[]>(['1', '2', '3']);
     const [selectedPublishChannelIds, setSelectedPublishChannelIds] = useState<OmnichannelChannelId[]>(() => (
         channelCatalogEnabled
@@ -996,28 +1003,55 @@ export const WebProductSync: React.FC<{
                             </div>
                         </div>
 
-                        <div className="mb-7 border-b border-gray-100 pb-7">
-                            <div className="mb-5 text-sm font-black text-gray-800">选择修改字段</div>
-                            <div className="space-y-5">
-                                {BATCH_FIELD_GROUPS.map(group => (
-                                    <div key={group.title} className="flex items-start">
-                                        <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
-                                        <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
-                                            {group.fields.map(field => {
-                                                const selected = selectedBatchFields.includes(field);
-                                                return <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />{field}</label>;
-                                            })}
-                                        </div>
+                        {batchChangeMode === 'individual' ? (
+                            <div className="mb-7 border-b border-gray-100 pb-7">
+                                <div className="mb-5 border-b border-gray-100 pb-4">
+                                    <div className="text-sm font-black text-gray-800">选择修改字段</div>
+                                    <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
+                                        <span>字段后的标识表示可同步的平台</span>
+                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#E9FAF8] px-1.5 font-medium text-[#087F7A]">抖</span>
+                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#FFF5DC] px-1.5 font-medium text-[#9A6400]">美</span>
+                                        <span>无标识仅更新企迈资料</span>
                                     </div>
-                                ))}
+                                </div>
+                                <div className="space-y-5">
+                                    {BATCH_FIELD_GROUPS.map(group => (
+                                        <div key={group.title} className="flex items-start">
+                                            <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
+                                            <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
+                                                {group.fields.map(field => {
+                                                    const selected = selectedBatchFields.includes(field);
+                                                    const support = BATCH_PLATFORM_FIELD_SUPPORT[field] || [];
+                                                    return (
+                                                        <label key={field} className={`flex cursor-pointer items-center text-sm ${selected ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}>
+                                                            <input type="checkbox" checked={selected} onChange={() => setSelectedBatchFields(prev => selected ? prev.filter(item => item !== field) : [...prev, field])} className="mr-2 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
+                                                            <span>{field}</span>
+                                                            {support.includes('douyin') && <span title="支持同步到抖音在线点" className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#E9FAF8] px-1.5 text-[11px] font-medium text-[#087F7A]">抖</span>}
+                                                            {support.includes('meituan') && <span title="支持同步到美团在线点" className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded bg-[#FFF5DC] px-1.5 text-[11px] font-medium text-[#9A6400]">美</span>}
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="mb-7 border-b border-gray-100 pb-7">
+                                <div className="mb-3 text-sm font-black text-gray-800">统一设置上下架状态</div>
+                                <div className="flex items-center gap-8 text-sm">
+                                    <label className={`flex cursor-pointer items-center font-bold ${unifiedShelfStatus === 'on' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="unified-shelf-status" checked={unifiedShelfStatus === 'on'} onChange={() => setUnifiedShelfStatus('on')} className="mr-2" />上架</label>
+                                    <label className={`flex cursor-pointer items-center font-bold ${unifiedShelfStatus === 'off' ? 'text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="unified-shelf-status" checked={unifiedShelfStatus === 'off'} onChange={() => setUnifiedShelfStatus('off')} className="mr-2" />下架</label>
+                                </div>
+                                <div className="mt-3 text-xs text-gray-400">所选商品将统一调整为该状态，并按下一步选择的生效范围执行。</div>
+                            </div>
+                        )}
 
                         <section aria-labelledby="batch-product-list-title" className="mb-6">
                             <div className="mb-3">
                                 <div>
                                     <h3 id="batch-product-list-title" className="text-base font-black text-gray-900">选择商品</h3>
-                                    <p className="mt-1 text-xs text-gray-400">已选字段将作为可编辑列展示在商品列表中</p>
+                                    <p className="mt-1 text-xs text-gray-400">{batchChangeMode === 'individual' ? '已选字段将作为可编辑列展示在商品列表中' : `添加需要统一${unifiedShelfStatus === 'on' ? '上架' : '下架'}的商品`}</p>
                                 </div>
                             </div>
 
@@ -1025,7 +1059,7 @@ export const WebProductSync: React.FC<{
                                 <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-4 py-3">
                                     <div className="flex items-center gap-3">
                                         <button type="button" onClick={() => openProductSelector('batch')} className="h-9 bg-[#00B460] px-4 text-sm font-bold text-white hover:bg-[#00A35B]">添加标准商品</button>
-                                        <span className="text-xs text-gray-500">已添加 <strong className="text-gray-800">{selectedBatchProducts.length}</strong> 个，可编辑 <strong className="text-gray-800">{selectedBatchFields.length}</strong> 个字段</span>
+                                        <span className="text-xs text-gray-500">已添加 <strong className="text-gray-800">{selectedBatchProducts.length}</strong> 个{batchChangeMode === 'individual' ? <>，可编辑 <strong className="text-gray-800">{selectedBatchFields.length}</strong> 个字段</> : <>，统一<strong className="ml-1 text-[#00A35B]">{unifiedShelfStatus === 'on' ? '上架' : '下架'}</strong></>}</span>
                                     </div>
                                     <button
                                         type="button"
@@ -1040,7 +1074,7 @@ export const WebProductSync: React.FC<{
                                     </button>
                                 </div>
                                 <div className="max-w-full overflow-x-auto">
-                                    <table className="w-full table-fixed text-left" style={{ minWidth: `${420 + selectedBatchFields.length * 180}px` }}>
+                                    <table className="w-full table-fixed text-left" style={{ minWidth: `${420 + (batchChangeMode === 'individual' ? selectedBatchFields.length * 180 : 0)}px` }}>
                                         <thead className="bg-[#F5F6F7] text-sm font-bold text-gray-700">
                                             <tr>
                                                 <th className="w-12 px-4 py-3">
@@ -1053,31 +1087,11 @@ export const WebProductSync: React.FC<{
                                                     />
                                                 </th>
                                                 <th className="w-[240px] px-3 py-3">商品</th>
-                                                {selectedBatchFields.map(field => <th key={field} className="w-[180px] px-3 py-3">{field}</th>)}
+                                                {batchChangeMode === 'individual' && selectedBatchFields.map(field => <th key={field} className="w-[180px] px-3 py-3">{field}</th>)}
                                                 <th className="w-20 px-3 py-3 text-center">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 text-sm">
-                                            {batchChangeMode === 'unified' && selectedBatchFields.length > 0 && (
-                                                <tr className="bg-[#F3FBF7]">
-                                                    <td className="px-4 py-3"></td>
-                                                    <td className="px-3 py-3">
-                                                        <div className="font-bold text-[#008F53]">统一修改值</div>
-                                                        <div className="mt-1 text-xs text-gray-400">应用于下方全部商品</div>
-                                                    </td>
-                                                    {selectedBatchFields.map(field => (
-                                                        <td key={field} className="px-3 py-3 align-top">
-                                                            {renderBatchFieldControl(
-                                                                field,
-                                                                unifiedBatchDraftValues[field] ?? '',
-                                                                value => setUnifiedBatchDraftValues(prev => ({ ...prev, [field]: value })),
-                                                                true,
-                                                            )}
-                                                        </td>
-                                                    ))}
-                                                    <td className="px-3 py-3"></td>
-                                                </tr>
-                                            )}
                                             {selectedBatchProducts.map(product => {
                                                 const rowSelected = selectedBatchRowIds.includes(product.id);
                                                 return (
@@ -1103,15 +1117,13 @@ export const WebProductSync: React.FC<{
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        {selectedBatchFields.map(field => (
+                                                        {batchChangeMode === 'individual' && selectedBatchFields.map(field => (
                                                             <td key={field} className="px-3 py-3 align-top">
-                                                                {batchChangeMode === 'individual'
-                                                                    ? renderBatchFieldControl(
-                                                                        field,
-                                                                        batchDraftValues[product.id]?.[field] ?? getBatchFieldValue(product, field),
-                                                                        value => updateBatchDraftValue(product.id, field, value),
-                                                                    )
-                                                                    : <div className="flex h-9 min-w-[132px] items-center border border-dashed border-[#B7E7CB] bg-white px-2.5 text-xs text-[#008F53]">使用统一修改值</div>}
+                                                                {renderBatchFieldControl(
+                                                                    field,
+                                                                    batchDraftValues[product.id]?.[field] ?? getBatchFieldValue(product, field),
+                                                                    value => updateBatchDraftValue(product.id, field, value),
+                                                                )}
                                                             </td>
                                                         ))}
                                                         <td className="px-3 py-3 text-center align-top">
@@ -1132,7 +1144,7 @@ export const WebProductSync: React.FC<{
                                             })}
                                             {selectedBatchProducts.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={selectedBatchFields.length + 3} className="h-36 px-6 text-center text-sm text-gray-400">
+                                                    <td colSpan={(batchChangeMode === 'individual' ? selectedBatchFields.length : 0) + 3} className="h-36 px-6 text-center text-sm text-gray-400">
                                                         暂未添加商品，请点击“添加标准商品”选择本次要修改的商品
                                                     </td>
                                                 </tr>
@@ -1144,7 +1156,7 @@ export const WebProductSync: React.FC<{
                         </section>
                     </div>
                 </div>
-                <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchFields.length === 0 || selectedBatchProductIds.length === 0} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
+                <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchProductIds.length === 0 || (batchChangeMode === 'individual' && selectedBatchFields.length === 0)} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
             </div>
         );
     };
@@ -1501,7 +1513,7 @@ export const WebProductSync: React.FC<{
                                 <p className="text-xs text-gray-400 mt-4 border-t border-gray-200 pt-3">勾选以上任意选项后，将覆盖门店对应的商品属性</p>
                             </div>
                         </div>
-                    </div> : <div className="mb-6 flex items-start"><span className="w-24 text-sm text-gray-500">修改内容</span><div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div></div>}
+                    </div> : <div className="mb-6 flex items-start"><span className="w-24 shrink-0 text-sm text-gray-500">修改内容</span>{batchChangeMode === 'unified' ? <span className={`border px-3 py-1 text-xs font-bold ${unifiedShelfStatus === 'on' ? 'border-[#B7E7CB] bg-[#F4FBF7] text-[#008F53]' : 'border-gray-300 bg-gray-50 text-gray-700'}`}>统一{unifiedShelfStatus === 'on' ? '上架' : '下架'}</span> : <div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div>}</div>}
 
                     {includesMeituanDine && (
                         <div className="mb-7 overflow-hidden rounded-lg border border-[#DDE5EC] bg-white">

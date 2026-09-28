@@ -1088,7 +1088,7 @@ export const WebProductSync: React.FC<{
                                                 </th>
                                                 <th className="w-[240px] px-3 py-3">商品</th>
                                                 {batchChangeMode === 'individual' && selectedBatchFields.map(field => <th key={field} className="w-[180px] px-3 py-3">{field}</th>)}
-                                                <th className="w-20 px-3 py-3 text-center">操作</th>
+                                                <th className="sticky right-0 z-30 w-20 border-l border-gray-200 bg-[#F5F6F7] px-3 py-3 text-center shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.18)]">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 text-sm">
@@ -1126,7 +1126,7 @@ export const WebProductSync: React.FC<{
                                                                 )}
                                                             </td>
                                                         ))}
-                                                        <td className="px-3 py-3 text-center align-top">
+                                                        <td className={`sticky right-0 z-20 border-l border-gray-100 px-3 py-3 text-center align-top shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.14)] ${rowSelected ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
                                                             <button
                                                                 type="button"
                                                                 aria-label={`移除${product.name}`}

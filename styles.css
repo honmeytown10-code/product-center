@@ -21,6 +21,30 @@
   box-sizing: border-box;
 }
 
+/* Scroll remains available on touch/trackpad/keyboard; only the visual rail is removed. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.mobile-app-shell,
+.mobile-app-shell * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.mobile-app-shell *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 html,
 body,
 #root {

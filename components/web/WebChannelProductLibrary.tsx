@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Boxes,
   ChevronRight,
   ChevronUp,
   ChevronDown,
@@ -923,24 +924,17 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                       setShowPlatformMenu(value => !value);
                       setShowImportExportMenu(false);
                     }}
-                    className="console-secondary-button"
+                    className="console-secondary-button min-w-[112px] justify-center"
                     aria-haspopup="menu"
                     aria-expanded={showPlatformMenu}
-                    title="查看当前商品库生成的平台商品"
+                    title="管理当前商品库生成的平台商品"
                   >
-                    <span className="flex items-center -space-x-1" aria-hidden="true">
-                      {hasDouyinOnlineOrdering && <span className="flex h-5 w-5 items-center justify-center rounded border border-white bg-[#E8FAF7] text-[10px] font-bold text-[#00A6A6]">抖</span>}
-                      {hasMeituanOnlineOrdering && <span className="flex h-5 w-5 items-center justify-center rounded border border-white bg-[#FFF5D6] text-[10px] font-bold text-[#9A6A00]">美</span>}
-                    </span>
+                    <Boxes size={15} />
                     平台商品
                     <ChevronDown size={14} className={`transition-transform ${showPlatformMenu ? 'rotate-180' : ''}`} />
                   </button>
                   {showPlatformMenu && (
-                    <div role="menu" className="absolute right-0 top-[42px] z-50 w-[288px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 shadow-xl">
-                      <div className="border-b border-[#F0F1F2] px-3 py-2">
-                        <div className="text-[12px] font-semibold text-[#4E5969]">平台商品管理</div>
-                        <div className="mt-0.5 text-[11px] text-[#86909C]">查看当前商品库已生成的平台数据</div>
-                      </div>
+                    <div role="menu" className="absolute right-0 top-[42px] z-50 w-[336px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 shadow-xl">
                       {hasDouyinOnlineOrdering && (
                         <>
                           <button
@@ -950,12 +944,12 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                               setShowPlatformMenu(false);
                               setPlatformWorkspace({ platform: 'douyin', view: 'products' });
                             }}
-                            className="group flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                            className="group flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
                           >
                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[13px] font-medium text-[#1D2129]">抖音在线点商品</span>
-                              <span className="mt-0.5 block text-[11px] text-[#86909C]">查看同步与审核状态</span>
+                              <span className="block truncate text-[13px] font-medium text-[#1D2129]">抖音在线点商品</span>
+                              <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">查看商品资料、同步与审核状态</span>
                             </span>
                             <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('douyin').length}</span>
                             <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
@@ -967,12 +961,12 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                               setShowPlatformMenu(false);
                               setPlatformWorkspace({ platform: 'douyin', view: 'addons' });
                             }}
-                            className="group flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                            className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
                           >
                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[13px] font-medium text-[#1D2129]">抖音在线点加料</span>
-                              <span className="mt-0.5 block text-[11px] text-[#86909C]">维护加料资料与平台状态</span>
+                              <span className="block truncate text-[13px] font-medium text-[#1D2129]">抖音在线点加料</span>
+                              <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">维护加料资料并查看同步状态</span>
                             </span>
                             <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
                           </button>
@@ -986,12 +980,12 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                             setShowPlatformMenu(false);
                             setPlatformWorkspace({ platform: 'meituan', view: 'products' });
                           }}
-                          className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-2.5 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
+                          className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
                         >
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#FFF5D6] text-[11px] font-bold text-[#9A6A00]">美</span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] font-medium text-[#1D2129]">美团在线点商品</span>
-                            <span className="mt-0.5 block text-[11px] text-[#86909C]">查看平台同步结果</span>
+                            <span className="block truncate text-[13px] font-medium text-[#1D2129]">美团在线点商品</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">查看商品资料与平台同步结果</span>
                           </span>
                           <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('meituan').length}</span>
                           <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />

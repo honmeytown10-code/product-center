@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, Check, Image as ImageIcon, Info, Link2, LockKeyhole, RefreshCw } from 'lucide-react';
+import { Check, CircleCheck, Image as ImageIcon, Link2 } from 'lucide-react';
 import type { ThirdPartyChannelId } from '../../types';
 import { getThirdPartyChannel } from '../../omnichannel';
 
@@ -21,7 +21,7 @@ const CHANNEL_FIELDS: Partial<Record<ThirdPartyChannelId, FieldDefinition[]>> = 
       type: 'select',
       required: true,
       options: ['美食 / 饮品 / 奶茶', '美食 / 饮品 / 果茶', '美食 / 小吃甜品 / 烘焙甜品'],
-      description: '标品与点单品共用一次选择；同步时系统分别映射到平台标品类目和点单品三级类目。',
+      description: '用于商品在抖音内展示和归类，品牌商品与门店点单品使用同一选择。',
     },
     {
       id: 'settleType',
@@ -29,7 +29,7 @@ const CHANNEL_FIELDS: Partial<Record<ThirdPartyChannelId, FieldDefinition[]>> = 
       type: 'radio',
       required: true,
       options: ['总部收款', '门店收款', '区域收款'],
-      description: '生成门店点单品时写入结算信息。',
+      description: '决定顾客付款后由总部、门店还是区域结算，下发门店商品时生效。',
     },
   ],
   meituan_dine: [],
@@ -69,82 +69,29 @@ const CHANNEL_INITIAL_VALUES: Partial<Record<ThirdPartyChannelId, Record<string,
   },
 };
 
-const DOUYIN_REUSE_ROWS = [
-  {
-    source: '商品名称、主图',
-    target: '标品名称、标品图片 / 点单品名称、头图',
-    rule: '直接复用渠道商品当前生效值',
-  },
-  {
-    source: '规格与 SKU',
-    target: '标品规格 / 点单品销售属性与 SKU',
-    rule: '复用主档规格和当前渠道启用子集；规格价格继续按 SKU 提交',
-  },
-  {
-    source: '不加价做法',
-    target: '点单品描述属性（spec_type=2）',
-    rule: '按当前渠道启用子集提交做法组和选项编码；加价做法一期不提交，并在预检结果中逐项提示',
-  },
-  {
-    source: '渠道销售价',
-    target: '点单品 SKU 实付价',
-    rule: '元换算为分；同步前校验非负整数分',
-  },
-  {
-    source: 'SKU 包装费',
-    target: '点单品包装费结构',
-    rule: '复用当前渠道包装费，按平台单位与计费步长转换',
-  },
-  {
-    source: '渠道售卖时间',
-    target: '点单品售卖起止时间',
-    rule: '转换为秒级时间戳；长期售卖生成远期结束时间',
-  },
-];
-
-const MEITUAN_DINE_REUSE_ROWS = [
-  {
-    source: '商品名称与基础价格',
-    target: '标准商品名称与 SKU 销售价',
-    rule: '复用渠道商品当前生效值；价格由元换算为分。',
-  },
-  {
-    source: '规格与 SKU',
-    target: '售卖属性、规格组与 SKU 规格组合',
-    rule: '规格值先同步为美团售卖属性，再按规格组和完整规格值组合生成 SKU；当前渠道只控制规格启用状态。',
-  },
-  {
-    source: '商品图片',
-    target: '商品主图与详情图',
-    rule: '一期对接、非必填；新增或变更图片时先上传美团，再随商品提交；未配置不阻断同步。',
-  },
-  {
-    source: '售卖时间',
-    target: '商品售卖星期、日期与时段',
-    rule: '一期对接、非必填；复用渠道商品通用字段，未配置时按美团全天售卖处理。',
-  },
-  {
-    source: '做法',
-    target: 'Premium、做法组与 SKU 客制化规则',
-    rule: '按当前渠道启用的做法组和做法项生成；不在美团专属区重复新增、删除或修改结构。',
-  },
-  {
-    source: '加料',
-    target: 'Premium、加料组与 SKU 客制化规则',
-    rule: '同步启用的加料项、价格及限选规则；无法等价转换时在发布预检中阻断。',
-  },
-  {
-    source: '门店价格、上下架与库存',
-    target: '美团门店商品经营数据',
-    rule: '只在商品同步门店或门店经营操作时提交；品牌商品同步不创建门店任务。',
-  },
-];
-
 type Props = {
   channelIds: ThirdPartyChannelId[];
   location: 'master' | 'channel' | 'channel_catalog';
   title?: string;
   compact?: boolean;
+};
+
+const PLATFORM_PUBLISH_SUMMARIES: Partial<Record<ThirdPartyChannelId, {
+  groups: Array<{ label: string; detail: string; wide?: boolean }>;
+}>> = {
+  douyin: {
+    groups: [
+      { label: '商品信息', detail: '名称、图片、规格、SKU 与售价' },
+      { label: '售卖设置', detail: '包装费、售卖时间和当前渠道已启用的做法' },
+      { label: '商品加料', detail: '已关联且在当前渠道启用的加料随商品同步；名称和类型沿用主档，平台售价和抖音商品类目在“抖音在线点加料”中维护', wide: true },
+    ],
+  },
+  meituan_dine: {
+    groups: [
+      { label: '商品信息', detail: '名称、图片和后台分类' },
+      { label: '销售内容', detail: '规格、SKU、售价、售卖时间，以及当前渠道已启用的做法和加料' },
+    ],
+  },
 };
 
 export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, location, title, compact = false }) => {
@@ -158,30 +105,28 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
   if (!activeChannel) return null;
 
   const inherited = inheritBasic[activeId] ?? true;
+  const publishSummary = PLATFORM_PUBLISH_SUMMARIES[activeId];
   const channelValues = { ...(CHANNEL_INITIAL_VALUES[activeId] || {}), ...(values[activeId] || {}) };
-  const isDouyinChannelForm = activeId === 'douyin' && location !== 'master';
-  const isMeituanDineChannelForm = activeId === 'meituan_dine' && location !== 'master';
-  const isOnlineChannelForm = isDouyinChannelForm || isMeituanDineChannelForm;
-  const reuseRows = isDouyinChannelForm ? DOUYIN_REUSE_ROWS : MEITUAN_DINE_REUSE_ROWS;
+  const isOnlineChannelForm = Boolean(publishSummary && location !== 'master');
   const updateValue = (fieldId: string, value: string | boolean | string[]) => {
     setValues(prev => ({ ...prev, [activeId]: { ...(prev[activeId] || {}), [fieldId]: value } }));
   };
 
   return (
     <div className="overflow-hidden border border-[#DDE3E8] bg-white">
-      <div className="flex items-start justify-between gap-5 border-b border-[#E8E8E8] bg-[#FAFBFC] px-5 py-4">
+      {!isOnlineChannelForm && <div className="flex items-start justify-between gap-5 border-b border-[#E8E8E8] bg-[#FAFBFC] px-5 py-4">
         <div>
           <div className="text-sm font-black text-[#1F2129]">{title || '三方渠道商品资料'}</div>
           <div className="mt-1 text-xs text-gray-500">
             {location === 'master'
               ? '商品主档保持统一身份和公共资料，渠道销售属性请前往渠道商品库维护。'
-              : '当前商品来自渠道商品库，基础资料继承商品主档，渠道团队维护售卖差异。'}
+              : `在这里调整${activeChannel.name}的售卖资料和平台设置，不会影响其他商品库。`}
           </div>
         </div>
         <div className="flex items-center border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700">
           <Link2 size={13} className="mr-1.5" /> 已关联商品主档
         </div>
-      </div>
+      </div>}
 
       <div className="flex overflow-x-auto border-b border-[#E8E8E8] bg-white px-4">
         {channelIds.map(channelId => {
@@ -202,8 +147,8 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
       <div className={compact ? 'space-y-4 p-4' : 'space-y-6 p-5'}>
         {!isOnlineChannelForm && <div className="flex items-center justify-between border border-[#E8E8E8] bg-[#F8FAFB] px-4 py-3">
           <div>
-            <div className="text-sm font-bold text-gray-800">名称、价格、图片使用商品主档</div>
-            <div className="mt-0.5 text-xs text-gray-400">关闭后可为{activeChannel.name}维护独立的基础售卖资料。</div>
+            <div className="text-sm font-bold text-gray-800">跟随商品主档</div>
+            <div className="mt-0.5 text-xs text-gray-500">当前名称、价格和图片与商品主档保持一致；关闭后可为{activeChannel.name}单独设置。</div>
           </div>
           <button
             type="button"
@@ -232,62 +177,94 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
           </div>
         )}
 
-        {isOnlineChannelForm && (
-          <div className="overflow-hidden border border-[#DDE3E8] bg-white">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E8E8E8] bg-[#FAFBFC] px-4 py-3.5">
-              <div>
-                <div className="flex items-center text-sm font-black text-[#1F2129]"><RefreshCw size={15} className="mr-2 text-[#00A35B]" />复用现有渠道资料</div>
-                <div className="mt-1 text-xs leading-5 text-[#667085]">以下字段继续在通用表单维护，不重复增加平台字段；同步时由系统完成对象拆分和格式转换。</div>
-              </div>
-              <span className="inline-flex items-center border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700"><LockKeyhole size={12} className="mr-1.5" />无需重复填写</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[880px] w-full border-collapse text-left">
-                <thead className="bg-[#F7F8FA] text-[11px] font-bold text-[#667085]">
-                  <tr>
-                    <th className="w-[190px] border-b border-[#E5E6EB] px-4 py-2.5">企迈资料来源</th>
-                    <th className="w-[310px] border-b border-[#E5E6EB] px-4 py-2.5">{isDouyinChannelForm ? '抖音接口目标' : '美团接口目标'}</th>
-                    <th className="border-b border-[#E5E6EB] px-4 py-2.5">同步适配规则</th>
-                  </tr>
-                </thead>
-                <tbody className="text-xs text-[#4E5969]">
-                  {reuseRows.map(row => (
-                    <tr key={row.source}>
-                      <td className="border-b border-[#EEF0F2] px-4 py-3 font-bold text-[#1F2129]">{row.source}</td>
-                      <td className="border-b border-[#EEF0F2] px-4 py-3"><span className="inline-flex items-center gap-2"><ArrowRight size={13} className="text-[#98A2B3]" />{row.target}</span></td>
-                      <td className="border-b border-[#EEF0F2] px-4 py-3 leading-5">{row.rule}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t border-[#E8E8E8] bg-[#F2F8FF] px-4 py-3 text-[11px] leading-5 text-[#245B8A]">
-              {isDouyinChannelForm
-                ? '标品同步只使用品牌级资料；包装费、售卖时间、收款方式和门店范围在“下发门店并创建点单品”时写入，不随标品提交。'
-                : '渠道商品用于生成品牌商品；门店价格、上下架、售卖时间和门店差异在下发门店时写入平台门店商品。'}
-            </div>
-          </div>
-        )}
-
-        {fields.length > 0 ? (
-          <div>
-            {isOnlineChannelForm && (
-              <div className="mb-4 flex items-start justify-between gap-4 border-b border-[#E8E8E8] pb-3">
-                <div>
-                  <div className="text-sm font-black text-[#1F2129]">{isDouyinChannelForm ? '抖音在线点专属属性' : '美团在线点专属属性'}</div>
-                  <div className="mt-1 text-xs text-[#667085]">仅维护无法由企迈通用商品字段等价生成的平台资料。</div>
+        {isOnlineChannelForm && publishSummary && (
+          <section className="space-y-5" aria-label={`${activeChannel.name}同步资料`}>
+            <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-2 bg-[#F7F8FA] px-4 py-3.5 md:grid-cols-2">
+              {publishSummary.groups.map(group => (
+                <div key={group.label} className={`min-w-0 text-xs leading-5 text-[#667085] ${group.wide ? 'md:col-span-2' : ''}`}>
+                  <span className="font-bold text-[#475467]">{group.label}：</span>{group.detail}
                 </div>
-                <span className="border border-[#E5E6EB] bg-[#F7F8FA] px-2.5 py-1 text-[11px] text-[#667085]">随当前渠道商品维护</span>
+              ))}
+            </div>
+
+            {fields.length > 0 && (
+              <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
+                  {fields.map(field => {
+                    const value = channelValues[field.id];
+                    return (
+                      <div key={field.id} className={field.type === 'checkbox' ? 'md:col-span-2' : ''}>
+                        <div className="mb-2 flex items-center text-xs font-bold text-gray-700">
+                          {field.required && <span className="mr-1 text-red-500">*</span>}{field.label}
+                        </div>
+                        {field.type === 'select' && (
+                          <select value={String(value)} onChange={event => updateValue(field.id, event.target.value)} className="h-10 w-full border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#00C06B]">
+                            {field.options?.map(option => <option key={option}>{option}</option>)}
+                          </select>
+                        )}
+                        {field.type === 'text' && (
+                          <input
+                            value={String(value || '')}
+                            onChange={event => updateValue(field.id, event.target.value)}
+                            className="h-10 w-full border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#00C06B]"
+                            placeholder={field.placeholder || '请输入'}
+                          />
+                        )}
+                        {field.type === 'switch' && (
+                          <button type="button" onClick={() => updateValue(field.id, !value)} className={`relative h-6 w-11 rounded-full ${value ? 'bg-[#00C06B]' : 'bg-gray-300'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${value ? 'left-6' : 'left-1'}`} /></button>
+                        )}
+                        {field.type === 'radio' && (
+                          <div className="flex gap-5">
+                            {field.options?.map(option => (
+                              <button key={option} type="button" onClick={() => updateValue(field.id, option)} className="flex items-center text-sm text-gray-700">
+                                <span className={`mr-2 flex h-5 w-5 items-center justify-center rounded-full border-2 ${value === option ? 'border-[#00C06B]' : 'border-gray-300'}`}>{value === option && <span className="h-2.5 w-2.5 rounded-full bg-[#00C06B]" />}</span>{option}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {field.type === 'checkbox' && (
+                          <div className="flex flex-wrap gap-3">
+                            {field.options?.map(option => {
+                              const selectedValues = Array.isArray(value) ? value : [];
+                              const selected = selectedValues.includes(option);
+                              return (
+                                <button key={option} type="button" onClick={() => updateValue(field.id, selected ? selectedValues.filter(item => item !== option) : [...selectedValues, option])} className={`flex items-center border px-3 py-2 text-sm ${selected ? 'border-[#8BD7AE] bg-[#F0FBF5] text-[#008F53]' : 'border-gray-200 text-gray-600'}`}>
+                                  <span className={`mr-2 flex h-4 w-4 items-center justify-center border ${selected ? 'border-[#00C06B] bg-[#00C06B]' : 'border-gray-300'}`}>{selected && <Check size={11} className="text-white" />}</span>{option}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {field.description && <div className="mt-2 text-xs leading-5 text-[#667085]">{field.description}</div>}
+                      </div>
+                    );
+                  })}
               </div>
             )}
-            <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
+
+            {fields.length === 0 && (
+              <div className="flex items-center gap-3 border border-[#D9EDE2] bg-[#F7FCF9] px-4 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EAF8F1] text-[#008F53]" aria-hidden="true">
+                  <CircleCheck size={16} />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-[#1D2129]">无需额外设置</div>
+                  <div className="mt-0.5 text-xs leading-5 text-[#667085]">
+                    当前商品没有其他{activeChannel.name}专属属性。
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {!isOnlineChannelForm && fields.length > 0 ? (
+          <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
             {fields.map(field => {
               const value = channelValues[field.id];
               return (
                 <div key={field.id} className={field.type === 'checkbox' ? 'md:col-span-2' : ''}>
                   <div className="mb-2 flex items-center text-xs font-bold text-gray-700">
                     {field.required && <span className="mr-1 text-red-500">*</span>}{field.label}
-                    {field.description && <span title={field.description}><Info size={13} className="ml-1.5 text-gray-400" /></span>}
                   </div>
                   {field.type === 'select' && (
                     <select value={String(value)} onChange={event => updateValue(field.id, event.target.value)} className="h-10 w-full border border-gray-200 bg-white px-3 text-sm outline-none focus:border-[#00C06B]">
@@ -327,24 +304,17 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
                       })}
                     </div>
                   )}
+                  {field.description && <div className="mt-2 text-xs leading-5 text-[#667085]">{field.description}</div>}
                 </div>
               );
             })}
-            </div>
           </div>
-        ) : isMeituanDineChannelForm ? (
-          <div className="border border-[#CFE8DA] bg-[#F3FCF7] px-5 py-4">
-            <div className="flex items-center text-sm font-black text-[#087443]"><Check size={15} className="mr-2" />一期无需额外填写美团专属字段</div>
-            <div className="mt-2 text-xs leading-5 text-[#4D7C62]">
-              标准商品所需的名称、规格、SKU、价格、后台分类、图片、售卖时间、做法和加料均复用企迈资料；管理模式、来源、门店连接和平台编码由系统生成。图片与售卖时间为一期非必填字段；套餐、商品简述、平台标签和属性互斥一期不提交。
-            </div>
-          </div>
-        ) : (
+        ) : !isOnlineChannelForm && !publishSummary ? (
           <div className="border border-dashed border-gray-300 bg-gray-50 px-5 py-8 text-center">
-            <div className="text-sm font-bold text-gray-700">{activeChannel.name}属性能力待补充</div>
-            <div className="mt-1 text-xs text-gray-400">当前先支持名称、价格和图片差异；平台专属字段将在能力规则确认后补齐。</div>
+            <div className="text-sm font-bold text-gray-700">暂无其他设置</div>
+            <div className="mt-1 text-xs text-gray-500">当前渠道仅需维护上方的名称、价格和图片。</div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

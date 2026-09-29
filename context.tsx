@@ -56,6 +56,7 @@ const INITIAL_POLICIES: ManagementPolicy[] = [
 const INITIAL_BRAND_CONFIGS: Record<string, BrandConfig> = {
   'b_1': {
     policyId: INITIAL_POLICIES[0].id,
+    packageFeeSetting: 'product',
     features: {
       stock_shared: false, // Default changed to false
       auto_mapping: false,

@@ -85,6 +85,7 @@ interface Props {
   badges: MobileBadgeItem[];
   onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
   onBadgesChange: (badges: MobileBadgeItem[]) => void;
+  packageFeeLevel?: 'product' | 'spec';
 }
 
 const PHOTO_POSITIVE_TIPS = ['菜单平整', '正对拍摄', '清晰无遮挡'];
@@ -234,12 +235,12 @@ const MOBILE_THIRD_PRODUCTS: Record<MobileThirdPlatform, MobileThirdProduct[]> =
   ],
 };
 
-export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange }) => {
+export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange, packageFeeLevel = 'product' }) => {
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
   const [quickMode, setQuickMode] = useState<'photo' | 'voice'>('photo');
   const [targetProductType, setTargetProductType] = useState<'standard' | 'combo'>('standard');
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showPhotoActionSheet, setShowPhotoActionSheet] = useState(false);
   const [creationCategory, setCreationCategory] = useState<{ id: string; name: string } | null>(null);
   const [creationFormData, setCreationFormData] = useState<Record<string, any>>({});
@@ -857,37 +858,38 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
     const isStandard = targetProductType === 'standard';
 
     return (
-      <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in duration-200">
-        <div className="flex-1" onClick={() => setShowCategoryModal(false)}></div>
-        <div className="bg-white rounded-t-[32px] p-6 animate-in slide-in-from-bottom duration-300 pb-10 shadow-2xl flex flex-col max-h-[80vh]">
-          <div className="flex justify-between items-center mb-4 shrink-0">
+      <div className="absolute inset-0 z-[90] flex flex-col justify-end bg-black/50 animate-in fade-in duration-200">
+        <button type="button" aria-label="关闭类目选择" className="min-h-0 flex-1" onClick={() => setShowCategoryModal(false)} />
+        <div className="flex max-h-[80vh] flex-col rounded-t-[32px] bg-white px-5 pb-8 pt-5 shadow-2xl animate-in slide-in-from-bottom duration-300">
+          <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
             <div>
               <h3 className="text-xl font-black text-[#1F2129]">选择所属类目</h3>
-              <div className="flex items-center mt-1">
-                <span className="text-xs text-gray-400 mr-1">当前正在创建:</span>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isStandard ? 'bg-green-50 text-[#00C06B]' : 'bg-orange-50 text-orange-500'}`}>
+              <div className="mt-1 flex items-center">
+                <span className="mr-1 text-xs text-gray-400">当前正在创建：</span>
+                <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${isStandard ? 'bg-green-50 text-[#00C06B]' : 'bg-orange-50 text-orange-500'}`}>
                   {isStandard ? '标准商品' : '套餐商品'}
                 </span>
               </div>
             </div>
-            <button onClick={() => setShowCategoryModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-500">
+            <button type="button" onClick={() => setShowCategoryModal(false)} className="rounded-full bg-gray-100 p-2 text-gray-500">
               <X size={20} />
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 overflow-y-auto no-scrollbar pb-6">
+          <div className="grid min-h-0 grid-cols-2 gap-3 overflow-y-auto no-scrollbar pb-2">
             {activeCategoryList.map(cat => (
-              <div
+              <button
+                type="button"
                 key={cat.id}
                 onClick={() => handleCategorySelect(cat)}
-                className="flex flex-col items-center justify-center py-4 px-2 bg-[#F8FAFB] rounded-2xl border border-transparent active:border-[#00C06B] active:bg-[#00C06B]/5 cursor-pointer min-h-[110px] transition-all"
+                className="flex min-h-[110px] flex-col items-center justify-center rounded-2xl border border-transparent bg-[#F8FAFB] px-2 py-4 text-center transition-all active:border-[#00C06B] active:bg-[#00C06B]/5"
               >
                 <div className={`mb-2 p-2.5 rounded-2xl ${isStandard ? 'bg-white text-[#00C06B] shadow-sm' : 'bg-white text-orange-500 shadow-sm'}`}>
                   {cat.icon ? React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24, strokeWidth: 2.5 }) : <Utensils size={24} strokeWidth={2.5} />}
                 </div>
                 <span className="font-bold text-sm text-gray-800 text-center mb-0.5">{cat.name}</span>
                 <span className="text-[10px] text-gray-400 text-center leading-tight px-1">{cat.desc}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -911,6 +913,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
         onBack={handleBack}
         categories={categories}
         productType={targetProductType}
+        packageFeeLevel={packageFeeLevel}
         categoryName={creationFormData.category || creationCategory?.name}
         initialData={creationFormData}
         saveMode={formEntrySource === 'ai_confirm' ? 'ai_confirm' : 'default'}

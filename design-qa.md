@@ -77,3 +77,42 @@ passed
 - 自动检查结果：稳定菜单、策略配置、统一默认商品库、新建入口、类目选择和联合表单全部通过；1440 × 900 无横向溢出；控制台错误 0。
 - 截图：`design-handoff/audit/stable-menu-combined-create-2026-08-06/01-unified-channel-catalog.png`、`design-handoff/audit/stable-menu-combined-create-2026-08-06/02-combined-create-form.png`。
 - `npm.cmd run build`：通过。`npx.cmd tsc --noEmit` 仍有工作树既存的移动端与旧 Web 原型类型错误，本轮未新增可归因错误；Vite 构建与本轮浏览器链路均通过。
+
+## 2026-09-14 POS 商品管理 3.0 风格复验
+
+- 视觉参考：`exports/claude-recovered/POS商品管理 3.0/POS商品管理 3.0.dc.html`；只提取视觉结构与布局规则，不采用其中的模拟业务字段。
+- 对照视口：1366 × 1024，参考稿与当前实现均按相同尺寸截图。
+- 参考稿截图：`.codex_tmp/pos-reference-html-1366.png`。
+- 当前实现截图：`.codex_tmp/pos-current-after-1366.png`、`.codex_tmp/pos-method-after-1366.png`、`.codex_tmp/pos-shelf-after-1366.png`。
+- 已对齐轻量顶栏、白色分段导航、分类横栏、六列紧凑卡片、禁用态、恢复操作和底部浮动操作坞；背景、圆角、阴影、字号与状态色均按参考稿收敛。
+- 做法管理继续使用卡片网格，商品上下架保留渠道切换；“部分下架”只在全部渠道视图出现。已有搜索、分类、批量操作和确认流程均保留。
+- 保留“品项沽清”入口及现有业务弹窗，属于业务能力约束下的差异（P3）；未发现需要继续修复的 P0、P1 或 P2 视觉问题。
+- `npm run build`：通过；`git diff --check`：通过（仅有工作树既有的 LF/CRLF 提示）。
+
+最终结果：passed
+
+## 2026-09-14 POS 单渠道列表与跨渠道操作
+
+- 做法管理保持“全部 / 已禁用”，商品上下架保持“全部 / 已下架”；正常状态继续通过“全部”查看，不增加低价值的“已启用 / 已上架”快捷项。
+- 全渠道统一库存或统一上下架时，顶部显示只读范围，不提供渠道选择；操作自动覆盖全部关联渠道。
+- 分渠道独立管理时，顶部渠道选择只包含具体渠道，不再提供“全部渠道”；卡片库存、沽清和上下架状态只表达当前渠道。
+- 商品沽清、恢复库存和商品上下架弹窗均锁定当前渠道，并允许追加其他渠道执行同一操作；未映射渠道继续遵循既有禁用规则。
+- 独立库存列表截图：`.codex_tmp/pos-independent-stock-v1.png`；沽清跨渠道弹窗：`.codex_tmp/pos-stock-cross-channel-v1.png`；上下架跨渠道弹窗：`.codex_tmp/pos-shelf-cross-channel-v2.png`。
+- `npm run build` 与 `git diff --check`：通过。
+
+最终结果：passed
+
+## 2026-09-14 POS 参考稿完整交互补齐
+
+- 商品沽清渠道选择补充“全部渠道”并设为默认视图；分渠道和全部渠道均沿用当前项目既有库存与沽清数据结构。
+- 商品沽清底部快捷筛选按参考稿拆分为“全部 / 已沽清 / 低库存 / 长期沽清”，做法管理与商品上下架保留各自“全部 / 已禁用”“全部 / 已下架”快捷筛选。
+- “如何沽清商品”补齐三种场景的说明、数量输入示意、长期沽清标识和恢复售卖示意，使用 900px 三列弹窗结构。
+- 恢复项目现有 Ops / Web / POS / App 端切换能力，并收敛为左下角 40px 图标；悬浮、聚焦或点击时向上展开四端菜单，选择后自动收起。
+- 同视口截图：`.codex_tmp/pos-complete-replica-1366-v2.png`；说明弹窗截图：`.codex_tmp/pos-guide-complete-1366-v2.png`。
+- `npm run build` 与 `git diff --check`：通过。
+
+- 端切换入口截图：`.codex_tmp/pos-client-switcher-collapsed.png`、`.codex_tmp/pos-client-switcher-expanded.png`；展开状态未遮挡底部快捷筛选坞。
+- 修复入口与展开菜单之间的悬浮断层：菜单命中区域与图标连续，移出延迟 260ms；点击图标只负责保持展开，不再与悬浮状态反向切换。
+- 自动交互验证：鼠标从左下角图标移动到展开菜单的 Web 按钮后，菜单保持展开并成功切换至 `?view=web`。
+
+最终结果：passed

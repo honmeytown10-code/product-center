@@ -1234,7 +1234,7 @@ export const WebAdmin: React.FC = () => {
       }
 
       if (activeMenu === 'product_template') {
-          return <WebProductTemplateManager onNavigate={(path) => {
+          return <WebProductTemplateManager channelProductOverrides={channelProductOverrides} onChannelProductSaved={(key, product) => setChannelProductOverrides(prev => ({ ...prev, [key]: product }))} onNavigate={(path) => {
             if (path === 'product_sync') setProductSyncInitialTab('publish');
             setActiveMenu(path);
           }} />;

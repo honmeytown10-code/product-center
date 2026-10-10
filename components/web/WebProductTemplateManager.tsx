@@ -18,6 +18,7 @@ import { useProducts } from '../../context';
 import { ALL_OMNICHANNEL_CHANNELS, getOmnichannelConfig, isThirdPartyChannelId, resolveTemplateProductSource } from '../../omnichannel';
 import type { OmnichannelChannel } from '../../omnichannel';
 import { WebProductTemplateDetail } from './WebProductTemplateDetail';
+import type { Product } from '../../types';
 
 type TemplateStatus = 'enabled' | 'disabled';
 
@@ -73,7 +74,11 @@ const EMPTY_EDITOR: TemplateEditorState = {
   channels: ['pos', 'mini_program_dine_in'],
 };
 
-export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavigate }) => {
+export const WebProductTemplateManager: React.FC<{
+  onNavigate?: (path: string) => void;
+  channelProductOverrides?: Record<string, Product>;
+  onChannelProductSaved?: (key: string, product: Product) => void;
+}> = ({ onNavigate, channelProductOverrides = {}, onChannelProductSaved }) => {
   const { products, activeBrandId, brandConfigs } = useProducts();
   const omnichannelConfig = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
   const [records, setRecords] = useState<ProductTemplateRecord[]>(INITIAL_RECORDS);
@@ -198,6 +203,8 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
   const managedTemplate = records.find(record => record.id === managedTemplateId);
   if (managedTemplate) {
     const source = resolveTemplateProductSource(omnichannelConfig, managedTemplate.channels);
+    const catalogId = source.source?.type === 'channel_catalog' ? source.source.id.replace('channel_catalog:', '') : null;
+    const catalogChannelIds = omnichannelConfig.channelGroups.find(group => group.id === catalogId)?.channels.filter(isThirdPartyChannelId) || [];
     const storeConflicts = (Object.entries(templateStoreIds) as Array<[string, string[]]>).reduce<Record<string, string>>((acc, [templateId, storeIds]) => {
       const other = records.find(record => record.id === templateId && record.id !== managedTemplate.id && record.status === 'enabled' && record.channels.some(channel => managedTemplate.channels.includes(channel)));
       if (other) storeIds.forEach(storeId => { acc[storeId] = other.name; });
@@ -212,6 +219,10 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
         sourceLabel={source.source?.label || '配置待完善'}
         sourceDescription={source.message}
         storeConflicts={storeConflicts}
+        catalogId={catalogId}
+        catalogChannelIds={catalogChannelIds}
+        channelProductOverrides={channelProductOverrides}
+        onChannelProductSaved={onChannelProductSaved}
         onCreatePublish={() => onNavigate?.('product_sync')}
         onProductIdsChange={ids => {
           setTemplateProductIds(prev => ({ ...prev, [managedTemplate.id]: ids }));

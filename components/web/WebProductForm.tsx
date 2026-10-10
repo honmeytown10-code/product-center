@@ -9,10 +9,11 @@ import { Category, CategoryFieldConfig, AVAILABLE_DYNAMIC_FIELDS, COMMON_FIELD_C
 import { channelGroupIncludesMiniProgram } from '../../omnichannel';
 import { Switch, SectionHeader, FormRow } from './WebCommon';
 import { WebCategorySelectModal } from './WebModals';
-import { WebThirdPartyChannelFields } from './WebThirdPartyChannelFields';
+import { WebThirdPartyChannelFields, getDouyinSettingsError, normalizeDouyinChannelValues, resolveChannelFieldValues, resolveDouyinSalePeriod, resolveSelectedSalesChannelIds } from './WebThirdPartyChannelFields';
 
 type ProductSaveDraft = {
     id: string;
+    createdTime?: string;
     name: string;
     price: number;
     category: string;
@@ -1284,6 +1285,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 { id: 'addon-2', groupName: '小料', addonName: '芒果粒', addonCode: '1210585270384668672', addonLimit: '2', fixedQuantity: '1', addonPrice: '3', addonSpecPrice: '', addonStatus: 'on' },
             ]
     ));
+    const enabledChannelAddonItems = addonConfigRows
+        .filter(row => row.addonStatus === 'on')
+        .map(row => ({ groupName: row.groupName, name: row.addonName }));
+    const selectedSalesChannelIds = resolveSelectedSalesChannelIds(thirdPartyChannelAttributeIds, dynamicFormData);
+    const channelFieldValues = resolveChannelFieldValues(thirdPartyChannelAttributeIds, dynamicFormData.channelSpecificValues || {});
     const getStickyOffset = () => {
         const stickyHeight = stickyToolbarRef.current?.offsetHeight ?? 0;
         return stickyHeight + 16;
@@ -2336,6 +2342,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const commitProductSave = (showSuccessPage = true) => {
         const nextSuccessMode = hasSavedProduct ? 'edit' : 'create';
+        const createdTime = String(initialProduct?.createdTime || savedProductForChannelAction?.createdTime || formatDateTime(new Date()));
+        const savedChannelFields = selectedSalesChannelIds.includes('douyin') ? normalizeDouyinChannelValues(channelFieldValues, enabledChannelAddonItems) : channelFieldValues;
         const inheritedChannelFormData = isUnifiedForm
             ? {
                 ...dynamicFormData,
@@ -2355,6 +2363,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             : dynamicFormData;
         const savedProduct: ProductSaveDraft = {
             id: savedProductId,
+            createdTime,
             name: String(
                 isUnifiedForm
                     ? masterProductName
@@ -2373,7 +2382,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             ),
             skuCode: String(initialProduct?.skuCode || `${Date.now()}`.slice(-8)),
             type,
-            formData: inheritedChannelFormData,
+            formData: {
+                ...inheritedChannelFormData,
+                ...((isChannelForm || isUnifiedForm) && thirdPartyChannelAttributeIds.length > 0 ? {
+                    salesChannelIds: selectedSalesChannelIds,
+                    onlineSalesChannelIds: selectedSalesChannelIds.filter(id => id === 'douyin' || id === 'meituan_dine'),
+                    channelSpecificValues: savedChannelFields,
+                    channelAddonItems: enabledChannelAddonItems,
+                    douyinSalePeriod: selectedSalesChannelIds.includes('douyin') ? resolveDouyinSalePeriod(savedChannelFields, createdTime) : undefined,
+                } : {}),
+            },
         };
         onProductSaved?.(savedProduct, nextSuccessMode);
         setSavedProductForChannelAction(savedProduct);
@@ -2386,6 +2404,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const handleSave = () => {
         setDraftSaved(false);
         setSaveAttempted(true);
+        if ((isChannelForm || isUnifiedForm) && thirdPartyChannelAttributeIds.length > 0 && selectedSalesChannelIds.length === 0) {
+            document.getElementById('third_party')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+        if (selectedSalesChannelIds.includes('douyin') && getDouyinSettingsError(channelFieldValues, enabledChannelAddonItems)) {
+            document.getElementById('third_party')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
         if (!isStoreForm && requiredMissingItems.length > 0) {
             locateValidationItem(requiredMissingItems[0]);
             return;
@@ -9942,8 +9968,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             <div id="third_party" className="scroll-mt-[190px] bg-white rounded-lg border border-gray-200 p-4 xl:p-5">
                                 <WebThirdPartyChannelFields
                                     channelIds={thirdPartyChannelAttributeIds}
+                                    selectedSalesChannelIds={selectedSalesChannelIds}
+                                    onSelectedSalesChannelIdsChange={ids => setDynamicFormData(prev => ({ ...prev, salesChannelIds: ids, onlineSalesChannelIds: ids.filter(id => id === 'douyin' || id === 'meituan_dine') }))}
                                     location={isChannelForm || isUnifiedForm ? 'channel' : 'master'}
                                     title={isChannelForm || isUnifiedForm ? '渠道专属属性' : '三方渠道发布属性'}
+                                    value={dynamicFormData.channelSpecificValues || {}}
+                                    onChange={channelSpecificValues => setDynamicFormData(prev => ({ ...prev, channelSpecificValues }))}
+                                    addonItems={enabledChannelAddonItems}
                                 />
                             </div>
                         )}

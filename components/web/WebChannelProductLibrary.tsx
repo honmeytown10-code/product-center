@@ -502,15 +502,23 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   };
 
   const getPlatformSyncEligibility = (platform: OnlineOrderingPlatform, productIds: string[]) => {
+    const channelIds = productIds.filter(productId => {
+      const formData = effectiveProducts.find(product => product.id === productId)?.formData;
+      const selected = Array.isArray(formData?.salesChannelIds) ? formData.salesChannelIds : formData?.onlineSalesChannelIds;
+      return !Array.isArray(selected) || selected.includes(platform === 'douyin' ? 'douyin' : 'meituan_dine');
+    });
     const supportedIds = platform === 'meituan'
-      ? productIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
-      : productIds;
+      ? channelIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
+      : channelIds;
     const eligibleIds = platform === 'douyin' && reviewChannel
       ? supportedIds.filter(productId => !isPlatformReviewing(getPlatformStatus(productId) as PlatformStatus))
       : supportedIds;
     return {
       eligibleIds,
       excludedCount: productIds.length - eligibleIds.length,
+      excludedByChannelCount: productIds.length - channelIds.length,
+      excludedByTypeCount: channelIds.length - supportedIds.length,
+      excludedByReviewCount: supportedIds.length - eligibleIds.length,
     };
   };
 
@@ -543,9 +551,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   };
 
   const submitPlatformSync = (platform: OnlineOrderingPlatform, productIds: string[]) => {
-    const syncableProductIds = platform === 'meituan'
-      ? productIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
-      : productIds;
+    const syncableProductIds = getPlatformSyncEligibility(platform, productIds).eligibleIds;
     if (syncableProductIds.length === 0) return;
     if (platform === 'douyin' && reviewChannel) {
       const submittedAt = '2026-08-20 14:30';
@@ -1200,7 +1206,12 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                 <div className="mb-2 text-[13px] font-bold text-[#1D2129]">选择目标平台</div>
                 <div className="space-y-2">
                   {getAvailablePlatformTargets().map(platform => {
-                    const { eligibleIds, excludedCount } = getPlatformSyncEligibility(platform, syncDialogProductIds);
+                    const { eligibleIds, excludedCount, excludedByChannelCount, excludedByTypeCount, excludedByReviewCount } = getPlatformSyncEligibility(platform, syncDialogProductIds);
+                    const exclusionReasons = [
+                      excludedByChannelCount > 0 ? `${excludedByChannelCount} 个未勾选该售卖渠道` : '',
+                      excludedByTypeCount > 0 ? `${excludedByTypeCount} 个套餐商品暂不支持` : '',
+                      excludedByReviewCount > 0 ? `${excludedByReviewCount} 个商品正在审核中` : '',
+                    ].filter(Boolean).join('、');
                     const checked = platformSyncTargets.includes(platform);
                     const disabled = eligibleIds.length === 0;
                     const label = platform === 'douyin' ? '抖音在线点' : '美团在线点';
@@ -1223,7 +1234,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                           </span>
                           <span className="mt-1 block text-[12px] leading-5 text-[#667085]">
                             {platform === 'douyin' ? '创建或更新抖音标品，并提交平台审核。' : '创建或更新美团品牌商品，无需平台审核。'}
-                            {excludedCount > 0 && <span className="ml-1 text-[#C46A00]">{excludedCount} 个将被排除：{platform === 'douyin' ? '商品正在审核中' : '一期暂不支持套餐商品'}。</span>}
+                            {excludedCount > 0 && <span className="ml-1 text-[#C46A00]">已排除：{exclusionReasons}。</span>}
                           </span>
                         </span>
                       </label>

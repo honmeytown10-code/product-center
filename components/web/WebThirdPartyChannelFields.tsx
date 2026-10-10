@@ -69,11 +69,80 @@ const CHANNEL_INITIAL_VALUES: Partial<Record<ThirdPartyChannelId, Record<string,
   },
 };
 
+export type ThirdPartyFieldValues = Record<string, Record<string, string | boolean | string[]>>;
+export type ChannelAddonItem = { groupName: string; name: string };
+export const resolveChannelFieldValues = (channelIds: ThirdPartyChannelId[], values: ThirdPartyFieldValues): ThirdPartyFieldValues =>
+  Object.fromEntries(channelIds.map(id => [id, { ...CHANNEL_INITIAL_VALUES[id], ...values[id] }]));
+const ONLINE_CHANNEL_IDS: ThirdPartyChannelId[] = ['douyin', 'meituan_dine'];
+export const resolveSelectedSalesChannelIds = (
+  channelIds: ThirdPartyChannelId[],
+  formData?: { salesChannelIds?: unknown; onlineSalesChannelIds?: unknown },
+): ThirdPartyChannelId[] => {
+  if (Array.isArray(formData?.salesChannelIds)) return channelIds.filter(id => formData.salesChannelIds.includes(id));
+  if (Array.isArray(formData?.onlineSalesChannelIds)) return channelIds.filter(id => !ONLINE_CHANNEL_IDS.includes(id) || formData.onlineSalesChannelIds.includes(id));
+  return channelIds;
+};
+const DOUYIN_LONG_SALE_END_AT = '2099-12-31 23:59:59';
+const getDouyinSaleMode = (settings?: ThirdPartyFieldValues['douyin']) =>
+  settings?.soldTimeMode === 'range' || (!settings?.soldTimeMode && (settings?.soldStartAt !== undefined || settings?.soldEndAt !== undefined)) ? 'range' : 'long';
+export const formatPlatformDateTime = (value: string | Date) => {
+  const date = value instanceof Date ? value : new Date(value.replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (number: number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+export const resolveDouyinSalePeriod = (values: ThirdPartyFieldValues, createdTime?: string) => {
+  const settings = values.douyin || {};
+  if (getDouyinSaleMode(settings) === 'long') {
+    const startAt = formatPlatformDateTime(createdTime || new Date());
+    return startAt && startAt < DOUYIN_LONG_SALE_END_AT ? { startAt, endAt: DOUYIN_LONG_SALE_END_AT } : null;
+  }
+  const startAt = formatPlatformDateTime(String(settings.soldStartAt || ''));
+  const endAt = formatPlatformDateTime(String(settings.soldEndAt || ''));
+  return startAt && endAt && endAt > startAt ? { startAt, endAt } : null;
+};
+export const normalizeDouyinChannelValues = (values: ThirdPartyFieldValues, addonItems: ChannelAddonItem[] = []): ThirdPartyFieldValues => {
+  const douyin = { ...(values.douyin || {}) };
+  if (getDouyinSaleMode(douyin) === 'long') {
+    douyin.soldTimeMode = 'long';
+    delete douyin.soldStartAt;
+    delete douyin.soldEndAt;
+  } else {
+    const period = resolveDouyinSalePeriod(values);
+    if (period) {
+      douyin.soldTimeMode = 'range';
+      douyin.soldStartAt = period.startAt.replace(' ', 'T');
+      douyin.soldEndAt = period.endAt.replace(' ', 'T');
+    }
+  }
+  for (const groupName of new Set(addonItems.map(item => item.groupName).filter(Boolean))) {
+    const count = addonItems.filter(item => item.groupName === groupName).length;
+    const key = `addonChoice:${groupName}`;
+    if (String(douyin[key] || 'all') === String(count)) douyin[key] = 'all';
+  }
+  return { ...values, douyin };
+};
+export const getDouyinSettingsError = (values: ThirdPartyFieldValues, addonItems: ChannelAddonItem[] = []): string => {
+  const settings = values.douyin || {};
+  if (getDouyinSaleMode(settings) === 'range' && !resolveDouyinSalePeriod(values)) return '请填写完整的售卖时间，且结束时间晚于开始时间';
+  for (const groupName of new Set(addonItems.map(item => item.groupName).filter(Boolean))) {
+    const count = addonItems.filter(item => item.groupName === groupName).length;
+    const choice = String(settings[`addonChoice:${groupName}`] || 'all');
+    if (choice !== 'all' && (!Number.isInteger(Number(choice)) || Number(choice) < 1 || Number(choice) >= count)) return `请重新设置“${groupName}”的加料组购买限制`;
+  }
+  return '';
+};
+
 type Props = {
   channelIds: ThirdPartyChannelId[];
+  selectedSalesChannelIds?: ThirdPartyChannelId[];
+  onSelectedSalesChannelIdsChange?: (ids: ThirdPartyChannelId[]) => void;
   location: 'master' | 'channel' | 'channel_catalog';
   title?: string;
   compact?: boolean;
+  value?: ThirdPartyFieldValues;
+  onChange?: (value: ThirdPartyFieldValues) => void;
+  addonItems?: ChannelAddonItem[];
 };
 
 const PLATFORM_PUBLISH_SUMMARIES: Partial<Record<ThirdPartyChannelId, {
@@ -82,8 +151,8 @@ const PLATFORM_PUBLISH_SUMMARIES: Partial<Record<ThirdPartyChannelId, {
   douyin: {
     groups: [
       { label: '商品信息', detail: '名称、图片、规格、SKU 与售价' },
-      { label: '售卖设置', detail: '包装费、售卖时间和当前渠道已启用的做法' },
-      { label: '商品加料', detail: '已关联且在当前渠道启用的加料随商品同步；名称和类型沿用主档，平台售价和抖音商品类目在“抖音在线点加料”中维护', wide: true },
+      { label: '售卖设置', detail: '包装费、当前渠道已启用的做法，以及下方设置的售卖时间' },
+      { label: '商品加料', detail: '当前渠道已启用的加料及下方的分组选择数量；加料售价和抖音类目在“抖音在线点加料”维护', wide: true },
     ],
   },
   meituan_dine: {
@@ -94,27 +163,36 @@ const PLATFORM_PUBLISH_SUMMARIES: Partial<Record<ThirdPartyChannelId, {
   },
 };
 
-export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, location, title, compact = false }) => {
+export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, selectedSalesChannelIds, onSelectedSalesChannelIdsChange, location, title, compact = false, value, onChange, addonItems = [] }) => {
   const [activeChannelId, setActiveChannelId] = useState<ThirdPartyChannelId>(channelIds[0]);
   const [inheritBasic, setInheritBasic] = useState<Record<string, boolean>>({});
   const [values, setValues] = useState<Record<string, Record<string, string | boolean | string[]>>>({});
 
-  const activeId = channelIds.includes(activeChannelId) ? activeChannelId : channelIds[0];
+  const selectedChannelIds = selectedSalesChannelIds ?? channelIds;
+  const visibleChannelIds = location === 'master' ? channelIds : channelIds.filter(id => selectedChannelIds.includes(id));
+  const activeId = visibleChannelIds.includes(activeChannelId) ? activeChannelId : visibleChannelIds[0];
   const activeChannel = activeId ? getThirdPartyChannel(activeId) : null;
   const fields = useMemo(() => activeId ? (CHANNEL_FIELDS[activeId] || []) : [], [activeId]);
-  if (!activeChannel) return null;
-
   const inherited = inheritBasic[activeId] ?? true;
   const publishSummary = PLATFORM_PUBLISH_SUMMARIES[activeId];
-  const channelValues = { ...(CHANNEL_INITIAL_VALUES[activeId] || {}), ...(values[activeId] || {}) };
+  const savedValues = value || values;
+  const channelValues = { ...(CHANNEL_INITIAL_VALUES[activeId] || {}), ...(savedValues[activeId] || {}) };
   const isOnlineChannelForm = Boolean(publishSummary && location !== 'master');
-  const updateValue = (fieldId: string, value: string | boolean | string[]) => {
-    setValues(prev => ({ ...prev, [activeId]: { ...(prev[activeId] || {}), [fieldId]: value } }));
+  const updateValue = (fieldId: string, nextValue: string | boolean | string[]) => {
+    const nextChannelValues = { ...channelValues };
+    if (activeId === 'douyin' && fieldId === 'soldTimeMode') {
+      delete nextChannelValues.soldStartAt;
+      delete nextChannelValues.soldEndAt;
+    }
+    nextChannelValues[fieldId] = nextValue;
+    const next = { ...savedValues, [activeId]: nextChannelValues };
+    setValues(next);
+    onChange?.(next);
   };
 
   return (
     <div className="overflow-hidden border border-[#DDE3E8] bg-white">
-      {!isOnlineChannelForm && <div className="flex items-start justify-between gap-5 border-b border-[#E8E8E8] bg-[#FAFBFC] px-5 py-4">
+      {activeChannel && !isOnlineChannelForm && <div className="flex items-start justify-between gap-5 border-b border-[#E8E8E8] bg-[#FAFBFC] px-5 py-4">
         <div>
           <div className="text-sm font-black text-[#1F2129]">{title || '三方渠道商品资料'}</div>
           <div className="mt-1 text-xs text-gray-500">
@@ -128,8 +206,16 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
         </div>
       </div>}
 
-      <div className="flex overflow-x-auto border-b border-[#E8E8E8] bg-white px-4">
-        {channelIds.map(channelId => {
+      {channelIds.length > 0 && location !== 'master' && <div className="border-b border-[#E8E8E8] px-5 py-4">
+        <div className="mb-2 text-sm font-bold text-[#1D2129]">售卖渠道</div>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">{channelIds.map(id => (
+          <label key={id} className="inline-flex cursor-pointer items-center gap-2 text-sm text-[#344054]">
+            <input type="checkbox" checked={selectedChannelIds.includes(id)} onChange={() => onSelectedSalesChannelIdsChange?.(selectedChannelIds.includes(id) ? selectedChannelIds.filter(item => item !== id) : channelIds.filter(item => item === id || selectedChannelIds.includes(item)))} className="h-4 w-4 accent-[#00B460]" />{getThirdPartyChannel(id).name}
+          </label>
+        ))}</div>
+      </div>}
+      {visibleChannelIds.length > 0 && <div className="flex overflow-x-auto border-b border-[#E8E8E8] bg-white px-4">
+        {visibleChannelIds.map(channelId => {
           const channel = getThirdPartyChannel(channelId);
           return (
             <button
@@ -142,9 +228,10 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
             </button>
           );
         })}
-      </div>
+      </div>}
+      {visibleChannelIds.length === 0 && <div className="px-5 py-6 text-sm text-[#667085]">请先选择售卖渠道，再维护对应渠道的商品属性。</div>}
 
-      <div className={compact ? 'space-y-4 p-4' : 'space-y-6 p-5'}>
+      {activeChannel && <div className={compact ? 'space-y-4 p-4' : 'space-y-6 p-5'}>
         {!isOnlineChannelForm && <div className="flex items-center justify-between border border-[#E8E8E8] bg-[#F8FAFB] px-4 py-3">
           <div>
             <div className="text-sm font-bold text-gray-800">跟随商品主档</div>
@@ -241,6 +328,33 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
               </div>
             )}
 
+            {activeId === 'douyin' && <div className="space-y-5">
+              <div>
+                <div className="mb-2 text-xs font-bold text-[#344054]">售卖时间</div>
+                <div className="flex flex-wrap gap-5 text-sm text-[#344054]">
+                  {(['long', 'range'] as const).map(mode => <label key={mode} className="inline-flex cursor-pointer items-center gap-2"><input type="radio" name="douyin-sold-time-mode" checked={getDouyinSaleMode(channelValues) === mode} onChange={() => updateValue('soldTimeMode', mode)} className="h-4 w-4 accent-[#00B460]" />{mode === 'long' ? '长期售卖' : '指定日期售卖'}</label>)}
+                </div>
+                {getDouyinSaleMode(channelValues) === 'long' && <p className="mt-2 text-xs text-[#667085]">同步时按商品创建时间至 2099-12-31 23:59:59 设置售卖时间。</p>}
+                {getDouyinSaleMode(channelValues) === 'range' && <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[#667085]">
+                  <input aria-label="抖音售卖开始时间" type="datetime-local" step="1" value={String(channelValues.soldStartAt || '')} onChange={event => updateValue('soldStartAt', event.target.value)} className="h-9 border border-[#DDE3E8] bg-white px-2 text-[#344054]" />
+                  <span>至</span>
+                  <input aria-label="抖音售卖结束时间" type="datetime-local" step="1" value={String(channelValues.soldEndAt || '')} onChange={event => updateValue('soldEndAt', event.target.value)} className="h-9 border border-[#DDE3E8] bg-white px-2 text-[#344054]" />
+                </div>}
+                {getDouyinSaleMode(channelValues) === 'range' && (channelValues.soldStartAt || channelValues.soldEndAt) && !resolveDouyinSalePeriod({ douyin: channelValues }) && <p role="alert" className="mt-2 text-xs text-[#B42318]">请填写完整的售卖时间，且结束时间晚于开始时间。</p>}
+              </div>
+              {(() => {
+                const groups = Array.from(new Set(addonItems.map(item => item.groupName).filter(Boolean)));
+                return groups.length > 0 ? <div><div className="mb-2 text-xs font-bold text-[#344054]">加料组购买限制</div><div className="divide-y divide-[#E8E8E8] border-y border-[#E8E8E8]">{groups.map(groupName => {
+                  const groupAddons = addonItems.filter(item => item.groupName === groupName);
+                  const count = groupAddons.length;
+                  const key = `addonChoice:${groupName}`;
+                  const storedChoice = String(channelValues[key] || 'all');
+                  const choice = storedChoice === String(count) ? 'all' : storedChoice;
+                  return <div key={groupName} className="flex flex-wrap items-center justify-between gap-4 py-3"><div className="min-w-0 flex-1"><div className="text-sm font-medium text-[#344054]">{groupName} <span className="ml-1 text-xs font-normal text-[#667085]">{count} 个加料</span></div><div className="mt-1 text-xs leading-5 text-[#667085]">{groupAddons.map(item => item.name).join('、')}</div></div><select aria-label={`${groupName}加料组购买限制`} value={choice} onChange={event => updateValue(key, event.target.value)} className="h-9 min-w-[140px] border border-[#DDE3E8] bg-white px-2 text-sm text-[#344054]"><option value="all">全部可选</option>{Array.from({ length: Math.max(count - 1, 0) }, (_, index) => index + 1).map(number => <option key={number} value={String(number)}>{count} 选 {number}</option>)}</select></div>;
+                })}</div></div> : <p className="text-xs text-[#667085]">当前商品没有已启用的加料，无需设置加料组购买限制。</p>;
+              })()}
+            </div>}
+
             {fields.length === 0 && (
               <div className="flex items-center gap-3 border border-[#D9EDE2] bg-[#F7FCF9] px-4 py-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EAF8F1] text-[#008F53]" aria-hidden="true">
@@ -315,7 +429,7 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, locati
             <div className="mt-1 text-xs text-gray-500">当前渠道仅需维护上方的名称、价格和图片。</div>
           </div>
         ) : null}
-      </div>
+      </div>}
     </div>
   );
 };

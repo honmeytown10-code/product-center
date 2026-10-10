@@ -13,6 +13,8 @@ interface SpecItemDraft {
   unlimited: boolean;
   storePackFee?: string;
   takePackFee?: string;
+  storePackMark?: string;
+  takePackMark?: string;
 }
 
 const DEFAULT_SPEC_LIBRARY: LocalSpec[] = [
@@ -50,7 +52,7 @@ export const MobileProductEditor: React.FC<Props> = ({
   draftBasePrice,
   draftSpecItems,
   packageFeeLevel = 'product',
-}) => {
+}: Props) => {
   const { products } = useProducts();
   const initialChannels = getInitialChannels(activeChannel);
   const [pendingPayload, setPendingPayload] = useState<null | {
@@ -61,6 +63,8 @@ export const MobileProductEditor: React.FC<Props> = ({
     linkedStallIds: string[];
     storePackFee: string;
     takePackFee: string;
+    storePackMark: string;
+    takePackMark: string;
   }>(null);
   const [effectiveChannels, setEffectiveChannels] = useState<string[]>(['mini', 'meituan', 'taobao', 'pos']);
 
@@ -76,29 +80,45 @@ export const MobileProductEditor: React.FC<Props> = ({
   };
 
   const submitEdit = (
-    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[]; storePackFee: string; takePackFee: string },
+    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[]; storePackFee: string; takePackFee: string; storePackMark: string; takePackMark: string },
     options?: { mode: 'all' | 'partial'; channels: string[] }
   ) => {
-    const nextPrice = Number(payload.basePrice) || product.price;
+    const nextPrice = payload.basePrice.trim() ? Number(payload.basePrice) : product.price;
     const nextSpecs = product.isMultiSpec && payload.specItems.length
       ? payload.specItems.map((item, index) => ({
           ...product.specs?.[index],
           name: item.name,
-          price: Number(item.price) || product.specs?.[index]?.price || nextPrice,
-          stock: item.unlimited ? -1 : (Number(item.stock) || product.specs?.[index]?.stock || 0),
+          price: item.price.trim() ? Number(item.price) : (product.specs?.[index]?.price ?? nextPrice),
+          stock: item.unlimited ? -1 : (item.stock.trim() ? Number(item.stock) : (product.specs?.[index]?.stock ?? 0)),
           unlimited: item.unlimited,
-          storePackFee: parseOptionalMoney(item.storePackFee),
-          takePackFee: parseOptionalMoney(item.takePackFee),
+          ...(packageFeeLevel === 'spec' ? {
+            storePackFee: parseOptionalMoney(item.storePackFee),
+            takePackFee: parseOptionalMoney(item.takePackFee),
+            storePackMark: item.storePackMark || undefined,
+            takePackMark: item.takePackMark || undefined,
+          } : {}),
         }))
-      : product.specs;
+      : packageFeeLevel === 'spec' ? [{
+          ...product.specs?.[0],
+          name: product.specs?.[0]?.name || '统一规格',
+          price: nextPrice, stock: product.stock ?? -1,
+          storePackFee: parseOptionalMoney(payload.storePackFee),
+          takePackFee: parseOptionalMoney(payload.takePackFee),
+          storePackMark: payload.storePackMark || undefined,
+          takePackMark: payload.takePackMark || undefined,
+        }] : product.specs;
 
     onSave?.({
       name: payload.name,
       category: payload.category,
       price: nextPrice,
       specs: nextSpecs,
-      storePackFee: parseOptionalMoney(payload.storePackFee),
-      takePackFee: parseOptionalMoney(payload.takePackFee),
+      ...(packageFeeLevel === 'product' ? {
+        storePackFee: parseOptionalMoney(payload.storePackFee),
+        takePackFee: parseOptionalMoney(payload.takePackFee),
+        storePackMark: payload.storePackMark || undefined,
+        takePackMark: payload.takePackMark || undefined,
+      } : {}),
       linkedStallIds: payload.linkedStallIds,
     }, options);
     onBack();
@@ -143,9 +163,13 @@ export const MobileProductEditor: React.FC<Props> = ({
             unlimited: !!spec.unlimited || spec.stock === -1,
             storePackFee: spec.storePackFee === undefined ? '' : String(spec.storePackFee),
             takePackFee: spec.takePackFee === undefined ? '' : String(spec.takePackFee),
+            storePackMark: spec.storePackMark || '',
+            takePackMark: spec.takePackMark || '',
           })),
-          storePackFee: product.storePackFee === undefined ? '' : String(product.storePackFee),
-          takePackFee: product.takePackFee === undefined ? '' : String(product.takePackFee),
+          storePackFee: String((packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.storePackFee : product.storePackFee) ?? ''),
+          takePackFee: String((packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.takePackFee : product.takePackFee) ?? ''),
+          storePackMark: (packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.storePackMark : product.storePackMark) || '',
+          takePackMark: (packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.takePackMark : product.takePackMark) || '',
           specSelection: inferSpecSelection((product.specs || []).map(spec => spec.name), DEFAULT_SPEC_LIBRARY),
           specLibrary: DEFAULT_SPEC_LIBRARY,
           linkedStallIds: product.linkedStallIds || [],
@@ -159,6 +183,8 @@ export const MobileProductEditor: React.FC<Props> = ({
             linkedStallIds: data.linkedStallIds,
             storePackFee: data.storePackFee,
             takePackFee: data.takePackFee,
+            storePackMark: data.storePackMark,
+            takePackMark: data.takePackMark,
           };
           if (activeChannel === 'all') {
             setPendingPayload(payload);

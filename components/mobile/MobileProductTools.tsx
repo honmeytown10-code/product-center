@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  ChevronLeft, ShoppingBag, Plus, Layers, Database, Tag, Scale, Box, Edit3, 
+  ChevronLeft, ShoppingBag, Plus, Layers, Database, Tag, Scale, Edit3,
   ChevronRight, Settings, Coffee, Utensils
 } from 'lucide-react';
 
@@ -28,7 +28,7 @@ export const MobileProductTools: React.FC<Props> = ({ onBack, onNavigate }) => {
         <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="flex items-center mb-4">
                 <span className="w-1 h-4 bg-[#00C06B] rounded-full mr-2"></span>
-                <span className="text-sm font-black text-[#1F2129]">菜品与菜单</span>
+                <span className="text-sm font-black text-[#1F2129]">商品与分类</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
                 <ToolCard 
@@ -40,28 +40,20 @@ export const MobileProductTools: React.FC<Props> = ({ onBack, onNavigate }) => {
                     onClick={() => onNavigate('product_list')}
                 />
                 <ToolCard 
-                    icon={<Layers size={24}/>} 
-                    label="商品分类" 
-                    desc="管理前台展示分类"
-                    color="text-green-500"
-                    bg="bg-green-50"
-                    onClick={() => onNavigate('category_list')}
-                />
-                <ToolCard 
                     icon={<Plus size={24}/>} 
                     label="新建商品" 
-                    desc="录入新菜品/套餐"
+                    desc="录入新单品/套餐"
                     color="text-blue-500"
                     bg="bg-blue-50"
                     onClick={() => onNavigate('product_create')}
                 />
                 <ToolCard 
-                    icon={<Box size={24}/>} 
-                    label="随心配" 
-                    desc="管理套餐分组"
-                    color="text-teal-500"
-                    bg="bg-teal-50"
-                    onClick={() => onNavigate('combo_list')}
+                    icon={<Layers size={24}/>}
+                    label="商品分类"
+                    desc="管理前台展示分类"
+                    color="text-green-500"
+                    bg="bg-green-50"
+                    onClick={() => onNavigate('category_list')}
                 />
             </div>
         </div>

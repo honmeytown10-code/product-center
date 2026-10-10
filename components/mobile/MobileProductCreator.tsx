@@ -24,7 +24,8 @@ import {
 import { Category, Product } from '../../types';
 import { MobileProductEditor } from './MobileProductEditor';
 import { MobileComboProductCreator } from './MobileComboProductCreator';
-import { MobileStandardProductCreator } from './MobileStandardProductCreator';
+import { MobileStandardProductCreator, type MobileStandardProductDraft } from './MobileStandardProductCreator';
+import { useProducts } from '../../context';
 import { MobileQuickCreate, QuickCreateSavedDraft, QuickEntryScreen } from './MobileQuickCreate';
 import { MobileBadgeItem, MobileLabelGroup, STORE_CREATION_CATEGORIES } from './productMeta';
 
@@ -236,6 +237,7 @@ const MOBILE_THIRD_PRODUCTS: Record<MobileThirdPlatform, MobileThirdProduct[]> =
 };
 
 export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange, packageFeeLevel = 'product' }) => {
+  const { addProduct } = useProducts();
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>('manual');
@@ -676,6 +678,40 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
     setCreateStep('ai_confirm');
   };
 
+  const handleManualSave = (data: MobileStandardProductDraft, continueAdding = false) => {
+    const money = (value?: string) => value?.trim() ? Number(value) : undefined;
+    const multiSpec = data.specType === 'multi';
+    const specFees = packageFeeLevel === 'spec';
+    const specs = multiSpec ? data.specItems.map(item => ({
+      name: item.name,
+      price: Number(item.price),
+      stock: item.unlimited ? -1 : Number(item.stock),
+      unlimited: item.unlimited,
+      ...(specFees ? { storePackFee: money(item.storePackFee), takePackFee: money(item.takePackFee), storePackMark: item.storePackMark || undefined, takePackMark: item.takePackMark || undefined } : {}),
+    })) : specFees ? [{
+      name: '统一规格', price: Number(data.basePrice),
+      stock: data.stock.trim() ? Number(data.stock) : -1,
+      storePackFee: money(data.storePackFee), takePackFee: money(data.takePackFee),
+      storePackMark: data.storePackMark || undefined, takePackMark: data.takePackMark || undefined,
+    }] : undefined;
+    addProduct({
+      id: crypto.randomUUID(), name: data.name, category: data.category,
+      price: multiSpec ? Math.min(...data.specItems.map(item => Number(item.price))) : Number(data.basePrice),
+      stock: data.stock.trim() ? Number(data.stock) : -1,
+      status: 'on_shelf', stockStatus: 'available', type: 'standard',
+      image: '', skuCode: `APP-${Date.now()}`, isMultiSpec: multiSpec, specs,
+      ...(!specFees ? { storePackFee: money(data.storePackFee), takePackFee: money(data.takePackFee), storePackMark: data.storePackMark || undefined, takePackMark: data.takePackMark || undefined } : {}),
+      linkedStallIds: data.linkedStallIds,
+    });
+    if (continueAdding) {
+      setCreationFormData({});
+      setCreationCategory(null);
+      setCreateStep('type_select');
+    } else {
+      onBack();
+    }
+  };
+
   const handleSaveDrafts = () => {
     setSuccessSummary({
       savedCount: validDrafts.length,
@@ -860,7 +896,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
     return (
       <div className="absolute inset-0 z-[90] flex flex-col justify-end bg-black/50 animate-in fade-in duration-200">
         <button type="button" aria-label="关闭类目选择" className="min-h-0 flex-1" onClick={() => setShowCategoryModal(false)} />
-        <div className="flex max-h-[80vh] flex-col rounded-t-[32px] bg-white px-5 pb-8 pt-5 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div role="dialog" aria-modal="true" aria-label="选择所属类目" className="flex max-h-[80vh] flex-col rounded-t-[32px] bg-white px-5 pb-8 pt-5 shadow-2xl animate-in slide-in-from-bottom duration-300">
           <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
             <div>
               <h3 className="text-xl font-black text-[#1F2129]">选择所属类目</h3>
@@ -918,6 +954,8 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
         initialData={creationFormData}
         saveMode={formEntrySource === 'ai_confirm' ? 'ai_confirm' : 'default'}
         onSaveDraft={handleStandardFormSave}
+        onPrimaryAction={data => handleManualSave(data)}
+        onSecondaryAction={data => handleManualSave(data, true)}
         labelGroups={labelGroups}
         badges={badges}
         onLabelGroupsChange={onLabelGroupsChange}

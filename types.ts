@@ -383,8 +383,10 @@ export interface Product {
   /** 商品级包装费（商品设置为商品级时使用）。 */
   storePackFee?: number;
   takePackFee?: number;
+  storePackMark?: string;
+  takePackMark?: string;
   /** 规格级包装费（商品设置为规格级时使用）。 */
-  specs?: { name: string; stock: number; price?: number; unlimited?: boolean; storePackFee?: number; takePackFee?: number }[];
+  specs?: { name: string; stock: number; price?: number; unlimited?: boolean; storePackFee?: number; takePackFee?: number; storePackMark?: string; takePackMark?: string }[];
   timeSales?: TimeSalesConfig | null;
   linkedStallIds?: string[];
   comboItemIds?: string[];

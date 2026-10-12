@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { WebTakeoutSyncPreview } from './WebTakeoutSyncPreview';
 import { Bike, ShoppingBag, Smartphone, Store, UtensilsCrossed, X } from 'lucide-react';
 
 export type ShelfChannelId =
@@ -9,6 +10,7 @@ export type ShelfChannelId =
   | 'douyin'
   | 'meituan_tuangou'
   | 'taobao'
+  | 'jd'
   | 'eleme'
   | 'pos';
 
@@ -55,6 +57,7 @@ const CHANNEL_META: Record<ShelfChannelId, {
     icon: <ShoppingBag size={16} strokeWidth={2.2} />,
     activeClass: 'bg-[#FF7A18] text-white',
   },
+  jd: { label: '京东外卖', icon: <ShoppingBag size={16} />, activeClass: 'bg-[#FEE4E2] text-[#D92D20]' },
   eleme: {
     label: '饿了么',
     icon: <span className="text-[12px] font-black leading-none">e</span>,
@@ -107,6 +110,7 @@ const ChannelCheckbox = ({
 
 export const getShelfChannelLabel = (channelId: string) =>
   CHANNEL_META[channelId as ShelfChannelId]?.label || channelId;
+export const isShelfChannelId = (channelId: string): channelId is ShelfChannelId => Boolean(CHANNEL_META[channelId as ShelfChannelId]);
 
 export const WebShelfConfirmModal: React.FC<{
   entityLabel: '商品' | '加料';
@@ -115,6 +119,7 @@ export const WebShelfConfirmModal: React.FC<{
   channelStatuses: Partial<Record<ShelfChannelId, ShelfStatus>>;
   activeTabId: string;
   isShelvesUnited: boolean;
+  managedPlatformChannels?: string[];
   onClose: () => void;
   onConfirm: (payload: { action: ShelfAction; channels: ShelfChannelId[] }) => void;
 }> = ({
@@ -124,6 +129,7 @@ export const WebShelfConfirmModal: React.FC<{
   channelStatuses,
   activeTabId,
   isShelvesUnited,
+  managedPlatformChannels = [],
   onClose,
   onConfirm,
 }) => {
@@ -237,6 +243,7 @@ export const WebShelfConfirmModal: React.FC<{
             </div>
           )}
 
+          <WebTakeoutSyncPreview channelIds={(isShelvesUnited ? availableChannels : isAllMode ? selectedChannels : currentChannel ? [currentChannel] : []).filter(id => managedPlatformChannels.includes(id))} operation={entityLabel === '加料' ? 'addon_shelf' : 'shelf'} />
           <div className="mt-11 flex justify-end gap-4">
             <button
               onClick={onClose}

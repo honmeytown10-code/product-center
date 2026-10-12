@@ -318,7 +318,7 @@ const RecipeList = ({ onViewDetail, onNavigate, onOpenBaseSettings, onOpenPolici
   };
 
   return (
-    <div className="relative m-4 flex flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm">
+    <div className="console-recipe-list relative m-4 flex flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-[#E8E8E8] bg-white p-4">
         <div className="flex space-x-3">

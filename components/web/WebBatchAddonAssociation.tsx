@@ -117,25 +117,39 @@ const getTotalLimitSummary = (rule: LimitRule) => {
 
 const isLimitModeSupported = (mode: ModifyMode) => mode === 'replace' || mode === 'add';
 
-export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [scope, setScope] = useState<'uniform' | 'single'>('uniform');
-  const [modifyMode, setModifyMode] = useState<ModifyMode>('add');
-  const [groups, setGroups] = useState<AddonGroup[]>(INITIAL_GROUPS);
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(['product-1', 'product-2']);
+export type AddonAssociationDraft = { productIds: string[]; mode: ModifyMode; scope: 'uniform' | 'single'; groups: AddonGroup[]; productGroups: Record<string, AddonGroup[]>; limitScope: LimitScope; globalLimit: LimitRule; summary: string };
+
+export const WebBatchAddonAssociation: React.FC<{ onBack: () => void; onContinue?: (draft: AddonAssociationDraft) => void; sourceControls?: React.ReactNode; products?: ProductItem[]; initialDraft?: AddonAssociationDraft }> = ({ onBack, onContinue, sourceControls, products: productOptions = PRODUCTS, initialDraft }) => {
+  const [scope, setScope] = useState<'uniform' | 'single'>(initialDraft?.scope || 'uniform');
+  const [modifyMode, setModifyMode] = useState<ModifyMode>(initialDraft?.mode || 'add');
+  const [groups, setGroups] = useState<AddonGroup[]>(initialDraft?.scope === 'single' ? initialDraft.productGroups[initialDraft.productIds[0]] || initialDraft.groups : initialDraft?.groups || INITIAL_GROUPS);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(initialDraft?.productIds || []);
+  const [productGroups, setProductGroups] = useState<Record<string, AddonGroup[]>>(initialDraft?.productGroups || {});
+  const [editingProductId, setEditingProductId] = useState(initialDraft?.productIds[0] || '');
+  const [validationError, setValidationError] = useState('');
   const [productKeyword, setProductKeyword] = useState('');
   const [editorGroupId, setEditorGroupId] = useState<string | null>(null);
   const [draftGroups, setDraftGroups] = useState<AddonGroup[]>([]);
-  const [limitScope, setLimitScope] = useState<LimitScope>('group');
-  const [globalLimit, setGlobalLimit] = useState<LimitRule>({ limitMode: 'unlimited', minCount: 0, maxCount: 0 });
+  const [limitScope, setLimitScope] = useState<LimitScope>(initialDraft?.limitScope || 'group');
+  const [globalLimit, setGlobalLimit] = useState<LimitRule>(initialDraft?.globalLimit || { limitMode: 'unlimited', minCount: 0, maxCount: 0 });
   const [draftLimitScope, setDraftLimitScope] = useState<LimitScope>('group');
   const [draftGlobalLimit, setDraftGlobalLimit] = useState<LimitRule>({ limitMode: 'unlimited', minCount: 0, maxCount: 0 });
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
-  const selectedProducts = PRODUCTS.filter(product => selectedProductIds.includes(product.id));
-  const filteredProducts = PRODUCTS.filter(product => (
+  const selectedProducts = productOptions.filter(product => selectedProductIds.includes(product.id));
+  const filteredProducts = productOptions.filter(product => (
     product.name.includes(productKeyword) || product.code.includes(productKeyword)
   ));
   const usesTotalLimit = modifyMode === 'replace' && limitScope === 'total';
+  const switchProduct = (id: string) => { setProductGroups(current => ({ ...current, ...(editingProductId ? { [editingProductId]: groups } : {}) })); setGroups(productGroups[id] || INITIAL_GROUPS); setEditingProductId(id); };
+  const continueTask = () => {
+    if (scope === 'single' && !editingProductId) { setValidationError('请先选择要分别配置的商品。'); return; }
+    const allGroups = scope === 'single' ? selectedProductIds.flatMap(id => id === editingProductId ? groups : productGroups[id] || INITIAL_GROUPS) : groups;
+    if (isLimitModeSupported(modifyMode) && allGroups.some(group => group.minCount < 0 || group.maxCount < 0 || group.limitMode === 'range' && group.maxCount < group.minCount)) { setValidationError('加料起购数不能大于限购数，且数量不能为负数。'); return; }
+    if (usesTotalLimit && globalLimit.limitMode === 'range' && globalLimit.maxCount < globalLimit.minCount) { setValidationError('加料合计起购数不能大于限购数。'); return; }
+    setValidationError('');
+    onContinue?.({ productIds: selectedProductIds, mode: modifyMode, scope, groups, productGroups: { ...productGroups, ...(editingProductId ? { [editingProductId]: groups } : {}) }, limitScope, globalLimit, summary: `${MODIFY_MODES.find(mode => mode.id === modifyMode)?.label}；${scope === 'single' ? '单个修改' : groups.map(group => `${group.name}（${getLimitSummary(group)}）`).join('、')}${usesTotalLimit ? `；${getTotalLimitSummary(globalLimit)}` : ''}` });
+  };
   const modeNotice = useMemo(() => {
     if (modifyMode === 'add') return '新增的加料会保留商品原有关联；购买限制仅对本次新增的加料组生效。';
     if (modifyMode === 'replace') return '覆盖后商品将只保留本次选择的加料，请确认加料及购买限制设置。';
@@ -440,13 +454,13 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="w-[250px] shrink-0 border-r border-gray-100 bg-white px-6 py-8">
+        <aside className="w-[190px] shrink-0 border-r border-gray-100 bg-white px-5 py-6">
           <div className="relative space-y-14">
             <div className="absolute bottom-3 left-[11px] top-3 w-px bg-gray-200" />
             {[
               { index: 1, title: '修改加料 & 选择商品', active: true },
-              { index: 2, title: '请选择修改方式', active: false },
-              { index: 3, title: '定时执行', active: false },
+              { index: 2, title: '确认生效范围', active: false },
+              { index: 3, title: '处理结果', active: false },
             ].map(item => (
               <div key={item.index} className={`relative flex items-start gap-4 ${item.active ? 'text-gray-800' : 'text-gray-400'}`}>
                 <span className={`z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${item.active ? 'border-[#00C06B] bg-[#00C06B] text-white' : 'border-gray-300 bg-white'}`}>{item.active ? <Check size={14} /> : item.index}</span>
@@ -457,10 +471,12 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
         </aside>
 
         <main className="min-w-0 flex-1 overflow-auto bg-white px-6 pb-24 pt-5">
+          {sourceControls}
+          {validationError && <p role="alert" className="mb-3 text-sm text-red-700">{validationError}</p>}
           <h3 className="mb-5 text-lg font-bold">修改加料 & 选择商品</h3>
-          <div className="mb-5 flex h-11 items-end gap-7 border-b border-gray-200">
-            <button type="button" onClick={() => setScope('uniform')} className={`h-11 border-b-2 px-3 text-sm ${scope === 'uniform' ? 'border-[#00C06B] font-bold text-[#00A85A]' : 'border-transparent text-gray-500'}`}>统一修改</button>
-            <button type="button" onClick={() => setScope('single')} className={`h-11 border-b-2 px-3 text-sm ${scope === 'single' ? 'border-[#00C06B] font-bold text-[#00A85A]' : 'border-transparent text-gray-500'}`}>单个修改</button>
+          <div className="console-segmented-tabs mb-5 flex h-11 items-end gap-7 border-b border-gray-200" role="tablist" aria-label="加料修改方式">
+            <button type="button" role="tab" aria-selected={scope === 'uniform'} onClick={() => setScope('uniform')} className={`h-11 border-b-2 px-3 text-sm ${scope === 'uniform' ? 'border-[#00C06B] font-bold text-[#00A85A]' : 'border-transparent text-gray-500'}`}>统一修改</button>
+            <button type="button" role="tab" aria-selected={scope === 'single'} onClick={() => { setScope('single'); if (!editingProductId && selectedProductIds[0]) setEditingProductId(selectedProductIds[0]); }} className={`h-11 border-b-2 px-3 text-sm ${scope === 'single' ? 'border-[#00C06B] font-bold text-[#00A85A]' : 'border-transparent text-gray-500'}`}>单个修改</button>
           </div>
 
           <div className="mb-4 flex flex-wrap items-center gap-x-7 gap-y-3 text-sm">
@@ -479,10 +495,10 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
           </div>
 
           {scope === 'single' && (
-            <div className="mb-4 flex items-center gap-2 border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-600"><Info size={16} />单个修改时，可在选择商品后分别配置每个商品的关联加料。</div>
+            <label className="mb-4 flex items-center gap-3 text-sm text-gray-700">正在配置的商品<select aria-label="分别配置关联加料的商品" value={editingProductId} onChange={event => switchProduct(event.target.value)} className="h-9 rounded border border-gray-200 px-3"><option value="">请选择已选商品</option>{selectedProducts.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
           )}
 
-          <div className="grid min-h-[560px] min-w-[1050px] grid-cols-[minmax(0,1.05fr)_minmax(0,1.05fr)_minmax(250px,0.8fr)] border border-gray-200">
+          <div className="grid min-h-[420px] min-w-[760px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] border border-gray-200">
             <section className="min-w-0 border-r border-gray-200 p-4">
               <div className="mb-3">
                 <h4 className="text-sm font-bold">{modifyMode === 'remove' ? '选择要移除的加料' : '添加加料'}</h4>
@@ -514,7 +530,7 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
                 <Search size={15} className="absolute left-3 top-3 text-gray-400" />
                 <input value={productKeyword} onChange={event => setProductKeyword(event.target.value)} placeholder="搜索商品名称或ID" className="h-10 w-full border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" />
               </div>
-              <div className="mb-2 flex items-center justify-between text-xs text-gray-500"><span>已选 <b className="text-[#00A85A]">{selectedProductIds.length}</b> 个商品</span><button type="button" onClick={() => setSelectedProductIds(selectedProductIds.length === PRODUCTS.length ? [] : PRODUCTS.map(item => item.id))} className="text-[#00A85A]">{selectedProductIds.length === PRODUCTS.length ? '取消全选' : '选择全部'}</button></div>
+              <div className="mb-2 flex items-center justify-between text-xs text-gray-500"><span>已选 <b className="text-[#00A85A]">{selectedProductIds.length}</b> 个商品</span><button type="button" onClick={() => setSelectedProductIds(selectedProductIds.length === productOptions.length ? [] : productOptions.map(item => item.id))} className="text-[#00A85A]">{selectedProductIds.length === productOptions.length ? '取消全选' : '选择全部'}</button></div>
               <div className="max-h-[440px] overflow-y-auto border border-gray-200">
                 {filteredProducts.map(product => (
                   <label key={product.id} className="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-3 last:border-b-0 hover:bg-gray-50">
@@ -525,6 +541,7 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
                   </label>
                 ))}
               </div>
+              {!filteredProducts.length && <p className="py-6 text-center text-sm text-gray-500">没有匹配的商品，请调整来源或搜索条件。</p>}
             </section>
 
             <section className="min-w-0 bg-[#FAFBFC] p-4">
@@ -559,9 +576,9 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void }> = ({ onB
         </main>
       </div>
 
-      <div className="absolute bottom-0 left-[250px] right-0 z-20 flex h-16 items-center justify-end gap-3 border-t border-gray-200 bg-white/95 px-6 backdrop-blur-sm">
+      <div className="absolute bottom-0 left-[190px] right-0 z-20 flex h-16 items-center justify-end gap-3 border-t border-gray-200 bg-white px-6">
         <button type="button" onClick={onBack} className="h-10 border border-gray-200 px-5 text-sm text-gray-600">取消</button>
-        <button type="button" disabled={selectedProductIds.length === 0 || (modifyMode !== 'clear' && groups.length === 0)} className="inline-flex h-10 items-center gap-1 bg-[#00C06B] px-6 text-sm font-medium text-white hover:bg-[#00A85A] disabled:cursor-not-allowed disabled:bg-gray-300">下一步<ChevronRight size={16} /></button>
+        <button type="button" onClick={continueTask} disabled={selectedProductIds.length === 0 || (modifyMode !== 'clear' && groups.length === 0)} className="inline-flex h-10 items-center gap-1 bg-[#00C06B] px-6 text-sm font-medium text-white hover:bg-[#00A85A] disabled:cursor-not-allowed disabled:bg-gray-300">下一步<ChevronRight size={16} /></button>
       </div>
 
       {groupPickerOpen && (

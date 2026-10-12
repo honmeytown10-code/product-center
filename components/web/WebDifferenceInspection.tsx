@@ -15,7 +15,7 @@ const TASKS: InspectionTask[] = [
 const DIFFERENCES: DifferenceRecord[] = [
   { id: 'DF-1026', productName: '金桔柠檬茶', productId: 'SP00012876', channel: '美团外卖', storeRange: '南山万象店等 18 家', fieldGroup: '基础信息', fieldName: '商品名称', masterValue: '金桔柠檬茶', platformValue: '金桔柠檬饮', severity: 'high', status: 'pending', detectedAt: '08-01 09:12' },
   { id: 'DF-1027', productName: '双拼鸡腿饭', productId: 'SP00012877', channel: '美团外卖', storeRange: '42 家门店', fieldGroup: '图片', fieldName: '主图', masterValue: '企迈主图 800×800', platformValue: '平台图片 640×480', severity: 'high', status: 'processing', detectedAt: '08-01 09:13' },
-  { id: 'DF-1028', productName: '超值午餐套餐', productId: 'SP00012878', channel: '饿了么', storeRange: '86 家门店', fieldGroup: '价格', fieldName: '销售价', masterValue: '¥39.00', platformValue: '¥42.00', severity: 'medium', status: 'pending', detectedAt: '08-01 09:15' },
+  { id: 'DF-1028', productName: '超值午餐套餐', productId: 'SP00012878', channel: '饿了么', storeRange: '86 家门店', fieldGroup: '价格', fieldName: '售价', masterValue: '¥39.00', platformValue: '¥42.00', severity: 'medium', status: 'pending', detectedAt: '08-01 09:15' },
   { id: 'DF-1029', productName: '港式奶茶', productId: 'SP00012879', channel: '美团外卖', storeRange: '福田卓悦店', fieldGroup: '分类', fieldName: '平台分类', masterValue: '现制饮品 / 奶茶', platformValue: '饮品 / 其他', severity: 'low', status: 'ignored', detectedAt: '08-01 09:16' },
 ];
 const STATUS_LABELS: Record<TaskStatus, string> = { running: '巡检中', completed: '已完成', failed: '部分失败' };

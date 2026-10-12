@@ -89,7 +89,7 @@ export const WebChannelProductInitializationEmpty: React.FC<EmptyProps> = ({
 
         <div className="mx-auto mt-7 grid max-w-[620px] grid-cols-3 gap-3 text-left">
           {[
-            ['1', '确认管理方式', '统一管理或分渠道协作'],
+            ['1', '确认管理方式', '各渠道共用一套商品资料或各渠道分别维护商品资料'],
             ['2', '建立商品库', '确认渠道归属与初始化规则'],
             ['3', '完成初始化', '成功后进入渠道商品管理'],
           ].map(([number, title, description]) => (
@@ -270,11 +270,11 @@ export const WebOmnichannelInitialization: React.FC<InitializationProps> = ({ on
             {step === 1 && (
               <div className="mx-auto max-w-[1040px]">
                 <div><h2 className="text-[17px] font-bold text-[#1D2129]">确认品牌的商品管理方式</h2><p className="mt-1 text-[12px] text-[#86909C]">{legacyOnlineOrder ? '系统已根据历史在线点使用记录确定本次初始化方式。' : '请选择最符合当前团队职责的方式。首次启用后仍可通过受控迁移调整。'}</p></div>
-                {legacyOnlineOrder && <div className="mt-4 flex items-start gap-3 rounded-md border border-[#FFD8A8] bg-[#FFF9F0] px-4 py-3"><History size={17} className="mt-0.5 shrink-0 text-[#D46B08]" /><div><strong className="text-[13px] text-[#1D2129]">检测到抖音在线点、美团在线点历史商品</strong><p className="mt-1 text-[12px] leading-5 text-[#667085]">为保证历史商品独立迁移，本次只能使用分渠道协作。系统将在下一步分别创建两个平台专属商品库。</p></div></div>}
+                {legacyOnlineOrder && <div className="mt-4 flex items-start gap-3 rounded-md border border-[#FFD8A8] bg-[#FFF9F0] px-4 py-3"><History size={17} className="mt-0.5 shrink-0 text-[#D46B08]" /><div><strong className="text-[13px] text-[#1D2129]">检测到抖音在线点、美团在线点历史商品</strong><p className="mt-1 text-[12px] leading-5 text-[#667085]">为保证历史商品独立迁移，本次只能使用各渠道分别维护商品资料。系统将在下一步分别创建两个平台专属商品库。</p></div></div>}
                 <div className="mt-5 grid grid-cols-2 gap-4">
                   {[
-                    ['unified', '统一管理', '所有渠道共用一个品牌默认商品库，由同一团队集中维护渠道售卖资料。', '适合渠道差异较小、职责集中的品牌'],
-                    ['channel_division', '分渠道协作', '按渠道职责建立多个商品库，不同团队分别维护各自渠道商品。', '适合堂食、外卖、在线点分别运营的品牌'],
+                    ['unified', '各渠道共用一套商品资料', '所有渠道共用一个品牌默认商品库，由同一团队集中维护渠道售卖资料。', '适合渠道差异较小、职责集中的品牌'],
+                    ['channel_division', '各渠道分别维护商品资料', '按渠道职责建立多个商品库，不同团队分别维护各自渠道商品。', '适合堂食、外卖、在线点分别运营的品牌'],
                   ].map(([id, title, description, fit]) => {
                     const active = mode === id;
                     const disabled = legacyOnlineOrder && id === 'unified';
@@ -288,7 +288,7 @@ export const WebOmnichannelInitialization: React.FC<InitializationProps> = ({ on
 
             {step === 2 && mode && (
               <div className="mx-auto max-w-[1080px]">
-                <div className="flex items-start justify-between"><div><h2 className="text-[17px] font-bold text-[#1D2129]">建立渠道商品库</h2><p className="mt-1 text-[12px] text-[#86909C]">确认商品库与渠道归属；初始化不会自动发布商品到门店或三方平台。</p></div>{mode === 'channel_division' && <button type="button" onClick={addCatalog} className="inline-flex h-8 items-center rounded-md border border-[#C9CDD4] px-3 text-[12px] text-[#4E5969] hover:border-[#00B460] hover:text-[#008F53]">+ 新建商品库</button>}</div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[17px] font-bold text-[#1D2129]">建立渠道商品库</h2><p className="mt-1 text-[12px] text-[#86909C]">确认商品库与渠道归属；初始化不会自动发布商品到门店或三方平台。</p></div>{mode === 'channel_division' && <button type="button" onClick={addCatalog} className="inline-flex h-8 items-center rounded-md border border-[#C9CDD4] px-3 text-[12px] text-[#4E5969] hover:border-[#00B460] hover:text-[#008F53]">+ 新建单品库</button>}</div>
 
                 {legacyOnlineOrder && <div className="mt-4 flex items-start gap-3 rounded-md border border-[#DDEFE5] bg-[#F6FCF9] px-4 py-3"><LockKeyhole size={16} className="mt-0.5 shrink-0 text-[#008F53]" /><div><strong className="text-[13px] text-[#1D2129]">两个在线点渠道由系统固定归属</strong><p className="mt-1 text-[12px] leading-5 text-[#667085]">抖音在线点、美团在线点将分别进入同名商品库，本次初始化不可改名或调整渠道；其他渠道仍可按团队职责配置。</p></div></div>}
 
@@ -324,7 +324,7 @@ export const WebOmnichannelInitialization: React.FC<InitializationProps> = ({ on
               <div className="mx-auto max-w-[920px]">
                 <div><h2 className="text-[17px] font-bold text-[#1D2129]">确认并启用全渠道商品管理</h2><p className="mt-1 text-[12px] text-[#86909C]">提交后将创建后台初始化任务，全部成功后才正式启用。</p></div>
                 <div className="mt-5 overflow-hidden rounded-lg border border-[#E5E6EB]"><div className="grid grid-cols-2 gap-px bg-[#EEF1F4]">{[
-                  ['管理方式', mode === 'unified' ? '统一管理' : '分渠道协作'],
+                  ['管理方式', mode === 'unified' ? '各渠道共用一套商品资料' : '各渠道分别维护商品资料'],
                   ['渠道建品方式', creationMode === 'create_master_and_channel' ? '允许联合创建' : '仅从主档添加'],
                   ['渠道商品库', `${effectiveCatalogs.length} 个`],
                   ['已归属渠道', `${ALL_OMNICHANNEL_CHANNELS.length} 个`],

@@ -35,7 +35,7 @@ const OVERRIDE_FIELDS: OverrideField[] = [
 
 const CHANNEL_OWNED_FIELDS = [
     {
-        name: '规格销售价',
+        name: '规格售价',
         scope: '渠道商品 / 规格',
         rule: '创建渠道商品时按主档规格售价初始化，保存后由渠道独立维护。',
         icon: <CircleDollarSign size={17} />,
@@ -67,7 +67,7 @@ const MASTER_ONLY_FIELDS = [
     },
     {
         name: '内部识别字段',
-        examples: '数字助记码、商家商品标识、统计标签',
+        examples: '助记码、商家商品标识、统计标签',
     },
     {
         name: 'SKU 与规格结构',

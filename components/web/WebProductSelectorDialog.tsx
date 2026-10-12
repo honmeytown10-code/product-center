@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 
 export type SelectableProduct = {
@@ -24,6 +25,7 @@ type Props = {
   onCancel: () => void;
   onConfirm: () => void;
   confirmLabel?: string;
+  onCreateProduct?: (type: 'standard' | 'combo') => void;
   onSecondaryConfirm?: () => void;
   secondaryConfirmLabel?: string;
   maxSelected?: number;
@@ -57,6 +59,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
   onConfirm,
   confirmLabel = '确定',
   onSecondaryConfirm,
+  onCreateProduct,
   secondaryConfirmLabel,
   maxSelected,
   fixedType,
@@ -136,7 +139,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
     onSelectedIdsChange([...selectedIds, ...allowedIds]);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-5">
       <div className="flex h-[760px] w-[1180px] max-w-[calc(100vw-40px)] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
         <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#E5E6EB] px-6">
@@ -189,6 +192,13 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
           </div>
         </div>
 
+        {onCreateProduct && <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-4 text-sm">
+          <span className="text-[#667085]">商品库中没有需要的商品？</span>
+          <div className="flex gap-2">
+            {fixedType !== 'combo' && <button type="button" className="inline-flex h-9 items-center justify-center rounded-md border border-[#E8E8E8] bg-white px-4 text-sm font-semibold text-[#4E5969] hover:border-[#00B460] hover:text-[#009F55]" onClick={() => onCreateProduct('standard')}>新建单品</button>}
+            {fixedType !== 'standard' && <button type="button" className="inline-flex h-9 items-center justify-center rounded-md border border-[#E8E8E8] bg-white px-4 text-sm font-semibold text-[#4E5969] hover:border-[#00B460] hover:text-[#009F55]" onClick={() => onCreateProduct('combo')}>新建套餐</button>}
+          </div>
+        </div>}
         <div className="min-h-0 flex-1 overflow-auto px-5 pt-4">
           <table className={`w-full table-fixed text-left text-[13px] ${showSkuFields ? 'min-w-[1040px]' : 'min-w-[880px]'}`}>
             <thead className="sticky top-0 z-10 bg-[#F2F3F5] text-[#4E5969]">
@@ -199,7 +209,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
                 <th className="w-[140px] px-4 py-3">前台分类</th>
                 <th className="w-[160px] px-4 py-3">商品标识</th>
                 {showSkuFields && <th className="w-[160px] px-4 py-3">SKUID</th>}
-                <th className="w-[100px] px-4 py-3">基础价格</th>
+                <th className="w-[100px] px-4 py-3">售价</th>
                 <th className="w-[90px] px-4 py-3">状态</th>
               </tr>
             </thead>
@@ -246,6 +256,6 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 };

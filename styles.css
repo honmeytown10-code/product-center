@@ -277,3 +277,505 @@ button:disabled {
     display: none;
   }
 }
+
+/* 2026 PC system: Figma payment + marketing references. Only WebAdmin owns
+   this scope; App, POS and OP retain their existing themes. */
+.console-figma {
+  --console-color-primary: #00b460;
+  --console-color-primary-hover: #009b53;
+  --console-color-primary-soft: #e4f7ef;
+  --console-color-text: #20252d;
+  --console-color-text-secondary: #545d6b;
+  --console-color-text-tertiary: #697386;
+  --console-color-border: #e7ecf2;
+  --console-color-border-secondary: #eff2f6;
+  --console-color-layout: #f0f6fe;
+  --console-color-container: #fff;
+  --console-radius: 10px;
+  --console-shadow-modal: 0 16px 48px rgba(30, 58, 91, 0.18);
+  background: radial-gradient(ellipse at 98% 94%, #dceafe 0%, transparent 43%),
+    radial-gradient(ellipse at 6% 25%, #e5f2ff 0%, transparent 46%), #f0f6fe;
+  color: var(--console-color-text);
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.console-figma .console-global-header {
+  height: 56px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(18px);
+}
+
+.console-figma .console-global-header nav > button {
+  border-color: transparent;
+  background: transparent;
+  border-radius: 6px;
+  height: 40px;
+}
+
+.console-figma .console-global-header nav > button[class*="text-[#00C06B]"] {
+  box-shadow: inset 0 -2px var(--console-color-primary);
+  color: #008647;
+}
+
+.console-figma .console-body {
+  padding: 10px 12px 12px;
+  gap: 12px;
+}
+
+.console-figma .console-body > aside {
+  width: 200px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(18px);
+  padding: 4px 8px 8px;
+}
+
+.console-figma .console-sidebar > div:first-child {
+  padding: 16px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #e7edf4;
+}
+
+.console-figma .console-sidebar > div > div {
+  padding-left: 12px;
+  color: #6b7787;
+}
+
+.console-figma .console-sidebar button {
+  min-height: 36px;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 2px;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.console-figma .console-sidebar button[aria-current="page"] {
+  background: #def2e9;
+  color: #007c42;
+  font-weight: 600;
+}
+
+.console-figma .console-sidebar button:not([aria-current]):hover {
+  background: rgba(255, 255, 255, 0.9);
+  color: #20252d;
+}
+
+.console-figma .console-workspace {
+  gap: 10px;
+}
+
+.console-figma .console-page {
+  border-radius: var(--console-radius);
+  isolation: isolate;
+}
+
+.console-figma .console-page > * {
+  min-height: 0;
+  width: 100%;
+}
+
+/* Compatibility layer for existing page neutrals, without repainting semantic
+   success/warning/danger colors or floating menus. */
+.console-figma :is(.bg-\[\#F5F6FA\], .bg-\[\#F5F6F8\], .bg-\[\#F8F9FB\], .bg-\[\#F5F5F5\], .bg-\[\#F0F2F5\]) {
+  background-color: transparent;
+}
+
+.console-figma .console-page > :is(main, div, section) {
+  border-radius: var(--console-radius);
+}
+
+.console-figma :is(.console-panel, .bg-white.rounded-lg, .bg-white.rounded-xl) {
+  border-color: var(--console-color-border);
+  box-shadow: none;
+}
+
+.console-figma .console-view-tabs {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(12px);
+}
+
+.console-figma .console-view-tabs :is([role="tablist"], div.flex) {
+  gap: 4px;
+}
+
+.console-figma .console-view-tabs :is(button[role="tab"], button.console-view-tab) {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #545d6b;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.console-figma .console-view-tabs :is(button[role="tab"], button.console-view-tab)::after {
+  display: none;
+}
+
+.console-figma .console-view-tabs :is(button[aria-selected="true"], button[aria-current="page"]) {
+  color: #fff;
+  background: #008647;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.console-figma .console-view-tabs :is(button[aria-selected="true"], button[aria-current="page"]) :is(div, span, svg) {
+  color: inherit;
+}
+
+.console-figma .console-view-tabs button:not([aria-selected="true"]):not([aria-current="page"]):hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.console-figma .console-secondary-tab-row {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 0;
+}
+
+.console-figma .console-segmented-tabs {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #eff2f6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.console-figma .console-segmented-tabs > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 14px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #545d6b;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.console-figma .console-segmented-tabs > button::after {
+  display: none;
+}
+
+.console-figma .console-segmented-tabs > button[aria-selected="true"] {
+  background: #e4f7ef;
+  color: #008647;
+  font-weight: 600;
+}
+
+.console-figma .console-segmented-tabs > button[aria-selected="true"] :is(span, svg) {
+  color: inherit;
+}
+
+.console-figma .console-segmented-tabs > button[aria-selected="true"] span[class*="rounded-full"] {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.console-figma .console-status-tab {
+  height: 32px;
+}
+
+.console-figma .console-status-tab span {
+  color: inherit;
+}
+
+.console-figma .console-view-tabs[role="tablist"] {
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.console-figma .console-segmented-tabs > button:not([aria-selected="true"]):hover {
+  color: #008647;
+  background: #e4f7ef;
+}
+
+.console-figma .console-status-toolbar {
+  min-height: 56px;
+  padding: 10px 16px;
+  gap: 12px;
+}
+
+.console-figma .console-status-tabs {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #eff2f6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.console-figma :is(.console-status-tabs > button, .console-status-tab) {
+  min-height: 32px;
+  padding: 5px 12px;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #fff;
+  color: #545d6b;
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.console-figma :is(.console-status-tabs > button, .console-status-tab)[aria-selected="true"] {
+  border-color: transparent;
+  background: #e4f7ef;
+  color: #008647;
+}
+
+.console-figma .console-status-toolbar .console-status-tabs > button > span:first-child {
+  display: none;
+}
+
+.console-figma .console-status-tabs > button > span:last-child {
+  gap: 5px;
+}
+
+.console-figma .console-status-tabs > button span {
+  font-size: 13px;
+  line-height: 20px;
+  color: inherit;
+}
+
+/* Second-level menus live on the workspace, while filters and descriptions
+   belong to the same white business surface as their results. */
+.console-figma .console-attribute-page > .console-view-tabs {
+  margin-bottom: 12px;
+}
+
+.console-figma .console-attribute-content {
+  padding: 0;
+  min-height: 0;
+}
+
+.console-figma .console-category-panel,
+.console-figma .console-recipe-list {
+  margin: 0;
+}
+
+.console-figma .console-page-description {
+  border: 0;
+  background: transparent;
+  color: var(--console-color-text-secondary);
+}
+
+.console-figma .console-page > .m-4,
+.console-figma .console-page > * > .m-4 {
+  margin: 0;
+}
+
+.console-figma .console-page > :is(.bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100) {
+  background: transparent;
+}
+
+.console-figma .console-page > .pc-page,
+.console-figma .console-list-surface {
+  padding: 0;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.console-figma .pc-page > .pc-surface {
+  border-radius: inherit;
+}
+
+.console-figma [data-unified-sync-tasks] {
+  background: #fff;
+}
+
+.console-figma .console-product-library {
+  background: #fff;
+  border-radius: 10px;
+}
+
+.console-figma .console-product-library .console-status-toolbar {
+  border-bottom: 0;
+  padding: 12px 16px 4px;
+}
+
+.console-figma .console-product-library .console-status-tabs {
+  flex: 0 1 auto;
+  min-width: 0;
+  width: fit-content;
+}
+
+.console-figma .console-library-filters {
+  background: #fff;
+}
+
+.console-figma .console-library-results > div {
+  gap: 12px;
+}
+
+.console-figma .console-library-results > div > button[title] {
+  transform: translate(-6px, -50%);
+}
+
+.console-figma :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) {
+  border-radius: 6px;
+  caret-color: #008647;
+}
+
+.console-figma :is(input, textarea)::placeholder {
+  color: #697386;
+  opacity: 1;
+}
+
+.console-figma :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: #008647;
+}
+
+.console-figma button:not([role="switch"]):not(.rounded-full):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, [class*="rounded-["]) {
+  border-radius: 6px !important;
+}
+
+/* Keep the bright reference green as an accent; small action text needs the
+   deeper companion green to remain legible on white and filled controls. */
+.console-pc-active :is(.text-\[\#00C06B\], .text-\[\#00B460\], .text-\[\#00b460\]) {
+  color: #008647;
+}
+
+.console-pc-active button:is(.bg-\[\#00C06B\], .bg-\[\#00B460\], .bg-\[\#00b460\]):not([role="switch"]) {
+  background-color: #008647;
+}
+
+.console-pc-active .console-primary-button {
+  background-color: #008647;
+  color: #fff;
+}
+
+.console-pc-active .console-primary-button:not(:disabled):hover {
+  background-color: #00763f;
+}
+
+.console-pc-active button:is(.bg-\[\#00C06B\], .bg-\[\#00B460\], .bg-\[\#00b460\]):not([role="switch"]):not(:disabled):hover {
+  background-color: #00763f;
+}
+
+.console-pc-active :is(.text-\[\#86909C\], .text-gray-400) {
+  color: #697386;
+}
+
+.console-figma ::selection {
+  color: #20252d;
+  background: #ccebdd;
+}
+
+.console-figma table {
+  font-variant-numeric: tabular-nums;
+}
+
+.console-figma button:disabled {
+  opacity: 0.5;
+}
+
+.console-figma table thead {
+  background-color: #f7f9fc;
+}
+
+.console-figma table thead :is(th, td) {
+  background-color: #f7f9fc;
+  color: #545d6b;
+  height: 42px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.console-figma table tbody tr:hover {
+  background-color: #f5faf8;
+}
+
+.console-figma table :is(th, td) {
+  border-color: #edf1f5;
+}
+
+.console-figma [role="dialog"] {
+  border-radius: 12px !important;
+  box-shadow: var(--console-shadow-modal);
+}
+
+.console-figma :is(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #008647;
+  outline-offset: 2px;
+}
+
+.console-figma *, .console-figma {
+  scrollbar-width: none;
+}
+
+.console-figma *::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .console-figma :is(.console-global-header, .console-body > aside, .console-view-tabs) {
+    background-color: #f8fbff;
+    backdrop-filter: none;
+  }
+}
+
+/* Portals stay above page clipping; this scope exists only while WebAdmin mounts. */
+.console-pc-active > :not(#root) {
+  --console-color-primary: #00b460;
+  --console-color-text: #20252d;
+  --console-color-text-secondary: #545d6b;
+  --console-color-border: #e7ecf2;
+  --console-radius: 10px;
+  color: #20252d;
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.console-pc-active > :not(#root) :is(input, select, textarea, button:not([role="switch"]):not(.rounded-full)[class*="rounded"]) {
+  border-radius: 6px;
+}
+
+.console-pc-active > :not(#root) :is(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #008647;
+  outline-offset: 2px;
+}
+
+.console-pc-active > :not(#root) :is(input, textarea)::placeholder {
+  color: #697386;
+}
+
+.console-pc-active > :not(#root), .console-pc-active > :not(#root) * {
+  scrollbar-width: none;
+}
+
+.console-pc-active > :not(#root)::-webkit-scrollbar, .console-pc-active > :not(#root) *::-webkit-scrollbar {
+  display: none;
+}

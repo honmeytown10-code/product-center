@@ -1,4 +1,6 @@
 
+import { CATEGORY_SUPPLEMENT_FIELDS } from './components/web/productCategoryFields';
+
 export type ManagementMode = 'strict' | 'empower' | 'light';
 
 export interface SourcePermission {
@@ -48,6 +50,7 @@ export interface ChannelGroup {
 export type ThirdPartyChannelId =
   | 'meituan'
   | 'taobao'
+  | 'jd'
   | 'douyin'
   | 'meituan_dine'
   | 'meituan_pinhaofan';
@@ -73,6 +76,8 @@ export interface OmnichannelChannelGroup {
 
 export interface OmnichannelBrandConfig {
   enabled: boolean;
+  /** Legacy preview compatibility only. Creation modes are merged; save intent controls publishing. */
+  operationStyle?: 'direct' | 'rules';
   collaborationMode: OmnichannelCollaborationMode;
   channelProductCreationMode: ChannelProductCreationMode;
   thirdPartyStrategies: Record<ThirdPartyChannelId, ThirdPartyManagementMode>;
@@ -158,7 +163,6 @@ export interface FieldChildOption {
 
 export const COMMON_FIELD_CHILD_CONFIG_LIBRARY: Record<string, FieldChildOption[]> = {
   p_display_type: [
-    { id: 'blind_box', label: '盲盒商品', isDefaultSelected: true, description: '适用于套餐盲盒等特殊售卖场景。' },
     { id: 'display_product', label: '展示商品', isDefaultSelected: true, description: '前端仅展示，不支持直接下单结算。' },
     { id: 'group_meal', label: '团餐商品', isDefaultSelected: true, description: '用于团餐或统一套餐业务场景。' },
     { id: 'group_meal_only', label: '仅团餐业务售卖', isDefaultSelected: true, description: '开启后仅在团餐业务中展示和售卖。' },
@@ -170,7 +174,7 @@ export const COMMON_FIELD_CHILD_CONFIG_LIBRARY: Record<string, FieldChildOption[
   s_specs: [
     { id: 's_spec_name', label: '规格名称', isSystem: true, isDefaultSelected: true, description: '规格首列名称，默认保留。' },
     { id: 's_spec_price', label: '销售价', isSystem: true, isDefaultSelected: true, description: '规格价格设置中的核心字段。' },
-    { id: 's_spec_market', label: '市场价', isDefaultSelected: true, description: '规格市场划线价。' },
+    { id: 's_spec_market', label: '划线价', isDefaultSelected: true, description: '规格市场划线价。' },
     { id: 's_spec_cost', label: '预估成本价', isDefaultSelected: true, description: '规格成本或预估成本。' },
     { id: 's_spec_barcode', label: '商品条码', isDefaultSelected: true, description: '规格对应的商品条码。' },
     { id: 's_spec_mark', label: '商品标识', isDefaultSelected: true, description: '规格标识或内部识别码。' },
@@ -181,7 +185,7 @@ export const COMMON_FIELD_CHILD_CONFIG_LIBRARY: Record<string, FieldChildOption[
     { id: 's_spec_img', label: '规格图片', isDefaultSelected: true, description: '规格独立图片上传。' },
     { id: 's_spec_large_img', label: '规格大图', isDefaultSelected: true, description: '规格大图，优先用于规格区域展示，建议尺寸 800*450。' },
     { id: 's_spec_alias', label: '规格别名', isDefaultSelected: true, description: '规格别名文案。' },
-    { id: 's_spec_amount', label: '商品分量', isDefaultSelected: true, description: '规格分量与单位。' },
+    { id: 's_spec_amount', label: '商品份量', isDefaultSelected: true, description: '规格份量与单位。' },
     { id: 's_spec_store_pack_fee', label: '到店外带包装费', isDefaultSelected: true, description: '到店外带场景包装费。' },
     { id: 's_spec_store_pack_mark', label: '到店外带包装标识', isDefaultSelected: true, description: '到店外带包装标识。' },
     { id: 's_spec_take_pack_fee', label: '外卖配送包装费', isDefaultSelected: true, description: '外卖配送包装费。' },
@@ -211,21 +215,30 @@ export const COMMON_FIELD_CHILD_CONFIG_LIBRARY: Record<string, FieldChildOption[
 };
 
 export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
+  ...CATEGORY_SUPPLEMENT_FIELDS,
+  { id: 'p_badge_date', label: '角标展示日期', module: 'display', type: 'input' },
+  { id: 's_jump_third_mini_program', label: '跳转三方小程序', module: 'sales', type: 'switch' },
+  { id: 's_third_mini_program_path', label: '三方小程序页面路径', module: 'sales', type: 'input' },
+  { id: 's_sales_commission_amount', label: '销售提成金额', module: 'sales', type: 'number' },
+  { id: 'o_more_settings', label: '更多设置', module: 'others', type: 'checkbox_group' },
+  { id: 'o_base_sales', label: '基础销量', module: 'others', type: 'number' },
+  { id: 'o_more_barcodes', label: '更多条码', module: 'others', type: 'input' },
+  { id: 'o_product_share', label: '商品分享', module: 'others', type: 'input' },
   // 1. 基础属性 (base)
   { id: 'p_name', label: '商品名称', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 10, isRequired: true, placeholder: '请输入商品名称' },
   { id: 'p_alias', label: '商品别名', module: 'base', type: 'input', sortOrder: 20, placeholder: '请输入商品别名' },
   { id: 'p_merchant_code', label: '商家商品标识', module: 'base', type: 'input', sortOrder: 25, description: '商家自有主数据编码，用于跨系统识别，不直接发布到售卖渠道', placeholder: '请输入商家商品标识' },
-  { id: 'p_code', label: '数字助记码', module: 'base', type: 'input', sortOrder: 30, description: '便于仓边收银使用助记码查找商品', placeholder: '请输入商品助记码' },
+  { id: 'p_code', label: '助记码', module: 'base', type: 'input', sortOrder: 30, description: '便于收银时快速查找商品', placeholder: '请输入商品助记码' },
   { id: 'p_front_cat', label: '前台分类', module: 'base', type: 'selector', applyToBrands: ['b_1', 'b_2'], sortOrder: 40, isRequired: true, description: '用于前台展示，如小程序、美团、淘宝闪购等渠道的分类展示', presetValues: ['热销推荐', '奶茶系列', '咖啡系列', '果茶系列'] },
-  { id: 'p_back_cat', label: '后台分类', module: 'base', type: 'selector', sortOrder: 45, description: '用于店铺内部经营管理和数据统计等，不在前台展示', presetValues: ['常规商品', '新品商品', '活动商品', '原料商品'] },
+  { id: 'p_back_cat', label: '后台分类', module: 'base', type: 'selector', sortOrder: 45, description: '用于内部查找、管理和统计商品，可分多级，如“饮品 → 奶茶”。', presetValues: ['常规商品', '新品商品', '活动商品', '原料商品'] },
   { id: 'p_cat', label: '商品类目', module: 'base', type: 'selector', isBase: true, isSystem: true, sortOrder: 50, isRequired: false },
-  { id: 'p_applicable_people', label: '适用人数', module: 'base', type: 'number', isSystem: true, sortOrder: 51, isRequired: true, description: '每售出 1 份自助餐门票所覆盖的用餐人数' },
+  { id: 'p_applicable_people', label: '适用人数', module: 'base', type: 'number', isSystem: true, sortOrder: 51, isRequired: true, description: '每售出 1 份自助餐标所覆盖的用餐人数' },
   { id: 'p_deposit_required', label: '是否收取押金', module: 'base', type: 'switch', isSystem: true, sortOrder: 52, description: '开启后，POS 收银时将按押金业务流程处理' },
   { id: 'p_weight_flag', label: '是否称重商品', module: 'base', type: 'switch', sortOrder: 52, description: '用于企迈 POS 端称重商品业务，开启后商品不支持多规格' },
   { id: 'p_unit', label: '计量单位', module: 'base', type: 'input', isBase: true, isSystem: true, sortOrder: 53, isRequired: false },
   { id: 'p_display_type', label: '商品展示类型', module: 'base', type: 'checkbox_group', sortOrder: 55, description: '为商品配置特殊标识用于个性化业务场景' },
   { id: 'p_remark', label: '备注', module: 'base', type: 'textarea', sortOrder: 60, description: '用于标记商品，以便识别同名商品', placeholder: '请输入备注' },
-  { id: 'p_stat_tags', label: '统计标签', module: 'base', type: 'selector', sortOrder: 70, description: '用于商品报表统计，最多支持 4 个', presetValues: ['销量统计', '活动统计', '成本统计', '渠道统计'] },
+  { id: 'p_stat_tags', label: '统计标签', module: 'base', type: 'selector', sortOrder: 70, description: '为商品添加统计标记，如“新品”“夏季主推”，可多选，最多 10 个。', presetValues: ['销量统计', '活动统计', '成本统计', '渠道统计'] },
   { id: 'p_tare_weight', label: '商品皮重', module: 'base', type: 'number', sortOrder: 80, description: '用于称重商品去除包装皮重' },
 
   // 2. 商品属性 (product_attr)
@@ -233,9 +246,9 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
     id: 's_specs', label: '规格设置', module: 'product_attr', type: 'tag_group', isBase: true, sortOrder: 10, 
     children: [
         { id: 's_spec_name', label: '规格名称', module: 'product_attr', type: 'input', isSystem: true, isDefaultSelected: true, sortOrder: 1 },
-        { id: 's_spec_price', label: '销售价格', module: 'product_attr', type: 'number', isSystem: true, isDefaultSelected: true, sortOrder: 2 },
+        { id: 's_spec_price', label: '销售价', module: 'product_attr', type: 'number', isSystem: true, isDefaultSelected: true, sortOrder: 2 },
         { id: 's_spec_cost', label: '成本价', module: 'product_attr', type: 'number', sortOrder: 3 },
-        { id: 's_spec_market', label: '市场价格', module: 'product_attr', type: 'number', sortOrder: 4 },
+        { id: 's_spec_market', label: '划线价格', module: 'product_attr', type: 'number', sortOrder: 4 },
         { id: 's_spec_stock', label: '库存设置', module: 'product_attr', type: 'number', isSystem: true, isDefaultSelected: true, sortOrder: 5 },
         { id: 's_spec_img', label: '规格独立图片', module: 'product_attr', type: 'image', sortOrder: 6 },
         { id: 's_spec_large_img', label: '规格大图', module: 'product_attr', type: 'image', sortOrder: 7 },
@@ -255,9 +268,9 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   { id: 'c_groups', label: '套餐分组', module: 'product_attr', type: 'tag_group', presetValues: ['主食区', '加餐小食', '饮品区'], sortOrder: 40 },
 
   // 3. 销售信息 (sales)
-  { id: 's_price', label: '基础售价', module: 'sales', type: 'number', isBase: true, isSystem: true, sortOrder: 10, isRequired: true },
+  { id: 's_price', label: '售价', module: 'sales', type: 'number', isBase: true, isSystem: true, sortOrder: 10, isRequired: true },
   { id: 's_cost', label: '成本价', module: 'sales', type: 'number', sortOrder: 20 },
-  { id: 's_market_price', label: '市场价格', module: 'sales', type: 'number', sortOrder: 30 },
+  { id: 's_market_price', label: '划线价格', module: 'sales', type: 'number', sortOrder: 30 },
   { id: 's_pack_fee', label: '包装费', module: 'sales', type: 'number', sortOrder: 40 },
   { id: 's_stock', label: '库存设置', module: 'sales', type: 'number', isBase: true, isSystem: true, sortOrder: 50 },
   { id: 's_limit', label: '起购/限购数量', module: 'sales', type: 'number', sortOrder: 60 },
@@ -275,12 +288,15 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
 
   // 4. 展示信息 (display)
   { id: 'p_img', label: '商品主图', module: 'display', type: 'image', isBase: true, sortOrder: 10 },
+  { id: 'p_cover_img', label: '商品封面', module: 'display', type: 'image', sortOrder: 15 },
   { id: 'p_list_desc', label: '列表页简述', module: 'display', type: 'textarea', sortOrder: 20 },
   { id: 'p_desc_tags', label: '描述标签', module: 'display', type: 'tag_group', presetValues: ['店长推荐', '新品', '无糖低脂'], sortOrder: 40 },
   { id: 'p_order_tags', label: '点单标签', module: 'display', type: 'tag_group', applyToBrands: ['b_1'], sortOrder: 50 },
   { id: 'p_badge', label: '商品角标', module: 'display', type: 'image', sortOrder: 60 },
   { id: 'p_video', label: '商品视频', module: 'display', type: 'image', sortOrder: 70 },
   { id: 'p_rich_desc', label: '详情页描述', module: 'display', type: 'rich_text', isBase: true, sortOrder: 80 },
+  { id: 'p_detail_images', label: '商品详情图', module: 'display', type: 'image', sortOrder: 81 },
+  { id: 'p_detail_bottom_img', label: '商品详情页底图', module: 'display', type: 'image', sortOrder: 82 },
 
   // 5. 其他信息 (others)
   { id: 'st_member', label: '会员折扣/积分', module: 'others', type: 'switch', applyToBrands: ['b_1', 'b_2', 'b_3'], sortOrder: 10 },
@@ -291,8 +307,6 @@ export const AVAILABLE_DYNAMIC_FIELDS: DynamicFieldConfig[] = [
   { id: 'o_ingredients', label: '原料说明', module: 'others', type: 'textarea', sortOrder: 50 },
   { id: 'o_recipe_ref', label: '配方引用', module: 'others', type: 'selector', presetValues: ['经典奶茶配方', '鲜果茶标准配方', '咖啡基底配方'], sortOrder: 52, description: '关联统一配方主数据' },
   { id: 'o_nutrition_ref', label: '营养成分引用', module: 'others', type: 'selector', presetValues: ['标准饮品营养表', '轻食营养表', '烘焙营养表'], sortOrder: 54, description: '关联统一营养成分主数据' },
-  { id: 'o_print_stat_test', label: '测试打印统计', module: 'others', type: 'radio_group', presetValues: ['番茄酱', '糖醋酱'], sortOrder: 60 },
-  { id: 'o_1202_attr', label: '1202属性', module: 'others', type: 'checkbox_group', presetValues: ['多选1', '多选2', '多选3', '多选4', '多选5', '多选6', '多选7', '多选8'], sortOrder: 70 },
 ];
 
 export interface CategoryFieldConfig {

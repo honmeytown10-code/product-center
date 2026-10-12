@@ -6,8 +6,11 @@ import {
 import { useProducts } from '../../context';
 import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
 import { StockoutSpec, WebStockoutModal } from './WebStockoutModal';
+import { getOmnichannelConfig } from '../../omnichannel';
+import { createTakeoutStoreBatch } from '../../takeoutSync';
+import type { PublishBatch } from './WebPublishRecords';
 
-type ChannelId = 'mini_dine' | 'mini_take' | 'meituan' | 'meituan_dine' | 'douyin' | 'taobao' | 'pos';
+type ChannelId = 'mini_dine' | 'mini_take' | 'meituan' | 'meituan_dine' | 'douyin' | 'taobao' | 'jd' | 'pos';
 type ShelfStatus = 'on_shelf' | 'off_shelf';
 
 type StoreAddonRecord = {
@@ -66,6 +69,7 @@ const CHANNEL_DEFS: Record<ChannelId, {
   inactiveClass: string;
   icon: React.ReactNode;
 }> = {
+  jd: { label: '京东外卖', shortLabel: '京', activeClass: 'bg-[#FEE4E2] text-[#D92D20]', inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]', icon: <ShoppingBag size={16} /> },
   mini_dine: {
     label: '小程序-堂食',
     shortLabel: '堂',
@@ -124,6 +128,7 @@ const DEFAULT_CHANNELS = [
   { id: 'meituan_dine', label: '美团在线点' },
   { id: 'douyin', label: '抖音在线点' },
   { id: 'taobao', label: '淘宝闪购' },
+  { id: 'jd', label: '京东外卖' },
   { id: 'pos', label: 'POS' },
 ] as const;
 
@@ -136,7 +141,7 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
     stockCount: 56,
     storeName: '南山万象店',
     storeId: 's1',
-    channelStatuses: { mini_dine: 'on_shelf', mini_take: 'on_shelf', meituan: 'off_shelf', meituan_dine: 'on_shelf', douyin: 'on_shelf', taobao: 'off_shelf', pos: 'on_shelf' },
+    channelStatuses: { mini_dine: 'on_shelf', mini_take: 'on_shelf', meituan: 'off_shelf', meituan_dine: 'on_shelf', douyin: 'on_shelf', taobao: 'off_shelf', jd: 'on_shelf', pos: 'on_shelf' },
     independentSale: true,
     relatedProductCount: 4,
     isMultiSpec: false,
@@ -247,10 +252,12 @@ const FilterSelect = ({ label, value, onChange, options }: { label: string; valu
   </div>
 );
 
-export const WebStoreAddonList: React.FC = () => {
+export const WebStoreAddonList: React.FC<{ onSubmitTask?: (batch: PublishBatch) => void }> = ({ onSubmitTask }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const config = brandConfigs[activeBrandId];
   const isShelvesUnited = config?.features.shelves_unite ?? false;
+  const takeoutStrategies = getOmnichannelConfig(config || brandConfigs.b_1).thirdPartyStrategies;
+  const managedTakeoutChannels = ['meituan', 'taobao', 'jd'].filter(id => takeoutStrategies[id as 'meituan' | 'taobao' | 'jd'] === 'qimai');
   const isStockShared = config?.features.stock_shared ?? false;
   const [addons, setAddons] = useState<StoreAddonRecord[]>(MOCK_STORE_ADDONS);
   const [activeTabId, setActiveTabId] = useState('all');
@@ -379,21 +386,11 @@ export const WebStoreAddonList: React.FC = () => {
     if (!shelfDialog) return;
     const actionLabel = payload.action === 'on_shelf' ? '上架' : '下架';
     const selectedNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
-
-    if (activeTabId === 'all') {
-      window.alert(
-        isShelvesUnited
-      ? `已统一${actionLabel}加料全部渠道，企迈管理的在线点渠道将同步平台`
-          : `已${actionLabel}加料所选渠道：${selectedNames || '未选择渠道'}`
-      );
-    } else {
-      window.alert(
-        isShelvesUnited
-      ? `已统一${actionLabel}加料全部渠道，企迈管理的在线点渠道将同步平台`
-          : `${getShelfChannelLabel(activeTabId)} ${actionLabel}成功`
-      );
-    }
+    setAddons(current => current.map(addon => addon.id === shelfDialog.id ? { ...addon, channelStatuses: { ...addon.channelStatuses, ...Object.fromEntries(payload.channels.map(channel => [channel, payload.action])) } } : addon));
+    setNotice(`企迈加料已${actionLabel}：${selectedNames}。${payload.channels.includes('meituan') ? '美团外卖只更新企迈，不执行平台小料上下架。' : ''}${payload.channels.includes('taobao') && managedTakeoutChannels.includes('taobao') ? '淘宝闪购选项启停需 L2 权限，当前为本地演示，未调用平台。' : ''}`);
     setShelfDialog(null);
+    const batch = createTakeoutStoreBatch({ ...shelfDialog, formData: {} }, payload.channels.filter(id => managedTakeoutChannels.includes(id)), 'addon_shelf', ['加料上下架']);
+    if (batch) onSubmitTask?.(batch);
   };
 
   const handleStockConfirm = (payload: {
@@ -406,11 +403,11 @@ export const WebStoreAddonList: React.FC = () => {
   }) => {
     if (!stockDialog) return;
     const channelNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
-    window.alert(
-      isStockShared
-        ? `${stockDialog.name} 沽清设置已保存，并同步更新渠道库存：${channelNames}`
-        : `${stockDialog.name} 沽清设置已保存，已应用至渠道：${channelNames}`
-    );
+    const updated = { ...stockDialog, stockMode: 'custom' as const, stockCount: Number(payload.remainStock || 0), specs: payload.specs.length ? payload.specs : stockDialog.specs };
+    setAddons(prev => prev.map(item => item.id === updated.id && item.storeId === updated.storeId ? updated : item));
+    const batch = createTakeoutStoreBatch({ id: updated.id, name: updated.name, storeId: updated.storeId, storeName: updated.storeName, formData: {} }, payload.channels.filter(id => managedTakeoutChannels.includes(id)), 'stock', ['加料库存']);
+    if (batch) onSubmitTask?.(batch);
+    setNotice(`企迈加料库存已更新：${channelNames}；平台结果请查看同步任务。`);
     setStockDialog(null);
   };
 
@@ -466,13 +463,19 @@ export const WebStoreAddonList: React.FC = () => {
 
   const handleDeleteConfirm = () => {
     if (!deleteDialog) return;
+    const targets = deleteDialog.mode === 'single' ? [deleteDialog.addon] : selectedAddons;
+    if (targets.some(item => item.relatedProductCount > 0)) {
+      setNotice('加料仍被商品引用，请先移除关联；不会自动删除共享加料或平台对象。');
+      setDeleteDialog(null); return;
+    }
     if (deleteDialog.mode === 'single') {
-      setAddons(prev => prev.filter(item => !(item.id === deleteDialog.addon.id && item.storeId === deleteDialog.addon.storeId)));
+      setAddons(prev => prev.map(item => item.id === deleteDialog.addon.id && item.storeId === deleteDialog.addon.storeId ? { ...item, channelStatuses: Object.fromEntries(Object.entries(item.channelStatuses).filter(([id]) => activeTabId !== 'all' && id !== activeTabId)) } : item).filter(item => Object.keys(item.channelStatuses).length > 0));
     } else {
-      setAddons(prev => prev.filter(item => !selectedRowKeys.has(getRowKey(item))));
+      setAddons(prev => prev.map(item => selectedRowKeys.has(getRowKey(item)) ? { ...item, channelStatuses: Object.fromEntries(Object.entries(item.channelStatuses).filter(([id]) => activeTabId !== 'all' && id !== activeTabId)) } : item).filter(item => Object.keys(item.channelStatuses).length > 0));
       setSelectedRowKeys(new Set());
     }
     setDeleteDialog(null);
+    setNotice('仅移除所选企迈门店渠道加料，平台小料仍保留；其他渠道、公共加料和历史订单不受影响。');
   };
 
   const handleBatchShelfConfirm = (channels: ShelfChannelId[]) => {
@@ -817,6 +820,7 @@ export const WebStoreAddonList: React.FC = () => {
           channelStatuses={shelfDialog.channelStatuses}
           activeTabId={activeTabId}
           isShelvesUnited={isShelvesUnited}
+          managedPlatformChannels={managedTakeoutChannels}
           onClose={() => setShelfDialog(null)}
           onConfirm={handleShelfConfirm}
         />
@@ -861,11 +865,11 @@ export const WebStoreAddonList: React.FC = () => {
                 <div className="text-[17px] leading-8 text-[#666]">
                   {deleteDialog.mode === 'single'
                     ? (activeTabId === 'all'
-                        ? '加料将从所有在售渠道中删除，删除后不可恢复请谨慎操作！确认删除该加料嘛？'
-                        : '确认删除该加料吗？删除后不可恢复请谨慎操作！')
+                        ? '将移除当前门店全部渠道的企迈加料，平台小料仍保留。需先处理商品引用；恢复需重新生成门店加料。确认继续？'
+                        : '将移除当前门店、当前渠道的企迈加料，其他渠道和平台小料保留。恢复需重新生成门店加料。确认继续？')
                     : (activeTabId === 'all'
-                        ? `加料将从所有在售渠道中删除，删除后不可恢复请谨慎操作！确认删除已选${deleteDialog.count}个加料嘛？`
-                        : `确认删除已选${deleteDialog.count}个加料吗？删除后不可恢复请谨慎操作！`)}
+                        ? `将移除所选 ${deleteDialog.count} 个门店加料的全部企迈渠道数据，平台小料仍保留。存在商品引用时禁止删除。确认继续？`
+                        : `将移除所选 ${deleteDialog.count} 个门店加料的当前企迈渠道数据，其他渠道和平台小料保留。确认继续？`)}
                 </div>
               </div>
               <div className="mt-8 flex justify-end gap-3">

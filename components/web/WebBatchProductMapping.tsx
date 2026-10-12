@@ -315,8 +315,8 @@ export const WebBatchProductMapping: React.FC<Props> = ({
       <section className="relative rounded-lg border border-[#E5E6EB] bg-white">
         <div className="flex h-12 items-center gap-4 border-b border-[#E5E6EB] px-4">
           <div className="shrink-0 text-[15px] font-bold text-[#1D2129]">商品批量映射</div>
-          <div className="flex h-full min-w-0 items-end gap-5 overflow-x-auto">
-            {channelTabs.map(channel => <button key={channel.id} type="button" onClick={() => onChannelChange(channel.id)} className={`h-full shrink-0 whitespace-nowrap border-b-2 px-0.5 text-[12px] ${channelId === channel.id ? 'border-[#00B460] font-bold text-[#00A35B]' : 'border-transparent text-[#4E5969]'}`}>{channel.label}</button>)}
+          <div className="console-segmented-tabs flex h-full min-w-0 items-end gap-5 overflow-x-auto" role="tablist" aria-label="映射渠道">
+            {channelTabs.map(channel => <button key={channel.id} type="button" role="tab" aria-selected={channelId === channel.id} onClick={() => onChannelChange(channel.id)} className={`h-full shrink-0 whitespace-nowrap border-b-2 px-0.5 text-[12px] ${channelId === channel.id ? 'border-[#00B460] font-bold text-[#00A35B]' : 'border-transparent text-[#4E5969]'}`}>{channel.label}</button>)}
           </div>
           <button type="button" onClick={onOpenExemption} className="ml-auto inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md border border-[#F0C98B] bg-[#FFF9F0] px-3 text-[12px] font-medium text-[#A8620A]"><ShieldOff size={13} className="mr-1.5" />免绑定商品 {exemptCount}</button>
         </div>

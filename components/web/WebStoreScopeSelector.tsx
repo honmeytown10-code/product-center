@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Building2, Check, ChevronDown, Search, Store, Tag, X } from 'lucide-react';
 
 export type StoreScopeOption = {
@@ -7,6 +8,7 @@ export type StoreScopeOption = {
   code: string;
   organization: string;
   tags: string[];
+  searchKeywords?: string;
 };
 
 type ScopeTab = 'store' | 'organization' | 'tag';
@@ -16,6 +18,8 @@ type Props = {
   value: string[];
   onChange: (storeIds: string[]) => void;
   widthClassName?: string;
+  placement?: 'above' | 'below';
+  selectionMode?: 'multiple' | 'single';
 };
 
 const tabs: Array<{ id: ScopeTab; label: string; icon: React.ElementType }> = [
@@ -34,24 +38,57 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
   value,
   onChange,
   widthClassName = 'w-[190px]',
+  placement = 'below',
+  selectionMode = 'multiple',
 }) => {
+  const single = selectionMode === 'single';
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const popupId = useId();
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   const [tab, setTab] = useState<ScopeTab>('store');
   const [keyword, setKeyword] = useState('');
   const [draftValue, setDraftValue] = useState<string[]>(value);
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node) && !popupRef.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); setOpen(false); triggerRef.current?.focus(); } };
+    const scroll = (event: Event) => { if (!popupRef.current?.contains(event.target as Node)) setOpen(false); };
+    const resize = () => setOpen(false);
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('scroll', scroll, true);
+    window.addEventListener('resize', resize);
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape); window.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', resize); };
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current || !popupRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const height = popupRef.current.getBoundingClientRect().height;
+    const aboveFits = rect.top - height - 4 >= 16;
+    const belowFits = rect.bottom + height + 4 <= window.innerHeight - 16;
+    const useAbove = placement === 'above' ? aboveFits : (!belowFits && aboveFits);
+    setPosition({
+      top: Math.max(16, Math.min(useAbove ? rect.top - height - 4 : rect.bottom + 4, window.innerHeight - height - 16)),
+      left: Math.max(16, Math.min(rect.left, window.innerWidth - 496)),
+    });
+  }, [open, placement]);
 
   const organizations = useMemo(() => Array.from(new Set(stores.map(store => store.organization))), [stores]);
   const tags = useMemo(() => Array.from(new Set(stores.flatMap(store => store.tags))), [stores]);
   const normalizedKeyword = keyword.trim().toLowerCase();
   const visibleStores = stores.filter(store =>
     !normalizedKeyword
-      || `${store.name}${store.code}${store.organization}${store.tags.join('')}`.toLowerCase().includes(normalizedKeyword),
+      || `${store.name}${store.code}${store.id}${store.organization}${store.tags.join('')}${store.searchKeywords || ''}`.toLowerCase().includes(normalizedKeyword),
   );
   const visibleOrganizations = organizations.filter(item => !normalizedKeyword || item.toLowerCase().includes(normalizedKeyword));
   const visibleTags = tags.filter(item => !normalizedKeyword || item.toLowerCase().includes(normalizedKeyword));
 
   const openSelector = () => {
     setDraftValue(value);
+    if (single) setTab('store');
     setKeyword('');
     setOpen(true);
   };
@@ -63,22 +100,26 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
   );
 
   return (
-    <div className={`relative shrink-0 ${widthClassName}`}>
+    <div ref={rootRef} className={`relative shrink-0 ${widthClassName}`}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => open ? setOpen(false) : openSelector()}
         aria-expanded={open}
-        className={`flex h-8 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-[12px] ${open ? 'border-[#00B460] shadow-[0_0_0_2px_rgba(0,180,96,0.08)]' : 'border-[#C9CDD4]'}`}
+        aria-controls={open ? popupId : undefined}
+        aria-label={single ? '选择要管理的门店' : undefined}
+        aria-haspopup={single ? 'listbox' : undefined}
+        className={`flex h-8 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00B460] ${open ? 'border-[#00B460]' : 'border-[#C9CDD4]'}`}
       >
         <span className={value.length ? 'truncate text-[#1D2129]' : 'truncate text-[#98A2B3]'}>
-          {value.length ? `已选 ${value.length} 家门店` : '请选择门店'}
+          {value.length ? single ? stores.find(store => store.id === value[0])?.name || '请选择门店' : `已选 ${value.length} 家门店` : '请选择门店'}
         </span>
         <ChevronDown size={14} className={`ml-2 shrink-0 text-[#86909C] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
-        <div className="absolute left-0 top-full z-[420] mt-1 w-[480px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white shadow-[0_10px_32px_rgba(29,33,41,0.16)]">
-          <div className="flex h-11 items-center border-b border-[#E5E6EB] bg-[#F7F8FA] px-1">
+      {open && createPortal(
+        <div ref={popupRef} id={popupId} style={position} className="fixed z-[420] max-h-[calc(100vh-32px)] w-[480px] max-w-[calc(100vw-32px)] overflow-auto rounded-md border border-[#E5E6EB] bg-white shadow-[0_10px_32px_rgba(29,33,41,0.16)]">
+          {!single && <div className="flex h-11 items-center border-b border-[#E5E6EB] bg-[#F7F8FA] px-1">
             {tabs.map(item => {
               const Icon = item.icon;
               return (
@@ -92,12 +133,20 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
                 </button>
               );
             })}
-          </div>
+          </div>}
 
           <div className="p-3">
             <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3 focus-within:border-[#00B460]">
               <Search size={14} className="mr-2 shrink-0 text-[#86909C]" />
               <input
+                autoFocus={single}
+                aria-label={tab === 'store' ? '搜索门店' : tab === 'organization' ? '搜索机构' : '搜索标签'}
+                onKeyDown={event => {
+                  if (single && event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    popupRef.current?.querySelector<HTMLButtonElement>('[role="option"]')?.focus();
+                  }
+                }}
                 value={keyword}
                 onChange={event => setKeyword(event.target.value)}
                 placeholder={tab === 'store' ? '门店名称 / 编码 / ID' : tab === 'organization' ? '搜索机构' : '搜索标签'}
@@ -106,16 +155,31 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
               {keyword && <button type="button" onClick={() => setKeyword('')} aria-label="清空搜索"><X size={14} className="text-[#86909C]" /></button>}
             </label>
 
-            <div className="mt-2 max-h-[300px] overflow-y-auto rounded-md border border-[#EEF0F3]">
+            <div className="mt-2 max-h-[300px] overflow-y-auto rounded-md border border-[#EEF0F3]" role={single ? 'listbox' : undefined} aria-label={single ? '门店列表' : undefined}
+              onKeyDown={event => {
+                if (!single || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+                const index = options.indexOf(document.activeElement as HTMLButtonElement);
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+                  : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+                options[next]?.focus();
+              }}>
               {tab === 'store' && visibleStores.map(store => {
                 const checked = draftValue.includes(store.id);
                 return (
-                  <button key={store.id} type="button" onClick={() => setDraftValue(toggleIds(draftValue, [store.id]))} className="flex min-h-11 w-full items-center gap-3 border-b border-[#F0F1F2] px-3 py-2 text-left last:border-b-0 hover:bg-[#F7F8FA]">
-                    {renderCheckbox(checked)}
+                  <button key={store.id} type="button" role={single ? 'option' : undefined} aria-selected={single ? checked : undefined}
+                    onClick={() => {
+                      if (single) { onChange([store.id]); setOpen(false); triggerRef.current?.focus(); }
+                      else setDraftValue(toggleIds(draftValue, [store.id]));
+                    }}
+                    className={`flex min-h-11 w-full items-center gap-3 border-b border-[#F0F1F2] px-3 py-2 text-left last:border-b-0 hover:bg-[#F7F8FA] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#00B460] ${single && checked ? 'bg-[#EAF8F2]' : ''}`}>
+                    {!single && renderCheckbox(checked)}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-medium text-[#1D2129]">{store.name}</div>
                       <div className="mt-0.5 truncate text-[11px] text-[#86909C]">{store.code} · {store.organization}</div>
                     </div>
+                    {single && checked && <Check size={16} className="shrink-0 text-[#008F4C]" />}
                   </button>
                 );
               })}
@@ -152,16 +216,16 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex h-12 items-center justify-between border-t border-[#E5E6EB] bg-[#FAFBFC] px-3">
+          {!single && <div className="flex h-12 items-center justify-between border-t border-[#E5E6EB] bg-[#FAFBFC] px-3">
             <span className="text-[12px] text-[#667085]">{draftValue.length ? `已选 ${draftValue.length} 家门店` : '暂未选择门店'}</span>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => setDraftValue([])} className="h-8 rounded-md px-3 text-[12px] text-[#4E5969]">清空</button>
               <button type="button" onClick={() => setOpen(false)} className="h-8 rounded-md border border-[#C9CDD4] bg-white px-3 text-[12px] text-[#4E5969]">取消</button>
               <button type="button" onClick={() => { onChange(draftValue); setOpen(false); }} className="h-8 rounded-md bg-[#00B460] px-3 text-[12px] font-semibold text-white">确认</button>
             </div>
-          </div>
+          </div>}
         </div>
-      )}
+      , document.body)}
     </div>
   );
 };

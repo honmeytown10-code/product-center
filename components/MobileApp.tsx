@@ -305,7 +305,7 @@ export const MobileApp: React.FC = () => {
                         <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity text-orange-500"><ArrowRight size={16}/></div>
                     </div>
 
-                    <MockToolCard icon={<FileText size={20}/>} label="品牌菜品库" desc="统一管理标准菜品" color="bg-blue-50 text-blue-500" onClick={() => navigateTo('product_list')} />
+                    <MockToolCard icon={<FileText size={20}/>} label="品牌菜品库" desc="各渠道共用一套商品资料标准菜品" color="bg-blue-50 text-blue-500" onClick={() => navigateTo('product_list')} />
                     <MockToolCard icon={<ArrowDownCircle size={20}/>} label="一键下发" desc="快速同步至门店" color="bg-purple-50 text-purple-500" onClick={() => {}} />
                     <MockToolCard icon={<Layers size={20}/>} label="类目管理" desc="维护品牌标准分类" color="bg-green-50 text-green-500" onClick={() => navigateTo('category_list')} />
                  </div>

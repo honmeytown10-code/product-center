@@ -47,6 +47,8 @@ import {
 
 type Props = {
   onBack: () => void;
+  configOverride?: OmnichannelBrandConfig;
+  onConfigSaved?: (config: OmnichannelBrandConfig) => void;
 };
 
 type ImpactLevel = 'high' | 'medium' | 'info';
@@ -75,7 +77,6 @@ const LEVEL_META: Record<ImpactLevel, { label: string; chipBg: string; chipText:
 };
 
 const CAPABILITY_LABELS: Array<[QimaiChannelCapability, string]> = [
-  ['order_receiving', '企迈接单'],
   ['product_operations', '上下架/库存'],
 ];
 
@@ -161,12 +162,12 @@ const ConfirmDialog: React.FC<{
   </div>
 );
 
-export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
+export const WebOmnichannelSettings: React.FC<Props> = ({ onBack, configOverride, onConfigSaved }) => {
   const { activeBrandId, brandConfigs, products, updateBrandConfig } = useProducts();
   const currentBrandConfig = brandConfigs[activeBrandId];
 
-  const [baseline, setBaseline] = useState<OmnichannelBrandConfig>(() => getOmnichannelConfig(currentBrandConfig));
-  const [draft, setDraft] = useState<OmnichannelBrandConfig>(() => getOmnichannelConfig(currentBrandConfig));
+  const [baseline, setBaseline] = useState<OmnichannelBrandConfig>(() => cloneConfig(configOverride || getOmnichannelConfig(currentBrandConfig)));
+  const [draft, setDraft] = useState<OmnichannelBrandConfig>(() => cloneConfig(configOverride || getOmnichannelConfig(currentBrandConfig)));
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
@@ -222,6 +223,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
       }
       const next = cloneConfig(migrationTask.targetConfig);
       updateBrandConfig(activeBrandId, { ...currentBrandConfig, omnichannel: next });
+      onConfigSaved?.(next);
       setBaseline(next);
       setDraft(next);
       setMigrationTask({ ...migrationTask, progress: 100, status: 'completed' });
@@ -241,26 +243,14 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
       items.push(draft.collaborationMode === 'unified'
         ? {
             level: 'high',
-            title: '协作方式改为「统一管理」',
+            title: '协作方式改为「各渠道共用一套商品资料」',
             detail: '保存后将创建迁移任务：全部商品取并集，重复商品以选定的主商品库公共资料为准；原商品库和权限保存快照，不会直接删除。',
           }
         : {
             level: 'high',
-            title: '协作方式改为「分渠道协作」',
+            title: '协作方式改为「各渠道分别维护商品资料」',
             detail: '保存后将创建迁移任务：统一商品库中的全部商品复制到每个目标商品库，完成后再由各渠道团队批量移出不经营的商品。',
           });
-    }
-
-    if (baseline.channelProductCreationMode !== draft.channelProductCreationMode) {
-      items.push({
-        level: 'medium',
-        title: draft.channelProductCreationMode === 'create_master_and_channel'
-          ? '渠道商品库允许直接新建商品'
-          : '渠道商品库仅允许选择已有主档',
-        detail: draft.channelProductCreationMode === 'create_master_and_channel'
-          ? '具备商品主档创建权限和当前商品库创建权限的人员，可一次填写主档资料与渠道商品资料并同时创建。'
-          : '渠道商品库不再提供新建主档入口，渠道人员只能把已有商品主档加入当前商品库。',
-      });
     }
 
     ALL_OMNICHANNEL_CHANNELS.forEach(channel => {
@@ -275,14 +265,14 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
           level: 'high',
           title: `${channel.name} 改为平台维护资料`,
           detail: keepsQimaiOperations
-            ? `企迈不再维护或发布该平台的专属商品资料；仍从「${draft.collaborationMode === 'unified' ? '品牌默认商品库' : currentGroup?.name || '待分配商品库'}」下发企迈侧门店渠道商品，并通过商品映射继续接单或管理上下架、库存。`
-            : '企迈不再维护或发布该平台的专属商品资料，当前也未启用企迈接单、上下架或库存能力；该渠道不再要求渠道商品库和门店绑定。',
+            ? `企迈不再维护或发布该平台的专属商品资料；仍从「${draft.collaborationMode === 'unified' ? '品牌默认商品库' : currentGroup?.name || '待分配商品库'}」下发企迈侧门店渠道商品，并通过商品映射管理上下架、库存。`
+            : '企迈不再维护或发布该平台的专属商品资料，当前也未启用企迈上下架或库存能力；该渠道不再要求渠道商品库和门店绑定。',
         });
       } else {
         items.push({
           level: 'medium',
           title: `${channel.name} 纳入企迈管理`,
-          detail: '企迈接单、商品发布与上下架库存将默认全部开启，并需要在门店绑定中心完成该渠道的门店授权。',
+          detail: '商品发布与上下架库存将默认开启，并需要在门店绑定中心完成该渠道的门店授权。',
         });
       }
     });
@@ -301,7 +291,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
         title: `${channel.name} 的企迈参与能力变更`,
         detail: afterLabels.length
           ? `变更后企迈参与：${afterLabels.join('、')}；渠道继续使用渠道商品库下发门店商品，并需保持门店绑定和商品映射有效。`
-          : '变更后不再通过企迈接单或操作商品；该渠道退出渠道商品库归属，并停止生成新的企迈侧门店渠道商品。',
+          : '变更后不再通过企迈操作商品；该渠道退出渠道商品库归属，并停止生成新的企迈侧门店渠道商品。',
       });
     });
 
@@ -360,18 +350,6 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
       }
     }
 
-    const mappingVisible = (config: OmnichannelBrandConfig) => (
-      Object.values(config.thirdPartyStrategies).some(mode => mode === 'platform')
-      || Object.values(config.channelConnections).some(connection => connection.capabilities.length > 0)
-    );
-    if (mappingVisible(baseline) !== mappingVisible(draft)) {
-      items.push({
-        level: 'info',
-        title: mappingVisible(draft) ? '左侧将出现「商品映射」菜单' : '左侧「商品映射」菜单将收起',
-        detail: '该菜单在存在平台管理渠道、或平台管理渠道启用了企迈能力时出现。',
-      });
-    }
-
     return items;
   }, [baseline, catalogChannels, dirty, draft, groupOfChannel]);
 
@@ -383,14 +361,14 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
     const oldMode = draft.thirdPartyStrategies[channelId];
     if (oldMode === mode) return;
     const capabilities: QimaiChannelCapability[] = mode === 'qimai'
-      ? ['order_receiving', 'product_operations']
+      ? ['product_operations']
       : draft.channelConnections[channelId].capabilities;
 
     setDraft({
       ...draft,
       thirdPartyStrategies: { ...draft.thirdPartyStrategies, [channelId]: mode },
       channelConnections: { ...draft.channelConnections, [channelId]: { capabilities } },
-      // 平台维护资料但继续使用企迈接单/经营能力时，仍保留渠道商品库归属。
+      // 平台维护资料但继续使用企迈商品经营能力时，仍保留渠道商品库归属。
       channelGroups: mode === 'platform' && capabilities.length === 0
         ? draft.channelGroups.map(group => ({ ...group, channels: group.channels.filter(id => id !== channelId) }))
         : draft.channelGroups,
@@ -405,11 +383,9 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
     setDraft({
       ...draft,
       collaborationMode: mode,
-      // 统一管理的推荐路径是从默认渠道商品库一次创建主档与渠道商品；
-      // 切回分渠道协作时保留该能力，由品牌按职责决定是否关闭。
       channelProductCreationMode: mode === 'unified'
         ? 'create_master_and_channel'
-        : draft.channelProductCreationMode,
+        : 'existing_master_only',
     });
   };
 
@@ -525,7 +501,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
 
   const confirmSave = () => {
     setImpactOpen(false);
-    const next = cloneConfig(draft);
+    const next = cloneConfig({ ...draft, channelProductCreationMode: draft.collaborationMode === 'unified' ? 'create_master_and_channel' : 'existing_master_only' });
     if (collaborationModeChanged) {
       const primaryGroup = baseline.channelGroups.find(group => group.id === primaryGroupId);
       setMigrationTask({
@@ -544,6 +520,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
     // 生产实现：改为真实接口调用，失败时展示 error 状态并保留当前编辑内容
     window.setTimeout(() => {
       updateBrandConfig(activeBrandId, { ...currentBrandConfig, omnichannel: next });
+      onConfigSaved?.(next);
       setBaseline(next);
       setSaving(false);
       setSavedFlash(true);
@@ -560,7 +537,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
 
   const deletingGroup = draft.channelGroups.find(group => group.id === deletingGroupId);
   const modeLabel = (mode: OmnichannelBrandConfig['collaborationMode']) => (
-    mode === 'unified' ? '统一管理' : '分渠道协作'
+    mode === 'unified' ? '各渠道共用一套商品资料' : '各渠道分别维护商品资料'
   );
   const migrationStage = migrationTask
     ? migrationTask.progress < 24
@@ -588,7 +565,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
           <button type="button" onClick={() => updateStrategy(channelId, 'platform')} className={`flex h-7 items-center gap-1.5 rounded px-3 text-[12px] ${strategy === 'platform' ? 'bg-white font-semibold text-[#1D2129] shadow-sm' : 'text-[#86909C]'}`}><Radio active={strategy === 'platform'} />平台管理</button>
         </div>
         <div className="min-w-0">
-          {strategy === 'qimai' ? <><div className="flex flex-wrap gap-1.5"><span className="rounded bg-[#EAF8F1] px-2 py-1 text-[11px] text-[#087A49]">接单</span><span className="rounded bg-[#EAF8F1] px-2 py-1 text-[11px] text-[#087A49]">商品发布</span><span className="rounded bg-[#EAF8F1] px-2 py-1 text-[11px] text-[#087A49]">上下架/库存</span></div><div className="mt-1.5 text-[11px] text-[#A9AEB8]">由企迈管理固定包含，不可调整</div></> : <><div className="flex flex-wrap gap-2">{CAPABILITY_LABELS.map(([capability, label]) => <button key={capability} type="button" onClick={() => toggleCapability(channelId, capability)} className={`flex h-7 items-center gap-1.5 rounded border px-2.5 text-[12px] ${draft.channelConnections[channelId].capabilities.includes(capability) ? 'border-[#8BD7AE] bg-[#F2FFF8] text-[#087A49]' : 'border-[#E5E6EB] bg-white text-[#667085]'}`}><Checkbox checked={draft.channelConnections[channelId].capabilities.includes(capability)} />{label}</button>)}</div><div className="mt-1.5 text-[11px] text-[#A9AEB8]">{draft.channelConnections[channelId].capabilities.length ? '启用后需下发企迈侧商品并建立映射' : '企迈不参与该渠道接单和商品经营'}</div></>}
+          {strategy === 'qimai' ? <><div className="flex flex-wrap gap-1.5"><span className="rounded bg-[#EAF8F1] px-2 py-1 text-[11px] text-[#087A49]">商品发布</span><span className="rounded bg-[#EAF8F1] px-2 py-1 text-[11px] text-[#087A49]">上下架/库存</span></div><div className="mt-1.5 text-[11px] text-[#A9AEB8]">由企迈管理固定包含，不可调整</div></> : <><div className="flex flex-wrap gap-2">{CAPABILITY_LABELS.map(([capability, label]) => <button key={capability} type="button" onClick={() => toggleCapability(channelId, capability)} className={`flex h-7 items-center gap-1.5 rounded border px-2.5 text-[12px] ${draft.channelConnections[channelId].capabilities.includes(capability) ? 'border-[#8BD7AE] bg-[#F2FFF8] text-[#087A49]' : 'border-[#E5E6EB] bg-white text-[#667085]'}`}><Checkbox checked={draft.channelConnections[channelId].capabilities.includes(capability)} />{label}</button>)}</div><div className="mt-1.5 text-[11px] text-[#A9AEB8]">{draft.channelConnections[channelId].capabilities.length ? '启用后需下发企迈侧商品并建立映射' : '企迈不参与该渠道的商品经营'}</div></>}
         </div>
         <div>{requiresAuth ? <button type="button" onClick={() => window.open(TAKEAWAY_STORE_BINDING_URL, '_blank', 'noopener,noreferrer')} className="inline-flex items-center text-[12px] font-medium text-[#D46B08]">需门店绑定<ExternalLink size={11} className="ml-1" /></button> : <span className="text-[12px] text-[#A9AEB8]">无需绑定</span>}</div>
       </div>
@@ -621,7 +598,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
             <div className="min-w-0">
               <button type="button" disabled={migrationRunning} onClick={handleBack} className="mb-1.5 inline-flex items-center gap-1 text-[12px] text-[#86909C] hover:text-[#4E5969] disabled:cursor-not-allowed disabled:text-[#C9CDD4]"><ArrowLeft size={14} />商品设置</button>
               <div className="flex items-center gap-2"><h1 className="text-[19px] font-bold leading-7 text-[#1D2129]">全渠道商品管理策略</h1><span className="rounded bg-[#F2F3F5] px-2 py-0.5 text-[11px] text-[#667085]">品牌级</span></div>
-              <div className="mt-1 text-[12px] text-[#86909C]">品牌级配置 · 当前{modeLabel(baseline.collaborationMode)} · 普通配置保存后生效，协作方式变更完成迁移后生效</div>
+              <div className="mt-1 text-[12px] text-[#86909C]">品牌级配置 · 当前{modeLabel(baseline.collaborationMode)} · 配置保存后生效</div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {savedFlash && <span className="mr-1 inline-flex items-center text-[12px] font-medium text-[#008F4C]"><CheckCircle2 size={14} className="mr-1" />已保存</span>}
@@ -661,51 +638,24 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
           <fieldset disabled={migrationRunning} className={migrationRunning ? 'opacity-60' : ''}>
           <section className="mt-4 overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
             <div className="flex items-center gap-3 border-b border-[#F0F1F2] px-5 py-4">
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#1D2129] text-[12px] font-bold text-white">1</span>
-              <div><h2 className="text-[15px] font-bold text-[#1D2129]">谁来管每个三方渠道</h2><p className="mt-0.5 text-[12px] text-[#86909C]">选择平台商品资料的维护方，并决定企迈是否参与接单、商品发布或上下架/库存。</p></div>
+              <div><h2 className="text-[15px] font-bold text-[#1D2129]">商品资料管理方式</h2><p className="mt-0.5 text-[12px] text-[#667085]">当前品牌的商品资料维护方式。</p></div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><strong className="text-sm text-[#1D2129]">{modeLabel(baseline.collaborationMode)}</strong><p className="mt-2 text-[13px] leading-6 text-[#4E5969]">{baseline.collaborationMode === 'unified' ? '在商品库集中维护商品资料，选择销售渠道；保存并下发时选择门店，也可通过模板或发布工具手动下发。' : '例如堂食、外卖使用不同售卖资料：先建商品主档，再在堂食、外卖等商品库分别维护名称、图片等资料；同组渠道共用，不同组互不覆盖。'}</p></div></div>
+          </section>
+
+          <section className="mt-4 overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
+            <div className="flex items-center gap-3 border-b border-[#F0F1F2] px-5 py-4">
+              <div><h2 className="text-[15px] font-bold text-[#1D2129]">谁来管每个三方渠道</h2><p className="mt-0.5 text-[12px] text-[#86909C]">选择平台商品资料的维护方，并决定是否通过企迈发布商品、管理上下架和库存。</p></div>
               <button type="button" onClick={() => window.open(TAKEAWAY_STORE_BINDING_URL, '_blank', 'noopener,noreferrer')} className="ml-auto inline-flex h-8 items-center rounded-md border border-[#E5E6EB] px-3 text-[12px] text-[#4E5969]">门店绑定<ExternalLink size={12} className="ml-1" /></button>
             </div>
             <div className="overflow-x-auto"><div className="min-w-[920px]"><div className="grid grid-cols-[220px_200px_minmax(260px,1fr)_140px] gap-3 bg-[#F7F8FA] px-5 py-2.5 text-[12px] font-medium text-[#4E5969]"><span>渠道</span><span>平台商品资料</span><span>企迈参与能力</span><span>门店连接要求</span></div>{thirdPartyChannels.map(renderOwnershipRow)}</div></div>
           </section>
 
+          {divided && (
           <section className="mt-4 overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
             <div className="flex items-center gap-3 border-b border-[#F0F1F2] px-5 py-4">
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#1D2129] text-[12px] font-bold text-white">2</span>
-              <div><h2 className="text-[15px] font-bold text-[#1D2129]">商品资料怎么分工与创建</h2><p className="mt-0.5 text-[12px] text-[#86909C]">菜单结构始终一致；协作方式只决定商品库数量、职责边界和创建路径。</p></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 p-4">
-              {([
-                ['unified', '统一管理', '保留商品主档与渠道商品入口，全部渠道共用一个品牌默认商品库。', '适合同一团队维护、各渠道资料差异较小的品牌'],
-                ['channel_division', '分渠道协作', '保留相同菜单，由多个渠道商品库分别承接不同团队的售卖资料。', '适合堂食、外卖和在线点由不同团队管理的品牌'],
-              ] as const).map(([mode, title, description, fit]) => {
-                const active = draft.collaborationMode === mode;
-                const current = baseline.collaborationMode === mode;
-                const statusLabel = active && !current ? '待切换' : current ? '当前生效' : '';
-                return <button key={mode} type="button" onClick={() => selectCollaborationMode(mode)} className={`rounded-lg border p-4 text-left ${active ? 'border-[#00B460] bg-[#F6FCF9]' : 'border-[#E5E6EB] bg-white hover:border-[#C9CDD4]'}`}><div className="flex items-center justify-between"><strong className="text-[14px] text-[#1D2129]">{title}</strong>{statusLabel && <span className={`text-[11px] font-medium ${active ? 'text-[#008F4C]' : 'text-[#86909C]'}`}>{statusLabel}</span>}</div><p className="mt-2 text-[12px] leading-5 text-[#4E5969]">{description}</p><div className="mt-2 text-[11px] text-[#86909C]">{fit}</div></button>;
-              })}
-            </div>
-            <div className="border-t border-[#F0F1F2] bg-[#FAFBFC] px-4 py-4">
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <div><strong className="text-[13px] text-[#1D2129]">渠道商品库的商品创建方式</strong><p className="mt-1 text-[11px] text-[#86909C]">品牌级策略，统一管理和分渠道协作都适用；最终还需同时满足主档与商品库操作权限。</p></div>
-                {draft.collaborationMode === 'unified' && <span className="rounded bg-[#EAF8F1] px-2 py-1 text-[11px] text-[#087A49]">统一管理推荐允许直接新建</span>}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {([
-                  ['existing_master_only', '仅选择已有商品主档', '渠道人员从商品主档中选择商品加入当前商品库，不在此处创建新主档。'],
-                  ['create_master_and_channel', '允许同时创建主档与渠道商品', '按“主档资料 / 渠道商品资料”分区填写，一次提交同时创建并加入当前商品库。'],
-                ] as const).map(([mode, title, description]) => {
-                  const active = draft.channelProductCreationMode === mode;
-                  return <button key={mode} type="button" onClick={() => setDraft({ ...draft, channelProductCreationMode: mode })} className={`flex items-start gap-3 rounded-md border p-3 text-left ${active ? 'border-[#8BD7AE] bg-white' : 'border-[#E5E6EB] bg-white hover:border-[#C9CDD4]'}`}><Radio active={active} /><span><strong className="block text-[13px] text-[#1D2129]">{title}</strong><span className="mt-1 block text-[11px] leading-5 text-[#667085]">{description}</span></span></button>;
-                })}
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-4 overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">
-            <div className="flex items-center gap-3 border-b border-[#F0F1F2] px-5 py-4">
-              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#1D2129] text-[12px] font-bold text-white">3</span>
               <div><h2 className="text-[15px] font-bold text-[#1D2129]">确认每个渠道的商品来源</h2><p className="mt-0.5 text-[12px] text-[#86909C]">{divided ? `${catalogChannels.length} 个渠道需要从所属渠道商品库下发企迈侧门店商品。` : `${catalogChannels.length} 个渠道统一使用品牌默认商品库。`}</p></div>
-              {divided && <div className="ml-auto flex items-center gap-2">{draft.channelGroups.length > 1 && <button type="button" onClick={openGroupSort} className="inline-flex h-8 items-center rounded-md border border-[#E5E6EB] bg-white px-3 text-[12px] text-[#4E5969] hover:border-[#C9CDD4]"><GripVertical size={13} className="mr-1" />调整顺序</button>}<button type="button" onClick={addGroup} className="inline-flex h-8 items-center rounded-md border border-[#E5E6EB] bg-white px-3 text-[12px] text-[#1D2129] hover:border-[#C9CDD4]"><Plus size={13} className="mr-1" />新建商品库</button></div>}
+              {divided && <div className="ml-auto flex items-center gap-2">{draft.channelGroups.length > 1 && <button type="button" onClick={openGroupSort} className="inline-flex h-8 items-center rounded-md border border-[#E5E6EB] bg-white px-3 text-[12px] text-[#4E5969] hover:border-[#C9CDD4]"><GripVertical size={13} className="mr-1" />调整顺序</button>}<button type="button" onClick={addGroup} className="inline-flex h-8 items-center rounded-md border border-[#E5E6EB] bg-white px-3 text-[12px] text-[#1D2129] hover:border-[#C9CDD4]"><Plus size={13} className="mr-1" />新建单品库</button></div>}
             </div>
 
             {divided ? (
@@ -718,6 +668,7 @@ export const WebOmnichannelSettings: React.FC<Props> = ({ onBack }) => {
             )}
             <div className="overflow-x-auto"><div className="min-w-[840px]"><div className="grid grid-cols-[230px_110px_180px_minmax(240px,1fr)] gap-3 bg-[#F7F8FA] px-5 py-2.5 text-[12px] font-medium text-[#4E5969]"><span>渠道</span><span>类型</span><span>管理方式</span><span>所属渠道商品库</span></div>{ALL_OMNICHANNEL_CHANNELS.map(renderAssignmentRow)}</div></div>
           </section>
+          )}
           </fieldset>
         </div>
       </main>

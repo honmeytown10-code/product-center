@@ -51,7 +51,7 @@ const createDetailTabs = (isCombo: boolean, counts: { stores: number; templates:
   if (isCombo) {
     return [
       { key: 'stores' as DetailTabKey, label: `在售门店 (${counts.stores})` },
-      { key: 'templates' as DetailTabKey, label: `商品模板 (${counts.templates})` },
+      { key: 'templates' as DetailTabKey, label: `商品下发模板 (${counts.templates})` },
       { key: 'combo_detail' as DetailTabKey, label: `套餐明细 (${counts.combos})` },
       { key: 'free_match' as DetailTabKey, label: `随心配 (${counts.freeMatch})` },
     ];
@@ -59,7 +59,7 @@ const createDetailTabs = (isCombo: boolean, counts: { stores: number; templates:
 
   return [
     { key: 'stores' as DetailTabKey, label: `在售门店 (${counts.stores})` },
-    { key: 'templates' as DetailTabKey, label: `商品模板 (${counts.templates})` },
+    { key: 'templates' as DetailTabKey, label: `商品下发模板 (${counts.templates})` },
     { key: 'combos' as DetailTabKey, label: `套餐组合 (${counts.combos})` },
     { key: 'free_match' as DetailTabKey, label: `随心配 (${counts.freeMatch})` },
     { key: 'optional_groups' as DetailTabKey, label: `可选分组 (${counts.optionalGroups})` },

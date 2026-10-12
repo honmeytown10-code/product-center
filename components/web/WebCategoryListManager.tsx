@@ -1783,7 +1783,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
   }
 
   return (
-    <div className="m-4 flex flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="console-category-panel m-4 flex flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
       {operationNotice && (
         <div className="fixed right-6 top-20 z-[120] flex max-w-[460px] items-start gap-3 rounded-lg border border-[#B7E7CD] bg-white px-4 py-3 text-sm text-[#087A49] shadow-[0_12px_32px_rgba(15,23,42,0.16)]">
           <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
@@ -1792,19 +1792,20 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
         </div>
       )}
       {scope === 'all' && (
-        <div className="flex space-x-8 border-b border-gray-100 px-6 py-4">
-          <button onClick={() => setActiveTab('frontend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'frontend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>前台分类</button>
-          <button onClick={() => setActiveTab('backend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'backend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>后台分类</button>
+        <div className="console-secondary-tab-row flex border-b border-gray-100 px-6 py-4">
+          <div className="console-segmented-tabs" role="tablist" aria-label="分类类型">
+          <button role="tab" aria-selected={activeTab === 'frontend'} onClick={() => setActiveTab('frontend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'frontend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>前台分类</button>
+          <button role="tab" aria-selected={activeTab === 'backend'} onClick={() => setActiveTab('backend')} className={`-mb-4 border-b-2 pb-4 text-base font-bold transition-colors ${activeTab === 'backend' ? 'border-[#00C06B] text-[#00C06B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>后台分类</button>
+          </div>
         </div>
       )}
 
       {resolvedTab === 'backend' ? (
         <>
-          <div className="bg-orange-50/50 px-6 py-4 text-xs text-orange-600">
+          <div className="console-page-description px-6 py-3 text-[13px] leading-6 text-[#4E5969]">
             <div className="flex items-center">
               <Info size={14} className="mr-2" />
-              原商品类别，商品后台分类，用于店内部经营管理如数据统计等，不在前台展示
-              <a href="#" className="ml-2 text-[#00C06B] hover:underline">查看帮助文档</a>
+              用于内部查找、管理和统计商品，支持多级分类，不在顾客点单页展示。
             </div>
           </div>
 
@@ -1864,7 +1865,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
         </>
       ) : (
         <>
-          <div className="bg-orange-50/50 px-6 py-4 text-xs text-orange-600"><div className="flex items-center"><Info size={14} className="mr-2" />原商品分类，商品前台展示分类，用于小程序端、企迈POS端等展示 <a href="#" className="ml-2 text-[#00C06B] hover:underline">查看帮助文档</a></div></div>
+          <div className="console-page-description px-6 py-3 text-[13px] leading-6 text-[#4E5969]">用于小程序、POS 等点单页面的商品分组，方便顾客查找商品；平台商品类目仍在渠道专属属性中设置。</div>
 
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex flex-wrap items-center gap-3">

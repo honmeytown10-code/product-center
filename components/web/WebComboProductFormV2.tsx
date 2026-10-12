@@ -413,7 +413,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                             <span className="font-bold text-gray-800 text-lg">填写套餐商品资料</span>
                             <span className="text-[10px] bg-[#00C06B]/10 text-[#00C06B] px-2 py-0.5 rounded-full font-bold border border-[#00C06B]/20">类目: {category.name}</span>
                         </div>
-                        <div className="text-xs text-gray-400">套餐创建页已补充为和新建商品页相近的模块结构，套餐不支持加料配置。</div>
+                        <div className="text-xs text-gray-400">套餐创建页已补充为和新建单品页相近的模块结构，套餐不支持加料配置。</div>
                     </div>
                 </div>
                 <div className="flex space-x-3">
@@ -457,7 +457,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                         placeholder="请输入套餐名称"
                                     />
                                 </FormRow>
-                                <FormRow label="基础价格" required>
+                                <FormRow label="售价" required>
                                     <input
                                         value={formState.price}
                                         onChange={(e) => updateFormState('price', e.target.value)}
@@ -1093,7 +1093,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                         />
                                     </div>
                                     <div className="text-xs text-gray-400">
-                                        开启后，用户点单时该随心配会以默认子商品的加价为基础价，其他子商品的加价金额将按基础价计算 <span className="text-[#00C06B] cursor-pointer hover:underline">查看示例</span>
+                                        开启后，用户点单时该随心配会以默认子商品的加价为售价，其他子商品的加价金额将按售价计算 <span className="text-[#00C06B] cursor-pointer hover:underline">查看示例</span>
                                     </div>
                                 </div>
                             </FormRow>

@@ -103,11 +103,11 @@ const STORES: StoreOption[] = [
 const ALL_STORE_IDS = STORES.map(store => store.id);
 
 const TICKETS: TicketProduct[] = [
-  { id: 't-adult-lunch', name: '成人午市自助餐门票', code: 'BUFFET-A-L', price: 118, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, allowPosTemporaryPrice: false, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-child-lunch', name: '儿童午市自助餐门票', code: 'BUFFET-C-L', price: 68, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, allowPosTemporaryPrice: true, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-child-dinner', name: '儿童晚市自助餐门票', code: 'BUFFET-C-D', price: 88, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, allowPosTemporaryPrice: false, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-adult-dinner', name: '成人晚市自助餐门票', code: 'BUFFET-A-D', price: 168, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, allowPosTemporaryPrice: true, availableStoreIds: ALL_STORE_IDS },
-  { id: 't-premium', name: '尊享海鲜双人自助餐门票', code: 'BUFFET-P', price: 438, applicablePeople: 2, frontendCategory: '双人自助餐', requiresDeposit: true, allowPosTemporaryPrice: false, availableStoreIds: ['s001', 's002', 's004', 's007'] },
+  { id: 't-adult-lunch', name: '成人午市自助餐标', code: 'BUFFET-A-L', price: 118, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, allowPosTemporaryPrice: false, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-child-lunch', name: '儿童午市自助餐标', code: 'BUFFET-C-L', price: 68, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, allowPosTemporaryPrice: true, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-child-dinner', name: '儿童晚市自助餐标', code: 'BUFFET-C-D', price: 88, applicablePeople: 1, frontendCategory: '儿童自助餐', requiresDeposit: false, allowPosTemporaryPrice: false, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-adult-dinner', name: '成人晚市自助餐标', code: 'BUFFET-A-D', price: 168, applicablePeople: 1, frontendCategory: '成人自助餐', requiresDeposit: false, allowPosTemporaryPrice: true, availableStoreIds: ALL_STORE_IDS },
+  { id: 't-premium', name: '尊享海鲜双人自助餐标', code: 'BUFFET-P', price: 438, applicablePeople: 2, frontendCategory: '双人自助餐', requiresDeposit: true, allowPosTemporaryPrice: false, availableStoreIds: ['s001', 's002', 's004', 's007'] },
 ];
 
 const FRONTEND_CATEGORIES = ['成人自助餐', '儿童自助餐', '双人自助餐', '家庭自助餐'];
@@ -737,7 +737,7 @@ export const WebBuffetMenuManager: React.FC = () => {
             <tr className="h-10 border-y border-[#EAECF0]">
               <th className="w-[72px] px-4 font-medium">排序</th>
               <th className="w-[210px] px-4 font-medium">菜单名称</th>
-              <th className="w-[220px] px-4 font-medium">关联自助餐门票（餐标）</th>
+              <th className="w-[220px] px-4 font-medium">关联自助餐标</th>
               <th className="w-[150px] px-4 font-medium">菜单商品</th>
               <th className="w-[150px] px-4 font-medium">适用门店</th>
               <th className="w-[88px] px-4 font-medium">状态</th>
@@ -859,11 +859,11 @@ export const WebBuffetMenuManager: React.FC = () => {
       </div>
       <div className="rounded-lg border border-[#EAECF0] bg-white">
         <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] px-5 py-4">
-          <FieldLabel required>关联自助餐门票（餐标）</FieldLabel>
-          <button type="button" onClick={openTicketSelector} className="flex h-8 items-center gap-2 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Ticket size={15} />选择自助餐门票</button>
+          <FieldLabel required>关联自助餐标</FieldLabel>
+          <button type="button" onClick={openTicketSelector} className="flex h-8 items-center gap-2 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Ticket size={15} />选择自助餐标</button>
         </div>
-        {draftTicketIds.length ? <div className="overflow-x-auto"><table className="w-full min-w-[860px] table-fixed text-left text-[13px]"><thead className="bg-[#F9FAFB] text-[#475467]"><tr><th className="w-[300px] px-5 py-3 font-medium">商品名称</th><th className="w-[110px] px-4 py-3 font-medium">适用人数</th><th className="w-[110px] px-4 py-3 font-medium">收取押金</th><th className="w-[130px] px-4 py-3 font-medium">POS临时改价</th><th className="w-[120px] px-4 py-3 font-medium">售价</th><th className="w-[80px] px-4 py-3 font-medium">操作</th></tr></thead><tbody className="divide-y divide-[#EAECF0]">{draftTicketIds.map(id => { const ticket = getTicket(id); return ticket ? <tr key={id} className="text-[#344054]"><td className="px-5 py-3"><span className="block truncate font-medium text-[#1D2939]" title={ticket.name}>{ticket.name}</span><span className="mt-1 block text-[12px] text-[#98A2B3]">{ticket.code}</span></td><td className="px-4 py-3">{ticket.applicablePeople} 人</td><td className="px-4 py-3">{ticket.requiresDeposit ? '是' : '否'}</td><td className="px-4 py-3">{ticket.allowPosTemporaryPrice ? '是' : '否'}</td><td className="px-4 py-3">¥{ticket.price.toFixed(2)}</td><td className="px-4 py-3"><button type="button" onClick={() => setDraftTicketIds(ids => ids.filter(ticketId => ticketId !== id))} className="text-[#008F4C] hover:text-[#007A41]" aria-label={`移除${ticket.name}`}>移除</button></td></tr> : null; })}</tbody></table></div> : <div className="py-10 text-center text-[13px] text-[#98A2B3]">尚未选择自助餐门票</div>}
-        {validatedSteps[1] && draftTicketIds.length === 0 && <div className="border-t border-[#F1B7B3] bg-[#FFF5F4] px-5 py-3 text-[12px] text-[#B42318]">请至少选择一张自助餐门票</div>}
+        {draftTicketIds.length ? <div className="overflow-x-auto"><table className="w-full min-w-[860px] table-fixed text-left text-[13px]"><thead className="bg-[#F9FAFB] text-[#475467]"><tr><th className="w-[300px] px-5 py-3 font-medium">商品名称</th><th className="w-[110px] px-4 py-3 font-medium">适用人数</th><th className="w-[110px] px-4 py-3 font-medium">收取押金</th><th className="w-[130px] px-4 py-3 font-medium">POS临时改价</th><th className="w-[120px] px-4 py-3 font-medium">售价</th><th className="w-[80px] px-4 py-3 font-medium">操作</th></tr></thead><tbody className="divide-y divide-[#EAECF0]">{draftTicketIds.map(id => { const ticket = getTicket(id); return ticket ? <tr key={id} className="text-[#344054]"><td className="px-5 py-3"><span className="block truncate font-medium text-[#1D2939]" title={ticket.name}>{ticket.name}</span><span className="mt-1 block text-[12px] text-[#98A2B3]">{ticket.code}</span></td><td className="px-4 py-3">{ticket.applicablePeople} 人</td><td className="px-4 py-3">{ticket.requiresDeposit ? '是' : '否'}</td><td className="px-4 py-3">{ticket.allowPosTemporaryPrice ? '是' : '否'}</td><td className="px-4 py-3">¥{ticket.price.toFixed(2)}</td><td className="px-4 py-3"><button type="button" onClick={() => setDraftTicketIds(ids => ids.filter(ticketId => ticketId !== id))} className="text-[#008F4C] hover:text-[#007A41]" aria-label={`移除${ticket.name}`}>移除</button></td></tr> : null; })}</tbody></table></div> : <div className="py-10 text-center text-[13px] text-[#98A2B3]">尚未选择自助餐标</div>}
+        {validatedSteps[1] && draftTicketIds.length === 0 && <div className="border-t border-[#F1B7B3] bg-[#FFF5F4] px-5 py-3 text-[12px] text-[#B42318]">请至少选择一张自助餐标</div>}
       </div>
     </div>
   );
@@ -906,7 +906,7 @@ export const WebBuffetMenuManager: React.FC = () => {
         <h2 className="text-[18px] font-semibold text-[#1D2939]">菜单商品</h2>
         <span className="text-[12px] text-[#667085]">共 {draftItems.length} 个商品</span>
       </div>
-      <div className="flex h-11 items-end gap-6 border-b border-[#EAECF0] bg-white px-4" role="tablist" aria-label="菜单商品类型">
+      <div className="console-segmented-tabs flex h-11 items-end gap-6 border-b border-[#EAECF0] bg-white px-4" role="tablist" aria-label="菜单商品类型">
         {ITEM_MODES.map(mode => <button key={mode} type="button" role="tab" aria-selected={activeProductMode === mode} onClick={() => setActiveProductMode(mode)} className={`relative flex h-full items-center gap-2 px-1 text-[13px] ${activeProductMode === mode ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[#00B460]' : 'text-[#667085] hover:text-[#344054]'}`}><span>{MODE_LABELS[mode]}</span><span className={`rounded-full px-1.5 py-0.5 text-[11px] ${activeProductMode === mode ? 'bg-[#E8F8F0] text-[#008F4C]' : 'bg-[#F2F4F7] text-[#98A2B3]'}`}>{draftItems.filter(item => item.mode === mode).length}</span></button>)}
       </div>
       {validatedSteps[2] && !menuComplete && <div className="flex items-center gap-2 rounded border border-[#F1B7B3] bg-[#FFF5F4] px-4 py-3 text-[13px] text-[#B42318]"><AlertCircle size={16} />请至少添加一个菜单商品。</div>}
@@ -962,7 +962,7 @@ export const WebBuffetMenuManager: React.FC = () => {
               const duplicateStores = menu.storeIds.filter(id => effectiveDraftStoreIds.includes(id)).map(id => getStore(id)?.name).filter(Boolean);
               return <div key={menu.id} className="flex items-start gap-3 px-5 py-4"><AlertTriangle size={17} className="mt-0.5 shrink-0 text-[#E5484D]" /><div className="min-w-0 flex-1"><div className="font-medium text-[#B42318]">餐标与已启用菜单重复</div><div className="mt-1 text-[12px] leading-5 text-[#667085]">{duplicateTickets.join('、')} 在 {duplicateStores.join('、')} 已关联“{menu.name}”。需移除重叠门店或停用原菜单。</div></div><button type="button" onClick={() => setDetailMenu(menu)} className="shrink-0 text-[12px] text-[#008F4C]">查看原菜单</button></div>;
             })}
-            {ticketStoreIssues.map(issue => <div key={issue} className="flex items-start gap-3 px-5 py-4"><AlertCircle size={17} className="mt-0.5 shrink-0 text-[#E5484D]" /><div><div className="font-medium text-[#B42318]">餐标不在门店售卖</div><div className="mt-1 text-[12px] text-[#667085]">{issue}，请先调整门票的门店覆盖或从本菜单移除该门店。</div></div></div>)}
+            {ticketStoreIssues.map(issue => <div key={issue} className="flex items-start gap-3 px-5 py-4"><AlertCircle size={17} className="mt-0.5 shrink-0 text-[#E5484D]" /><div><div className="font-medium text-[#B42318]">餐标不在门店售卖</div><div className="mt-1 text-[12px] text-[#667085]">{issue}，请先调整餐标的门店覆盖或从本菜单移除该门店。</div></div></div>)}
           </div>
         </div>
       )}
@@ -1042,8 +1042,8 @@ export const WebBuffetMenuManager: React.FC = () => {
       )}
 
       {ticketSelectorOpen && (
-        <SelectionModal title="选择自助餐门票" selectedCount={pendingTicketIds.length} width="w-[760px]" onClose={() => setTicketSelectorOpen(false)} onConfirm={() => { setDraftTicketIds(pendingTicketIds); setTicketSelectorOpen(false); }}>
-          <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] p-4"><div className="relative w-[380px]"><Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" /><input value={selectorKeyword} onChange={event => setSelectorKeyword(event.target.value)} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索门票名称、编码或前台分类" /></div><button type="button" onClick={openCreateTicket} className="flex h-9 shrink-0 items-center gap-1.5 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Plus size={15} />新增自助餐门票</button></div>
+        <SelectionModal title="选择自助餐标" selectedCount={pendingTicketIds.length} width="w-[760px]" onClose={() => setTicketSelectorOpen(false)} onConfirm={() => { setDraftTicketIds(pendingTicketIds); setTicketSelectorOpen(false); }}>
+          <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] p-4"><div className="relative w-[380px]"><Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" /><input value={selectorKeyword} onChange={event => setSelectorKeyword(event.target.value)} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索餐标名称、编码或前台分类" /></div><button type="button" onClick={openCreateTicket} className="flex h-9 shrink-0 items-center gap-1.5 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Plus size={15} />新增自助餐标</button></div>
           <div className="min-h-[360px] divide-y divide-[#EAECF0]">
             {filteredSelectorTickets.map(ticket => { const selected = pendingTicketIds.includes(ticket.id); return <label key={ticket.id} className={`flex cursor-pointer items-center gap-4 px-5 py-4 ${selected ? 'bg-[#F5FCF8]' : 'hover:bg-[#F9FAFB]'}`}><input type="checkbox" checked={selected} onChange={() => setPendingTicketIds(ids => selected ? ids.filter(id => id !== ticket.id) : [...ids, ticket.id])} className="h-4 w-4 accent-[#00B460]" /><span className="flex h-10 w-10 items-center justify-center rounded bg-[#E8F8F0] text-[#008F4C]"><Ticket size={18} /></span><span className="min-w-0 flex-1"><span className="block font-medium text-[#1D2939]">{ticket.name}</span><span className="mt-1 block text-[12px] text-[#98A2B3]">{ticket.code} · {ticket.frontendCategory} · {ticket.requiresDeposit ? '收取押金' : '不收押金'}</span></span><span className="w-[88px] shrink-0 text-right"><span className="block text-[13px] text-[#344054]">{ticket.applicablePeople} 人</span><span className="mt-1 block text-[11px] text-[#98A2B3]">适用人数</span></span><span className="w-[100px] shrink-0 text-right"><span className="block text-[13px] text-[#344054]">¥{ticket.price.toFixed(2)}</span><span className="mt-1 block text-[11px] text-[#98A2B3]">售价</span></span></label>; })}
           </div>
@@ -1051,14 +1051,14 @@ export const WebBuffetMenuManager: React.FC = () => {
       )}
 
       {createTicketOpen && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-6" role="dialog" aria-modal="true" aria-label="新增自助餐门票">
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-6" role="dialog" aria-modal="true" aria-label="新增自助餐标">
           <div className="w-[640px] max-w-full overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-[#EAECF0] px-5">
-              <h3 className="text-[16px] font-semibold text-[#1D2939]">新增自助餐门票</h3>
+              <h3 className="text-[16px] font-semibold text-[#1D2939]">新增自助餐标</h3>
               <button type="button" onClick={() => setCreateTicketOpen(false)} aria-label="关闭" className="rounded p-1.5 text-[#667085] hover:bg-[#F2F4F7]"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-4 p-5">
-              <label className="col-span-2"><span className="mb-2 block text-[13px] font-medium text-[#344054]">商品名称 <span className="text-[#E5484D]">*</span></span><input value={newTicketForm.name} maxLength={40} onChange={event => setNewTicketForm(form => ({ ...form, name: event.target.value }))} className="h-9 w-full rounded border border-[#D0D5DD] px-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="请输入自助餐门票名称" /></label>
+              <label className="col-span-2"><span className="mb-2 block text-[13px] font-medium text-[#344054]">商品名称 <span className="text-[#E5484D]">*</span></span><input value={newTicketForm.name} maxLength={40} onChange={event => setNewTicketForm(form => ({ ...form, name: event.target.value }))} className="h-9 w-full rounded border border-[#D0D5DD] px-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="请输入自助餐标名称" /></label>
               <label><span className="mb-2 block text-[13px] font-medium text-[#344054]">前台分类 <span className="text-[#E5484D]">*</span></span><select value={newTicketForm.frontendCategory} onChange={event => setNewTicketForm(form => ({ ...form, frontendCategory: event.target.value }))} className="h-9 w-full rounded border border-[#D0D5DD] bg-white px-3 text-[13px] outline-none focus:border-[#00B460]"><option value="">请选择前台分类</option>{FRONTEND_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select></label>
               <label><span className="mb-2 block text-[13px] font-medium text-[#344054]">商品售价 <span className="text-[#E5484D]">*</span></span><span className="flex h-9 items-center rounded border border-[#D0D5DD] px-3 focus-within:border-[#00B460]"><span className="mr-2 text-[13px] text-[#667085]">¥</span><input type="number" min={0} step={0.01} value={newTicketForm.price} onChange={event => setNewTicketForm(form => ({ ...form, price: event.target.value }))} className="min-w-0 flex-1 text-[13px] outline-none" placeholder="0.00" /></span></label>
               <label><span className="mb-2 block text-[13px] font-medium text-[#344054]">适用人数 <span className="text-[#E5484D]">*</span></span><span className="flex h-9 items-center rounded border border-[#D0D5DD] px-3 focus-within:border-[#00B460]"><input type="number" min={1} step={1} value={newTicketForm.applicablePeople} onChange={event => setNewTicketForm(form => ({ ...form, applicablePeople: event.target.value }))} className="min-w-0 flex-1 text-[13px] outline-none" /><span className="ml-2 text-[13px] text-[#667085]">人</span></span></label>

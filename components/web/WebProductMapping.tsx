@@ -670,7 +670,7 @@ export const WebProductMapping: React.FC = () => {
           </button>
           <span className="h-5 w-px shrink-0 bg-[#E5E6EB]" />
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            {THIRD_PARTY_CHANNELS.map(channel => (
+            {THIRD_PARTY_CHANNELS.filter(channel => channel.platformProductScope !== 'brand_and_store' && channel.id !== 'jd').map(channel => (
               <button
                 key={channel.id}
                 type="button"
@@ -701,7 +701,7 @@ export const WebProductMapping: React.FC = () => {
             <div className="border-b border-[#EEF0F3] p-3">
               <div className="flex overflow-x-auto rounded-md border border-[#E5E6EB] bg-[#F7F8FA] p-0.5">
                 {statusTabs.map(tab => (
-                  <button key={tab.id} type="button" onClick={() => setStatus(tab.id)} className={`h-7 flex-1 shrink-0 rounded px-2 text-[12px] ${status === tab.id ? 'bg-white font-semibold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>
+                  <button key={tab.id} role="tab" aria-selected={activeView === tab.id} type="button" onClick={() => setStatus(tab.id)} className={`h-7 flex-1 shrink-0 rounded px-2 text-[12px] ${status === tab.id ? 'bg-white font-semibold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>
                     {tab.label}<span className="ml-1 text-[10px] text-[#98A2B3]">{counts[tab.id]}</span>
                   </button>
                 ))}
@@ -860,12 +860,12 @@ export const WebProductMapping: React.FC = () => {
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6F8]">
       <header className="shrink-0 border-b border-[#E5E6EB] bg-white">
-        <nav className="flex h-12 items-end gap-6 overflow-x-auto px-6">
+        <nav className="console-view-tabs flex h-12 items-end gap-6 overflow-x-auto px-6" role="tablist" aria-label="映射治理视图">
           {viewTabs.map(tab => {
             const Icon = tab.icon;
             return (
               <button
-                key={tab.id}
+                key={tab.id} role="tab" aria-selected={activeView === tab.id}
                 type="button"
                 onClick={() => {
                   setActiveView(tab.id);

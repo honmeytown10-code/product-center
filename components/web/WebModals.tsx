@@ -1174,7 +1174,6 @@ export const WebCategorySelectModal = ({
         if (type === 'standard') {
             if (classification && classification !== 'standard') return false;
             if (cat.name.includes('套餐')) return false;
-            if (cat.name.includes('称重')) return false;
             return true;
         }
 

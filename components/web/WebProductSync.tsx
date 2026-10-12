@@ -1,20 +1,33 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Search, ChevronRight, CheckCircle2, ChevronDown,
-    Layers, RefreshCw, FileUp, FileEdit, X, PackagePlus, Tickets, Tags, Copy, Trash2, SquarePen
+    Layers, RefreshCw, FileUp, FileEdit, X, PackagePlus, Tickets, Tags, Copy, Trash2
 } from 'lucide-react';
-import { WebBatchAddonAssociation } from './WebBatchAddonAssociation';
+import { WebProductToolFlow, type ProductTool } from './WebProductToolFlow';
 import { useProducts } from '../../context';
 import {
     channelGroupIncludesMiniProgram,
     getEffectiveChannelGroups,
     getOmnichannelChannel,
     getOmnichannelConfig,
+    isThirdPartyChannelId,
     shouldShowChannelCatalog,
 } from '../../omnichannel';
-import type { OmnichannelChannelId } from '../../types';
-import { WebPublishRecords, type MasterChannelSyncRecord, type RecordView } from './WebPublishRecords';
+import { AVAILABLE_DYNAMIC_FIELDS, type OmnichannelChannelId, type Product } from '../../types';
+import { PRODUCT_SALES_SCOPE_STORES, type ProductSalesScope } from './WebProductSalesScope';
+import { WebStoreScopeSelector } from './WebStoreScopeSelector';
+import { WebStoreScopePanel } from './WebStoreScopePanel';
+import type { StoreProductRecord } from './WebStoreProductList';
+import { INITIAL_RECORDS as TEMPLATE_RECORDS } from './WebProductTemplateManager';
+import { STORE_OPTIONS as TEMPLATE_STORES } from './WebProductTemplateDetail';
+import { WebPublishRecords, type MasterChannelSyncRecord, type PublishBatch, type RecordView } from './WebPublishRecords';
 import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
+import { checkJdStoreReadiness, checkTakeoutProduct, checkTakeoutRequiredInfo, isTakeoutChannel, takeoutOperationPlan } from '../../takeoutSync';
+import { WebStoreProductDeleteFlow } from './WebStoreProductDeleteFlow';
+import type { DeleteTarget } from '../../storeProductDeletion';
+import { WebPublishWarnings } from './WebPublishWarnings';
+import { checkChannelRequiredFields } from './WebThirdPartyChannelFields';
+import { WebProductPublishRules, getPublishOverwriteDefaults } from './WebProductPublishRules';
 
 type ProductCategoryConfig = {
     id: string;
@@ -140,26 +153,29 @@ const DEFAULT_PUBLISH_CHANNEL_IDS: OmnichannelChannelId[] = [
 ];
 const BATCH_FIELD_GROUPS = [
     { title: '基础信息', fields: ['商品名称', '前台分类', '是否展示商品'] },
-    { title: '商品属性', fields: ['基础价格', '商品标识', '商品条码', '预计成本', '商品份量'] },
+    { title: '商品属性', fields: ['售价', '商品标识', '商品条码', '预计成本', '商品份量'] },
     { title: '展示设置', fields: ['商品主图', '规格图片', '商品详情图', '列表页简述', '描述标签'] },
     { title: '销售属性', fields: ['售卖时间', '是否为套餐商品', '是否为小料商品', '起购限购', '单点不送', '包装费'] },
 ];
 const BATCH_PLATFORM_FIELD_SUPPORT: Record<string, Array<'douyin' | 'meituan'>> = {
     商品名称: ['douyin', 'meituan'],
-    基础价格: ['douyin', 'meituan'],
+    售价: ['douyin', 'meituan'],
     商品主图: ['douyin', 'meituan'],
     售卖时间: ['douyin', 'meituan'],
     包装费: ['douyin'],
 };
-const BATCH_BOOLEAN_FIELDS = new Set(['是否展示商品', '是否为套餐商品', '是否为小料商品', '单点不送']);
-const BATCH_NUMBER_FIELDS = new Set(['基础价格', '预计成本', '包装费']);
-const BATCH_IMAGE_FIELDS = new Set(['商品主图', '规格图片', '商品详情图']);
-type BatchFieldValue = string | number | boolean;
-const TEMPLATE_RANGE_OPTIONS = [
-    { id: 'template-1', name: '华南直营门店模板', count: 56, channels: ['mini_program_dine_in', 'pos'] as OmnichannelChannelId[] },
-    { id: 'template-2', name: '机场枢纽门店模板', count: 12, channels: ['pos', 'mini_program_dine_in'] as OmnichannelChannelId[] },
-    { id: 'template-3', name: '外卖渠道模板', count: 128, channels: ['mini_program_delivery', 'meituan', 'taobao'] as OmnichannelChannelId[] },
+// Existing combo form fields, verified against the production batch-update page.
+const BATCH_COMBO_FIELD_GROUPS = [
+    { title: '基础信息', fields: ['商品名称', '前台分类'] },
+    { title: '商品属性', fields: ['售价', '商品标识', '商品条码', '商品规格码', '商品份量'] },
+    { title: '展示设置', fields: ['商品主图', '规格图片', '详情页描述', '列表页简述', '描述标签', '点单标签', '商品角标', '商品封面', '商品详情页底图'] },
+    { title: '销售属性', fields: ['售卖时间', '是否为团餐商品', '参与会员折扣', '起购限购', '包装费'] },
 ];
+const BATCH_BOOLEAN_FIELDS = new Set(['是否展示商品', '是否为套餐商品', '是否为小料商品', '单点不送', '是否为团餐商品', '参与会员折扣']);
+const BATCH_NUMBER_FIELDS = new Set(['售价', '预计成本', '包装费']);
+const BATCH_IMAGE_FIELDS = new Set(['商品主图', '规格图片', '商品详情图', '商品封面', '商品详情页底图']);
+type BatchFieldValue = string | number | boolean;
+const TEMPLATE_RANGE_OPTIONS = TEMPLATE_RECORDS.filter(template => template.status === 'enabled').map(template => ({ ...template, count: template.storeCount }));
 const STORE_RANGE_OPTIONS = [
     { id: 'store-1', name: '南山万象店', code: 'SZ001' },
     { id: 'store-2', name: '福田卓悦店', code: 'SZ002' },
@@ -193,12 +209,11 @@ const getListTimeSaleSummary = (timeSale: TimeSaleConfig) => (
 );
 
 type ToolCardConfig = {
+    iconClassName: string;
     title: string;
     desc: string;
     icon: React.ReactNode;
-    iconWrapClass: string;
     onClick?: () => void;
-    featured?: boolean;
     disabled?: boolean;
 };
 
@@ -220,7 +235,7 @@ const getChangedFields = (product: EditableProduct) => {
     const changed: string[] = [];
     if (JSON.stringify(product.categories) !== JSON.stringify(initial.categories)) changed.push('前台分类');
     if (product.price !== initial.price || JSON.stringify(product.specs) !== JSON.stringify(initial.specs)) {
-        changed.push('基础售价');
+        changed.push('售价');
     }
     if (JSON.stringify(product.timeSale) !== JSON.stringify(initial.timeSale)) changed.push('售卖时间');
     if (product.salesMode !== initial.salesMode) changed.push('售卖方式');
@@ -228,66 +243,128 @@ const getChangedFields = (product: EditableProduct) => {
 };
 
 export const WebProductSync: React.FC<{
+    initialBatch?: { type: 'standard' | 'combo'; productIds: string[] };
+    onReturnToLibrary?: () => void;
+    onApplyLibraryBatch?: (updates: Array<{ productId: string; values: Record<string, BatchFieldValue> }>) => void;
+    initialPublish?: { productId?: string; productIds?: string[]; source?: 'master' | 'channel_catalog'; catalogId?: string; channelIds: OmnichannelChannelId[]; storeIds?: string[] };
+    onCreateProduct?: (type: 'standard' | 'combo', selection: { productIds: string[]; channelIds: OmnichannelChannelId[]; storeIds: string[]; source: 'master' | 'channel_catalog'; catalogId?: string }) => void;
+    onReturnToStore?: () => void;
     initialTab?: 'publish' | 'records' | 'qimai-records' | 'platform-records';
     masterChannelSyncRecords?: MasterChannelSyncRecord[];
-}> = ({ initialTab = 'publish', masterChannelSyncRecords = [] }) => {
+    extraBatches?: PublishBatch[];
+    sourceProducts?: Product[];
+    catalogProductIds?: Record<string, string[]>;
+    storeSourceRecords?: StoreProductRecord[];
+    channelProductOverrides?: Record<string, any>;
+    onSubmitTask?: (batch: PublishBatch) => void;
+  onRemoveStoreTargets?: (targets: DeleteTarget[]) => void;
+    onOpenRecords?: () => void;
+    unifiedManagementView?: boolean;
+    directUse?: boolean;
+    focus?: 'publish' | 'batch' | 'records';
+    hideNavigation?: boolean;
+    onRecordViewChange?: (tab: 'qimai-records' | 'platform-records') => void;
+}> = ({ initialBatch, onReturnToLibrary, onApplyLibraryBatch, initialPublish, onReturnToStore, onCreateProduct, initialTab = 'publish', masterChannelSyncRecords = [], extraBatches = [], sourceProducts, catalogProductIds, storeSourceRecords = [], channelProductOverrides = {}, onSubmitTask, onRemoveStoreTargets, onOpenRecords, unifiedManagementView = false, directUse = false, focus, hideNavigation = false, onRecordViewChange }) => {
     const batchStandardPreview = typeof window !== 'undefined'
         && new URLSearchParams(window.location.search).get('tool') === 'batch-standard';
     const { activeBrandId, brandConfigs } = useProducts();
     const omnichannelConfig = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
     const channelCatalogGroups = getEffectiveChannelGroups(omnichannelConfig);
-    const channelCatalogEnabled = shouldShowChannelCatalog(omnichannelConfig) && channelCatalogGroups.length > 0;
-    const [step, setStep] = useState(batchStandardPreview ? 1 : 0);
-    const [activeBatchTool, setActiveBatchTool] = useState<'addon-association' | null>(null);
+    const channelCatalogEnabled = !unifiedManagementView && shouldShowChannelCatalog(omnichannelConfig) && channelCatalogGroups.length > 0;
+    const [step, setStep] = useState(initialPublish || initialBatch || batchStandardPreview ? 1 : 0);
+    const [publishEntry, setPublishEntry] = useState(initialPublish);
+    const [activeBatchTool, setActiveBatchTool] = useState<ProductTool | null>(null);
+    const [comboOnly, setComboOnly] = useState(false);
     const [pageTab, setPageTab] = useState<'publish' | 'qimai-records' | 'platform-records'>(
-        initialTab === 'records' ? 'qimai-records' : initialTab,
+        focus === 'records' ? (initialTab === 'platform-records' ? 'platform-records' : 'qimai-records') : focus ? 'publish' : initialTab === 'records' ? 'qimai-records' : initialTab,
     );
-    const [operationMode, setOperationMode] = useState<'sync' | 'batch_standard' | 'batch_combo'>(batchStandardPreview ? 'batch_standard' : 'sync');
-    const [syncSource, setSyncSource] = useState<'master' | 'template' | 'channel_catalog'>(() => channelCatalogEnabled ? 'channel_catalog' : 'master');
+    useEffect(() => {
+        if (focus === 'records') setPageTab(initialTab === 'platform-records' ? 'platform-records' : 'qimai-records');
+    }, [focus, initialTab]);
+    const [operationMode, setOperationMode] = useState<'sync' | 'batch_standard' | 'batch_combo'>(initialBatch?.type === 'combo' ? 'batch_combo' : initialBatch || batchStandardPreview ? 'batch_standard' : 'sync');
+    const [syncSource, setSyncSource] = useState<'master' | 'template' | 'channel_catalog'>(() => unifiedManagementView ? 'master' : initialPublish?.source || (channelCatalogEnabled ? 'channel_catalog' : 'master'));
+    const [batchSource, setBatchSource] = useState<'master' | 'channel_catalog' | 'template' | 'store'>(() => initialBatch || unifiedManagementView ? 'master' : 'channel_catalog');
+    const [sourceTemplateId, setSourceTemplateId] = useState('tpl-1');
+    const [sourceStoreIds, setSourceStoreIds] = useState<string[]>([]);
     // 原型默认当前账号拥有全部固定渠道权限；生产环境需先按账号的 channelId 数据范围过滤，
     // 再由当前动态分组反向计算可见/可选商品库，不能把菜单权限等同于全部商品库权限。
     const authorizedChannelCatalogGroups = channelCatalogGroups;
-    const [selectedChannelGroupIds, setSelectedChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
+    const [selectedChannelGroupIds, setSelectedChannelGroupIds] = useState<string[]>(() => initialPublish?.catalogId ? [initialPublish.catalogId] : channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
     const [selectedTargetChannelGroupIds, setSelectedTargetChannelGroupIds] = useState<string[]>(() => channelCatalogGroups[0] ? [channelCatalogGroups[0].id] : []);
-    const [selectedTargetScopes, setSelectedTargetScopes] = useState<Array<'master' | 'template' | 'store' | 'channel_catalog'>>(['master', 'template', 'store']);
+    const [selectedTargetScopes, setSelectedTargetScopes] = useState<Array<'master' | 'template' | 'store' | 'channel_catalog'>>(initialBatch || unifiedManagementView ? ['master'] : ['channel_catalog']);
     const [batchChangeMode, setBatchChangeMode] = useState<'individual' | 'unified'>('individual');
     const [unifiedShelfStatus, setUnifiedShelfStatus] = useState<'on' | 'off'>('on');
     const [templateRangeMode, setTemplateRangeMode] = useState<'all' | 'selected'>('all');
     const [storeRangeMode, setStoreRangeMode] = useState<'all' | 'selected' | 'template'>('selected');
-    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(['template-1']);
-    const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(['store-1', 'store-2']);
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(['tpl-1']);
+    const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(initialPublish?.storeIds || []);
     const [selectedBatchChannelIds, setSelectedBatchChannelIds] = useState<OmnichannelChannelId[]>(() => (
         channelCatalogEnabled
             ? Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)))
             : DEFAULT_PUBLISH_CHANNEL_IDS
     ));
-    const [selectedBatchFields, setSelectedBatchFields] = useState<string[]>(['商品名称', '前台分类', '基础价格']);
-    const [selectedBatchProductIds, setSelectedBatchProductIds] = useState<string[]>(['1', '2']);
+    const [selectedBatchFields, setSelectedBatchFields] = useState<string[]>(initialBatch ? [] : ['商品名称', '前台分类', '售价']);
+    const [selectedBatchProductIds, setSelectedBatchProductIds] = useState<string[]>(initialBatch?.productIds || ['1', '2']);
     const [selectedBatchRowIds, setSelectedBatchRowIds] = useState<string[]>([]);
     const [batchDraftValues, setBatchDraftValues] = useState<Record<string, Record<string, BatchFieldValue>>>({});
-    const [selectedSyncProductIds, setSelectedSyncProductIds] = useState<string[]>(['1', '2', '3']);
+    const [selectedSyncProductIds, setSelectedSyncProductIds] = useState<string[]>(initialPublish?.productIds || (initialPublish?.productId ? [initialPublish.productId] : initialPublish ? [] : ['1', '2', '3']));
     const [selectedPublishChannelIds, setSelectedPublishChannelIds] = useState<OmnichannelChannelId[]>(() => (
-        channelCatalogEnabled
+        initialPublish ? [...initialPublish.channelIds] : channelCatalogEnabled
             ? Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)))
             : DEFAULT_PUBLISH_CHANNEL_IDS
     ));
     const [publishValidationMessage, setPublishValidationMessage] = useState('');
+    const [overwriteFields, setOverwriteFields] = useState<string[]>(() => getPublishOverwriteDefaults(activeBrandId));
+    useEffect(() => { setOverwriteFields(getPublishOverwriteDefaults(activeBrandId)); }, [activeBrandId]);
+    const [executionTime, setExecutionTime] = useState<'now' | 'scheduled'>('now');
+    const [scheduledAt, setScheduledAt] = useState('');
     const [productSelectorMode, setProductSelectorMode] = useState<'sync' | 'batch' | null>(null);
     const [pendingSelectorProductIds, setPendingSelectorProductIds] = useState<string[]>([]);
-    const [products, setProducts] = useState<EditableProduct[]>(() => cloneInitialProducts());
+    const [products, setProducts] = useState<EditableProduct[]>(() => sourceProducts ? sourceProducts.map((product, index) => ({
+        id: product.id, name: product.name, code: product.skuCode || product.id,
+        type: product.type === 'combo' ? '套餐商品' : '标准商品', image: product.image, price: product.price,
+        salesMode: '正常售卖', timeSale: { ...INITIAL_SYNC_PRODUCTS[0].timeSale, weekdays: [...INITIAL_SYNC_PRODUCTS[0].timeSale.weekdays] },
+        specs: product.specs?.length ? product.specs.map((spec, i) => ({ id: `${product.id}-${i}`, name: spec.name, price: spec.price ?? product.price })) : [{ id: `${product.id}-sku`, name: '单规格', price: product.price }],
+        categories: [{ id: product.category, name: product.category, categorySort: 1, productSort: index + 1 }],
+    })) : cloneInitialProducts());
     const [selectedCategoryName, setSelectedCategoryName] = useState<string>('all');
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+    const sourceCatalogId = operationMode === 'sync' ? selectedChannelGroupIds[0] : selectedTargetChannelGroupIds[0];
+    const readingCatalog = operationMode === 'sync' ? syncSource === 'channel_catalog' : batchSource === 'channel_catalog';
+    const readingTemplate = operationMode === 'sync' ? syncSource === 'template' : batchSource === 'template';
+    const sourceStoreProducts = useMemo(() => Array.from(new Map(storeSourceRecords.filter(record => sourceStoreIds.includes(record.storeId)).map(record => {
+        // Only aligns the incumbent demo datasets; production reads store-SKU details by ID.
+        const base = products.find(product => product.id === record.baseProductId || product.name === record.name);
+        return [record.baseProductId, { ...base, id: record.baseProductId, name: record.name, code: record.baseProductId, type: record.type === 'Combo' ? '套餐商品' : '标准商品', image: record.image, price: base?.price || 0, salesMode: '正常售卖' as const, timeSale: base?.timeSale || INITIAL_SYNC_PRODUCTS[0].timeSale, specs: base?.specs || [{ id: `${record.baseProductId}-sku`, name: '单规格', price: base?.price || 0 }], categories: base?.categories || [{ id: record.category, name: record.category, categorySort: 1, productSort: record.sortIndex }] } as EditableProduct] as const;
+    })).values()), [storeSourceRecords, sourceStoreIds, products]);
+    const sourceProductPool = useMemo(() => readingCatalog && !unifiedManagementView && catalogProductIds
+        ? products.filter(product => (catalogProductIds[sourceCatalogId] || []).includes(product.id)) : readingTemplate
+        ? products.slice(0, TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.productCount || 0) : operationMode !== 'sync' && batchSource === 'store' ? sourceStoreProducts : products,
+    [products, readingCatalog, readingTemplate, unifiedManagementView, catalogProductIds, sourceCatalogId, sourceTemplateId, operationMode, batchSource, sourceStoreProducts]);
+    const currentSourceProducts = useMemo(() => sourceProductPool.filter(product => operationMode === 'sync' ? !comboOnly || product.type === '套餐商品' : operationMode === 'batch_combo' ? product.type === '套餐商品' : product.type !== '套餐商品'), [sourceProductPool, operationMode, comboOnly]);
+    const usingTemplateStores = readingTemplate || operationMode !== 'sync' && storeRangeMode === 'template';
+    const scopeStores = usingTemplateStores ? TEMPLATE_STORES.map(store => ({ ...store, code: store.id, tags: [] })) : PRODUCT_SALES_SCOPE_STORES;
+    const previousTemplateStoreScope = useRef(usingTemplateStores);
+    useEffect(() => {
+        if (previousTemplateStoreScope.current !== usingTemplateStores) setSelectedStoreIds([]);
+        previousTemplateStoreScope.current = usingTemplateStores;
+    }, [usingTemplateStores]);
+    const batchChannels = batchSource === 'channel_catalog'
+        ? channelCatalogGroups.find(group => group.id === selectedTargetChannelGroupIds[0])?.channels || []
+        : batchSource === 'template' ? TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.channels || []
+        : Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)));
+    const effectiveBatchChannelIds = selectedBatchChannelIds.filter(channelId => batchChannels.includes(channelId));
 
     const availablePublishChannelIds = useMemo<OmnichannelChannelId[]>(() => (
-        syncSource === 'channel_catalog'
+        publishEntry?.channelIds.length ? publishEntry.channelIds : syncSource === 'template' ? TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.channels || [] : syncSource === 'channel_catalog'
             ? Array.from(new Set(
                 authorizedChannelCatalogGroups
                     .filter(group => selectedChannelGroupIds.includes(group.id))
                     .flatMap(group => group.channels)
             ))
-            : DEFAULT_PUBLISH_CHANNEL_IDS
-    ), [authorizedChannelCatalogGroups, selectedChannelGroupIds, syncSource]);
+            : Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)))
+    ), [authorizedChannelCatalogGroups, selectedChannelGroupIds, syncSource, sourceTemplateId, publishEntry]);
     const availablePublishChannelKey = availablePublishChannelIds.join('|');
 
     useEffect(() => {
@@ -296,15 +373,24 @@ export const WebProductSync: React.FC<{
     }, [availablePublishChannelKey]);
 
     const selectedSyncProducts = useMemo(
-        () => products.filter(product => selectedSyncProductIds.includes(product.id)),
-        [products, selectedSyncProductIds]
+        () => currentSourceProducts.filter(product => selectedSyncProductIds.includes(product.id)),
+        [currentSourceProducts, selectedSyncProductIds]
     );
+    const takeoutPrecheckRows = (operationMode === 'sync' || batchChangeMode !== 'unified' && !selectedBatchFields.every(field => ['售价'].includes(field)))
+        ? (operationMode === 'sync' ? selectedPublishChannelIds : effectiveBatchChannelIds).filter(isThirdPartyChannelId).filter(id => omnichannelConfig.thirdPartyStrategies[id] === 'qimai').flatMap(channel =>
+            (operationMode === 'sync' ? selectedSyncProducts : currentSourceProducts.filter(product => selectedBatchProductIds.includes(product.id))).flatMap(product => {
+                const master = sourceProducts?.find(item => item.id === product.id);
+                const override = readingCatalog ? channelProductOverrides[`${sourceCatalogId}:${product.id}`] : undefined;
+                const input = { ...master, ...product, ...override, name: String(batchDraftValues[product.id]?.['商品名称'] || override?.name || product.name), formData: { ...(master as any)?.formData, ...override?.formData } };
+                const issues = isTakeoutChannel(channel) ? checkTakeoutRequiredInfo(input, channel) : checkChannelRequiredFields(channel, input.formData);
+                return issues.map(issue => ({ channel, name: product.name, ...issue }));
+            })) : [];
     const batchRangeInvalid = operationMode !== 'sync' && (
         selectedTargetScopes.length === 0
         || (selectedTargetScopes.includes('template') && templateRangeMode === 'selected' && selectedTemplateIds.length === 0)
         || (selectedTargetScopes.includes('store') && storeRangeMode === 'selected' && selectedStoreIds.length === 0)
         || (selectedTargetScopes.includes('store') && storeRangeMode === 'template' && !selectedTargetScopes.includes('template'))
-        || (selectedTargetScopes.includes('store') && storeRangeMode !== 'template' && selectedBatchChannelIds.length === 0)
+        || (selectedTargetScopes.includes('store') && storeRangeMode !== 'template' && effectiveBatchChannelIds.length === 0)
         || (selectedTargetScopes.includes('channel_catalog') && selectedTargetChannelGroupIds.length === 0)
     );
     const miniProgramMainImageMissingProducts = useMemo(() => (
@@ -312,10 +398,125 @@ export const WebProductSync: React.FC<{
             ? selectedSyncProducts.filter(product => !String(product.image || '').trim())
             : []
     ), [selectedPublishChannelIds, selectedSyncProducts]);
-    const includesMeituanDine = operationMode === 'sync' && selectedPublishChannelIds.includes('meituan_dine');
-    const qimaiManagesMeituanDine = omnichannelConfig.thirdPartyStrategies.meituan_dine === 'qimai';
-    const meituanMissingBrandProducts = selectedSyncProducts.filter(product => ['2', '3'].includes(product.id));
-    const meituanComboProducts = selectedSyncProducts.filter(product => product.type.includes('套餐'));
+
+    const submitTask = () => {
+        const chosenProducts = operationMode === 'sync' ? selectedSyncProducts : currentSourceProducts.filter(product => selectedBatchProductIds.includes(product.id));
+        if (operationMode !== 'sync' && batchChangeMode === 'individual') {
+            for (const product of chosenProducts) {
+                for (const field of selectedBatchFields) {
+                    const value = batchDraftValues[product.id]?.[field] ?? getBatchFieldValue(product, field);
+                    if (field === '商品名称' && (!String(value).trim() || String(value).length > 70) || BATCH_NUMBER_FIELDS.has(field) && (value === '' || !Number.isFinite(Number(value)) || Number(value) < 0)) { setPublishValidationMessage(`请检查“${product.name}”的${field}：名称不能为空且最多 70 字，金额不能为负数或为空。`); return; }
+                }
+            }
+        }
+        const targetsStore = operationMode === 'sync' || selectedTargetScopes.includes('store');
+        const productScopes = new Map<string, ProductSalesScope | undefined>((sourceProducts || []).map(product => [product.id, (product as Product & { formData?: { salesScope?: ProductSalesScope } }).formData?.salesScope] as const));
+        const selectedTemplates = TEMPLATE_RANGE_OPTIONS.filter(template => templateRangeMode === 'all' || selectedTemplateIds.includes(template.id));
+        const channels = operationMode === 'sync' ? selectedPublishChannelIds : storeRangeMode === 'template' ? Array.from(new Set(selectedTemplates.flatMap(template => template.channels))) : effectiveBatchChannelIds;
+        if (operationMode === 'sync') {
+            const invalid = chosenProducts.find(product => {
+                const scope = productScopes.get(product.id);
+                return scope?.channelIds?.length && channels.some(channel => !scope.channelIds.includes(channel));
+            });
+            if (invalid) { setPublishValidationMessage(`“${invalid.name}”未配置全部所选销售渠道，请调整下发渠道或商品库销售渠道。`); return; }
+        }
+        const templateStoreCount = Math.max(0, ...selectedTemplates.map(template => template.count));
+        const stores = scopeStores.filter((store, index) => operationMode !== 'sync' && storeRangeMode === 'template' ? index < templateStoreCount : operationMode !== 'sync' && storeRangeMode === 'all' || selectedStoreIds.includes(store.id));
+        if (!chosenProducts.length || (targetsStore && (!stores.length || !channels.length))) {
+            setPublishValidationMessage('请选择商品，并确认适用门店和渠道。');
+            return;
+        }
+        if (executionTime === 'scheduled' && (!scheduledAt || new Date(scheduledAt).getTime() <= Date.now())) {
+            setPublishValidationMessage('请选择晚于当前时间的执行时间。');
+            return;
+        }
+        const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
+        const batchId = `PB${Date.now()}`;
+        const isScheduled = executionTime === 'scheduled';
+        const fieldNames = operationMode === 'sync' ? overwriteFields : batchChangeMode === 'unified' ? ['上下架'] : selectedBatchFields;
+        const scopeNames = selectedTargetScopes.map(scope => ({ master: unifiedManagementView ? '商品库' : '商品主档', template: '商品下发模板', channel_catalog: '渠道商品库', store: '门店商品' })[scope]);
+        const source = operationMode === 'sync' ? syncSource : batchSource;
+        const sourceName = source === 'channel_catalog' ? unifiedManagementView ? '商品库' : channelCatalogGroups.find(group => group.id === sourceCatalogId)?.name || '渠道商品库' : source === 'template' ? TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.name || '商品下发模板' : source === 'store' ? '门店商品' : unifiedManagementView ? '商品库' : '商品主档';
+        const channelNames = channels.map(id => getOmnichannelChannel(id).name);
+        const platformChannels = targetsStore ? channels.filter(id => isThirdPartyChannelId(id) && omnichannelConfig.thirdPartyStrategies[id] === 'qimai' && (operationMode === 'sync' || batchChangeMode === 'unified' || !['douyin', 'meituan_dine'].includes(id) || fieldNames.some(field => (BATCH_PLATFORM_FIELD_SUPPORT[field] || []).includes(id === 'douyin' ? 'douyin' : 'meituan')))) : [];
+        const skuCount = chosenProducts.reduce((sum, product) => sum + product.specs.length, 0);
+        const allowedInStore = (product: EditableProduct, storeId: string, channelId: OmnichannelChannelId | undefined) => {
+            if (!targetsStore || !channelId) return true;
+            if (batchSource === 'store' && operationMode !== 'sync') {
+                const alias: Record<string, string> = { mini_program_dine_in: 'mini_dine', mini_program_delivery: 'mini_take', douyin: 'douyin_dine' };
+                return storeSourceRecords.some(record => record.baseProductId === product.id && record.storeId === storeId && record.channels.includes(alias[channelId] || channelId));
+            }
+            if (directUse && operationMode !== 'sync') {
+                const alias: Record<string, string> = { mini_program_dine_in: 'mini_dine', mini_program_delivery: 'mini_take', douyin: 'douyin_dine' };
+                return storeSourceRecords.some(record => record.baseProductId === product.id && record.storeId === storeId && record.channels.includes(alias[channelId] || channelId));
+            }
+            return true;
+        };
+        const details = (targetsStore ? stores : [{ id: '', name: '品牌资料' }]).flatMap(store => (targetsStore ? channels : [undefined]).flatMap(channelId => chosenProducts.filter(product => allowedInStore(product, store.id, channelId)).flatMap(product => product.specs.map(spec => ({
+            id: `${batchId}-${store.id}-${channelId || 'brand'}-${spec.id}`, taskType: 'qimai' as const,
+            productName: product.name, productId: product.id, skuName: spec.name, skuId: spec.id,
+            storeName: store.name, storeId: store.id, channel: channelId ? getOmnichannelChannel(channelId).name : '品牌资料',
+            action: operationMode === 'sync' ? '下发门店商品' : '批量修改', fields: fieldNames,
+            status: isScheduled ? 'waiting' as const : 'success' as const, finishedAt: isScheduled ? '等待定时执行' : createdAt,
+        })))));
+        if (operationMode === 'sync') {
+            // Normal publication upserts combo children; combo-only publication preserves existing children.
+            for (const parent of chosenProducts.filter(product => product.type === '套餐商品')) {
+                const childIds = sourceProducts?.find(product => product.id === parent.id)?.comboItemIds || [];
+                for (const childId of childIds) {
+                    const child = products.find(product => product.id === childId);
+                    if (!child) continue;
+                    for (const store of stores) for (const channelId of channels) {
+                        const alias: Record<string, string> = { mini_program_dine_in: 'mini_dine', mini_program_delivery: 'mini_take', douyin: 'douyin_dine' };
+                        const exists = storeSourceRecords.some(record => record.storeId === store.id && (record.baseProductId === child.id || record.name === child.name) && (record.channels.includes(channelId) || record.channels.includes(alias[channelId])));
+                        if (comboOnly && exists) continue;
+                        for (const spec of child.specs) {
+                            const id = `${batchId}-${store.id}-${channelId}-${spec.id}`;
+                            if (details.some(detail => detail.id === id)) continue;
+                            details.push({ id, taskType: 'qimai', productName: child.name, productId: child.id, skuName: spec.name, skuId: spec.id, storeName: store.name, storeId: store.id, channel: getOmnichannelChannel(channelId).name, action: exists ? '更新套餐子商品' : '新增套餐子商品', fields: fieldNames, status: isScheduled ? 'waiting' : 'success', finishedAt: isScheduled ? '等待定时执行' : createdAt });
+                        }
+                    }
+                }
+            }
+        }
+        if (!details.length) { setPublishValidationMessage('所选范围内没有可修改的门店商品，请调整商品、门店或渠道。'); return; }
+        // Apply only edited cells; an untouched column must never write a mock placeholder value.
+        if (operationMode !== 'sync' && !isScheduled && selectedTargetScopes.includes('master') && batchChangeMode === 'individual') {
+            const updates = chosenProducts.map(product => ({ productId: product.id, values: Object.fromEntries(Object.entries(batchDraftValues[product.id] || {}).filter(([field]) => selectedBatchFields.includes(field))) })).filter(item => Object.keys(item.values).length);
+            try { onApplyLibraryBatch?.(updates); }
+            catch (error) { setPublishValidationMessage(error instanceof Error ? error.message : '商品库更新失败，请重试。'); return; }
+        }
+        const activePlatformChannels = platformChannels.filter(channelId => details.some(detail => detail.channel === getOmnichannelChannel(channelId).name));
+        const takeoutOperation = operationMode === 'sync' ? 'structure' : batchChangeMode === 'unified' ? 'shelf' : fieldNames.every(field => ['售价'].includes(field)) ? 'price' : 'structure';
+        const platformDetails = !isScheduled ? details.filter(detail => activePlatformChannels.some(id => getOmnichannelChannel(id).name === detail.channel)).map(detail => {
+            const comboUnsupported = detail.channel === getOmnichannelChannel('meituan_dine').name && chosenProducts.find(product => product.id === detail.productId)?.type === '套餐商品';
+            const takeoutChannel = activePlatformChannels.find(id => isTakeoutChannel(id) && getOmnichannelChannel(id).name === detail.channel);
+            const master = sourceProducts?.find(product => product.id === detail.productId);
+            const groupId = source === 'channel_catalog' ? sourceCatalogId : undefined;
+            const override = groupId ? channelProductOverrides[`${groupId}:${detail.productId}`] : undefined;
+            const input = { ...master, ...override, name: String(batchDraftValues[detail.productId]?.['商品名称'] || override?.name || chosenProducts.find(product => product.id === detail.productId)?.name || detail.productName), formData: { ...(master as any)?.formData, ...override?.formData } };
+            const issues = takeoutChannel && isTakeoutChannel(takeoutChannel) && takeoutOperation === 'structure' ? checkTakeoutProduct(input, takeoutChannel) : [];
+            const readiness = takeoutChannel === 'jd' ? checkJdStoreReadiness(input.formData?.jdStoreReadiness) : [];
+            const failure = comboUnsupported ? '美团在线点暂不支持同步套餐商品；企迈门店商品已保留。' : [...issues, ...readiness].map(issue => `${issue.field}：${issue.message}`).join('；');
+            return { ...detail, id: `${detail.id}-platform`, taskType: 'platform' as const, action: takeoutChannel && isTakeoutChannel(takeoutChannel) ? takeoutOperationPlan(takeoutChannel, takeoutOperation) : '同步平台门店商品', status: failure ? 'failed' as const : 'waiting' as const, finishedAt: failure ? createdAt : '等待平台执行（演示）', ...(failure ? { error: failure } : {}) };
+        }) : [];
+        onSubmitTask?.({
+            id: batchId, recordType: 'store_publish', title: `${operationMode === 'sync' ? '商品下发' : '批量修改'} · ${sourceName}`, action: operationMode === 'sync' ? '发布商品至门店' : '批量修改商品资料',
+            sourceType: sourceName, sourceName, snapshot: `${isScheduled ? `定时执行 ${scheduledAt.replace('T', ' ')}；` : ''}${operationMode === 'sync' ? '同款覆盖' : '修改字段'}：${fieldNames.join('、')}`,
+            channels: targetsStore ? channelNames : ['品牌资料'], storeScope: targetsStore ? stores.map(store => store.name).join('、') : scopeNames.join('、'), storeCount: targetsStore ? stores.length : 0,
+            productCount: new Set(details.map(detail => detail.productId)).size, skuCount: new Set(details.map(detail => detail.skuId)).size, status: isScheduled ? 'running' : 'success', createdAt, creator: '当前用户',
+            fieldSnapshots: fieldNames.map(name => ({ name, mode: operationMode === 'sync' ? '覆盖' : '修改', before: '执行前目标值（演示）', after: operationMode === 'sync' ? comboOnly ? '套餐来源资料；已有子商品不覆盖，缺少时新增' : '本次来源资料（含套餐子商品）' : batchChangeMode === 'unified' ? unifiedShelfStatus === 'on' ? '上架' : '下架' : chosenProducts.map(product => `${product.name}：${String(batchDraftValues[product.id]?.[name] ?? getBatchFieldValue(product, name))}`).join('；') })),
+            tasks: [{ id: `QM-${batchId}`, type: 'qimai', target: targetsStore ? '企迈门店商品' : scopeNames.join('、'), channels: targetsStore ? channelNames : ['品牌资料'], status: isScheduled ? 'waiting' : 'success', progress: isScheduled ? 0 : 100, productCount: chosenProducts.length, skuCount, storeCount: targetsStore ? stores.length : 0, successCount: isScheduled ? 0 : details.length, failedCount: 0, waitingCount: isScheduled ? details.length : 0, startedAt: createdAt, finishedAt: isScheduled ? undefined : createdAt },
+                ...(!isScheduled ? activePlatformChannels.map(channelId => {
+                    const rows = platformDetails.filter(detail => detail.channel === getOmnichannelChannel(channelId).name);
+                    const failedCount = rows.filter(detail => detail.status === 'failed').length;
+                    return { id: `PL-${batchId}-${channelId}`, type: 'platform' as const, target: `${getOmnichannelChannel(channelId).name}门店商品`, channels: [getOmnichannelChannel(channelId).name], status: failedCount === rows.length ? 'failed' as const : 'waiting' as const, progress: failedCount === rows.length ? 100 : 0, productCount: new Set(rows.map(detail => detail.productId)).size, skuCount: new Set(rows.map(detail => detail.skuId)).size, storeCount: new Set(rows.map(detail => detail.storeId)).size, successCount: 0, failedCount, waitingCount: rows.length - failedCount, startedAt: createdAt, ...(failedCount ? { error: rows.find(row => row.error)?.error } : {}), waitingReason: isTakeoutChannel(channelId) ? takeoutOperationPlan(channelId, takeoutOperation) : ['douyin', 'meituan_dine'].includes(channelId) ? '等待在线点品牌商品可用；抖音需审核通过' : '等待平台执行' };
+                }) : [])],
+            details: [...details, ...platformDetails],
+        });
+        setPublishValidationMessage('');
+        setStep(3);
+    };
 
     const categoryList = useMemo(() => {
         const map = new Map<string, { name: string; categorySort: number; productCount: number }>();
@@ -339,8 +540,8 @@ export const WebProductSync: React.FC<{
 
     const filteredProducts = useMemo(() => {
         const list = selectedCategoryName === 'all'
-            ? products
-            : products.filter(product => product.categories.some(category => category.name === selectedCategoryName));
+            ? currentSourceProducts
+            : currentSourceProducts.filter(product => product.categories.some(category => category.name === selectedCategoryName));
 
         return [...list].sort((a, b) => {
             const aCategory = getDisplayCategory(a, selectedCategoryName);
@@ -351,9 +552,9 @@ export const WebProductSync: React.FC<{
             if (aCategory.productSort !== bCategory.productSort) return aCategory.productSort - bCategory.productSort;
             return a.name.localeCompare(b.name, 'zh-CN');
         });
-    }, [products, selectedCategoryName]);
+    }, [currentSourceProducts, selectedCategoryName]);
 
-    const selectorProducts = useMemo<SelectableProduct[]>(() => products.map(product => ({
+    const selectorProducts = useMemo<SelectableProduct[]>(() => currentSourceProducts.map(product => ({
         id: product.id,
         name: product.name,
         image: product.image,
@@ -364,7 +565,7 @@ export const WebProductSync: React.FC<{
         type: product.type.includes('套餐') ? 'combo' : 'standard',
         price: product.price,
         status: 'on_shelf',
-    })), [products]);
+    })), [currentSourceProducts]);
 
     const openProductSelector = (mode: 'sync' | 'batch') => {
         setProductSelectorMode(mode);
@@ -384,20 +585,28 @@ export const WebProductSync: React.FC<{
     };
 
     const getBatchFieldValue = (product: EditableProduct, field: string): BatchFieldValue => {
+        const source = sourceProducts?.find(item => item.id === product.id) as Product & { formData?: Record<string, any> } | undefined;
+        const data = source?.formData || {};
+        const aliases: Record<string, string> = { '列表页简述': 'p_list_desc', '前台分类': 'p_front_cat', '商品主图': 'p_img', '包装费': 's_pack_fee', '描述标签': 'p_desc_tags' };
+        const definition = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === aliases[field] || item.label === field);
+        if (definition && data[definition.id] !== undefined) { const value = data[definition.id]; return Array.isArray(value) ? value.join('、') : typeof value === 'object' ? '' : value; }
+        const specFields: Record<string, string> = { '商品标识': 's_spec_mark', '商品条码': 's_spec_barcode', '商品规格码': 's_spec_sku_code', '预计成本': 's_spec_cost' };
+        const row = data.takeoutFormState?.specConfigRows?.[0];
+        if (specFields[field] && row) return row[specFields[field]] ?? '';
         switch (field) {
             case '商品名称': return product.name;
             case '前台分类': return product.categories[0]?.name || '';
-            case '是否展示商品': return true;
-            case '基础价格': return product.price;
-            case '商品标识': return '新品';
-            case '商品条码': return product.code;
-            case '预计成本': return Number((product.price * 0.35).toFixed(2));
-            case '商品份量': return '1杯';
-            case '商品主图': return product.image ? '已配置' : '未配置';
-            case '规格图片': return `${product.specs.length}张`;
-            case '商品详情图': return '3张';
-            case '列表页简述': return '门店热销饮品';
-            case '描述标签': return '推荐';
+            case '是否展示商品': return false;
+            case '售价': return product.price;
+            case '商品标识': return '';
+            case '商品条码': return '';
+            case '预计成本': return '';
+            case '商品份量': return '';
+            case '商品主图': return product.image || '';
+            case '规格图片': return '';
+            case '商品详情图': return '';
+            case '列表页简述': return '';
+            case '描述标签': return '';
             case '售卖时间': return getListTimeSaleSummary(product.timeSale);
             case '是否为套餐商品': return product.type.includes('套餐');
             case '是否为小料商品': return false;
@@ -460,10 +669,11 @@ export const WebProductSync: React.FC<{
 
         if (BATCH_IMAGE_FIELDS.has(field)) {
             return (
-                <button type="button" onClick={() => onChange('已重新选择')} className={`${controlClass} flex items-center justify-between text-left hover:bg-[#F7FCF9]`}>
-                    <span className={value ? 'text-gray-700' : 'text-gray-400'}>{value || '选择图片'}</span>
+                <label className={`${controlClass} flex cursor-pointer items-center justify-between text-left hover:bg-[#F7FCF9]`}>
+                    <span className={value ? 'text-gray-700' : 'text-gray-400'}>{value ? '已配置图片 · 点击替换' : '选择图片'}</span>
+                    <input aria-label={`上传${field}`} type="file" accept="image/*" className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => onChange(String(reader.result)); reader.readAsDataURL(file); }} />
                     <FileUp size={15} className="ml-2 shrink-0 text-[#00A35B]" />
-                </button>
+                </label>
             );
         }
 
@@ -560,150 +770,130 @@ export const WebProductSync: React.FC<{
             {
                 title: '发布商品至门店',
                 desc: '按商品来源创建门店渠道发布任务',
-                icon: <RefreshCw size={24} className="text-orange-500" />,
-                iconWrapClass: 'bg-orange-50',
-                onClick: () => { setOperationMode('sync'); setStep(1); },
-                featured: true,
+                icon: <RefreshCw size={20} />,
+                iconClassName: 'text-[#C57100]',
+                onClick: () => { setComboOnly(false); setOperationMode('sync'); setOverwriteFields(getPublishOverwriteDefaults(activeBrandId)); setStep(1); },
             },
             {
                 title: '批量发布模板商品',
                 desc: '批量选择模板并发布至适用门店',
-                icon: <Layers size={24} className="text-cyan-500" />,
-                iconWrapClass: 'bg-cyan-50',
-                disabled: true,
-            },
-            {
-                title: '更新门店商品属性',
-                desc: '更新商品属性至门店',
-                icon: <SquarePen size={24} className="text-green-500" />,
-                iconWrapClass: 'bg-green-50',
-                disabled: true,
+                icon: <Layers size={20} />,
+                iconClassName: 'text-[#008F97]',
+                onClick: () => setActiveBatchTool('template_publish'),
             },
             {
                 title: '同步套餐商品至门店',
-                desc: '仅同步套餐商品至门店',
-                icon: <PackagePlus size={24} className="text-emerald-500" />,
-                iconWrapClass: 'bg-emerald-50',
+                desc: '下发套餐，并补齐门店缺少的子商品',
+                icon: <PackagePlus size={20} />,
+                iconClassName: 'text-[#00A35B]',
+                onClick: () => { setComboOnly(true); setOperationMode('sync'); setOverwriteFields(getPublishOverwriteDefaults(activeBrandId)); setSelectedSyncProductIds(products.filter(product => product.type === '套餐商品').map(product => product.id)); setStep(1); },
             },
         ];
 
         const batchCards: ToolCardConfig[] = [
             {
                 title: '批量修改标准商品',
-                desc: '批量修改商品库、模板、门店的商品信息',
-                icon: <FileEdit size={24} className="text-blue-500" />,
-                iconWrapClass: 'bg-blue-50',
-                onClick: () => { setOperationMode('batch_standard'); setStep(1); },
+                desc: directUse ? '修改商品库及门店商品资料' : '修改商品库、模板或门店商品资料',
+                icon: <FileEdit size={20} />,
+                iconClassName: 'text-[#2185D0]',
+                onClick: () => { setOperationMode('batch_standard'); setSelectedBatchProductIds(sourceProductPool.filter(product => product.type !== '套餐商品').slice(0, 2).map(product => product.id)); setStep(1); },
             },
             {
                 title: '批量修改套餐商品',
-                desc: '批量修改商品库、模板、门店的商品信息',
-                icon: <PackagePlus size={24} className="text-emerald-500" />,
-                iconWrapClass: 'bg-emerald-50',
-                disabled: true,
-                onClick: () => { setOperationMode('batch_combo'); setStep(1); },
+                desc: directUse ? '修改商品库及门店套餐资料' : '修改商品库、模板或门店套餐资料',
+                icon: <PackagePlus size={20} />,
+                iconClassName: 'text-[#00A35B]',
+                onClick: () => { setOperationMode('batch_combo'); setSelectedBatchProductIds(sourceProductPool.filter(product => product.type === '套餐商品').slice(0, 1).map(product => product.id)); setStep(1); },
             },
             {
                 title: '批量修改加料商品',
-                desc: '批量修改门店商品信息',
-                icon: <Tickets size={24} className="text-violet-500" />,
-                iconWrapClass: 'bg-violet-50',
-                disabled: true,
+                desc: '批量设置门店加料的上下架状态',
+                icon: <Tickets size={20} />,
+                iconClassName: 'text-[#8460D7]',
+                onClick: () => setActiveBatchTool('addon_bulk'),
             },
             {
                 title: '批量修改商品关联加料',
-                desc: '修改部分商品库、模板、门店商品关联的加料',
-                icon: <Tags size={24} className="text-rose-500" />,
-                iconWrapClass: 'bg-rose-50',
-                onClick: () => setActiveBatchTool('addon-association'),
+                desc: '调整商品关联的加料及选择规则',
+                icon: <Tags size={20} />,
+                iconClassName: 'text-[#8460D7]',
+                onClick: () => setActiveBatchTool('addon_association'),
             },
             {
                 title: '批量修改商品关联做法',
-                desc: '批量修改商品库、模板、门店商品的做法',
-                icon: <Layers size={24} className="text-lime-500" />,
-                iconWrapClass: 'bg-lime-50',
-                disabled: true,
+                desc: '调整商品关联的做法及选项',
+                icon: <Layers size={20} />,
+                iconClassName: 'text-[#00A35B]',
+                onClick: () => setActiveBatchTool('method_association'),
             },
             {
                 title: '批量启用/禁用门店做法',
-                desc: '批量启用或禁用门店对应的做法',
-                icon: <Layers size={24} className="text-yellow-500" />,
-                iconWrapClass: 'bg-yellow-50',
-                disabled: true,
+                desc: '设置门店可用的做法选项',
+                icon: <Layers size={20} />,
+                iconClassName: 'text-[#00A35B]',
+                onClick: () => setActiveBatchTool('method_status'),
             },
         ];
 
         const productToolCards: ToolCardConfig[] = [
             {
                 title: '删除门店商品',
-                desc: '根据各种匹配配置信息从门店删除',
-                icon: <Trash2 size={24} className="text-red-500" />,
-                iconWrapClass: 'bg-red-50',
-                disabled: true,
+                desc: '从指定门店和渠道移除商品',
+                icon: <Trash2 size={20} />,
+                iconClassName: 'text-[#E65050]',
+                onClick: () => setActiveBatchTool('delete_goods'),
             },
             {
                 title: '删除门店加料',
-                desc: '根据各种匹配配置从门店删除加料',
-                icon: <Trash2 size={24} className="text-red-500" />,
-                iconWrapClass: 'bg-red-50',
-                disabled: true,
+                desc: '从指定门店和渠道移除加料',
+                icon: <Trash2 size={20} />,
+                iconClassName: 'text-[#E65050]',
+                onClick: () => setActiveBatchTool('delete_addon'),
             },
             {
                 title: '门店商品复制',
-                desc: '适用于将店开业等门店商品完整克隆至目标门店',
-                icon: <Copy size={24} className="text-emerald-500" />,
-                iconWrapClass: 'bg-emerald-50',
-                disabled: true,
+                desc: '将源门店商品复制到目标门店',
+                icon: <Copy size={20} />,
+                iconClassName: 'text-[#00A35B]',
+                onClick: () => setActiveBatchTool('copy_store'),
+            },
+            {
+                title: '渠道商品复制',
+                desc: '用源渠道商品覆盖目标渠道商品',
+                icon: <Copy size={20} />,
+                iconClassName: 'text-[#008F97]',
+                onClick: () => setActiveBatchTool('copy_channel'),
             },
         ];
 
-        const renderCardGrid = (cards: ToolCardConfig[]) => (
-            <div className="grid grid-cols-3 gap-4">
+        // Production goodsSynch: uniform neutral entries, colored icons, three columns.
+        // Keep the established React tool flows; this only mirrors the guide-container layout.
+        const renderToolEntries = (cards: ToolCardConfig[]) => (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {cards.map(card => (
                     <button
                         key={card.title}
                         type="button"
                         onClick={card.onClick}
-                        disabled={card.disabled}
-                        className={`relative overflow-hidden rounded-lg border bg-white p-4 text-left transition-colors ${
-                            card.featured
-                                ? 'border-[#00C06B] hover:bg-[#F8FFFB]'
-                                : 'border-gray-200 hover:border-[#A9E4C3]'
-                        } ${card.disabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'}`}
+                        className="group flex min-h-[96px] w-full items-start gap-3 rounded-lg border border-transparent bg-[#F6F7FA] p-4 text-left transition-colors duration-150 hover:border-[#B8DECC] hover:bg-[#F0F5F2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008F4C]"
                     >
-                        {card.featured && <div className="absolute left-0 top-0 h-full w-1 bg-[#00C06B]" />}
-                        <div className="flex items-start">
-                            <div className={`mr-4 flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${card.iconWrapClass}`}>
-                                {card.icon}
-                            </div>
-                            <div className="min-w-0">
-                                <div className="mb-1 flex items-center gap-2"><h4 className="text-base font-bold text-gray-800">{card.title}</h4>{card.disabled && <span className="rounded bg-[#F2F4F7] px-1.5 py-0.5 text-[11px] font-medium text-[#667085]">现有系统未接入</span>}</div>
-                                <p className="text-xs text-gray-400">{card.desc}</p>
-                            </div>
-                        </div>
+                        <span aria-hidden="true" className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white [&_svg]:h-7 [&_svg]:w-7 ${card.iconClassName}`}>{card.icon}</span>
+                        <span className="min-w-0 flex-1"><span className="block text-base font-semibold leading-6 text-[#1D2129] transition-colors duration-150 group-hover:text-[#008F4C]">{card.title}</span><span className="mt-1 block text-sm leading-5 text-[#667085]">{card.desc}</span></span>
                     </button>
                 ))}
             </div>
         );
 
-        return (
-            <div className="h-full overflow-y-auto p-8">
-                <div className="mb-8">
-                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">商品发布</h3>
-                    {renderCardGrid(syncCards)}
-                </div>
-
-                <div className="mb-8">
-                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">批量修改</h3>
-                    {renderCardGrid(batchCards)}
-                </div>
-
-                <div>
-                    <h3 className="mb-4 flex items-center font-bold text-gray-800 before:mr-2 before:h-4 before:w-1 before:bg-[#00C06B] before:content-['']">发布工具</h3>
-                    {renderCardGrid(productToolCards)}
-                </div>
-            </div>
-        );
+        const sections = [
+            ...(!directUse && focus !== 'batch' ? [{ title: '商品下发', cards: syncCards }] : []),
+            ...(focus !== 'publish' ? [{ title: '商品资料', cards: batchCards.slice(0, 3) }, { title: '做法与加料', cards: batchCards.slice(3) }, { title: '删除与复制', cards: productToolCards }] : []),
+        ];
+        return <div className="h-full overflow-auto bg-white px-6 py-5 selection:bg-[#DDF3E8] selection:text-[#006B3C]">
+            <div className="space-y-6">{sections.map(section => <section key={section.title} aria-label={section.title}>
+                {focus !== 'publish' && <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#344054]"><span aria-hidden="true" className="h-1 w-1 shrink-0 rounded-full bg-[#00B460]" />{section.title}</h2>}
+                {renderToolEntries(section.cards)}
+            </section>)}</div>
+        </div>;
     };
 
     const renderEditorDrawer = () => {
@@ -790,13 +980,13 @@ export const WebProductSync: React.FC<{
 
                         <div className="rounded-lg border border-gray-200 bg-white p-5">
                             <div className="text-base font-bold text-gray-800 mb-4">商品属性</div>
-                            <div className="text-sm text-gray-600 mb-3">基础售价</div>
+                            <div className="text-sm text-gray-600 mb-3">售价</div>
                             <div className="border border-gray-200 rounded-lg overflow-hidden">
                                 <table className="w-full text-left text-sm">
                                     <thead className="bg-[#F5F5F5] text-gray-500">
                                         <tr>
                                             <th className="px-4 py-3">规格</th>
-                                            <th className="px-4 py-3">基础售价</th>
+                                            <th className="px-4 py-3">售价</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -984,7 +1174,7 @@ export const WebProductSync: React.FC<{
     };
 
     const renderBatchStep1 = () => {
-        const selectedBatchProducts = products.filter(product => selectedBatchProductIds.includes(product.id));
+        const selectedBatchProducts = currentSourceProducts.filter(product => selectedBatchProductIds.includes(product.id));
         const allRowsSelected = selectedBatchProducts.length > 0 && selectedBatchProducts.every(product => selectedBatchRowIds.includes(product.id));
 
         return (
@@ -994,6 +1184,17 @@ export const WebProductSync: React.FC<{
                         <div className="mb-7">
                             <h2 className="text-xl font-black text-gray-900">{operationMode === 'batch_combo' ? '批量修改套餐商品' : '批量修改标准商品'}</h2>
                         </div>
+                        {initialBatch && <p className="mb-4 text-sm text-[#667085]">商品来源：{unifiedManagementView ? '商品库' : '商品主档'} · 已带入 {selectedBatchProducts.length} 个{operationMode === 'batch_combo' ? '套餐商品' : '标准商品'}。仅修改本次选择的资料，生效范围将在下一步确认。</p>}
+                        {!directUse && !initialBatch && <div className="mb-6 border-b border-gray-100 pb-6">
+                            <div className="mb-3 text-sm font-black text-gray-800">商品来源</div>
+                            <div className="flex flex-wrap gap-2">
+                                {([['master', unifiedManagementView ? '商品库' : '商品主档'], ...(!unifiedManagementView ? [['channel_catalog', '渠道商品库']] : []), ...(!directUse ? [['template', '商品下发模板']] : []), ['store', '门店商品']] as Array<[typeof batchSource, string]>).map(([id, label]) => <button key={id} type="button" aria-pressed={batchSource === id} onClick={() => { setBatchSource(id); setSelectedBatchProductIds([]); setSelectedTargetScopes(id === 'master' ? ['master'] : id === 'store' ? ['store'] : id === 'template' ? ['template'] : ['channel_catalog']); }} className={`rounded border px-3 py-2 text-sm ${batchSource === id ? 'border-[#00B460] bg-[#EAF8F2] font-semibold text-[#008F4C]' : 'border-[#E5E6EB] text-[#4E5969] hover:border-[#00B460]'}`}>{label}</button>)}
+                            </div>
+                            {batchSource === 'channel_catalog' && <div className="mt-3 flex flex-wrap gap-2">{authorizedChannelCatalogGroups.map(group => <button key={group.id} type="button" aria-pressed={selectedTargetChannelGroupIds.includes(group.id)} onClick={() => { setSelectedTargetChannelGroupIds([group.id]); setSelectedBatchProductIds([]); }} className={`rounded border px-3 py-1.5 text-xs ${selectedTargetChannelGroupIds.includes(group.id) ? 'border-[#00B460] bg-[#F1FBF5] font-semibold text-[#008F4C]' : 'border-[#E5E6EB] text-[#667085]'}`}>{group.name}</button>)}</div>}
+                            {batchSource === 'template' && <select aria-label="来源商品下发模板" value={sourceTemplateId} onChange={event => { setSourceTemplateId(event.target.value); setSelectedTemplateIds([event.target.value]); setTemplateRangeMode('selected'); setSelectedBatchProductIds([]); }} className="mt-3 h-9 rounded-md border border-[#E5E6EB] bg-white px-3 text-sm">{TEMPLATE_RANGE_OPTIONS.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select>}
+                            {batchSource === 'store' && <div className="mt-3"><WebStoreScopeSelector stores={PRODUCT_SALES_SCOPE_STORES} value={sourceStoreIds} onChange={ids => { setSourceStoreIds(ids); setSelectedStoreIds(ids); setSelectedBatchProductIds([]); }} widthClassName="w-[260px]" /></div>}
+                            <p className="mt-2 text-xs text-[#667085]">切换来源会清空已选商品。修改哪一层资料与影响哪些门店渠道，请在下一步确认。</p>
+                        </div>}
 
                         <div className="mb-6 border-b border-gray-100 pb-6">
                             <div className="mb-3 text-sm font-black text-gray-800">修改方式</div>
@@ -1015,7 +1216,7 @@ export const WebProductSync: React.FC<{
                                     </div>
                                 </div>
                                 <div className="space-y-5">
-                                    {BATCH_FIELD_GROUPS.map(group => (
+                                    {(operationMode === 'batch_combo' ? BATCH_COMBO_FIELD_GROUPS : BATCH_FIELD_GROUPS).map(group => (
                                         <div key={group.title} className="flex items-start">
                                             <div className="w-28 shrink-0 pt-1 text-sm font-black text-gray-800">{group.title}</div>
                                             <div className="flex flex-1 flex-wrap gap-x-6 gap-y-3">
@@ -1058,7 +1259,7 @@ export const WebProductSync: React.FC<{
                             <div className="overflow-hidden border border-gray-200 bg-white">
                                 <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-4 py-3">
                                     <div className="flex items-center gap-3">
-                                        <button type="button" onClick={() => openProductSelector('batch')} className="h-9 bg-[#00B460] px-4 text-sm font-bold text-white hover:bg-[#00A35B]">添加标准商品</button>
+                                        <button type="button" onClick={() => openProductSelector('batch')} className="h-9 bg-[#00B460] px-4 text-sm font-bold text-white hover:bg-[#00A35B]">{operationMode === 'batch_combo' ? '添加套餐商品' : '添加标准商品'}</button>
                                         <span className="text-xs text-gray-500">已添加 <strong className="text-gray-800">{selectedBatchProducts.length}</strong> 个{batchChangeMode === 'individual' ? <>，可编辑 <strong className="text-gray-800">{selectedBatchFields.length}</strong> 个字段</> : <>，统一<strong className="ml-1 text-[#00A35B]">{unifiedShelfStatus === 'on' ? '上架' : '下架'}</strong></>}</span>
                                     </div>
                                     <button
@@ -1156,7 +1357,7 @@ export const WebProductSync: React.FC<{
                         </section>
                     </div>
                 </div>
-                <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchProductIds.length === 0 || (batchChangeMode === 'individual' && selectedBatchFields.length === 0)} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
+                <div className="flex shrink-0 justify-end border-t border-gray-100 bg-white p-4"><button type="button" onClick={() => initialBatch ? onReturnToLibrary?.() : setStep(0)} className="mr-4 border border-gray-200 px-6 py-2 text-sm font-bold text-gray-600">取消</button><button type="button" onClick={() => setStep(2)} disabled={selectedBatchProducts.length === 0 || (batchChangeMode === 'individual' && selectedBatchFields.length === 0)} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white disabled:bg-gray-300">下一步</button></div>
             </div>
         );
     };
@@ -1166,24 +1367,27 @@ export const WebProductSync: React.FC<{
             <div className="border-b border-gray-100 p-6">
                 <div className="mb-3 text-sm font-bold text-gray-700">选择商品</div>
                 <div className="flex items-center gap-6">
-                    {!channelCatalogEnabled && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'master' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'master'} onChange={() => setSyncSource('master')} className="h-4 w-4 text-[#00C06B]" /><span>商品主档</span></label>}
-                    <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'template' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'template'} onChange={() => setSyncSource('template')} className="h-4 w-4 text-[#00C06B]" /><span>商品模板</span></label>
-                    {channelCatalogEnabled && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'channel_catalog' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'channel_catalog'} onChange={() => setSyncSource('channel_catalog')} className="h-4 w-4 text-[#00C06B]" /><span>渠道商品库</span></label>}
+                    {publishEntry?.productId ? <span className="text-sm text-[#4E5969]">商品库</span> : <>
+                    {(!channelCatalogEnabled || (!!onCreateProduct && !unifiedManagementView)) && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'master' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'master'} onChange={() => { setSyncSource('master'); setSelectedSyncProductIds([]); }} className="h-4 w-4 text-[#00C06B]" /><span>商品主档</span></label>}
+                    <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'template' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'template'} onChange={() => { setSyncSource('template'); setSelectedSyncProductIds([]); }} className="h-4 w-4 text-[#00C06B]" /><span>商品下发模板</span></label>
+                    {channelCatalogEnabled && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'channel_catalog' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'channel_catalog'} onChange={() => { setSyncSource('channel_catalog'); setSelectedSyncProductIds([]); }} className="h-4 w-4 text-[#00C06B]" /><span>{unifiedManagementView ? '商品库' : '渠道商品库'}</span></label>}
+                    </>}
                 </div>
-                {syncSource === 'channel_catalog' && (
+                {syncSource === 'channel_catalog' && !unifiedManagementView && (
                     <div className="mt-4"><div className="flex flex-wrap gap-2">
                         {authorizedChannelCatalogGroups.map(group => { const selected = selectedChannelGroupIds[0] === group.id; return <button key={group.id} type="button" onClick={() => { setSelectedChannelGroupIds([group.id]); setSelectedSyncProductIds([]); }} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-[#F0FBF5] text-[#008F53]' : 'border-gray-200 text-gray-500'}`}><span>{group.name}</span><span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>; })}
                     </div></div>
                 )}
+                {syncSource === 'template' && <select aria-label="来源商品下发模板" value={sourceTemplateId} onChange={event => { setSourceTemplateId(event.target.value); setSelectedSyncProductIds([]); }} className="mt-3 h-9 rounded-md border border-[#E5E6EB] bg-white px-3 text-sm">{TEMPLATE_RANGE_OPTIONS.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select>}
                 <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
                     <span className="text-sm text-gray-500">已选 <span className="font-bold text-gray-800">{selectedSyncProductIds.length}</span> 个商品</span>
-                    <button type="button" onClick={() => openProductSelector('sync')} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">选择商品</button>
+                    {!publishEntry?.productId && <button type="button" onClick={() => openProductSelector('sync')} className="bg-[#00C06B] px-6 py-2 text-sm font-bold text-white hover:bg-[#00A35B]">选择商品</button>}
                 </div>
             </div>
 
             <div className="p-6 border-b border-gray-100">
-                <div className="text-sm font-bold text-gray-700 mb-3">选择渠道</div>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <div className="text-sm font-bold text-gray-700 mb-3">{publishEntry?.productId ? '下发渠道' : '选择渠道'}</div>
+                {publishEntry?.productId ? <p aria-label="下发渠道" className="text-sm leading-6 text-[#4E5969]">{selectedPublishChannelIds.map(id => getOmnichannelChannel(id).name).join('、')}<span className="mt-1 block text-xs text-[#667085]">沿用商品设置的全部销售渠道。</span></p> : <div className="flex flex-wrap gap-x-4 gap-y-2">
                     {availablePublishChannelIds.map(channelId => {
                         const checked = selectedPublishChannelIds.includes(channelId);
                         return (
@@ -1205,7 +1409,7 @@ export const WebProductSync: React.FC<{
                         </label>
                         );
                     })}
-                </div>
+                </div>}
             </div>
 
             <div className="flex-1 overflow-hidden flex">
@@ -1263,7 +1467,7 @@ export const WebProductSync: React.FC<{
                                 <th className="py-3 px-4 font-medium w-[300px]">商品名称</th>
                                 <th className="py-3 px-4 font-medium">商品类型</th>
                                 <th className="py-3 px-4 font-medium">前台分类</th>
-                                <th className="py-3 px-4 font-medium">基础售价</th>
+                                <th className="py-3 px-4 font-medium">售价</th>
                                 <th className="py-3 px-4 font-medium">可售时间</th>
                                 <th className="py-3 px-4 font-medium w-[132px] min-w-[132px] sticky right-0 z-30 bg-[#F5F5F5] shadow-[-10px_0_14px_-10px_rgba(0,0,0,0.18)]">操作</th>
                             </tr>
@@ -1322,12 +1526,12 @@ export const WebProductSync: React.FC<{
                                                 >
                                                     差异化属性修改
                                                 </button>
-                                                <button
+                                                {!publishEntry?.productId && <button
                                                     onClick={() => handleRemoveProduct(product.id)}
                                                     className="text-gray-500 hover:text-red-500"
                                                 >
                                                     移除
-                                                </button>
+                                                </button>}
                                             </div>
                                         </td>
                                     </tr>
@@ -1339,64 +1543,15 @@ export const WebProductSync: React.FC<{
             </div>
 
             <div className="p-4 border-t border-gray-100 bg-white flex justify-end items-center shrink-0">
-                <button onClick={() => setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors mr-4">取消</button>
-                <button onClick={() => setStep(2)} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">下一步</button>
+                <button onClick={() => { setPublishEntry(undefined); setStep(0); }} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors mr-4">取消</button>
+                <button onClick={() => setStep(2)} disabled={!selectedSyncProducts.length || !selectedPublishChannelIds.length} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md disabled:bg-gray-300">下一步</button>
             </div>
 
             {renderEditorDrawer()}
         </div>
     );
 
-    const renderStoreSelector = () => (
-        <div className="flex h-[400px] min-h-[400px] shrink-0 border border-gray-200">
-            <div className="flex w-64 shrink-0 flex-col border-r border-gray-200">
-                <div className="border-b border-gray-200 bg-gray-50 p-2">
-                    <div className="relative">
-                        <Search size={14} className="absolute left-2 top-2 text-gray-400" />
-                        <input className="w-full border border-gray-200 py-1 pl-7 pr-2 text-xs outline-none focus:border-[#00C06B]" placeholder="请输入门店名称/编码/ID" />
-                    </div>
-                </div>
-                <div className="flex-1 space-y-1 overflow-auto p-2">
-                    <div className="flex cursor-pointer items-center bg-[#00C06B]/10 px-2 py-1.5 text-sm font-bold text-[#00C06B]">
-                        <ChevronDown size={14} className="mr-1" /> 餐饮2.0
-                    </div>
-                    <div className="ml-4 flex cursor-pointer items-center px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
-                        <ChevronRight size={14} className="mr-1" /> S茶
-                    </div>
-                    <div className="ml-4 flex cursor-pointer items-center px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
-                        <ChevronRight size={14} className="mr-1" /> No1A
-                    </div>
-                </div>
-            </div>
-            <div className="flex flex-1 flex-col">
-                <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 p-2 text-xs text-gray-500">
-                    <span>餐饮2.0 <span className="mx-2">|</span> 共 5348 家门店</span>
-                </div>
-                <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 border-b border-gray-100 bg-white text-gray-500">
-                            <tr>
-                                <th className="w-10 px-4 py-2"><input type="checkbox" className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]" /></th>
-                                <th className="px-4 py-2">门店名称</th>
-                                <th className="px-4 py-2">门店ID</th>
-                                <th className="px-4 py-2">门店编码</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {[1, 2, 3].map(i => (
-                                <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                                    <td className="px-4 py-2"><input type="checkbox" className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]" /></td>
-                                    <td className="px-4 py-2 text-gray-800">新建门店 {i}</td>
-                                    <td className="px-4 py-2 text-gray-500">56563{i}</td>
-                                    <td className="px-4 py-2 text-gray-500">--</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    );
+    const renderStoreSelector = () => <WebStoreScopePanel stores={scopeStores} value={selectedStoreIds} onChange={setSelectedStoreIds} />;
 
     const renderStep2 = () => (
         <div className="flex-1 flex flex-col h-full bg-white relative">
@@ -1406,20 +1561,20 @@ export const WebProductSync: React.FC<{
                         <div className="mb-8">
                             <h3 className="mb-4 text-base font-bold text-gray-800">确认生效范围</h3>
                             <div className="divide-y divide-gray-100 border border-gray-200">
-                                <div className={`px-4 py-3 ${selectedTargetScopes.includes('master') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
+                                {batchSource === 'master' && <div className={`px-4 py-3 ${selectedTargetScopes.includes('master') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
                                     <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('master') ? 'text-[#008F53]' : 'text-gray-700'}`}>
                                         <input type="checkbox" checked={selectedTargetScopes.includes('master')} onChange={() => setSelectedTargetScopes(prev => prev.includes('master') ? prev.filter(id => id !== 'master') : [...prev, 'master'])} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
-                                        商品主档
+                                        {unifiedManagementView ? '商品库' : '商品主档'}
                                     </label>
-                                </div>
+                                </div>}
 
-                                <div className={`px-4 py-3 ${selectedTargetScopes.includes('template') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
+                                {!directUse && (batchSource === 'master' || batchSource === 'template') && <div className={`px-4 py-3 ${selectedTargetScopes.includes('template') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
                                     <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('template') ? 'text-[#008F53]' : 'text-gray-700'}`}>
                                         <input type="checkbox" checked={selectedTargetScopes.includes('template')} onChange={() => {
                                             if (selectedTargetScopes.includes('template') && storeRangeMode === 'template') setStoreRangeMode('selected');
                                             setSelectedTargetScopes(prev => prev.includes('template') ? prev.filter(id => id !== 'template') : [...prev, 'template']);
                                         }} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
-                                        商品模板
+                                        商品下发模板
                                     </label>
                                     {selectedTargetScopes.includes('template') && (
                                         <div className="ml-7 mt-3 border-t border-[#DDEFE5] pt-3">
@@ -1430,7 +1585,7 @@ export const WebProductSync: React.FC<{
                                             {templateRangeMode === 'selected' && <div className="mt-3 flex flex-wrap gap-2">{TEMPLATE_RANGE_OPTIONS.map(template => { const selected = selectedTemplateIds.includes(template.id); return <button key={template.id} type="button" onClick={() => setSelectedTemplateIds(prev => selected ? prev.filter(id => id !== template.id) : [...prev, template.id])} className={`border px-3 py-2 text-xs ${selected ? 'border-[#8BD7AE] bg-white font-bold text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{template.name}<span className="ml-2 font-normal">{template.count} 家门店</span></button>; })}</div>}
                                         </div>
                                     )}
-                                </div>
+                                </div>}
 
                                 <div className={`px-4 py-3 ${selectedTargetScopes.includes('store') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
                                     <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('store') ? 'text-[#008F53]' : 'text-gray-700'}`}>
@@ -1449,7 +1604,7 @@ export const WebProductSync: React.FC<{
                                                 <div className="mt-3 border-t border-[#DDEFE5] pt-3">
                                                     <div className="mb-2 text-xs font-medium text-gray-500">修改渠道</div>
                                                     <div className="flex flex-wrap gap-x-5 gap-y-2">
-                                                        {(channelCatalogEnabled ? Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels))) : DEFAULT_PUBLISH_CHANNEL_IDS).map(channelId => {
+                                                        {(batchChannels.length ? batchChannels : DEFAULT_PUBLISH_CHANNEL_IDS).map(channelId => {
                                                             const checked = selectedBatchChannelIds.includes(channelId);
                                                             return (
                                                                 <label key={channelId} className="flex cursor-pointer items-center text-sm text-gray-600">
@@ -1474,7 +1629,7 @@ export const WebProductSync: React.FC<{
                                     )}
                                 </div>
 
-                                {channelCatalogEnabled && (
+                                {channelCatalogEnabled && !unifiedManagementView && (batchSource === 'master' || batchSource === 'channel_catalog') && (
                                     <div className={`px-4 py-3 ${selectedTargetScopes.includes('channel_catalog') ? 'bg-[#F7FCF9]' : 'bg-white'}`}>
                                         <label className={`flex cursor-pointer items-center text-sm font-bold ${selectedTargetScopes.includes('channel_catalog') ? 'text-[#008F53]' : 'text-gray-700'}`}>
                                             <input type="checkbox" checked={selectedTargetScopes.includes('channel_catalog')} onChange={() => setSelectedTargetScopes(prev => prev.includes('channel_catalog') ? prev.filter(id => id !== 'channel_catalog') : [...prev, 'channel_catalog'])} className="mr-3 h-4 w-4 rounded border-gray-300 text-[#00C06B]" />
@@ -1482,7 +1637,7 @@ export const WebProductSync: React.FC<{
                                         </label>
                                         {selectedTargetScopes.includes('channel_catalog') && (
                                             <div className="ml-7 mt-3 flex flex-wrap gap-2 border-t border-[#DDEFE5] pt-3">
-                                                {authorizedChannelCatalogGroups.map(group => { const selected = selectedTargetChannelGroupIds.includes(group.id); return <button key={group.id} type="button" onClick={() => setSelectedTargetChannelGroupIds(prev => selected ? prev.filter(id => id !== group.id) : [...prev, group.id])} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-white text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{group.name}<span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>; })}
+                                                {authorizedChannelCatalogGroups.filter(group => batchSource !== 'channel_catalog' || selectedTargetChannelGroupIds.includes(group.id)).map(group => { const selected = selectedTargetChannelGroupIds.includes(group.id); return <button key={group.id} type="button" disabled={batchSource === 'channel_catalog'} onClick={() => setSelectedTargetChannelGroupIds(prev => selected ? prev.filter(id => id !== group.id) : [...prev, group.id])} className={`border px-3 py-2 text-xs font-bold ${selected ? 'border-[#8BD7AE] bg-white text-[#008F53]' : 'border-gray-200 bg-white text-gray-500'}`}>{group.name}<span className="ml-2 font-normal">{group.channels.map(id => getOmnichannelChannel(id).shortName).join('、')}</span></button>; })}
                                             </div>
                                         )}
                                     </div>
@@ -1491,70 +1646,24 @@ export const WebProductSync: React.FC<{
                         </div>
                     )}
 
-                    <h3 className="font-bold text-gray-800 mb-4 text-base">{operationMode === 'sync' ? '商品同步规则' : '修改规则'}</h3>
-                    {operationMode === 'sync' ? <div className="flex items-start mb-6">
-                        <span className="w-24 text-gray-500 text-sm mt-0.5">相同商品</span>
-                        <div className="flex-1">
-                            <label className="flex items-center text-[#00C06B] font-bold text-sm mb-2 cursor-pointer">
-                                <input type="radio" checked readOnly className="mr-2 text-[#00C06B] focus:ring-[#00C06B]"/> 合并到门店商品
-                            </label>
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm">
-                                <p className="text-gray-500 mb-3">如果遇到重复商品，会覆盖门店重复商品，覆盖属性：</p>
-                                <div className="flex flex-wrap gap-x-6 gap-y-3">
-                                    {['商品名称', '基础售价', '商品排序', '分类排序', '售卖时间', '售卖方式', '前台分类'].map(attr => (
-                                        <label key={attr} className="flex items-center text-gray-700 cursor-pointer">
-                                            <input type="checkbox" defaultChecked className="mr-2 text-[#00C06B] rounded border-gray-300 focus:ring-[#00C06B]"/> {attr}
-                                        </label>
-                                    ))}
-                                    <label className="flex items-center text-gray-400 cursor-not-allowed">
-                                        <input type="checkbox" disabled className="mr-2 rounded border-gray-200"/> 其他属性 <span className="ml-1 text-xs bg-gray-200 px-1 rounded">默认参数配置</span>
-                                    </label>
-                                </div>
-                                <p className="text-xs text-gray-400 mt-4 border-t border-gray-200 pt-3">勾选以上任意选项后，将覆盖门店对应的商品属性</p>
-                            </div>
-                        </div>
-                    </div> : <div className="mb-6 flex items-start"><span className="w-24 shrink-0 text-sm text-gray-500">修改内容</span>{batchChangeMode === 'unified' ? <span className={`border px-3 py-1 text-xs font-bold ${unifiedShelfStatus === 'on' ? 'border-[#B7E7CB] bg-[#F4FBF7] text-[#008F53]' : 'border-gray-300 bg-gray-50 text-gray-700'}`}>统一{unifiedShelfStatus === 'on' ? '上架' : '下架'}</span> : <div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div>}</div>}
+                    <h3 className="font-bold text-gray-800 mb-4 text-base">{operationMode === 'sync' ? '商品下发规则' : '修改规则'}</h3>
+                    {operationMode === 'sync' ? <div className="mb-6 max-w-[680px]"><WebProductPublishRules value={overwriteFields} onChange={setOverwriteFields} defaultsBrandId={activeBrandId} /></div> : <div className="mb-6 flex items-start"><span className="w-24 shrink-0 text-sm text-gray-500">修改内容</span>{batchChangeMode === 'unified' ? <span className={`border px-3 py-1 text-xs font-bold ${unifiedShelfStatus === 'on' ? 'border-[#B7E7CB] bg-[#F4FBF7] text-[#008F53]' : 'border-gray-300 bg-gray-50 text-gray-700'}`}>统一{unifiedShelfStatus === 'on' ? '上架' : '下架'}</span> : <div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div>}</div>}
 
-                    {includesMeituanDine && (
-                        <div className="mb-7 overflow-hidden rounded-lg border border-[#DDE5EC] bg-white">
-                            <div className="flex items-start justify-between gap-4 border-b border-[#E8ECEF] bg-[#F7FAF8] px-4 py-3.5">
-                                <div>
-                                    <div className="text-sm font-black text-[#1F2129]">美团在线点任务编排</div>
-                                    <div className="mt-1 text-xs leading-5 text-[#667085]">页面只确认商品、门店和渠道；平台品牌商品由渠道商品库中的独立入口提前同步。</div>
-                                </div>
-                                <span className={`shrink-0 rounded px-2.5 py-1 text-[11px] font-bold ${qimaiManagesMeituanDine ? 'bg-[#EAF8F1] text-[#087443]' : 'bg-[#F2F4F7] text-[#667085]'}`}>
-                                    {qimaiManagesMeituanDine ? '企迈管理平台商品' : '平台自行管理商品'}
-                                </span>
-                            </div>
-                            <div className="grid gap-0 md:grid-cols-3">
-                                {[
-                                    ['1', '校验平台品牌商品', meituanMissingBrandProducts.length > 0 ? `${meituanMissingBrandProducts.length} 个商品尚未同步成功，仅阻断其平台门店商品子任务` : '所选商品均已具备同步成功的平台品牌商品'],
-                                    ['2', '更新企迈门店商品', syncSource === 'template' ? '模板仅更新门店商品，不直接改平台品牌商品' : '按本次门店范围创建或更新，不依赖平台品牌任务'],
-                                    ['3', '同步美团门店商品', qimaiManagesMeituanDine ? '仅对品牌商品已同步成功的商品执行平台子任务' : '不创建平台商品同步任务'],
-                                ].map(([index, title, desc]) => (
-                                    <div key={index} className="border-b border-[#EEF0F2] px-4 py-4 md:border-b-0 md:border-r last:border-r-0">
-                                        <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#00B865] text-[11px] text-white">{index}</span>{title}</div>
-                                        <div className="mt-2 text-xs leading-5 text-[#667085]">{desc}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            {meituanComboProducts.length > 0 && (
-                                <div className="border-t border-[#E8ECEF] bg-[#FFF9EB] px-4 py-3 text-xs leading-5 text-[#8A5A00]">
-                                    已选 {meituanComboProducts.length} 个套餐。下发前将校验套餐分组、子商品和选购规则；不兼容时仅阻断对应美团平台子任务，企迈门店商品仍按现有逻辑处理。
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <WebPublishWarnings rows={[
+                        ...takeoutPrecheckRows.map(row => ({ ...row, channel: getOmnichannelChannel(row.channel).name })),
+                        ...(operationMode === 'sync' ? miniProgramMainImageMissingProducts.map(product => ({ channel: '小程序', name: product.name, field: '商品主图', message: '请上传小程序售卖所需的商品主图。' })) : []),
+                    ]} />
 
                     <div className="flex items-center mb-8">
                         <span className="w-24 text-gray-500 text-sm">同步时间</span>
                         <div className="flex space-x-6 text-sm">
                             <label className="flex items-center text-gray-400 cursor-not-allowed"><input type="radio" disabled className="mr-2"/> 手动执行</label>
-                            <label className="flex items-center text-[#00C06B] font-bold cursor-pointer"><input type="radio" defaultChecked name="syncTime" className="mr-2 text-[#00C06B] focus:ring-[#00C06B]"/> 立即执行</label>
-                            <label className="flex items-center text-gray-600 cursor-pointer"><input type="radio" name="syncTime" className="mr-2"/> 定时执行</label>
+                            <label className="flex items-center text-[#00C06B] font-bold cursor-pointer"><input type="radio" checked={executionTime === 'now'} onChange={() => setExecutionTime('now')} name="syncTime" className="mr-2 text-[#00C06B] focus:ring-[#00C06B]"/> 立即执行</label>
+                            <label className="flex items-center text-gray-600 cursor-pointer"><input type="radio" checked={executionTime === 'scheduled'} onChange={() => setExecutionTime('scheduled')} name="syncTime" className="mr-2"/> 定时执行</label>
                         </div>
                         <span className="ml-4 text-xs text-red-500">高峰期进行商品同步等待时间可能较久，请尽量在非高峰期进行（定时）下发</span>
                     </div>
+                    {executionTime === 'scheduled' && <label className="mb-6 flex items-center gap-4 text-sm text-gray-600"><span className="w-20">执行时间</span><input aria-label="定时执行时间" type="datetime-local" value={scheduledAt} onChange={event => setScheduledAt(event.target.value)} className="h-9 rounded-md border border-gray-200 px-3" /></label>}
 
                     {operationMode === 'sync' && <>
                     <h3 className="font-bold text-gray-800 mb-4 text-base">选择门店</h3>
@@ -1580,10 +1689,9 @@ export const WebProductSync: React.FC<{
                             setPublishValidationMessage(`所选渠道包含小程序，${names}${suffix}缺少商品主图，请补充后再发布。`);
                             return;
                         }
-                        setPublishValidationMessage('');
-                        setStep(3);
+                        submitTask();
                     }}
-                    disabled={batchRangeInvalid}
+                    disabled={batchRangeInvalid || operationMode === 'sync' && !selectedStoreIds.length}
                     className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md disabled:bg-gray-300"
                 >
                     {operationMode === 'sync' ? '提交并同步' : '提交修改'}
@@ -1599,24 +1707,26 @@ export const WebProductSync: React.FC<{
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">{operationMode === 'sync' ? '同步任务已提交' : '批量修改任务已提交'}</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
-                {includesMeituanDine && qimaiManagesMeituanDine
-                    ? '企迈门店商品已进入下发任务；平台仅处理已提前同步成功的美团品牌商品，请在发布记录中查看各子任务结果。'
-                    : '请在发布记录中查看任务执行进度和各范围处理结果。'}
+                请在任务记录中查看各门店、渠道和商品的处理结果。企迈管理的三方渠道在企迈任务成功后继续同步平台。
             </p>
             <div className="flex space-x-4">
-                <button onClick={() => setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors">返回工具页</button>
-                <button onClick={() => setPageTab('qimai-records')} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">查看企迈同步记录</button>
+                {onReturnToStore && <button type="button" onClick={onReturnToStore} className="rounded border border-[#E5E7EB] px-5 py-2 text-sm text-[#667085]">返回原门店商品</button>}
+                <button onClick={() => initialBatch ? onReturnToLibrary?.() : setStep(0)} className="px-6 py-2 border border-gray-200 text-gray-600 rounded font-bold hover:bg-gray-50 transition-colors">{initialBatch ? '返回商品库' : '返回工具页'}</button>
+                <button onClick={() => onOpenRecords ? onOpenRecords() : setPageTab('qimai-records')} className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md">查看同步任务</button>
             </div>
         </div>
     );
 
-    if (activeBatchTool === 'addon-association') {
-        return <WebBatchAddonAssociation onBack={() => setActiveBatchTool(null)} />;
+    if (activeBatchTool === 'delete_goods') {
+        return <WebStoreProductDeleteFlow inline products={storeSourceRecords} managedChannels={['meituan', 'taobao', 'jd'].filter(id => omnichannelConfig.thirdPartyStrategies[id as 'meituan' | 'taobao' | 'jd'] === 'qimai')} onClose={() => setActiveBatchTool(null)} onSubmit={onSubmitTask} onLocalRemove={onRemoveStoreTargets} />;
+    }
+    if (activeBatchTool) {
+        return <WebProductToolFlow key={activeBatchTool} tool={activeBatchTool} products={sourceProducts || []} catalogProductIds={catalogProductIds} channelProductOverrides={channelProductOverrides} storeRecords={storeSourceRecords} directUse={directUse} unified={unifiedManagementView} onBack={() => setActiveBatchTool(null)} onSubmitTask={onSubmitTask} onOpenRecords={() => onOpenRecords ? onOpenRecords() : (setActiveBatchTool(null), setPageTab('qimai-records'))} />;
     }
 
     return (
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA] font-sans">
-            <div className="flex h-[48px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-6 text-sm" role="tablist" aria-label="商品同步">
+            {!hideNavigation && !focus && <div className="console-view-tabs flex h-[48px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-6 text-sm" role="tablist" aria-label="商品同步">
                 <div className="flex h-full items-stretch gap-8">
                     <button
                         type="button"
@@ -1625,7 +1735,7 @@ export const WebProductSync: React.FC<{
                         onClick={() => setPageTab('publish')}
                         className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'publish' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
                     >
-                        同步与批量工具
+                        下发与批量工具
                     </button>
                     <button
                         type="button"
@@ -1634,26 +1744,24 @@ export const WebProductSync: React.FC<{
                         onClick={() => setPageTab('qimai-records')}
                         className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'qimai-records' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
                     >
-                        企迈商品同步记录
-                    </button>
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={pageTab === 'platform-records'}
-                        onClick={() => setPageTab('platform-records')}
-                        className={`relative flex h-full items-center px-0.5 text-[14px] transition-colors ${pageTab === 'platform-records' ? 'font-semibold text-[#008F4C] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-t after:bg-[#00B460]' : 'font-medium text-[#667085] hover:text-[#1D2129]'}`}
-                    >
-                        平台商品同步记录
+                        同步任务
                     </button>
                 </div>
-            </div>
+            </div>}
+            {!hideNavigation && focus === 'records' && <div className="h-12 shrink-0 border-b border-[#E5E7EB] bg-white px-6 py-3 text-sm font-semibold">同步任务</div>}
+            {!hideNavigation && focus && focus !== 'records' && <div className="shrink-0 border-b border-[#E5E7EB] bg-white px-6 py-3 text-[15px] font-semibold text-[#1D2129]">{focus === 'publish' ? '商品下发' : '批量管理'}</div>}
 
             {/* Main Content Area */}
             {pageTab !== 'publish' ? (
                 <WebPublishRecords
                     masterChannelSyncRecords={masterChannelSyncRecords}
-                    view={(pageTab === 'platform-records' ? 'platform' : 'qimai') as RecordView}
-                    onViewChange={view => setPageTab(view === 'platform' ? 'platform-records' : 'qimai-records')}
+                    extraBatches={extraBatches}
+                    view="all"
+                    onViewChange={view => {
+                        const tab = view === 'platform' ? 'platform-records' : 'qimai-records';
+                        setPageTab(tab);
+                        onRecordViewChange?.(tab);
+                    }}
                 />
             ) : step === 0 ? (
                 renderToolsMenu()
@@ -1703,16 +1811,20 @@ export const WebProductSync: React.FC<{
             )}
             <WebProductSelectorDialog
                 open={productSelectorMode !== null}
-                title={productSelectorMode === 'batch' ? '添加标准商品' : '选择同步商品'}
+                title={productSelectorMode === 'batch' ? operationMode === 'batch_combo' ? '添加套餐商品' : '添加标准商品' : comboOnly ? '选择套餐商品' : '选择同步商品'}
                 description={productSelectorMode === 'batch'
-                    ? '筛选并选择本次需要批量修改的标准商品，确认后将添加到商品列表。'
-                    : `筛选并选择本次需要同步下发的商品；当前来源：${syncSource === 'channel_catalog' ? authorizedChannelCatalogGroups.find(group => group.id === selectedChannelGroupIds[0])?.name || '渠道商品库' : syncSource === 'template' ? '商品模板' : '商品主档'}。`}
+                    ? `选择本次需要批量修改的${operationMode === 'batch_combo' ? '套餐商品' : '标准商品'}。`
+                    : `筛选并选择本次需要同步下发的商品；当前来源：${syncSource === 'channel_catalog' ? unifiedManagementView ? '商品库' : authorizedChannelCatalogGroups.find(group => group.id === selectedChannelGroupIds[0])?.name || '渠道商品库' : syncSource === 'template' ? '商品下发模板' : unifiedManagementView ? '商品库' : '商品主档'}。`}
                 products={selectorProducts}
                 selectedIds={pendingSelectorProductIds}
                 onSelectedIdsChange={setPendingSelectorProductIds}
                 onCancel={() => setProductSelectorMode(null)}
                 onConfirm={confirmProductSelector}
-                fixedType={productSelectorMode === 'batch' ? (operationMode === 'batch_combo' ? 'combo' : 'standard') : undefined}
+                onCreateProduct={productSelectorMode === 'sync' && syncSource !== 'template' && onCreateProduct ? type => {
+                    setProductSelectorMode(null);
+                    onCreateProduct(type, { productIds: [...pendingSelectorProductIds], channelIds: [...selectedPublishChannelIds], storeIds: [...selectedStoreIds], source: syncSource === 'channel_catalog' ? 'channel_catalog' : 'master', catalogId: selectedChannelGroupIds[0] });
+                } : undefined}
+                fixedType={productSelectorMode === 'batch' ? (operationMode === 'batch_combo' ? 'combo' : 'standard') : comboOnly ? 'combo' : undefined}
             />
         </div>
     );

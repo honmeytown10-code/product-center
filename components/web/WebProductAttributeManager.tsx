@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart, Blend, ChevronRight, ChevronDown, Plus, X, Eye, EyeOff, Lock, Braces, FolderTree } from 'lucide-react';
 import { WebCustomAttributeManager } from './WebCustomAttributeManager';
+import { ATTRIBUTE_EXPLANATIONS, WebAttributeExampleDialog, type AttributeExampleKind } from './WebAttributeExampleDialog';
 import { WebCategoryListManager } from './WebCategoryListManager';
 
 type SpecValue = {
@@ -12,7 +13,7 @@ type SpecValue = {
 };
 
 type AttributeTab = 'category' | 'spec' | 'method' | 'label' | 'badge' | 'series' | 'custom_attribute' | 'custom_combo' | 'addon';
-type LabelTab = 'desc' | 'stats';
+type LabelTab = 'desc' | 'order' | 'stats';
 type SpecColumnKey = 'name' | 'value' | 'code' | 'relatedProducts';
 
 type LinkedSpecProduct = {
@@ -346,7 +347,7 @@ const getCustomComboRequiredLabel = (record: Pick<CustomComboRecord, 'configMode
 const getCustomComboQuantityLimit = (record: Pick<CustomComboRecord, 'configMode' | 'minTotalQuantity' | 'maxTotalQuantity'>) =>
   record.configMode === 'flexible' ? `${record.minTotalQuantity} ~ ${record.maxTotalQuantity}` : '--';
 
-const METHOD_GROUPS: MethodGroup[] = [
+export const METHOD_GROUPS: MethodGroup[] = [
   {
     id: 'method-1',
     name: '配方做法组A',
@@ -394,10 +395,15 @@ const METHOD_GROUPS: MethodGroup[] = [
 
 const LABEL_TABS: Array<{ id: LabelTab; label: string }> = [
   { id: 'desc', label: '描述标签' },
+  { id: 'order', label: '点单标签' },
   { id: 'stats', label: '统计标签' },
 ];
 
 const LABEL_GROUPS: Record<LabelTab, LabelGroup[]> = {
+  order: [
+    { id: 'order-recommend', groupName: '热销推荐', labels: [{ id: 'order-store', name: '门店推荐', bgColor: '#EAF8F1', textColor: '#008F4C', createdAt: '2026-10-08' }, { id: 'order-new', name: '新品尝鲜', bgColor: '#EAF8F1', textColor: '#008F4C', createdAt: '2026-10-08' }] },
+    { id: 'order-campaign', groupName: '营销活动', labels: [{ id: 'order-hot', name: '本周爆款', bgColor: '#FFF4DF', textColor: '#B76A00', createdAt: '2026-10-08' }] },
+  ],
   desc: [
     {
       id: 'label-group-1',
@@ -574,7 +580,7 @@ const ADDON_GROUPS: AddonGroup[] = [
   },
 ];
 
-const MASTER_ADDON_OPTIONS = [
+export const MASTER_ADDON_OPTIONS = [
   { id: 'master-addon-1', name: '椰果', type: '小料', price: 1, relatedCount: 18 },
   { id: 'master-addon-2', name: '珍珠', type: '小料', price: 1, relatedCount: 26 },
   { id: 'master-addon-3', name: '西柚粒', type: '水果加料', price: 2, relatedCount: 8 },
@@ -594,12 +600,12 @@ const tabs: Array<{ id: AttributeTab; label: string; icon: React.ReactNode }> = 
   { id: 'category', label: '商品分类', icon: <FolderTree size={16} /> },
   { id: 'spec', label: '规格管理', icon: <Layers3 size={16} /> },
   { id: 'method', label: '做法管理', icon: <ChefHat size={16} /> },
+  { id: 'addon', label: '加料管理', icon: <Blend size={16} /> },
   { id: 'label', label: '标签管理', icon: <Tags size={16} /> },
   { id: 'badge', label: '角标管理', icon: <Tag size={16} /> },
   { id: 'series', label: '系列商品', icon: <Grid2X2 size={16} /> },
+  { id: 'custom_combo', label: '随心配', icon: <Heart size={16} /> },
   { id: 'custom_attribute', label: '自定义属性', icon: <Braces size={16} /> },
-  { id: 'custom_combo', label: '随心配管理', icon: <Heart size={16} /> },
-  { id: 'addon', label: '加料', icon: <Blend size={16} /> },
 ];
 
 type ProductAttributeScope = 'all' | 'master' | 'channel';
@@ -646,10 +652,11 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
     [scope],
   );
   const visibleLabelTabs = useMemo(
-    () => LABEL_TABS.filter(tab => (
+    // Temporarily hide the ordering-label entry without removing its data or behavior.
+    () => LABEL_TABS.filter(tab => tab.id !== 'order' && (
       scope === 'all'
       || (scope === 'master' && tab.id === 'stats')
-      || (scope === 'channel' && tab.id === 'desc')
+      || (scope === 'channel' && tab.id !== 'stats')
     )),
     [scope],
   );
@@ -658,10 +665,12 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   );
   const [activeLabelTab, setActiveLabelTab] = useState<LabelTab>(scope === 'master' ? 'stats' : 'desc');
   const [keyword, setKeyword] = useState('');
-  const [showFieldOwnership, setShowFieldOwnership] = useState(false);
   const [labelGroups, setLabelGroups] = useState<Record<LabelTab, LabelGroup[]>>(LABEL_GROUPS);
   const [badges, setBadges] = useState<BadgeRecord[]>(BADGE_RECORDS);
   const [seriesRecords, setSeriesRecords] = useState<SeriesRecord[]>(SERIES_RECORDS);
+  const [showSeriesExample, setShowSeriesExample] = useState(false);
+  const [attributeExample, setAttributeExample] = useState<AttributeExampleKind | null>(null);
+  const seriesExampleTriggerRef = useRef<HTMLButtonElement>(null);
   const [channelLibraryEditor, setChannelLibraryEditor] = useState<ChannelLibraryEditorState | null>(null);
   const [channelLibraryDelete, setChannelLibraryDelete] = useState<ChannelLibraryDeleteState | null>(null);
   const [specGroups, setSpecGroups] = useState<SpecGroup[]>(SPEC_GROUPS);
@@ -713,7 +722,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
           ? '请至少选择一个主档加料'
           : missingCategory
             ? '请为已选加料维护抖音商品分类'
-            : '请填写正确的抖音销售价');
+            : '请填写正确的抖音售价');
         return;
       }
       const existingMasterIds = new Set(douyinAddons.map(item => item.masterAddonId).filter(Boolean));
@@ -733,7 +742,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
       return;
     }
     if (!douyinAddonEditor.category || douyinAddonEditor.price === '' || Number.isNaN(Number(douyinAddonEditor.price)) || Number(douyinAddonEditor.price) < 0) {
-      showActionNotice(!douyinAddonEditor.category ? '请选择抖音商品分类' : '请填写正确的抖音销售价');
+      showActionNotice(!douyinAddonEditor.category ? '请选择抖音商品分类' : '请填写正确的抖音售价');
       return;
     }
     const currentRecord = douyinAddons.find(item => item.id === douyinAddonEditor.recordId);
@@ -866,7 +875,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
     badge: '搜索角标名称',
     series: '搜索系列名称',
     custom_attribute: '搜索自定义属性',
-    custom_combo: '搜索分组名称/商品标识',
+    custom_combo: '搜索分组名称或编码',
     addon: '请输入加料名称',
   };
 
@@ -886,7 +895,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
     ? {
         title: '渠道属性',
         description: '维护渠道商品的展示标签和渠道扩展属性；前台分类定义来自商品主档，渠道商品可在资料页调整当前商品库的分类归属。',
-        badge: '分渠道协作',
+        badge: '各渠道分别维护商品资料',
         facts: [
           ['资料责任', '渠道团队'],
           ['继承来源', '商品主档'],
@@ -898,7 +907,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
       ? {
           title: '分类与属性',
           description: '维护商品主档的前台分类定义与默认归属、后台分类、规格、做法、统计标签和候选关系；渠道商品可按商品库覆盖前台分类归属。',
-          badge: '分渠道协作',
+          badge: '各渠道分别维护商品资料',
           facts: [
             ['资料责任', '商品团队'],
             ['管理对象', '商品主档'],
@@ -1400,9 +1409,9 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   };
 
   return (
-    <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
+    <div className="console-attribute-page relative flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
       {actionNotice && <div className="absolute left-1/2 top-3 z-[120] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{actionNotice}</div>}
-      <div className="flex h-[52px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-4">
+      <div className="console-view-tabs flex h-[52px] shrink-0 items-stretch border-b border-[#E5E7EB] bg-white px-4">
         <div className="no-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist" aria-label={pageMeta.title}>
             {visibleTabs.map(tab => (
               <button
@@ -1417,18 +1426,14 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                     : 'border-transparent bg-white text-[#667085] hover:bg-[#F7F8FA] hover:text-[#333]'
                 }`}
               >
-                  <div className={activeTab === tab.id ? 'text-[#008F4C]' : 'text-[#8C8C8C]'}>
-                    {tab.icon}
-                  </div>
                   <div className="whitespace-nowrap text-[13px] font-medium">{tab.label}</div>
               </button>
             ))}
         </div>
-        <button type="button" onClick={() => setShowFieldOwnership(true)} className="my-2 ml-3 shrink-0 rounded-md border border-[#D9DDE3] bg-white px-3 text-[12px] font-medium text-[#4E5969] hover:border-[#9AA2AE] hover:bg-[#F7F8FA]">字段归属</button>
       </div>
 
       {activeTab === 'category' && (
-        <div className="flex-1 min-h-0 overflow-hidden p-4">
+        <div className="console-attribute-content flex-1 min-h-0 overflow-hidden p-4">
           <div className="flex h-full min-h-0 overflow-hidden rounded-lg bg-white shadow-sm">
             <WebCategoryListManager
               scope={scope === 'master' ? 'all' : scope === 'channel' ? 'frontend' : 'all'}
@@ -1437,14 +1442,22 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
         </div>
       )}
 
-      <div className={activeTab === 'category' ? 'hidden' : 'flex-1 overflow-auto p-4'}>
+      <div className={activeTab === 'category' ? 'hidden' : 'console-attribute-content flex-1 overflow-auto p-4'}>
         <div className="min-h-full rounded-lg bg-white shadow-sm">
+          {activeTab === 'series' && (
+            <div className="console-page-description flex flex-wrap items-center gap-x-3 gap-y-1 px-6 py-3 text-[13px] leading-6 text-[#4E5969]">
+              <p>将几款商品关联为一个系列，顾客可在小程序点单页点击系列商品图片，快速切换同系列商品。</p>
+              <button ref={seriesExampleTriggerRef} type="button" onClick={() => setShowSeriesExample(true)} className="font-medium text-[#008F4C] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460]">查看示例</button>
+            </div>
+          )}
           {activeTab === 'label' && visibleLabelTabs.length > 1 && (
-            <div className="border-b border-[#E8E8E8] px-6 pt-3">
-              <div className="flex gap-8 text-sm">
+            <div className="console-secondary-tab-row border-b border-[#E8E8E8] px-6 pt-3">
+              <div className="console-segmented-tabs flex gap-8 text-sm" role="tablist" aria-label="标签类型">
                 {visibleLabelTabs.map(tab => (
                   <button
                     key={tab.id}
+                    role="tab"
+                    aria-selected={activeLabelTab === tab.id}
                     onClick={() => setActiveLabelTab(tab.id)}
                     className={`border-b-2 pb-3 transition-colors ${activeLabelTab === tab.id ? 'border-[#00C06B] text-[#00C06B] font-bold' : 'border-transparent text-[#666]'}`}
                   >
@@ -1455,13 +1468,14 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
             </div>
           )}
 
+          {(activeTab === 'label' || activeTab === 'badge') && <div className="console-page-description flex flex-wrap items-center gap-x-3 gap-y-1 px-6 py-3 text-[13px] leading-6 text-[#4E5969]"><p>{ATTRIBUTE_EXPLANATIONS[activeTab === 'badge' ? 'badge' : activeLabelTab]}</p><button type="button" onClick={() => setAttributeExample(activeTab === 'badge' ? 'badge' : activeLabelTab)} className="font-medium text-[#008F4C] hover:underline">查看示例</button></div>}
           {activeTab === 'custom_attribute' ? null : activeTab === 'addon' ? (
             <div className="border-b border-[#E8E8E8] px-6 py-4">
               {scope === 'channel' && (
                 <div className="mb-4 flex items-center justify-between rounded-lg border border-[#D9EFE4] bg-[#F5FCF8] px-4 py-3">
                   <div>
                     <div className="text-sm font-bold text-[#1D2129]">抖音在线点加料品</div>
-                    <div className="mt-1 text-xs text-[#667085]">从主档引用加料并维护抖音商品分类、销售价和品牌级同步状态；商品关联关系在下发门店点单品时处理。</div>
+                    <div className="mt-1 text-xs text-[#667085]">从主档引用加料并维护抖音商品分类、售价和品牌级同步状态；商品关联关系在下发门店点单品时处理。</div>
                   </div>
                   <div className="flex items-center gap-4 text-xs">
                     <span className="text-[#667085]">共 {douyinAddons.length} 个</span>
@@ -1681,7 +1695,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                 <div className="flex items-start justify-between border-b border-[#E5E6EB] px-6 py-5">
                   <div>
                     <div className="text-lg font-bold text-[#1D2129]">从主档加料添加</div>
-                    <div className="mt-1 text-xs text-[#86909C]">名称和企迈加料类型来自主档；为抖音在线点维护商品分类和销售价。</div>
+                    <div className="mt-1 text-xs text-[#86909C]">名称和企迈加料类型来自主档；为抖音在线点维护商品分类和售价。</div>
                   </div>
                   <button type="button" onClick={() => setDouyinAddonEditor(null)} aria-label="关闭" className="text-xl text-[#667085]">×</button>
                 </div>
@@ -1689,7 +1703,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                   <div className="mb-4 flex h-10 items-center rounded-md border border-[#D9DDE7] px-3 text-sm text-[#98A2B3]">搜索主档加料名称</div>
                   <div className="overflow-hidden rounded-md border border-[#E5E6EB]">
                     <table className="w-full border-collapse text-left text-sm">
-                      <thead className="bg-[#F7F8FA] text-xs font-bold text-[#4E5969]"><tr><th className="w-12 px-4 py-3"></th><th className="px-4 py-3">主档加料</th><th className="w-28 px-4 py-3">企迈加料类型</th><th className="w-[180px] px-4 py-3">抖音商品分类 *</th><th className="w-[150px] px-4 py-3">抖音销售价（元）*</th></tr></thead>
+                      <thead className="bg-[#F7F8FA] text-xs font-bold text-[#4E5969]"><tr><th className="w-12 px-4 py-3"></th><th className="px-4 py-3">主档加料</th><th className="w-28 px-4 py-3">企迈加料类型</th><th className="w-[180px] px-4 py-3">抖音商品分类 *</th><th className="w-[150px] px-4 py-3">抖音售价（元）*</th></tr></thead>
                       <tbody>
                         {MASTER_ADDON_OPTIONS.map(option => {
                           const alreadyAdded = douyinAddons.some(item => item.masterAddonId === option.id);
@@ -1732,7 +1746,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <label className="block"><span className="mb-2 block text-sm font-medium text-[#1D2129]">抖音商品分类 <b className="text-[#F53F3F]">*</b></span><select value={douyinAddonEditor.category} onChange={event => setDouyinAddonEditor(current => current?.mode === 'platform' ? { ...current, category: event.target.value } : current)} className="h-10 w-full rounded-md border border-[#D9DDE7] bg-white px-3 outline-none focus:border-[#00C06B]"><option value="">请选择</option><option>饮品 / 奶茶</option><option>饮品 / 果茶</option><option>饮品 / 其他饮品</option><option>餐饮 / 小吃配料</option></select></label>
-                    <label className="block"><span className="mb-2 block text-sm font-medium text-[#1D2129]">抖音销售价（元） <b className="text-[#F53F3F]">*</b></span><input type="number" min="0" step="0.01" value={douyinAddonEditor.price} onChange={event => setDouyinAddonEditor(current => current?.mode === 'platform' ? { ...current, price: event.target.value } : current)} className="h-10 w-full rounded-md border border-[#D9DDE7] px-3 outline-none focus:border-[#00C06B]" /></label>
+                    <label className="block"><span className="mb-2 block text-sm font-medium text-[#1D2129]">抖音售价（元） <b className="text-[#F53F3F]">*</b></span><input type="number" min="0" step="0.01" value={douyinAddonEditor.price} onChange={event => setDouyinAddonEditor(current => current?.mode === 'platform' ? { ...current, price: event.target.value } : current)} className="h-10 w-full rounded-md border border-[#D9DDE7] px-3 outline-none focus:border-[#00C06B]" /></label>
                   </div>
                   <div className="rounded-md border border-[#B8DBFF] bg-[#F2F8FF] px-4 py-3 text-xs leading-5 text-[#245B8A]">平台加料品先独立同步。与商品的关联关系在下发门店点单品时，按渠道商品当前关联关系一并传递。</div>
                 </div>
@@ -1764,10 +1778,10 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                   </div>
                 </div>
                 <div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
-                  <button type="button" onClick={onOpenSyncRecords} className="text-sm font-medium text-[#008F4C]">查看历史同步记录</button>
+                  <button type="button" onClick={onOpenSyncRecords} className="text-sm font-medium text-[#008F4C]">查看历史同步任务</button>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setShowDouyinAddonSyncDialog(false)} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475]">取消</button>
-                    <button type="button" onClick={() => { setDouyinAddons(current => current.map(item => selectedDouyinAddonIds.includes(item.id) ? { ...item, status: 'syncing', updatedAt: '2026-08-19 16:35' } : item)); setSelectedDouyinAddonIds([]); setShowDouyinAddonSyncDialog(false); showActionNotice('已创建抖音在线点加料品同步任务，可在发布中心「同步记录」查看进度'); }} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">确认同步</button>
+                    <button type="button" onClick={() => { setDouyinAddons(current => current.map(item => selectedDouyinAddonIds.includes(item.id) ? { ...item, status: 'syncing', updatedAt: '2026-08-19 16:35' } : item)); setSelectedDouyinAddonIds([]); setShowDouyinAddonSyncDialog(false); showActionNotice('已创建抖音在线点加料品同步任务，可在商品批量管理「同步任务」查看进度'); }} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">确认同步</button>
                   </div>
                 </div>
               </div>
@@ -1840,50 +1854,8 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
               onConfirm={confirmChannelLibraryDelete}
             />
           )}
-          {showFieldOwnership && createPortal((
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#111827]/35 p-6" role="dialog" aria-modal="true" aria-labelledby="field-ownership-title">
-              <div className="w-full max-w-[680px] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-2xl">
-                <div className="flex items-start justify-between border-b border-[#EEF0F3] px-6 py-5">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 id="field-ownership-title" className="text-[18px] font-semibold text-[#1D2129]">字段归属说明</h2>
-                      <span className="rounded-full bg-[#EAF8F1] px-2 py-0.5 text-[11px] font-semibold text-[#008F4C]">{pageMeta.badge}</span>
-                    </div>
-                    <p className="mt-1.5 text-[13px] text-[#667085]">用于判断字段应在哪里维护，以及变更如何影响上下游商品资料。</p>
-                  </div>
-                  <button type="button" aria-label="关闭" onClick={() => setShowFieldOwnership(false)} className="rounded-md p-1.5 text-[#7A8699] hover:bg-[#F2F4F7] hover:text-[#1D2129]"><X size={18} /></button>
-                </div>
-                <div className="grid gap-4 p-6 md:grid-cols-2">
-                  <div className="rounded-lg border border-[#E5E7EB] p-4">
-                    <div className="text-[13px] font-semibold text-[#1D2129]">本页面可维护</div>
-                    <div className="mt-3 space-y-2 text-[13px] leading-5 text-[#4E5969]">
-                      {(scope === 'channel'
-                        ? ['描述标签、角标与商品系列', '渠道自定义属性及可选值', '渠道平台扩展属性']
-                        : scope === 'master'
-                          ? ['前台分类与后台分类', '规格与规格值', '做法、统计标签、加料候选关系']
-                          : ['后台与前台分类', '规格、做法、标签与展示属性', '统一入口中的默认售卖属性']
-                      ).map(item => <div key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#00B460]" />{item}</div>)}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[#E5E7EB] p-4">
-                    <div className="text-[13px] font-semibold text-[#1D2129]">不可在此覆盖</div>
-                    <div className="mt-3 space-y-2 text-[13px] leading-5 text-[#4E5969]">
-                      {(scope === 'channel'
-                        ? ['商品身份、SPU/SKU 编码', '主档规格结构与候选关系', '平台自维护商品的权威资料']
-                        : scope === 'master'
-                          ? ['渠道商品名称、图片与渠道售价', '渠道展示属性与平台专属字段', '门店即时库存与上下架状态']
-                          : ['门店即时库存与上下架状态', '平台商品 ID 与映射权威关系', '合同渠道范围与授权令牌']
-                      ).map(item => <div key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F79009]" />{item}</div>)}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between border-t border-[#EEF0F3] bg-[#FAFBFC] px-6 py-4">
-                  <span className="text-[12px] text-[#7A8699]">结构字段变更会按当前全渠道策略生成下游待确认或待发布差异。</span>
-                  <button type="button" onClick={() => setShowFieldOwnership(false)} className="rounded-md bg-[#00B460] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#009D54]">我知道了</button>
-                </div>
-              </div>
-            </div>
-          ), document.body)}
+          {showSeriesExample && <SeriesExampleDialog returnFocus={seriesExampleTriggerRef.current} onClose={() => setShowSeriesExample(false)} />}
+          {attributeExample && <WebAttributeExampleDialog kind={attributeExample} onClose={() => setAttributeExample(null)} />}
         </div>
       </div>
     </div>
@@ -2030,6 +2002,57 @@ const MethodEditorModal = ({
         </div>
       </div>
     </div>,
+    document.body,
+  );
+};
+
+// Production uses the console image-preview/dialog component. The native dialog
+// keeps the prototype's example keyboard-modal without changing any product data.
+const SeriesExampleDialog = ({ onClose, returnFocus }: { onClose: () => void; returnFocus: HTMLButtonElement | null }) => {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      // React autofocus has already run before effects; use the original trigger,
+      // not document.activeElement (which would now be the dialog's close button).
+      queueMicrotask(() => { if (returnFocus?.isConnected) returnFocus.focus(); });
+    };
+  }, [returnFocus]);
+
+  return createPortal(
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="series-example-title"
+      aria-describedby="series-example-description"
+      onCancel={event => { event.preventDefault(); onClose(); }}
+      onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); } }}
+      onClick={event => {
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+      }}
+      className="m-auto max-h-[calc(100dvh-48px)] w-[720px] max-w-[calc(100vw-48px)] overflow-hidden rounded-lg bg-white p-0 text-[#1D2129] shadow-[0_16px_48px_rgba(0,0,0,0.18)] backdrop:bg-[#111827]/40"
+    >
+      <div className="flex items-center justify-between border-b border-[#E8E8E8] px-6 py-4">
+        <h2 id="series-example-title" className="text-[18px] font-semibold">系列商品展示示例</h2>
+        <button type="button" autoFocus onClick={onClose} aria-label="关闭系列商品示例" className="rounded p-2 text-[#667085] hover:bg-[#F7F8FA] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460]"><X size={18} /></button>
+      </div>
+      <div className="grid max-h-[calc(100dvh-168px)] grid-cols-[minmax(0,1fr)_260px] gap-6 overflow-y-auto p-6 max-sm:grid-cols-1">
+        <div className="space-y-4 text-[14px] leading-6 text-[#4E5969]">
+          <p id="series-example-description">例如，把几款芒果饮品关联到“芒果家族”系列。顾客点单时，点击上方商品图片即可切换商品。</p>
+          <p>切换后，可继续选择当前商品的规格、做法和加料。</p>
+        </div>
+        <figure className="m-0 min-w-0">
+          <img src="/reference/product-series-example.png" alt="小程序点单页顶部展示芒果家族系列的商品图片，顾客可切换到同系列的其他饮品。" className="mx-auto max-h-[560px] w-full rounded object-contain" />
+          <figcaption className="mt-2 text-center text-[12px] leading-5 text-[#667085]">小程序点单效果示例</figcaption>
+        </figure>
+      </div>
+      <div className="flex justify-end border-t border-[#E8E8E8] px-6 py-3">
+        <button type="button" onClick={onClose} className="rounded border border-[#D9DDE3] px-4 py-2 text-[13px] text-[#4E5969] hover:bg-[#F7F8FA] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460]">关闭</button>
+      </div>
+    </dialog>,
     document.body,
   );
 };
@@ -2896,32 +2919,28 @@ const CustomComboTable = ({
   onDelete: (record: CustomComboRecord) => void;
 }) => (
   <div className="overflow-auto">
-    <table className="w-full min-w-[1540px] border-collapse text-left">
+    <table className="w-full min-w-[1260px] border-collapse text-left">
       <thead className="bg-[#F7F8FA] text-xs font-bold text-[#333]">
         <tr>
           <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">分组ID</th>
           <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">分组名称</th>
           <th className="w-[100px] border-b border-[#E8E8E8] px-4 py-4">分组编码</th>
           <th className="w-[180px] border-b border-[#E8E8E8] px-4 py-4">备注</th>
-          <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">商品标识</th>
-          <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">商品条码</th>
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">配置方式</th>
           <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-4">按种类选择</th>
           <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-4">是否必选</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">购买数量限制</th>
           <th className="w-[100px] border-b border-[#E8E8E8] px-4 py-4">关联商品</th>
-          <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>
+          <th className="sticky right-0 z-10 w-[170px] border-b border-l border-[#E8E8E8] bg-[#F7F8FA] px-4 py-4 text-right">操作</th>
         </tr>
       </thead>
       <tbody className="text-sm text-[#333]">
         {records.map(record => (
-          <tr key={record.id} className="border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
+          <tr key={record.id} className="group border-b border-[#F3F4F6] hover:bg-[#FCFFFD]">
             <td className="px-4 py-4 text-[#666]">{record.id}</td>
             <td className="px-4 py-4">{record.groupName}</td>
             <td className="px-4 py-4">{record.groupCode}</td>
             <td className="px-4 py-4 text-[#666]">{record.remark || '-'}</td>
-            <td className="px-4 py-4 text-[#666]">{record.productCode || '-'}</td>
-            <td className="px-4 py-4 text-[#666]">{record.barcode || '-'}</td>
             <td className="px-4 py-4 text-[#666]">{getCustomComboModeLabel(record.configMode)}</td>
             <td className="px-4 py-4 text-[#666]">{getCustomComboOptionRule(record)}</td>
             <td className="px-4 py-4">
@@ -2931,7 +2950,7 @@ const CustomComboTable = ({
             </td>
             <td className="px-4 py-4 text-[#666]">{getCustomComboQuantityLimit(record)}</td>
             <td className="px-4 py-4 text-[#00C06B]">{record.relatedCount}</td>
-            <td className="px-4 py-4 text-right">
+            <td className="sticky right-0 border-l border-[#E8E8E8] bg-white px-4 py-4 text-right group-hover:bg-[#FCFFFD]">
               <ActionButtons
                 actions={[
                   { label: '编辑', onClick: () => onEdit(record) },
@@ -2944,7 +2963,7 @@ const CustomComboTable = ({
         ))}
         {!records.length && (
           <tr>
-            <td colSpan={11} className="px-4 py-12 text-center text-sm text-[#98A2B3]">
+            <td colSpan={10} className="px-4 py-12 text-center text-sm text-[#98A2B3]">
               暂无随心配分组，点击右上角“创建分组”开始配置
             </td>
           </tr>
@@ -3251,7 +3270,7 @@ const DouyinAddonTable = ({
           <th className="w-[250px] border-b border-[#E8E8E8] px-4 py-4">加料名称</th>
           <th className="w-[150px] border-b border-[#E8E8E8] px-4 py-4">企迈加料类型</th>
           <th className="w-[220px] border-b border-[#E8E8E8] px-4 py-4">抖音商品分类</th>
-          <th className="w-[130px] border-b border-[#E8E8E8] px-4 py-4">抖音销售价</th>
+          <th className="w-[130px] border-b border-[#E8E8E8] px-4 py-4">抖音售价</th>
           <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-4">同步状态</th>
           <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-4">最近更新</th>
           <th className="w-[190px] border-b border-[#E8E8E8] px-4 py-4 text-right">操作</th>

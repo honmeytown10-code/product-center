@@ -77,7 +77,7 @@ const getRelationScopeText = (rule: ScopeRule) => rule.relationProductScope === 
   ? `指定 ${rule.productNames.length} 个商品`
   : '全部关联商品';
 
-const CHANNELS = ['POS', '小程序堂食', '小程序外卖', '美团外卖', '淘宝闪购', '抖音在线点'];
+const CHANNELS = ['POS', '小程序堂食', '小程序外卖', '美团外卖', '淘宝闪购', '京东外卖', '抖音在线点'];
 const STORE_OPTIONS = [
   { id: 'store-001', name: '南山万象店', code: 'SZ001', organization: '深圳直营区', region: '华南', type: '直营店' },
   { id: 'store-002', name: '福田卓悦店', code: 'SZ002', organization: '深圳直营区', region: '华南', type: '直营店' },
@@ -516,7 +516,7 @@ export const WebSalesScopeManager: React.FC = () => {
   const canSaveRule = Boolean(stepOneValid && stepTwoValid && !hasDraftConflict);
 
   return (
-    <div className="relative flex min-h-0 min-w-0 w-full max-w-full flex-1 overflow-hidden bg-[#F5F6FA] p-3">
+    <div className="console-list-surface relative flex min-h-0 min-w-0 w-full max-w-full flex-1 overflow-hidden bg-[#F5F6FA] p-3">
       <div className="console-panel flex h-full min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden">
         <div className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-[#E9EDF2] px-4">
           <div className="text-[13px] text-[#667085]">商品 / 规格、做法和加料的门店渠道可售范围 · 共 <strong className="text-[#1D2129]">{rules.length}</strong> 条</div>
@@ -762,6 +762,11 @@ export const WebSalesScopeManager: React.FC = () => {
                 <div className="space-y-5"><section><div className="mb-2 flex items-center justify-between"><h3 className="text-[14px] font-semibold text-[#1D2129]">适用门店 <span className="text-[#D92D20]">*</span></h3><span className="text-[12px] text-[#667085]">区域、组织和门店类型仅用于选择器筛选</span></div><button type="button" onClick={openStoreSelector} className="flex h-11 w-full items-center justify-between rounded-md border border-[#DDE2E8] px-3 text-[13px]"><span>{draftStores.length ? `已选择 ${draftStores.length} 家门店` : '请选择门店'}</span><span className="font-medium text-[#008F4C]">选择门店</span></button><div className="mt-2 flex flex-wrap gap-2">{draftStores.slice(0, 8).map(store => <span key={store} className="rounded bg-[#F2F4F7] px-2 py-1 text-[12px] text-[#4E5969]">{store}</span>)}{draftStores.length > 8 && <span className="py-1 text-[12px] text-[#667085]">另 {draftStores.length - 8} 家</span>}</div></section><section className="border-t border-[#EEF0F3] pt-5"><h3 className="mb-2 text-[14px] font-semibold text-[#1D2129]">适用渠道 <span className="text-[#D92D20]">*</span></h3><div className="grid grid-cols-3 gap-2">{CHANNELS.map(channel => <label key={channel} className={`flex cursor-pointer items-center rounded-md border px-3 py-2.5 text-[13px] ${draftChannels.includes(channel) ? 'border-[#9ADFC0] bg-[#F3FBF7] text-[#008F4C]' : 'border-[#E3E7EC] text-[#4E5969]'}`}><input type="checkbox" checked={draftChannels.includes(channel)} onChange={() => toggleSelection(channel, draftChannels, setDraftChannels)} className="mr-2 accent-[#00B460]" />{channel}</label>)}</div></section></div>
               )}
 
+              {editorStep === 3 && draftChannels.some(channel => ['美团外卖', '淘宝闪购', '京东外卖'].includes(channel)) && <section aria-label="外卖规则执行说明" className="mb-4 border-b border-[#E3E7EC] pb-4 text-xs leading-6 text-[#667085]">
+                {draftChannels.includes('京东外卖') && <p><span className="font-medium text-[#344054]">京东外卖：</span>{draftObjectType === 'addon' ? '按独立小料状态执行，不删除关联关系；共享小料需核验所有引用。' : draftObjectType === 'method' ? '只同步不加价做法；不能等价表达的选择规则需先确认。' : '按完整 SKU 映射计算；上下架不修改库存。'}门店建品与分类能力检测通过后才执行平台任务。</p>}
+                {draftChannels.includes('美团外卖') && <p><span className="font-medium text-[#344054]">美团外卖：</span>{draftObjectType === 'addon' ? '加料可选范围参与商品资料预检，不执行独立小料上下架，也不通过删除或沽清替代。' : draftObjectType === 'method' ? '做法范围随商品做法资料转换；存在加价、默认或互斥关系时需校验完整结构。' : '按完整 SKU 组合计算范围；上下架与库存分别执行。'}</p>}
+                {draftChannels.includes('淘宝闪购') && <p><span className="font-medium text-[#344054]">淘宝闪购：</span>{draftObjectType === 'sku' ? '按平台规格映射执行；多层规格不能自动合并为一层。' : '做法 / 加料选项启停需开通 L2 接口权限；无权限时保留企迈规则并提示平台任务不能执行。'}</p>}
+              </section>}
               {editorStep === 3 && (
                 <div className="space-y-4"><section className="rounded-md border border-[#E3E7EC]"><div className="border-b border-[#EEF0F3] bg-[#F7F8FA] px-4 py-3 text-[14px] font-semibold text-[#1D2129]">规则摘要</div><dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-3 px-4 py-4 text-[13px]"><dt className="text-[#98A2B3]">规则名称</dt><dd className="font-medium text-[#344054]">{draftName}</dd><dt className="text-[#98A2B3]">管控对象</dt><dd className="text-[#344054]">{OBJECT_LABELS[draftObjectType]} · {draftObjectType === 'sku' ? `${draftProducts.length} 个商品 / 最终影响 ${draftObjectSelectionList?.reduce((sum, group) => sum + getAffectedSkuOptions(group.productName, Boolean(group.allSkus), group.values).length, 0) || 0} 个 SKU` : `${draftSharedObjectValues.join('、')} · ${draftRelationProductScope === 'all_linked_products' ? '全部关联商品' : `指定 ${draftProducts.length} 个商品`}`}</dd><dt className="text-[#98A2B3]">经营结果</dt><dd className="text-[#344054]">{getModeLabel(draftMode, draftObjectType)}</dd><dt className="text-[#98A2B3]">适用范围</dt><dd className="text-[#344054]">{draftStores.length} 家门店 · {draftChannels.length} 个渠道</dd></dl></section>{hasDraftConflict ? <div className="rounded-md border border-[#F7C8C5] bg-[#FFF6F5] p-4"><div className="flex items-center font-medium text-[#B42318]"><AlertTriangle size={16} className="mr-2" />发现 1 个反向规则冲突</div><p className="mt-2 pl-6 text-[12px] leading-5 text-[#667085]">与规则“{draftConflictRule?.name}”按规格值展开后的最终 SKU、门店和渠道范围重叠，且经营结果相反。请返回修改对象或范围后再保存。</p></div> : <div className="flex items-center rounded-md border border-[#B9E8D1] bg-[#F3FBF7] p-4 text-[13px] text-[#007A43]"><CheckCircle2 size={17} className="mr-2" />校验通过：规格值已展开为最终 SKU 集合，未发现相反经营结果。</div>}<p className="text-[12px] leading-5 text-[#667085]">保存后生成新规则版本并立即启用；规则用于后续商品发布和点单校验，不自动改变已发布商品状态。</p></div>
               )}

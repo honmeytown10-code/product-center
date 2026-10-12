@@ -81,6 +81,24 @@ const INITIAL_BRAND_CONFIGS: Record<string, BrandConfig> = {
   }
 };
 
+const initialPrototypeBrandConfigs = (): Record<string, BrandConfig> => {
+  if (typeof window === 'undefined') return INITIAL_BRAND_CONFIGS;
+  // Old direct/unified_rules URLs converge on unified management; split demos stay available.
+  const scenario = new URLSearchParams(window.location.search).get('scenario') || 'unified';
+  if (!['unified', 'direct', 'unified_rules'].includes(scenario)) return INITIAL_BRAND_CONFIGS;
+  return {
+    ...INITIAL_BRAND_CONFIGS,
+    b_1: {
+      ...INITIAL_BRAND_CONFIGS.b_1,
+      omnichannel: {
+        ...DEFAULT_OMNICHANNEL_CONFIG,
+        collaborationMode: 'unified',
+        operationStyle: 'rules',
+      },
+    },
+  };
+};
+
 interface ProductContextType {
   products: Product[];
   categories: Category[];
@@ -104,17 +122,24 @@ interface ProductContextType {
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(() => INITIAL_PRODUCTS.map(product => ({
+    ...product,
+    // Demo library records carry their own sales channels; store coverage remains task-derived.
+    formData: {
+      salesScope: { channelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'] },
+      applicableChannelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'],
+    },
+  })));
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [policies, setPolicies] = useState<ManagementPolicy[]>(INITIAL_POLICIES);
-  const [brandConfigs, setBrandConfigs] = useState<Record<string, BrandConfig>>(INITIAL_BRAND_CONFIGS);
+  const [brandConfigs, setBrandConfigs] = useState<Record<string, BrandConfig>>(initialPrototypeBrandConfigs);
   const [activeBrandId, setActiveBrandId] = useState<string>('b_1');
 
   const addProduct = (product: Product) => setProducts([...products, product]);
   const updateProduct = (id: string, updates: Partial<Product>) => {
     setProducts(currentProducts => currentProducts.map(p => p.id === id ? { ...p, ...updates } : p));
   };
-  const deleteProduct = (id: string) => setProducts(products.filter(p => p.id !== id));
+  const deleteProduct = (id: string) => setProducts(current => current.filter(p => p.id !== id));
 
   const addCategory = (category: Category) => setCategories([...categories, category]);
   const updateCategory = (id: string, updates: Partial<Category>) => {

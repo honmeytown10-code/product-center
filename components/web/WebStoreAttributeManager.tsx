@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Blend, ChefHat, Lock, Plus, Search, X } from 'lucide-react';
 import { WebStoreAddonList } from './WebStoreAddonList';
-import { PosMethodView } from '../pos/PosMethodView';
+import type { PublishBatch } from './WebPublishRecords';
+import { WebStoreMethodList } from './WebStoreMethodList';
 import { BadgeOptionConfig, GroupedTagFieldId, GroupedTagGroup, TagStyleType } from './WebProductForm';
 
 type StoreAttributeTab = 'addon' | 'method' | 'label' | 'badge';
@@ -37,6 +38,7 @@ type BadgeEditorState = {
 };
 
 export const WebStoreAttributeManager: React.FC<{
+  onSubmitTask?: (batch: PublishBatch) => void;
   initialTab?: StoreAttributeTab;
   showTabs?: boolean;
   groupedTagOptions: Record<GroupedTagFieldId, GroupedTagGroup[]>;
@@ -44,6 +46,7 @@ export const WebStoreAttributeManager: React.FC<{
   onGroupedTagOptionsChange: (value: Record<GroupedTagFieldId, GroupedTagGroup[]>) => void;
   onBadgeOptionsChange: (value: BadgeOptionConfig[]) => void;
 }> = ({
+  onSubmitTask,
   initialTab = 'addon',
   showTabs = true,
   groupedTagOptions,
@@ -459,7 +462,7 @@ export const WebStoreAttributeManager: React.FC<{
   return (
     <div className="pc-page flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
       {showTabs && (
-        <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5">
+        <div className="console-view-tabs shrink-0 border-b border-[#E8E8E8] bg-white px-5">
           <div role="tablist" className="flex h-12 gap-6 overflow-x-auto no-scrollbar">
             {tabs.map(tab => (
               <button
@@ -483,8 +486,8 @@ export const WebStoreAttributeManager: React.FC<{
       )}
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'addon' && <WebStoreAddonList />}
-        {activeTab === 'method' && <PosMethodView />}
+        {activeTab === 'addon' && <WebStoreAddonList onSubmitTask={onSubmitTask} />}
+        {activeTab === 'method' && <WebStoreMethodList />}
         {activeTab === 'label' && renderLabelManager()}
         {activeTab === 'badge' && renderBadgeManager()}
       </div>

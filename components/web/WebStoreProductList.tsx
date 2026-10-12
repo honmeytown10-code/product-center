@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { WebStoreProductDeleteFlow } from './WebStoreProductDeleteFlow';
+import { removeDeletedTargets } from '../../storeProductDeletion';
 import {
   Search, Plus, ChevronDown, MoreHorizontal, FileUp,
   Printer, Smartphone, Store, ShoppingBag, ChevronLeft,
@@ -7,13 +10,17 @@ import {
   FileSpreadsheet, Loader2, Settings
 } from 'lucide-react';
 import { useProducts } from '../../context';
-import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel } from './WebShelfConfirmModal';
+import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel, isShelfChannelId } from './WebShelfConfirmModal';
 import { StockoutSpec, WebStockoutModal } from './WebStockoutModal';
+import { getOmnichannelConfig } from '../../omnichannel';
+import { createTakeoutStoreBatch } from '../../takeoutSync';
+import type { PublishBatch } from './WebPublishRecords';
 
 type StoreProductPageMode = 'manage' | 'coverage';
 type StoreProductManagePreset = {
   keyword?: string;
   channelId?: string;
+  storeId?: string;
 };
 
 export type StoreProductRecord = {
@@ -87,7 +94,7 @@ const STORE_OPTIONS: StoreOption[] = [
   { id: 's4', name: '龙华红山店', businessStatus: 'closed' },
 ];
 
-const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
+export const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
   {
     id: '974340414367182854-s1',
     baseProductId: '974340414367182854',
@@ -96,7 +103,7 @@ const MOCK_STORE_PRODUCTS: StoreProductRecord[] = [
     category: '奶茶系列',
     storeName: '南山万象店',
     storeId: 's1',
-    channels: ['pos', 'mini_dine', 'mini_take', 'meituan', 'meituan_dine'],
+    channels: ['pos', 'mini_dine', 'mini_take', 'meituan', 'meituan_dine', 'jd'],
     image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&q=80&w=100',
     tags: ['新品'],
     status: 'on_shelf',
@@ -330,6 +337,7 @@ const CHANNEL_DEFS: Record<string, {
   activeClass: string;
   icon: React.ReactNode;
 }> = {
+  jd: { label: '京东外卖', shortLabel: '京', activeClass: 'bg-[#FEE4E2] text-[#D92D20]', icon: <ShoppingBag size={16} /> },
   mini_dine: {
     label: '小程序-堂食',
     shortLabel: '堂',
@@ -392,6 +400,7 @@ const DEFAULT_CHANNELS = [
   { id: 'meituan', label: '美团-外卖' },
   { id: 'meituan_tuangou', label: '美团-团购' },
   { id: 'taobao', label: '淘宝闪购' },
+  { id: 'jd', label: '京东外卖' },
   { id: 'meituan_dine', label: '美团在线点' },
   { id: 'douyin_dine', label: '抖音在线点' },
   { id: 'pos', label: 'POS' },
@@ -405,24 +414,74 @@ const COVERAGE_CHANNEL_OPTIONS = Array.from(
 }));
 
 const DEFAULT_COVERAGE_CHANNEL_ID = COVERAGE_CHANNEL_OPTIONS[0]?.id || 'mini_dine';
+const shelfChannelAlias = (id: string) => id === 'douyin_dine' ? 'douyin' : id;
 
 export const WebStoreProductList: React.FC<{
   mode?: StoreProductPageMode;
+  expandedChannelNavigation?: boolean;
   managePreset?: StoreProductManagePreset | null;
   onOpenManageProduct?: (preset: StoreProductManagePreset) => void;
   onEditProduct?: (product: StoreProductRecord, channelId: string) => void;
-}> = ({ mode = 'manage', managePreset = null, onOpenManageProduct, onEditProduct }) => {
+  onAddProduct?: (target: { storeId: string; channelId: string }) => void;
+
+  additionalRecords?: StoreProductRecord[];
+  records?: StoreProductRecord[];
+  onRecordsChange?: (updater: (records: StoreProductRecord[]) => StoreProductRecord[]) => void;
+  onSubmitTask?: (batch: PublishBatch) => void;
+}> = ({ mode = 'manage', expandedChannelNavigation = false, managePreset = null, onOpenManageProduct, onEditProduct, onAddProduct, additionalRecords = [], records, onRecordsChange, onSubmitTask }) => {
   const { activeBrandId, brandConfigs } = useProducts();
   const config = brandConfigs[activeBrandId];
+  const platformStrategies = getOmnichannelConfig(config || brandConfigs.b_1).thirdPartyStrategies;
+  const managedTakeoutChannels = ['meituan', 'taobao', 'jd'].filter(id => platformStrategies[id as 'meituan' | 'taobao' | 'jd'] === 'qimai');
+  const [previousStock, setPreviousStock] = useState<Record<string, number>>({});
+  const applyChannelChange = (record: StoreProductRecord, selected: string[], patch: Partial<StoreProductRecord>) => {
+    setStoreProducts(current => current.flatMap(item => {
+      if (item.id !== record.id) return [item];
+      const affected = item.channels.filter(id => selected.includes(id));
+      const retained = item.channels.filter(id => !selected.includes(id));
+      if (!affected.length) return [item];
+      return [...(retained.length ? [{ ...item, channels: retained }] : []), { ...item, ...patch, id: retained.length ? `${item.id}:${affected.join('-')}` : item.id, channels: affected, lastSync: '刚刚' }];
+    }));
+  };
+  const createPlatformTask = (record: StoreProductRecord, channels: string[], operation: 'shelf' | 'stock', fields: string[]) => {
+    const batch = createTakeoutStoreBatch(record, channels.filter(id => managedTakeoutChannels.includes(id)), operation, fields);
+    if (batch) onSubmitTask?.(batch);
+  };
   const enableGrouping = config?.enableChannelGrouping ?? false;
   const groups = config?.channelGroups || [];
   const isShelvesUnited = config?.features.shelves_unite ?? false;
   const isStockShared = config?.features.stock_shared ?? false;
-  const [storeProducts, setStoreProducts] = useState<StoreProductRecord[]>(MOCK_STORE_PRODUCTS);
+  const [localStoreProducts, setLocalStoreProducts] = useState<StoreProductRecord[]>(MOCK_STORE_PRODUCTS);
+  const storeProducts = records ?? localStoreProducts;
+  const setStoreProducts = (updater: React.SetStateAction<StoreProductRecord[]>) => {
+    const update = (current: StoreProductRecord[]) => typeof updater === 'function' ? updater(current) : updater;
+    if (onRecordsChange) onRecordsChange(update); else setLocalStoreProducts(update);
+  };
+  const [deleteProduct, setDeleteProduct] = useState<StoreProductRecord | null>(null);
+  const [moreProduct, setMoreProduct] = useState<{ product: StoreProductRecord; top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (!moreProduct) return;
+    const close = (event: MouseEvent) => { if (!(event.target as HTMLElement)?.closest('[data-store-more]')) setMoreProduct(null); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMoreProduct(null); };
+    document.addEventListener('click', close); document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', escape); };
+  }, [moreProduct]);
+  useEffect(() => {
+    if (!additionalRecords.length) return;
+    setStoreProducts(current => {
+      const next = [...current];
+      additionalRecords.forEach(record => {
+        const index = next.findIndex(item => item.id === record.id);
+        if (index < 0) next.unshift(record);
+        else next[index] = { ...next[index], name: record.name, category: record.category, image: record.image };
+      });
+      return next;
+    });
+  }, [additionalRecords]);
 
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeCategoryId, setActiveCategoryId] = useState('all');
-  const [activeStoreId, setActiveStoreId] = useState('all');
+  const [activeStoreId, setActiveStoreId] = useState(managePreset?.storeId || 'all');
   const [manageKeyword, setManageKeyword] = useState(managePreset?.keyword || '');
   const [coverageKeyword, setCoverageKeyword] = useState('');
   const [coverageCategoryId, setCoverageCategoryId] = useState('all');
@@ -452,7 +511,7 @@ export const WebStoreProductList: React.FC<{
   useEffect(() => {
     if (mode === 'manage') {
       setManageKeyword(managePreset?.keyword || '');
-      setActiveStoreId('all');
+      setActiveStoreId(managePreset?.storeId || 'all');
       setActiveCategoryId('all');
       setActiveTabId(managePreset?.channelId || 'all');
     }
@@ -633,41 +692,20 @@ export const WebStoreProductList: React.FC<{
                 ? 'on_shelf'
                 : 'off_shelf';
 
-    setStoreProducts(prev => prev.map(product => {
-      if (
-        product.baseProductId !== detail.baseProductId ||
-        product.storeId !== targetStore.storeId ||
-        !product.channels.includes(detail.channelId)
-      ) {
-        return product;
+    const record = storeProducts.find(product => product.baseProductId === detail.baseProductId && product.storeId === targetStore.storeId && product.channels.includes(detail.channelId));
+    if (!record) return;
+    if (action === 'restore_stock') {
+      const saved = previousStock[`${record.baseProductId}:${record.storeId}:${detail.channelId}`];
+      if (!(saved > 0) || record.isMultiSpec) {
+        setNotification({ type: 'info', message: '没有可恢复的历史库存', subMessage: '请在商品编辑页填写库存；不会自动补到最大库存或上架。' });
+        return;
       }
-
-      if (action === 'restore_stock') {
-        return {
-          ...product,
-          status: 'on_shelf',
-          stockStatus: 'normal',
-          stockCount: product.stockCount > 0 ? product.stockCount : 99,
-          lastSync: '刚刚',
-        };
-      }
-
-      if (action === 'on_shelf') {
-        return {
-          ...product,
-          status: 'on_shelf',
-          stockStatus: product.stockStatus === 'empty' ? 'normal' : product.stockStatus,
-          stockCount: product.stockCount > 0 ? product.stockCount : 99,
-          lastSync: '刚刚',
-        };
-      }
-
-      return {
-        ...product,
-        status: 'off_shelf',
-        lastSync: '刚刚',
-      };
-    }));
+      applyChannelChange(record, [detail.channelId], { stockCount: saved, stockStatus: 'normal' });
+      createPlatformTask(record, [detail.channelId], 'stock', [`恢复库存：${saved}`]);
+    } else {
+      applyChannelChange(record, [detail.channelId], { status: action });
+      createPlatformTask(record, [detail.channelId], 'shelf', [action === 'on_shelf' ? '上架' : '下架']);
+    }
 
     const channelLabel = CHANNEL_DEFS[detail.channelId]?.label || detail.channelId;
     const message =
@@ -680,7 +718,7 @@ export const WebStoreProductList: React.FC<{
     setNotification({
       type: 'success',
       message,
-      subMessage: `已更新 ${channelLabel} 渠道下的门店商品状态`,
+      subMessage: `已更新企迈 ${channelLabel} 商品；平台任务独立记录。`,
     });
 
     setCoverageStoreDetail(null);
@@ -689,26 +727,13 @@ export const WebStoreProductList: React.FC<{
   const handleShelfConfirm = (payload: { action: 'on_shelf' | 'off_shelf'; channels: ShelfChannelId[] }) => {
     if (!shelfDialog) return;
 
+    const selected = shelfDialog.channels.filter(id => payload.channels.includes(shelfChannelAlias(id) as ShelfChannelId));
     const actionLabel = payload.action === 'on_shelf' ? '上架' : '下架';
     const selectedNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
 
-    if (activeTabId === 'all') {
-      setNotification({
-        type: 'success',
-        message: isShelvesUnited ? `已统一${actionLabel}全部渠道商品` : `已${actionLabel}所选渠道商品`,
-        subMessage: isShelvesUnited
-          ? '状态会同步到美饿平台'
-          : `已操作渠道：${selectedNames || '未选择渠道'}`,
-      });
-    } else {
-      setNotification({
-        type: isShelvesUnited ? 'info' : 'success',
-        message: isShelvesUnited
-          ? `已统一${actionLabel}全部渠道商品`
-          : `${getShelfChannelLabel(activeTabId)} ${actionLabel}成功`,
-        subMessage: isShelvesUnited ? '状态会同步到美饿平台' : undefined,
-      });
-    }
+    applyChannelChange(shelfDialog, selected, { status: payload.action });
+    createPlatformTask(shelfDialog, payload.channels, 'shelf', [actionLabel]);
+    setNotification({ type: 'success', message: `企迈商品已${actionLabel}`, subMessage: `${selectedNames}；库存不变。平台结果请查看同步任务。` });
 
     setShelfDialog(null);
   };
@@ -722,13 +747,20 @@ export const WebStoreProductList: React.FC<{
     specs: StockoutSpec[];
   }) => {
     if (!stockDialog) return;
+    const selected = stockDialog.channels.filter(id => payload.channels.includes(shelfChannelAlias(id) as ShelfChannelId));
+    if (!payload.channels.length || !/^\d+$/.test(payload.remainStock) || payload.specs.some(spec => !/^\d+$/.test(spec.remainStock))) {
+      setNotification({ type: 'info', message: '请选择渠道并填写非负整数库存' });
+      return;
+    }
+    setPreviousStock(current => ({ ...current, ...Object.fromEntries(payload.channels.filter(channel => stockDialog.stockCount > 0).map(channel => [`${stockDialog.baseProductId}:${stockDialog.storeId}:${channel}`, stockDialog.stockCount])) }));
+    const stockCount = stockDialog.isMultiSpec && payload.specs.length ? (stockDialog.specs || []).reduce((sum, spec) => sum + Number(payload.specs.find(selected => selected.id === spec.id)?.remainStock ?? spec.currentStock ?? spec.remainStock), 0) : Number(payload.remainStock);
+    applyChannelChange(stockDialog, selected, { stockCount, stockStatus: stockCount === 0 ? 'empty' : 'normal', ...(stockDialog.isMultiSpec ? { specs: (stockDialog.specs || []).map(spec => payload.specs.find(selected => selected.id === spec.id) || spec) } : {}) });
+    createPlatformTask(stockDialog, payload.channels, 'stock', [`当前库存：${stockCount}`, payload.type === 'day' ? '次日恢复设置需库存调度服务执行' : '长期设置']);
     const channelNames = payload.channels.map(channelId => getShelfChannelLabel(channelId)).join('、');
     setNotification({
       type: isStockShared ? 'info' : 'success',
       message: `${stockDialog.name} 沽清设置已保存`,
-      subMessage: isStockShared
-        ? `已同步更新所有选中渠道库存：${channelNames}`
-        : `已应用至渠道：${channelNames}`,
+      subMessage: `企迈已应用至 ${channelNames}；上下架不变。平台任务等待执行（演示）。`,
     });
     setStockDialog(null);
   };
@@ -794,9 +826,9 @@ export const WebStoreProductList: React.FC<{
       <div className="pc-surface flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
         <div className="p-5 border-b border-[#E8E8E8] bg-white space-y-4 shrink-0 z-20">
           <div className="flex flex-wrap gap-3 items-center">
+            <FilterStoreSelect label="机构门店" options={STORE_OPTIONS} value={activeStoreId} onChange={setActiveStoreId} />
             <FilterInput label="商品ID" placeholder="请输入" />
             <FilterInput label="SKUID" placeholder="请输入" />
-            <FilterStoreSelect label="机构门店" options={STORE_OPTIONS} value={activeStoreId} onChange={setActiveStoreId} />
             <FilterSelect label="商品类型" placeholder="请选择" />
             <FilterSelect label="售卖状态" placeholder="全部" canClear />
             <FilterSelect label="库存状态" placeholder="请选择" canClear />
@@ -806,6 +838,7 @@ export const WebStoreProductList: React.FC<{
           </div>
 
           <div className="flex justify-between items-center gap-4">
+
             <div className="flex items-center flex-wrap gap-3">
               <button onClick={() => setNotification({ type: 'success', message: '门店商品快捷筛选已保存' })} className="flex items-center text-xs text-[#666] border border-[#E8E8E8] px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
                 <FileUp size={14} className="mr-1.5" /> 保存快捷筛选选项
@@ -824,28 +857,30 @@ export const WebStoreProductList: React.FC<{
           </div>
         </div>
 
-        <div className="px-5 py-3 flex justify-between items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-4">
-          <div className="flex items-center space-x-4 min-w-0">
+        <div className={`px-5 py-3 ${expandedChannelNavigation ? 'grid grid-cols-[1fr_auto] gap-y-2' : 'flex justify-between'} items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-x-4`}>
+          <div className={expandedChannelNavigation ? 'contents' : 'flex items-center space-x-4 min-w-0'}>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-2.5 text-[#999]" />
               <input value={manageKeyword} onChange={e => setManageKeyword(e.target.value)} className="pl-9 pr-4 py-1.5 border border-[#E8E8E8] rounded w-56 text-sm focus:border-[#00C06B] focus:outline-none transition-colors" placeholder="搜索商品名称/ID" />
             </div>
 
-            <div className="flex items-center space-x-1 overflow-x-auto max-w-[550px] no-scrollbar">
+            <div className={`console-segmented-tabs ${expandedChannelNavigation ? 'order-last col-span-2 flex flex-wrap items-center gap-1' : 'flex items-center space-x-1 overflow-x-auto max-w-[550px] no-scrollbar'}`}>
               {tabs.map(tab => (
                 <button
                   key={tab.id}
+                  aria-pressed={activeTabId === tab.id}
+                  aria-selected={activeTabId === tab.id}
                   onClick={() => setActiveTabId(tab.id)}
                   className={`relative px-4 py-2 text-sm font-bold transition-colors whitespace-nowrap rounded-lg ${activeTabId === tab.id ? 'text-[#00C06B] bg-[#00C06B]/5' : 'text-[#666] hover:text-[#333] hover:bg-gray-50'}`}
                 >
                   {tab.label}
-                  {activeTabId === tab.id && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-[#00C06B] rounded-full" />}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
+            {onAddProduct && <button type="button" onClick={() => onAddProduct({ storeId: activeStoreId, channelId: activeTabId })} className="console-primary-button"><Plus size={14} />添加商品</button>}
             <button onClick={() => setIsSorting(true)} className="flex items-center px-3 py-1.5 border border-[#E8E8E8] rounded text-xs text-[#333] hover:bg-gray-50 font-medium">
               <ArrowUpDown size={14} className="mr-1.5 text-[#666]" /> 排序管理
             </button>
@@ -920,18 +955,18 @@ export const WebStoreProductList: React.FC<{
 
           <div className="flex-1 flex flex-col overflow-hidden relative bg-white">
             <div className="flex-1 overflow-auto no-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[1240px]">
+              <table className={`w-full text-left border-collapse ${expandedChannelNavigation ? 'min-w-[1180px] table-fixed' : 'min-w-[1240px]'}`}>
                 <thead className="sticky top-0 bg-[#F7F8FA] z-10 text-xs font-bold text-[#333]">
                   <tr>
                     <th className="w-12 py-3 pl-5 border-b border-[#E8E8E8]"><input type="checkbox" className="rounded border-gray-300" /></th>
-                    <th className="py-3 px-4 border-b border-[#E8E8E8] w-16">排序</th>
+                    <th className={`py-3 border-b border-[#E8E8E8] ${expandedChannelNavigation ? 'w-12 px-2' : 'w-16 px-4'}`}>排序</th>
                     <th className="py-3 px-4 border-b border-[#E8E8E8]">商品名称</th>
-                    <th className="py-3 px-4 border-b border-[#E8E8E8] w-24">商品类型</th>
-                    <th className="py-3 px-4 border-b border-[#E8E8E8]">前台分类</th>
-                    <th className="py-3 px-4 border-b border-[#E8E8E8] w-32">门店名称</th>
-                    <th className="py-3 px-4 border-b border-[#E8E8E8] w-[220px]">{activeTabId === 'all' ? '投放渠道' : '渠道'}</th>
-                    <th className="py-3 px-4 border-b border-[#E8E8E8] w-24">库存状态</th>
-                    <th className="sticky right-0 w-[220px] min-w-[220px] whitespace-nowrap border-b border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)]">操作</th>
+                    <th className={`py-3 px-3 border-b border-[#E8E8E8] ${expandedChannelNavigation ? 'w-[84px]' : 'w-24'}`}>商品类型</th>
+                    <th className={`py-3 px-4 border-b border-[#E8E8E8] ${expandedChannelNavigation ? 'w-24' : ''}`}>前台分类</th>
+                    <th className={`py-3 px-4 border-b border-[#E8E8E8] ${expandedChannelNavigation ? 'w-28' : 'w-32'}`}>门店名称</th>
+                    <th className={`py-3 px-4 border-b border-[#E8E8E8] ${expandedChannelNavigation ? 'w-40' : 'w-[220px]'}`}>{activeTabId === 'all' ? '投放渠道' : '渠道'}</th>
+                    <th className={`py-3 px-4 border-b border-[#E8E8E8] ${expandedChannelNavigation ? 'w-[132px] min-w-[132px]' : 'w-24'}`}>库存状态</th>
+                    <th className={`sticky right-0 whitespace-nowrap border-b border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)] ${expandedChannelNavigation ? 'w-[184px] min-w-[184px]' : 'w-[220px] min-w-[220px]'}`}>操作</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm text-[#333]">
@@ -957,7 +992,7 @@ export const WebStoreProductList: React.FC<{
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 px-4 text-[#666]">{product.type === 'Standard' ? '标准商品' : '套餐商品'}</td>
+                      <td className={`${expandedChannelNavigation ? 'px-3 text-xs' : 'px-4 text-sm'} py-4 text-[#666]`}>{product.type === 'Standard' ? '标准商品' : '套餐商品'}</td>
                       <td className="py-4 px-4 text-[#666] max-w-[180px] truncate" title={product.category}>{product.category}</td>
                       <td className="py-4 px-4">
                         <div className="font-medium text-[#333]">{product.storeName}</div>
@@ -975,19 +1010,19 @@ export const WebStoreProductList: React.FC<{
                         )}
                       </td>
                       <td className="py-4 px-4">
-                        <div className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-bold ${product.stockStatus === 'normal' ? 'bg-[#F0FDF4] text-[#15803D]' : product.stockStatus === 'low' ? 'bg-[#FFF7ED] text-[#C2410C]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
+                        <div className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-bold ${expandedChannelNavigation ? 'whitespace-nowrap' : ''} ${product.stockStatus === 'normal' ? 'bg-[#F0FDF4] text-[#15803D]' : product.stockStatus === 'low' ? 'bg-[#FFF7ED] text-[#C2410C]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
                           {product.stockStatus === 'normal' ? `库存 ${product.stockCount}` : product.stockStatus === 'low' ? `库存紧张 ${product.stockCount}` : '已售罄'}
                         </div>
                       </td>
-                      <td className="sticky right-0 w-[220px] min-w-[220px] whitespace-nowrap bg-white px-4 py-4 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)] group-hover:bg-[#F9FFFC]">
-                        <div className="flex flex-nowrap items-center justify-center gap-3 whitespace-nowrap text-sm">
+                      <td className={`sticky right-0 whitespace-nowrap bg-white px-4 py-4 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.28)] group-hover:bg-[#F9FFFC] ${expandedChannelNavigation ? 'w-[184px] min-w-[184px]' : 'w-[220px] min-w-[220px]'}`}>
+                        <div className={`flex flex-nowrap items-center justify-center whitespace-nowrap ${expandedChannelNavigation ? 'gap-2 text-xs' : 'gap-3 text-sm'}`}>
                           <button onClick={() => handleAction(product, 'shelf')} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">
                             {activeTabId === 'all' ? '上下架' : product.status === 'on_shelf' ? '下架' : '上架'}
                           </button>
                           <button onClick={() => handleAction(product, 'edit')} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">编辑</button>
                           <button onClick={() => handleAction(product, 'stock')} className="shrink-0 whitespace-nowrap text-[#00C06B] font-medium hover:text-[#008f53] hover:underline">沽清</button>
                           <div className="h-3 w-px shrink-0 bg-gray-300" />
-                          <button aria-label="更多操作" title="更多操作" onClick={() => setNotification({ type: 'info', message: `${product.name}：可在编辑页维护分类、价格、售卖时间与渠道差异字段` })} className="shrink-0 text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
+                          <button data-store-more aria-label="更多操作" title="更多操作" aria-expanded={moreProduct?.product.id === product.id} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setMoreProduct(current => current?.product.id === product.id ? null : { product, top: Math.min(rect.bottom + 4, window.innerHeight - 100), right: Math.max(16, window.innerWidth - rect.right) }); }} className="shrink-0 text-[#999] hover:text-[#333]"><MoreHorizontal size={16} /></button>
                         </div>
                       </td>
                     </tr>
@@ -1019,16 +1054,19 @@ export const WebStoreProductList: React.FC<{
           </div>
         </div>
       </div>
+      {moreProduct && createPortal(<div data-store-more role="menu" aria-label="门店商品更多操作" style={{ top: moreProduct.top, right: moreProduct.right }} className="fixed z-[110] w-40 rounded-lg bg-white py-1 shadow-lg"><button role="menuitem" className="w-full px-4 py-3 text-left text-sm text-[#B42318] hover:bg-[#FEF3F2]" onClick={() => { setDeleteProduct(moreProduct.product); setMoreProduct(null); }}>删除门店商品</button></div>, document.body)}
+      {deleteProduct && <WebStoreProductDeleteFlow products={[deleteProduct]} initialChannel={activeTabId !== 'all' ? activeTabId : undefined} managedChannels={managedTakeoutChannels} onClose={() => setDeleteProduct(null)} onSubmit={onSubmitTask} onLocalRemove={targets => setStoreProducts(prev => removeDeletedTargets(prev, targets))} />}
       {shelfDialog && (
         <WebShelfConfirmModal
           entityLabel="商品"
           itemName={shelfDialog.name}
-          availableChannels={shelfDialog.channels.filter((channel): channel is ShelfChannelId => Boolean(getShelfChannelLabel(channel))) as ShelfChannelId[]}
+          availableChannels={shelfDialog.channels.map(shelfChannelAlias).filter(isShelfChannelId)}
           channelStatuses={Object.fromEntries(
-            shelfDialog.channels.map(channel => [channel, shelfDialog.status])
+            shelfDialog.channels.map(channel => [shelfChannelAlias(channel), shelfDialog.status])
           ) as Partial<Record<ShelfChannelId, 'on_shelf' | 'off_shelf'>>}
-          activeTabId={activeTabId}
+          activeTabId={shelfChannelAlias(activeTabId)}
           isShelvesUnited={isShelvesUnited}
+          managedPlatformChannels={managedTakeoutChannels}
           onClose={() => setShelfDialog(null)}
           onConfirm={handleShelfConfirm}
         />
@@ -1037,8 +1075,9 @@ export const WebStoreProductList: React.FC<{
         <WebStockoutModal
           itemName={stockDialog.name}
           entityLabel="商品"
-          channels={stockDialog.channels.filter((channel): channel is ShelfChannelId => Boolean(getShelfChannelLabel(channel))) as ShelfChannelId[]}
+          channels={stockDialog.channels.map(shelfChannelAlias).filter(isShelfChannelId)}
           isStockShared={isStockShared}
+          managedPlatformChannels={managedTakeoutChannels}
           isMultiSpec={Boolean(stockDialog.isMultiSpec)}
           specs={stockDialog.specs}
           defaultRemainStock="0"
@@ -1389,7 +1428,7 @@ const EXPORT_OPTIONAL_FIELDS = [
   { id: 'saleStatus', label: '商品状态' },
   { id: 'stockStatus', label: '沽清状态' },
   { id: 'stockCount', label: '库存信息' },
-  { id: 'price', label: '基础价格' },
+  { id: 'price', label: '售价' },
   { id: 'packageFee', label: '包装费' },
   { id: 'unit', label: '单位' },
   { id: 'barcode', label: '商品条码' },

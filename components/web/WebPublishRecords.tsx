@@ -17,7 +17,7 @@ type BatchStatus = 'success' | 'running' | 'partial' | 'failed';
 type TaskStatus = 'success' | 'running' | 'waiting' | 'failed';
 type TaskType = 'qimai' | 'platform';
 type RecordType = 'store_publish' | 'douyin_standard' | 'douyin_addon' | 'meituan_brand';
-export type RecordView = 'qimai' | 'platform';
+export type RecordView = 'all' | 'qimai' | 'platform';
 type PlatformObjectType = 'brand_product' | 'addon' | 'store_product';
 
 type PublishTask = {
@@ -36,9 +36,10 @@ type PublishTask = {
   startedAt: string;
   finishedAt?: string;
   error?: string;
+  waitingReason?: string;
 };
 
-type PublishBatch = {
+export type PublishBatch = {
   recordType?: RecordType;
   id: string;
   title: string;
@@ -55,6 +56,8 @@ type PublishBatch = {
   createdAt: string;
   creator: string;
   tasks: PublishTask[];
+  details?: TaskExecutionDetail[];
+  fieldSnapshots?: TaskFieldSnapshot[];
 };
 
 type PlatformTaskRecord = {
@@ -74,6 +77,7 @@ type TaskFieldSnapshot = {
 
 type TaskExecutionDetail = {
   id: string;
+  taskType?: TaskType;
   productName: string;
   productId: string;
   skuName: string;
@@ -447,7 +451,7 @@ const statusMeta: Record<BatchStatus | TaskStatus, { label: string; className: s
 };
 
 const StatusTag: React.FC<{ status: BatchStatus | TaskStatus }> = ({ status }) => (
-  <span className={`inline-flex h-6 items-center rounded px-2 text-xs font-medium ${statusMeta[status].className}`}>
+  <span className={`inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded px-2 text-xs font-medium ${statusMeta[status].className}`}>
     {status === 'running' && <Clock3 size={13} className="mr-1" />}
     {status === 'success' && <CheckCircle2 size={13} className="mr-1" />}
     {(status === 'partial' || status === 'failed') && <AlertCircle size={13} className="mr-1" />}
@@ -459,7 +463,7 @@ const getTaskGroupStatus = (tasks: PublishTask[]): BatchStatus => {
   if (tasks.length === 0) return 'success';
   if (tasks.some(task => task.status === 'running' || task.status === 'waiting')) return 'running';
   const failedTasks = tasks.filter(task => task.status === 'failed');
-  if (failedTasks.length === tasks.length) return 'failed';
+  if (failedTasks.length === tasks.length) return tasks.some(task => task.successCount > 0) ? 'partial' : 'failed';
   if (failedTasks.length > 0) return 'partial';
   return 'success';
 };
@@ -482,6 +486,7 @@ const getSnapshotFieldNames = (snapshot: string) => {
 };
 
 const getTaskFieldSnapshots = (batch: PublishBatch, task: PublishTask): TaskFieldSnapshot[] => {
+  if (batch.fieldSnapshots) return batch.fieldSnapshots;
   if (batch.action === '更新门店商品属性') {
     return [
       { name: '规格售价', mode: '修改', before: '门店当前售价', after: '按「全国标准菜单」模板售价更新' },
@@ -554,6 +559,7 @@ const buildTaskExecutionDetails = (
   task: PublishTask,
   fields: TaskFieldSnapshot[],
 ): TaskExecutionDetail[] => {
+  if (batch.details) return batch.details.filter(detail => task.channels.includes(detail.channel) && (!detail.taskType || detail.taskType === task.type));
   const products = batch.recordType === 'douyin_addon' ? addonProducts : standardProducts;
   const isBrandLevel = task.storeCount === 0;
   const rowCount = isBrandLevel ? Math.min(Math.max(task.productCount, 4), 6) : 8;
@@ -594,7 +600,8 @@ const TaskRecordDetailPage: React.FC<{
   onOpenRelated?: () => void;
   onRetry: () => void;
   notice?: string;
-}> = ({ batch, task, scope, onBack, onOpenRelated, onRetry, notice }) => {
+  onTaskChange?: (taskId: string) => void;
+}> = ({ batch, task, scope, onBack, onOpenRelated, onRetry, notice, onTaskChange }) => {
   const fields = useMemo(() => getTaskFieldSnapshots(batch, task), [batch, task]);
   const details = useMemo(() => buildTaskExecutionDetails(batch, task, fields), [batch, fields, task]);
   const [keyword, setKeyword] = useState('');
@@ -632,9 +639,10 @@ const TaskRecordDetailPage: React.FC<{
         </div>
       </div>
 
+      {onTaskChange && <nav className="flex shrink-0 flex-wrap gap-2 border-b border-[#E5E7EB] bg-white px-5 py-3" aria-label="同步任务各阶段">{batch.tasks.map(stage => <button key={stage.id} type="button" aria-pressed={task.id === stage.id} onClick={() => onTaskChange(stage.id)} className={`flex items-center gap-2 rounded border px-3 py-2 text-xs ${task.id === stage.id ? 'border-[#00B460] bg-[#EAF8F1] text-[#008F4C]' : 'border-[#E5E7EB] text-[#667085]'}`}><span>{stage.type === 'qimai' ? '企迈' : '平台'} · {stage.target}</span><StatusTag status={stage.status} /></button>)}</nav>}
       <div className="min-h-0 flex-1 overflow-auto p-5">
         <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#E3E6EA] bg-white">
-          <div className="border-r border-[#EEEEEE] p-4"><div className="text-xs text-[#86909C]">数据来源</div><div className="mt-1 text-sm font-medium text-[#1D2129]">{batch.sourceType} · {batch.sourceName}</div><div className="mt-1 text-xs text-[#86909C]">{batch.snapshot}</div></div>
+          <div className="border-r border-[#EEEEEE] p-4"><div className="text-xs text-[#86909C]">数据来源</div><div className="mt-1 text-sm font-medium text-[#1D2129]">{batch.sourceType.replace('商品模板', '商品下发模板')} · {batch.sourceName}</div><div className="mt-1 text-xs text-[#86909C]">{batch.snapshot}</div></div>
           <div className="border-r border-[#EEEEEE] p-4"><div className="text-xs text-[#86909C]">执行范围</div><div className="mt-1 text-sm font-medium text-[#1D2129]">{batch.storeScope}</div><div className="mt-1 text-xs text-[#86909C]">{task.storeCount > 0 ? `${task.storeCount} 家门店 · ${task.channels.length} 个渠道` : '品牌级任务，不涉及门店'}</div></div>
           <div className="border-r border-[#EEEEEE] p-4"><div className="text-xs text-[#86909C]">对象规模</div><div className="mt-1 text-sm font-medium text-[#1D2129]">{task.productCount} 个{objectUnit}{task.skuCount > 0 ? ` · ${task.skuCount} 个 SKU` : ''}</div><div className="mt-1 text-xs text-[#86909C]">成功 {task.successCount} · 失败 {task.failedCount} · 等待 {task.waitingCount}</div></div>
           <div className="p-4"><div className="text-xs text-[#86909C]">创建信息</div><div className="mt-1 text-sm font-medium text-[#1D2129]">{batch.createdAt}</div><div className="mt-1 text-xs text-[#86909C]">操作人 {batch.creator}</div></div>
@@ -704,9 +712,10 @@ const TaskRecordDetailPage: React.FC<{
 
 export const WebPublishRecords: React.FC<{
   masterChannelSyncRecords?: MasterChannelSyncRecord[];
+  extraBatches?: PublishBatch[];
   view?: RecordView;
   onViewChange?: (view: RecordView) => void;
-}> = ({ masterChannelSyncRecords = [], view = 'qimai', onViewChange }) => {
+}> = ({ masterChannelSyncRecords = [], extraBatches = [], view = 'all', onViewChange }) => {
   const allBatches = useMemo<PublishBatch[]>(() => {
     const masterChannelBatches = masterChannelSyncRecords.map(record => ({
       id: record.id,
@@ -739,8 +748,8 @@ export const WebPublishRecords: React.FC<{
         startedAt: record.createdAt,
       }],
     }));
-    return [...masterChannelBatches, ...batches];
-  }, [masterChannelSyncRecords]);
+    return [...extraBatches, ...masterChannelBatches, ...batches];
+  }, [extraBatches, masterChannelSyncRecords]);
   const activeView = view;
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<'all' | BatchStatus>('all');
@@ -753,6 +762,10 @@ export const WebPublishRecords: React.FC<{
       || '',
   ].filter(Boolean));
   const [detailBatch, setDetailBatch] = useState<PublishBatch | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState('');
+  const [taskKind, setTaskKind] = useState<'all' | TaskType>('all');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
   const [detailPlatformRecord, setDetailPlatformRecord] = useState<PlatformTaskRecord | null>(null);
   const [notice, setNotice] = useState('');
 
@@ -831,6 +844,11 @@ export const WebPublishRecords: React.FC<{
   };
 
   const openPlatformTasks = (batchId: string) => {
+    if (activeView === 'all') {
+      const batch = allBatches.find(item => item.id === batchId);
+      if (batch) { setDetailTaskId(batch.tasks.find(task => task.type === 'platform')?.id || ''); setDetailBatch(batch); }
+      return;
+    }
     switchView('platform');
     setKeyword(batchId);
     setStatus('all');
@@ -839,6 +857,11 @@ export const WebPublishRecords: React.FC<{
   };
 
   const openQimaiBatch = (batchId: string) => {
+    if (activeView === 'all') {
+      const batch = allBatches.find(item => item.id === batchId);
+      if (batch) { setDetailTaskId(batch.tasks.find(task => task.type === 'qimai')?.id || ''); setDetailBatch(batch); }
+      return;
+    }
     switchView('qimai');
     setKeyword(batchId);
     setStatus('all');
@@ -916,6 +939,7 @@ export const WebPublishRecords: React.FC<{
                     {task.waitingCount > 0 && <> · 等待 {task.waitingCount}</>}
                   </div>
                   {task.error && <div className="mt-1 line-clamp-2 text-[#D9363E]">{task.error}</div>}
+                  {task.status === 'waiting' && task.waitingReason && <div className="mt-1 text-xs leading-5 text-[#667085]">{task.waitingReason}</div>}
                 </td>
                 <td className="px-4 py-3 leading-5">
                   <div>{task.startedAt.slice(5)}</div>
@@ -955,22 +979,24 @@ export const WebPublishRecords: React.FC<{
   };
 
   if (detailBatch) {
-    const qimaiTask = detailBatch.tasks.find(task => task.type === 'qimai');
+    const qimaiTask = activeView === 'all' ? detailBatch.tasks.find(task => task.id === detailTaskId) || detailBatch.tasks[0] : detailBatch.tasks.find(task => task.type === 'qimai');
     if (qimaiTask) {
       const hasPlatformTasks = detailBatch.tasks.some(task => task.type === 'platform');
       return (
         <TaskRecordDetailPage
+          key={qimaiTask.id}
           batch={detailBatch}
           task={qimaiTask}
-          scope="qimai"
+          scope={qimaiTask.type}
+          onTaskChange={activeView === 'all' ? setDetailTaskId : undefined}
           notice={notice}
           onBack={() => setDetailBatch(null)}
-          onOpenRelated={hasPlatformTasks ? () => {
+          onOpenRelated={activeView !== 'all' && hasPlatformTasks ? () => {
             const batchId = detailBatch.id;
             setDetailBatch(null);
             openPlatformTasks(batchId);
           } : undefined}
-          onRetry={() => showNotice(`已为 ${qimaiTask.id} 创建企迈失败明细重试任务`)}
+          onRetry={() => showNotice(`本地演示：已选择 ${qimaiTask.id} 的失败明细；正式重试需接入任务服务。`)}
         />
       );
     }
@@ -995,8 +1021,48 @@ export const WebPublishRecords: React.FC<{
     );
   }
 
+  if (activeView === 'all') {
+    const rows = allBatches.filter(batch => {
+      const query = keyword.trim().toLowerCase();
+      const tasks = batch.tasks.filter(task => taskKind === 'all' || task.type === taskKind);
+      return tasks.length > 0
+        && (!query || [batch.id, batch.title, batch.sourceName, batch.creator, ...batch.tasks.flatMap(task => [task.id, task.target])].some(value => value.toLowerCase().includes(query)))
+        && (status === 'all' || getTaskGroupStatus(tasks) === status)
+        && (channel === 'all' || tasks.some(task => task.channels.includes(channel)))
+        && (!createdFrom || batch.createdAt.slice(0, 10) >= createdFrom)
+        && (!createdTo || batch.createdAt.slice(0, 10) <= createdTo);
+    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const allChannels = [...new Set(allBatches.flatMap(batch => batch.channels))];
+    return <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F6F8]" data-unified-sync-tasks>
+      {notice && <div role="status" className="absolute right-6 top-[76px] z-[120] rounded-md bg-[#1D2129] px-4 py-2.5 text-[13px] text-white shadow-lg">{notice}</div>}
+      <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <input aria-label="搜索同步任务" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="搜索任务编号、名称、来源或操作人" className="h-9 w-[280px] rounded border border-[#D9DDE3] px-3 outline-none focus:border-[#00B460]" />
+          <select aria-label="任务阶段" value={taskKind} onChange={e => setTaskKind(e.target.value as typeof taskKind)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3"><option value="all">全部任务阶段</option><option value="qimai">含企迈任务</option><option value="platform">含平台任务</option></select>
+          <select aria-label="任务状态" value={status} onChange={e => setStatus(e.target.value as typeof status)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3">{[['all', '全部状态'], ['running', '执行中 / 等待'], ['partial', '部分成功'], ['failed', '失败'], ['success', '成功']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <select aria-label="任务渠道" value={channel} onChange={e => setChannel(e.target.value)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3"><option value="all">全部渠道</option>{allChannels.map(item => <option key={item} value={item}>{item}</option>)}</select>
+          <label className="flex items-center gap-2 text-[#667085]">创建时间<input aria-label="创建开始日期" type="date" value={createdFrom} max={createdTo || undefined} onChange={e => setCreatedFrom(e.target.value)} className="h-9 rounded border border-[#D9DDE3] px-2" />至<input aria-label="创建结束日期" type="date" min={createdFrom || undefined} value={createdTo} onChange={e => setCreatedTo(e.target.value)} className="h-9 rounded border border-[#D9DDE3] px-2" /></label>
+          <button type="button" onClick={() => { setKeyword(''); setStatus('all'); setChannel('all'); setTaskKind('all'); setCreatedFrom(''); setCreatedTo(''); }} className="h-9 rounded border border-[#D9DDE3] px-4 text-[#667085]">重置</button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto p-5 no-scrollbar">
+        <div className="overflow-hidden rounded-lg border border-[#E3E6EA] bg-white">
+          <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3 text-xs text-[#667085]"><span>共 {rows.length} 个同步任务</span><span>同一次操作集中查看各阶段结果；平台失败不回滚企迈成功结果。</span></div>
+          <div className="overflow-x-auto no-scrollbar"><table className="w-full min-w-[1080px] table-fixed text-left text-[13px]">
+            <thead className="h-11 bg-[#F5F6F8] text-[#667085]"><tr><th className="w-[210px] px-4 font-medium">同步任务</th><th className="w-[165px] px-4 font-medium">来源与范围</th><th className="px-4 font-medium">各阶段结果</th><th className="w-[100px] px-4 font-medium">整体状态</th><th className="w-[150px] px-4 font-medium">创建信息</th><th className="w-[88px] px-4 font-medium">操作</th></tr></thead>
+            <tbody>{rows.map(batch => <tr key={batch.id} className="border-t border-[#EEEEEE] align-top hover:bg-[#FCFDFC]"><td className="px-4 py-4"><div className="font-semibold text-[#1D2129]">{batch.title}</div><div className="mt-1 break-all text-xs text-[#86909C]">{batch.id}</div><div className="mt-1 text-xs text-[#667085]">{batch.productCount} 个商品 · {batch.skuCount} 个 SKU</div></td>
+              <td className="px-4 py-4 leading-5"><div>{batch.sourceName}</div><div className="mt-1 text-xs text-[#86909C]">{batch.storeScope}</div><div className="mt-1 text-xs text-[#667085]">{batch.channels.join('、')}</div></td>
+              <td className="space-y-2 px-4 py-4">{batch.tasks.map(task => <button key={task.id} type="button" onClick={() => { setDetailTaskId(task.id); setDetailBatch(batch); }} className="block w-full text-left" aria-label={`查看阶段：${task.target}`}><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-[#1D2129]">{task.type === 'qimai' ? '企迈' : '平台'} · {task.target}</span><StatusTag status={task.status} /></div><div className="mt-1 text-xs text-[#86909C]">成功 {task.successCount} · 失败 {task.failedCount} · 等待 {task.waitingCount}</div>{(task.error || task.waitingReason) && <div className={`mt-1 line-clamp-2 text-xs leading-5 ${task.error ? 'text-[#D9363E]' : 'text-[#667085]'}`} title={task.error || task.waitingReason}>{task.error || task.waitingReason}</div>}</button>)}</td>
+              <td className="px-4 py-4"><StatusTag status={getTaskGroupStatus(batch.tasks)} /></td><td className="px-4 py-4"><div className="text-xs">{batch.createdAt}</div><div className="mt-1 text-xs text-[#86909C]">{batch.creator}</div></td><td className="px-4 py-4"><button type="button" onClick={() => { setDetailTaskId(batch.tasks[0]?.id || ''); setDetailBatch(batch); }} className="text-[#008F4C] hover:underline">查看详情</button></td></tr>)}
+              {!rows.length && <tr><td colSpan={6} className="py-14 text-center text-[#86909C]">{allBatches.length ? '没有符合条件的同步任务，请调整筛选。' : '暂无同步任务，提交下发或批量操作后可在这里查看。'}</td></tr>}
+            </tbody></table></div>
+        </div>
+      </div>
+    </div>;
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F6F8]">
+    <div className="console-list-surface flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F6F8]">
       {notice && <div className="absolute right-6 top-[76px] z-[120] rounded-md bg-[#1D2129] px-4 py-2.5 text-[13px] text-white shadow-lg">{notice}</div>}
       <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5 py-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -1089,7 +1155,7 @@ export const WebPublishRecords: React.FC<{
                           </button>
                         </td>
                         <td className="px-3 py-4">
-                          <div className="font-medium text-[#333]">{batch.sourceType}</div>
+                          <div className="font-medium text-[#333]">{batch.sourceType.replace('商品模板', '商品下发模板')}</div>
                           <div className="mt-1 text-xs text-[#999]">{batch.sourceName}</div>
                         </td>
                         <td className="px-3 py-4">
@@ -1168,7 +1234,7 @@ export const WebPublishRecords: React.FC<{
                             <span className="mt-1 inline-flex items-center text-xs">{batch.id}<ChevronRight size={13} className="ml-0.5" /></span>
                           </button>
                         ) : (
-                          <><div className="font-medium text-[#333]">渠道商品库手动同步</div><div className="mt-1 text-xs text-[#999]">{batch.sourceName}</div></>
+                          <><div className="font-medium text-[#333]">{batch.sourceType === '商品库' ? '保存商品后自动创建' : '渠道商品库手动同步'}</div><div className="mt-1 text-xs text-[#999]">{batch.sourceName}</div></>
                         )}
                       </td>
                       <td className="px-4 py-4">
@@ -1178,6 +1244,7 @@ export const WebPublishRecords: React.FC<{
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2"><StatusTag status={task.status} />{task.status === 'running' && <span className="text-xs text-[#246BCE]">{task.progress}%</span>}</div>
                         <div className="mt-2 text-xs text-[#777]">成功 {task.successCount} · 失败 <span className={task.failedCount ? 'text-[#D9363E]' : ''}>{task.failedCount}</span>{task.waitingCount > 0 ? ` · 等待 ${task.waitingCount}` : ''}</div>
+                        {task.status === 'waiting' && task.waitingReason && <div className="mt-1 text-xs leading-5 text-[#667085]">{task.waitingReason}</div>}
                       </td>
                       <td className="px-4 py-4 text-xs leading-5">
                         <div>{task.startedAt}</div>
@@ -1223,7 +1290,7 @@ export const WebPublishRecords: React.FC<{
             <div className="min-h-0 flex-1 overflow-auto p-5">
               <div className="grid grid-cols-4 gap-x-6 gap-y-4 rounded border border-[#E8E8E8] bg-[#FAFBFC] p-4 text-sm">
                 <div><div className="text-xs text-[#999]">同步动作</div><div className="mt-1 font-medium text-[#333]">{detailBatch.action}</div></div>
-                <div><div className="text-xs text-[#999]">数据来源</div><div className="mt-1 font-medium text-[#333]">{detailBatch.sourceType} · {detailBatch.sourceName}</div></div>
+                <div><div className="text-xs text-[#999]">数据来源</div><div className="mt-1 font-medium text-[#333]">{detailBatch.sourceType.replace('商品模板', '商品下发模板')} · {detailBatch.sourceName}</div></div>
                 <div><div className="text-xs text-[#999]">冻结快照</div><div className="mt-1 font-medium text-[#333]">{detailBatch.snapshot}</div></div>
                 <div><div className="text-xs text-[#999]">企迈执行状态</div><div className="mt-1"><StatusTag status={getTaskGroupStatus(detailBatch.tasks.filter(task => task.type === 'qimai'))} /></div></div>
                 <div><div className="text-xs text-[#999]">执行范围</div><div className="mt-1 font-medium text-[#333]">{detailBatch.storeScope}{detailBatch.storeCount > 0 ? ` · ${detailBatch.storeCount} 家` : ''}</div></div>
@@ -1310,7 +1377,7 @@ export const WebPublishRecords: React.FC<{
                 </div>
                 <div>
                   <div className="text-xs text-[#999]">数据来源</div>
-                  <div className="mt-1 font-medium text-[#333]">{detailPlatformRecord.batch.sourceType} · {detailPlatformRecord.batch.sourceName}</div>
+                  <div className="mt-1 font-medium text-[#333]">{detailPlatformRecord.batch.sourceType.replace('商品模板', '商品下发模板')} · {detailPlatformRecord.batch.sourceName}</div>
                 </div>
                 <div>
                   <div className="text-xs text-[#999]">触发来源</div>
@@ -1368,6 +1435,7 @@ export const WebPublishRecords: React.FC<{
                   <div className="mt-2 text-sm leading-6 text-[#9F2730]">{detailPlatformRecord.task.error}</div>
                 </div>
               )}
+              {detailPlatformRecord.task.status === 'waiting' && detailPlatformRecord.task.waitingReason && <div className="mt-4 rounded border border-[#DDE5EC] bg-[#F7F8FA] px-4 py-3 text-sm text-[#4E5969]">{detailPlatformRecord.task.waitingReason}</div>}
               <div className="mt-4 rounded border border-[#DCEFE5] bg-[#F5FCF8] px-4 py-3 text-xs leading-5 text-[#557065]">
                 平台同步任务独立记录、独立重试。平台执行失败不会回滚已经成功的企迈商品；重试仅处理当前平台任务中的失败对象。
               </div>

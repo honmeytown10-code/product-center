@@ -1,8 +1,20 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Plus, ChevronDown, MoreHorizontal, Filter, ListFilter, X, Trash2, HelpCircle, Package, ChevronLeft, ChevronRight, Box, Utensils, CupSoda, PanelLeftClose, PanelLeftOpen, Upload, ImageIcon, CheckCircle2, AlertTriangle, FileText, RefreshCw, Library, CircleCheck, CirclePause, FilePenLine } from 'lucide-react';
 import { useProducts } from '../../context';
 import type { Product } from '../../types';
+import { WebOnlineOrderingEntry } from './WebOnlineOrderingEntry';
+import type { OnlineOrderingPlatform, OnlineOrderingPlatformView } from './WebOnlineOrderingPlatformHub';
+import { getOmnichannelChannel } from '../../omnichannel';
+import { getProductStoreRecords, fromStoreChannel, type ProductSalesScope } from './WebProductSalesScope';
+import type { StoreProductRecord } from './WebStoreProductList';
+import { WebProductLifecycleConfirm, type ProductLifecycleAction } from './WebProductLifecycleConfirm';
+import { WebProductLibraryBatchDialog } from './WebProductLibraryBatchDialog';
+const readProductScope = (product: Product): ProductSalesScope | undefined => {
+  const data = (product as Product & { formData?: { salesScope?: ProductSalesScope; applicableChannelIds?: ProductSalesScope['channelIds'] } }).formData;
+  return data?.salesScope || (data?.applicableChannelIds ? { channelIds: data.applicableChannelIds, storeIds: [] } : undefined);
+};
 
 type ProductTab = 'all' | 'on_shelf' | 'off_shelf' | 'draft';
 type QuickCategoryView = 'backend' | 'frontend';
@@ -38,11 +50,9 @@ const getFrontendCategoryName = (product: Product) => {
 };
 
 const getBatchActions = (tab: ProductTab, unifiedManagement: boolean) => {
-  const entityName = unifiedManagement ? '商品' : '主档';
-  if (tab === 'all') return [`批量修改${entityName}`, `批量导出${entityName}`];
-  if (tab === 'on_shelf') return [`批量修改${entityName}`, '批量停用'];
   if (tab === 'off_shelf') return ['批量启用', '批量归档'];
-  return [];
+  const editActions = ['改价', '批量修改标准商品', '批量修改套餐商品', '加入到模板'];
+  return tab === 'on_shelf' ? [...editActions, '批量停用'] : editActions;
 };
 
 const BATCH_IMAGE_TYPES: Array<{ id: BatchImageType; label: string; suffix: string }> = [
@@ -86,9 +96,19 @@ export const WebProductList: React.FC<{
   onEditProduct?: (product: any) => void;
   onSyncToChannelProducts?: (products: Product[]) => void;
   unifiedManagement?: boolean;
-}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, onSyncToChannelProducts, unifiedManagement = false }) => {
-  const { products, categories, addProduct, updateProduct, toggleShelfStatus } = useProducts();
-  const [activeTab, setActiveTab] = useState<ProductTab>('on_shelf');
+  directUse?: boolean;
+  storeRecords?: StoreProductRecord[];
+  onLifecycleAction?: (action: ProductLifecycleAction, products: Product[]) => void | Promise<void>;
+  onBatchEdit?: (type: 'standard' | 'combo', products: Product[], returnTab: ProductTab) => void;
+  templateProductIds?: Record<string, string[]>;
+  onAddToTemplates?: (templateIds: string[], productIds: string[]) => void | Promise<void>;
+  initialTab?: ProductTab;
+  onlineChannels?: { douyin: boolean; meituan: boolean };
+  onOpenOnlineProducts?: (platform: OnlineOrderingPlatform, view: OnlineOrderingPlatformView) => void;
+}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, onSyncToChannelProducts, unifiedManagement = false, directUse = false, storeRecords = [], onLifecycleAction, onBatchEdit, templateProductIds, onAddToTemplates, initialTab = 'on_shelf', onlineChannels, onOpenOnlineProducts }) => {
+  const { products, categories, addProduct, updateProduct, deleteProduct, toggleShelfStatus } = useProducts();
+  const [activeTab, setActiveTab] = useState<ProductTab>(initialTab);
+  const [batchDialog, setBatchDialog] = useState<'price' | 'template' | 'enable' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportDropdown, setShowImportDropdown] = useState(false);
   const [showToolbarMoreDropdown, setShowToolbarMoreDropdown] = useState(false);
@@ -101,6 +121,12 @@ export const WebProductList: React.FC<{
   const [rowMoreMenu, setRowMoreMenu] = useState<{ productId: string; top: number; left: number } | null>(null);
   const [showBatchImageModal, setShowBatchImageModal] = useState(false);
   const [actionNotice, setActionNotice] = useState('');
+  const [scopeProduct, setScopeProduct] = useState<Product | null>(null);
+  const [lifecycleConfirmation, setLifecycleConfirmation] = useState<{ action: ProductLifecycleAction; products: Product[] } | null>(null);
+  const requestLifecycleAction = (action: ProductLifecycleAction, targets: Product[]) => {
+    setRowMoreMenu(null);
+    setLifecycleConfirmation({ action, products: targets });
+  };
   const showNotice = (message: string) => { setActionNotice(message); window.setTimeout(() => setActionNotice(''), 2400); };
 
   const tabCounts = useMemo(
@@ -117,7 +143,7 @@ export const WebProductList: React.FC<{
     if (activeTab === 'on_shelf' && product.status !== 'on_shelf') return false;
     if (activeTab === 'off_shelf' && product.status !== 'off_shelf') return false;
     if (activeTab === 'draft' && product.status !== 'draft') return false;
-    if (activeTab !== 'draft' && product.status === 'draft') return false;
+    // Production's all view includes drafts; switching state resets selection.
     if (appliedFilters.productId && !product.id.includes(appliedFilters.productId)) return false;
     if (appliedFilters.skuId && !product.skuCode.includes(appliedFilters.skuId)) return false;
     if (appliedFilters.backendCategory !== 'all' && product.category !== appliedFilters.backendCategory) return false;
@@ -154,15 +180,19 @@ export const WebProductList: React.FC<{
   }, [categorySourceProducts, quickCategoryView, selectedQuickCategory]);
 
   const batchActions = getBatchActions(activeTab, unifiedManagement);
-  const selectionEnabled = activeTab !== 'draft';
+  const selectionEnabled = true;
   const allVisibleSelected = filteredProducts.length > 0 && filteredProducts.every(item => selectedProductIds.includes(item.id));
 
   const selectedProducts = useMemo(
     () => products.filter(product => selectedProductIds.includes(product.id)),
     [products, selectedProductIds]
   );
+  useEffect(() => {
+    const visibleIds = new Set(filteredProducts.map(product => product.id));
+    setSelectedProductIds(current => current.filter(id => visibleIds.has(id)));
+  }, [filteredProducts]);
   const toolbarMoreActions = [
-    { label: '同步至渠道商品', enabled: selectedProductIds.length > 0 },
+    ...(!unifiedManagement ? [{ label: '同步至渠道商品', enabled: selectedProductIds.length > 0 }] : []),
     { label: '批量增/换图片', enabled: products.length > 0 },
   ];
 
@@ -207,6 +237,7 @@ export const WebProductList: React.FC<{
 
   const handleToggleShelf = (product: Product) => {
     if (product.status === 'draft') return;
+    if (product.status === 'on_shelf') { requestLifecycleAction('disable', [product]); return; }
     toggleShelfStatus(product.id);
     setRowMoreMenu(null);
   };
@@ -214,10 +245,9 @@ export const WebProductList: React.FC<{
   const getRowMoreActions = (product: Product) => {
     return [
       { key: 'enable', label: product.status === 'on_shelf' ? (unifiedManagement ? '停用商品' : '停用主档') : (unifiedManagement ? '启用商品' : '启用主档'), onClick: () => handleToggleShelf(product) },
-      { key: 'channel-products', label: unifiedManagement ? '查看发布范围' : '查看渠道商品', onClick: () => setRowMoreMenu(null) },
-      { key: 'template-reference', label: '查看模板引用', onClick: () => setRowMoreMenu(null) },
+      ...(!unifiedManagement && !directUse ? [{ key: 'channel-products', label: '查看渠道商品', onClick: () => setRowMoreMenu(null) }] : []),
       { key: 'copy', label: '复制', onClick: () => handleCopyProduct(product) },
-      { key: 'archive', label: '归档', onClick: () => setRowMoreMenu(null) },
+      { key: 'archive', label: '归档', onClick: () => requestLifecycleAction('archive', [product]) },
     ];
   };
 
@@ -239,10 +269,10 @@ export const WebProductList: React.FC<{
   };
 
   return (
-    <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
+    <main className="console-product-library relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
       {actionNotice && <div className="absolute left-1/2 top-3 z-[80] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{actionNotice}</div>}
-      <div className="flex min-h-[64px] shrink-0 items-center justify-between gap-5 border-b border-[#E8E8E8] bg-white px-5 py-2">
-        <div className="grid min-w-[640px] max-w-[820px] flex-1 grid-cols-4 gap-2" role="tablist" aria-label={unifiedManagement ? '商品状态概览' : '主档状态概览'}>
+      <div className="console-status-toolbar flex min-h-[64px] shrink-0 items-center justify-between gap-5 border-b border-[#E8E8E8] bg-white px-5 py-2">
+        <div className="console-status-tabs grid min-w-[640px] max-w-[820px] flex-1 grid-cols-4 gap-2" role="tablist" aria-label={unifiedManagement ? '商品状态概览' : '主档状态概览'}>
           {[
             { id: 'all' as const, label: unifiedManagement ? '全部商品' : '全部主档', count: tabCounts.all, icon: Library },
             { id: 'on_shelf' as const, label: '已启用', count: tabCounts.on_shelf, icon: CircleCheck },
@@ -277,12 +307,15 @@ export const WebProductList: React.FC<{
             );
           })}
         </div>
+        <div className="flex shrink-0 items-center gap-4">
+        {unifiedManagement && onlineChannels && onOpenOnlineProducts && <WebOnlineOrderingEntry {...onlineChannels} onOpen={onOpenOnlineProducts} />}
         <button onClick={() => showNotice('回收站暂无已归档商品')} className="flex items-center text-[13px] text-[#666] hover:text-[#333]">
           <Trash2 size={14} className="mr-1.5" /> 回收站
         </button>
+        </div>
       </div>
 
-      <div className="shrink-0 space-y-4 border-b border-[#E8E8E8] bg-[#F5F6FA] p-4">
+      <div className="console-library-filters shrink-0 space-y-3 bg-white px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex h-[36px] w-[200px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
             <span className="mr-2 whitespace-nowrap text-xs text-gray-500">商品ID:</span>
@@ -372,14 +405,14 @@ export const WebProductList: React.FC<{
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white p-4">
+      <div className="console-library-results flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-2">
         <div className="relative flex min-h-0 flex-1">
           {!isCategoryPanelCollapsed && (
             <aside className="flex min-h-0 w-[240px] shrink-0 flex-col rounded-lg border border-[#E8E8E8] bg-white">
               <div className="flex h-11 items-center justify-between border-b border-[#E8E8E8] px-3">
                 <div className="flex items-center gap-4 text-[13px]">
-                  <button type="button" onClick={() => { setQuickCategoryView('backend'); setSelectedQuickCategory(null); }} className={quickCategoryView === 'backend' ? 'font-bold text-[#00A35B]' : 'text-[#667085] hover:text-[#333]'}>后台分类</button>
-                  <button type="button" onClick={() => { setQuickCategoryView('frontend'); setSelectedQuickCategory(null); }} className={quickCategoryView === 'frontend' ? 'font-bold text-[#00A35B]' : 'text-[#667085] hover:text-[#333]'}>前台分类</button>
+                  <button type="button" aria-pressed={quickCategoryView === 'frontend'} onClick={() => { setQuickCategoryView('frontend'); setSelectedQuickCategory(null); }} className={quickCategoryView === 'frontend' ? 'font-bold text-[#00A35B]' : 'text-[#667085] hover:text-[#333]'}>前台分类</button>
+                  <button type="button" aria-pressed={quickCategoryView === 'backend'} onClick={() => { setQuickCategoryView('backend'); setSelectedQuickCategory(null); }} className={quickCategoryView === 'backend' ? 'font-bold text-[#00A35B]' : 'text-[#667085] hover:text-[#333]'}>后台分类</button>
                 </div>
               </div>
               <div className="no-scrollbar flex-1 overflow-y-auto p-2">
@@ -513,7 +546,7 @@ export const WebProductList: React.FC<{
                 </div>
 
                 <button onClick={() => onCreateClick('standard')} className="flex h-[36px] items-center rounded-md bg-[#00C06B] px-4 text-[13px] font-bold text-white transition-all hover:bg-[#00A35B] active:scale-95">
-                  <CupSoda size={16} className="mr-1.5" /> {unifiedManagement ? '新建商品' : '新建商品主档'}
+                  <CupSoda size={16} className="mr-1.5" /> {unifiedManagement ? '新建单品' : '新建单品主档'}
                 </button>
                 <button onClick={() => onCreateClick('combo')} className="flex h-[36px] items-center rounded-md border border-[#00C06B] bg-white px-4 text-[13px] font-bold text-[#00C06B] transition-all hover:bg-[#E6F8F0] active:scale-95">
                   <Utensils size={16} className="mr-1.5" /> {unifiedManagement ? '新建套餐商品' : '新建套餐主档'}
@@ -522,7 +555,7 @@ export const WebProductList: React.FC<{
             </div>
 
             {selectedProductIds.length > 0 && batchActions.length > 0 && (
-              <div className="absolute bottom-4 left-1/2 z-30 flex min-h-[60px] w-[min(900px,calc(100%-80px))] -translate-x-1/2 items-center justify-between rounded-lg border border-[#D8F0E3] bg-white px-4 py-3 shadow-[0_10px_28px_rgba(17,24,39,.14)]">
+              <div role="region" aria-label="商品批量操作" className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-md border border-[#9AD7B8] bg-[#EAF8F1] px-4 py-3">
                 <div className="text-[13px] text-[#333]">
                   已选择 <span className="font-bold text-[#00C06B]">{selectedProductIds.length}</span> 个商品
                 </div>
@@ -533,20 +566,26 @@ export const WebProductList: React.FC<{
                       <button
                         key={action}
                         onClick={() => {
-                          if (action === '批量启用' || action === '批量停用') selectedProducts.forEach(product => { if ((action === '批量启用' && product.status !== 'on_shelf') || (action === '批量停用' && product.status === 'on_shelf')) toggleShelfStatus(product.id); });
-                          showNotice(`${action}已处理 ${selectedProductIds.length} 个商品`);
-                          setSelectedProductIds([]);
+                          if (isDanger) { requestLifecycleAction(action === '批量停用' ? 'disable' : 'archive', selectedProducts); return; }
+                          if (action === '批量启用') { setBatchDialog('enable'); return; }
+                          if (action === '改价') { setBatchDialog('price'); return; }
+                          if (action === '加入到模板') { setBatchDialog('template'); return; }
+                          const type = action === '批量修改套餐商品' ? 'combo' : 'standard';
+                          const targets = selectedProducts.filter(product => (product.type === 'combo' ? 'combo' : 'standard') === type);
+                          if (!targets.length) { showNotice(`所选商品中没有${type === 'combo' ? '套餐商品' : '标准商品'}，请调整选择。`); return; }
+                          onBatchEdit?.(type, targets, activeTab);
                         }}
-                        className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                        className={`rounded px-2 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008647] ${
                           isDanger
-                            ? 'border border-[#FFD6D6] bg-white text-[#FF4D4F] hover:bg-[#FFF5F5]'
-                            : 'border border-[#D9EBDD] bg-white text-[#00A35B] hover:bg-[#F3FBF6]'
+                            ? 'text-[#CB2634] hover:bg-[#FFF5F5]'
+                            : 'text-[#008647] hover:bg-white/70'
                         }`}
                       >
                         {action}
                       </button>
                     );
                   })}
+                  <button type="button" onClick={() => setSelectedProductIds([])} className="ml-1 border-l border-[#9AD7B8] pl-3 text-[13px] font-medium text-[#008647] hover:underline">取消选择</button>
                 </div>
               </div>
             )}
@@ -583,9 +622,9 @@ export const WebProductList: React.FC<{
                       商品类型 <Filter size={12} className="ml-1 inline text-[#00C06B]" />
                     </th>
                     <th className="w-[140px] whitespace-nowrap px-4">商品类目</th>
-                    <th className="w-[120px] whitespace-nowrap px-4">基础售价</th>
+                    <th className="w-[120px] whitespace-nowrap px-4">售价</th>
                     <th className="w-[100px] whitespace-nowrap px-4">{unifiedManagement ? '商品状态' : '主档状态'}</th>
-                    <th className="w-[100px] whitespace-nowrap px-4">{unifiedManagement ? '维护方式' : '数据来源'}</th>
+                    {unifiedManagement ? <th className="w-[200px] whitespace-nowrap px-4">销售渠道</th> : <th className="w-[100px] whitespace-nowrap px-4">数据来源</th>}
                     <th className="w-[160px] whitespace-nowrap px-4">创建时间</th>
                     <th className="w-[100px] whitespace-nowrap px-4">备注</th>
                     <th className="sticky right-0 z-20 w-[140px] whitespace-nowrap bg-[#F7F8FA] px-4 text-center shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.05)]">
@@ -624,11 +663,11 @@ export const WebProductList: React.FC<{
                         <td className="whitespace-nowrap px-4 py-3">
                           <span className={product.status === 'on_shelf' ? 'text-[#00A35B]' : 'text-[#999]'}>{getProductStatusLabel(product)}</span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3">
+                        {unifiedManagement ? <td className="px-4 py-3"><span className="block min-w-[150px] max-w-[220px] whitespace-normal break-words leading-5 text-[#4E5969]">{readProductScope(product)?.channelIds?.map(id => getOmnichannelChannel(id).name).join('、') || '未设置'}</span></td> : <td className="whitespace-nowrap px-4 py-3">
                           <div className="flex items-center text-[#666]">
-                            {unifiedManagement ? '统一管理' : '品牌主档'} <HelpCircle size={12} className="ml-1 cursor-help text-[#00C06B]" />
+                            品牌主档
                           </div>
-                        </td>
+                        </td>}
                         <td className="whitespace-nowrap px-4 py-3 font-mono text-[12px] text-[#666]">{product.createdTime}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#999]">-</td>
                         <td className="sticky right-0 z-10 whitespace-nowrap bg-white px-4 py-3 shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.05)] group-hover:bg-[#F9FFFC]">
@@ -712,6 +751,22 @@ export const WebProductList: React.FC<{
             </div>
           </div>
         )}
+        {lifecycleConfirmation && <WebProductLifecycleConfirm
+          action={lifecycleConfirmation.action}
+          products={lifecycleConfirmation.products}
+          unifiedManagement={unifiedManagement}
+          storeCount={new Set(storeRecords.filter(record => lifecycleConfirmation.products.some(product => product.id === record.baseProductId)).map(record => record.storeId)).size}
+          onCancel={() => setLifecycleConfirmation(null)}
+          onConfirm={async () => {
+            const { action, products: targets } = lifecycleConfirmation;
+            if (onLifecycleAction) await onLifecycleAction(action, targets);
+            else targets.forEach(product => action === 'disable' ? updateProduct(product.id, { status: 'off_shelf' }) : deleteProduct(product.id));
+            setLifecycleConfirmation(null);
+            setSelectedProductIds([]);
+            showNotice(action === 'disable' ? `已停用 ${targets.length} 个商品${unifiedManagement ? '，所有关联门店商品已下架' : ''}` : `已归档 ${targets.length} 个商品${unifiedManagement ? '，已从商品库、门店和模板移除' : ''}`);
+          }}
+        />}
+        {batchDialog && <WebProductLibraryBatchDialog action={batchDialog} products={selectedProducts} templateProductIds={templateProductIds} onAddToTemplates={onAddToTemplates} onCancel={() => setBatchDialog(null)} onComplete={message => { setBatchDialog(null); setSelectedProductIds([]); showNotice(message); }} />}
         {showBatchImageModal && (
           <BatchImageImportModal
             products={products}
@@ -721,9 +776,43 @@ export const WebProductList: React.FC<{
             }}
           />
         )}
+        {scopeProduct && <ProductScopeDrawer product={scopeProduct} records={getProductStoreRecords(storeRecords, scopeProduct.id)} onClose={() => setScopeProduct(null)} onEdit={() => { setScopeProduct(null); onEditProduct?.(scopeProduct); }} />}
       </div>
     </main>
   );
+};
+
+// Production: shared Drawer, QmListTable and authorized store-name lookup.
+const ProductScopeDrawer: React.FC<{ product: Product; records: StoreProductRecord[]; onClose: () => void; onEdit: () => void }> = ({ product, records, onClose, onEdit }) => {
+  const scope = readProductScope(product);
+  const [keyword, setKeyword] = useState('');
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    panel.current?.focus();
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Tab') return;
+      const controls = panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input');
+      if (!controls?.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => { document.removeEventListener('keydown', handler); previousFocus?.focus(); };
+  }, [onClose]);
+  const rows = records.flatMap(record => record.channels.map(channel => ({ ...record, channel }))).filter(record => `${record.storeName} ${record.storeId} ${getOmnichannelChannel(fromStoreChannel(record.channel)).name}`.includes(keyword.trim()));
+  return createPortal(<div className="fixed inset-0 z-[150] flex justify-end bg-black/30" onClick={onClose}>
+    <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="product-scope-title" className="flex h-full w-full max-w-[600px] flex-col bg-white shadow-2xl focus:outline-none" onClick={event => event.stopPropagation()}>
+      <header className="flex items-start justify-between border-b border-[#E5E6EB] p-5"><div><h2 id="product-scope-title" className="text-[18px] font-semibold text-[#1D2129]">门店商品</h2><p className="mt-1 max-w-[480px] break-words text-[14px] text-[#4E5969]">{product.name}</p></div><button type="button" aria-label="关闭门店商品" className="rounded p-2 text-[#667085] hover:bg-[#F2F3F5]" onClick={onClose}><X size={18} /></button></header>
+      <div className="flex-1 overflow-auto p-5">
+        <h3 className="mb-3 text-sm font-semibold">商品库销售渠道</h3><div className="mb-6 flex flex-wrap gap-2">{scope?.channelIds?.length ? scope.channelIds.map(id => <span key={id} className="rounded bg-[#F2F3F5] px-3 py-1 text-[13px] text-[#4E5969]">{getOmnichannelChannel(id).name}</span>) : <span className="text-sm text-[#667085]">尚未设置</span>}</div>
+        <h3 className="mb-2 text-sm font-semibold">已有门店商品 · {new Set(records.map(record => record.storeId)).size} 家门店</h3><p className="mb-4 text-[13px] leading-6 text-[#667085]">按当前门店商品展示，包含已下架商品。手动下发、删除和下架的结果会在此更新。</p>
+        {records.length ? <><input aria-label="搜索门店商品" placeholder="搜索门店名称、编码或渠道" value={keyword} onChange={event => setKeyword(event.target.value)} className="mb-3 h-9 w-full rounded border border-[#D9DDE3] px-3 text-sm focus:border-[#00B460] focus:outline-none" /><table className="w-full text-left text-sm"><thead className="bg-[#F7F8FA] text-[#667085]"><tr><th className="p-3 font-medium">门店</th><th className="p-3 font-medium">渠道</th><th className="p-3 font-medium">状态</th></tr></thead><tbody>{rows.map(row => <tr key={row.id + row.channel} className="border-b border-[#F0F1F2]"><td className="p-3">{row.storeName}<small className="block text-[#667085]">{row.storeId}</small></td><td className="p-3">{getOmnichannelChannel(fromStoreChannel(row.channel)).name}</td><td className="p-3"><span className={row.status === 'on_shelf' ? 'text-[#008F4C]' : 'text-[#667085]'}>{row.status === 'on_shelf' ? '已上架' : '已下架'}</span><small className="block text-[#667085]">库存 {row.stockCount ?? '—'}</small></td></tr>)}{!rows.length && <tr><td colSpan={3} className="p-8 text-center text-[#667085]">未找到符合条件的门店商品</td></tr>}</tbody></table></> : <div className="py-12 text-center"><Package size={28} className="mx-auto mb-4 text-[#667085]" /><h3 className="text-sm font-semibold">暂无门店商品</h3><p className="mt-2 text-[13px] text-[#667085]">下发任务完成后，此处展示生成的门店商品。</p></div>}
+        <p className="mt-5 text-xs leading-5 text-[#667085]">门店在每次下发时选择；任务执行进度请查看同步任务。</p>
+      </div><footer className="flex justify-end gap-3 border-t border-[#E5E6EB] p-4"><button type="button" className="h-9 rounded border border-[#D9DDE3] px-4 text-sm text-[#4E5969] hover:bg-[#F7F8FA]" onClick={onClose}>关闭</button><button type="button" className="h-9 rounded bg-[#00B460] px-4 text-sm font-medium text-white hover:bg-[#009F55]" onClick={onEdit}>编辑商品</button></footer>
+    </div></div>, document.body);
 };
 
 type SelectedBatchImage = {

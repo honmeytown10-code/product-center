@@ -55,7 +55,7 @@ const FIELD_DEFINITIONS: FieldDefinition[] = [
   { id: 'productType', label: '商品类型', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，固定同步标准商品或套餐商品身份。' },
   { id: 'productCategory', label: '商品类目', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，固定使用主档商品类目及类目字段结构。' },
   { id: 'backendCategory', label: '后台分类', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，固定同步主档后台经营分类。' },
-  { id: 'mnemonicCode', label: '数字助记码', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，固定同步主档数字助记码。' },
+  { id: 'mnemonicCode', label: '助记码', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，固定同步主档助记码。' },
   { id: 'weightFlag', label: '称重商品属性', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，固定同步是否称重商品。' },
   { id: 'unit', label: '计量单位', defaultSelected: true, selectionMode: 'locked', description: '渠道不可修改，始终使用主档当前计量单位。' },
   { id: 'specs', label: '规格结构', defaultSelected: true, selectionMode: 'locked', description: '固定同步规格组、规格值及 SKU 组合，并重新校验渠道可售范围。' },
@@ -186,7 +186,7 @@ export const WebMasterChannelSyncDialog: React.FC<{
             <button type="button" onClick={onClose} className="console-secondary-button">完成</button>
             {!isDirectAction && (
               <button type="button" onClick={onOpenRecords} className="console-primary-button">
-                查看同步记录 <ChevronRight size={15} />
+                查看同步任务 <ChevronRight size={15} />
               </button>
             )}
           </div>
@@ -354,7 +354,7 @@ export const WebMasterChannelSyncDialog: React.FC<{
             <RefreshCw size={13} />
             {isDirectAction
               ? (isAddAction ? '确认后立即创建渠道商品，不生成后台任务' : '确认后立即更新渠道商品，不生成后台任务')
-              : '提交后可在“发布中心—同步记录”查看进度与失败原因'}
+              : '提交后可在“商品批量管理—同步任务”查看进度与失败原因'}
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="console-secondary-button">{isDirectAction ? '暂不处理' : '取消'}</button>

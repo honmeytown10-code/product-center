@@ -335,7 +335,7 @@ export const WebComboProductForm: React.FC<WebComboProductFormProps> = ({ catego
                                             <Switch checked={group.relativePricing || false} onChange={(checked) => updateGroup(index, { relativePricing: checked })} />
                                         </div>
                                         <div className="flex-1 text-xs text-gray-400">
-                                            开启后，用户点单时该随心配会以默认子商品的加价为基础价计算 <span className="text-[#00C06B] cursor-pointer hover:underline">查看示例</span>
+                                            开启后，用户点单时该随心配会以默认子商品的加价为售价计算 <span className="text-[#00C06B] cursor-pointer hover:underline">查看示例</span>
                                         </div>
                                     </div>
                                     <div className="flex items-start space-x-8">
@@ -572,7 +572,7 @@ export const WebComboProductForm: React.FC<WebComboProductFormProps> = ({ catego
                             <SectionHeader title="基础信息" icon={<FileText size={20}/>} />
                             <div className="grid grid-cols-2 gap-8">
                                 <FormRow label="套餐名称" required><input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]" placeholder="请输入套餐名称"/></FormRow>
-                                <FormRow label="基础价格" required><input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]" placeholder="0.00"/></FormRow>
+                                <FormRow label="售价" required><input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#00C06B]" placeholder="0.00"/></FormRow>
                             </div>
                         </div>
 
@@ -597,7 +597,7 @@ export const WebComboProductForm: React.FC<WebComboProductFormProps> = ({ catego
                                     </label>
                                 </div>
                                 <p className="text-xs text-gray-400 mt-1">
-                                    {pricingType === 'markup' ? '套餐基础价格为基本费用，总价根据随心配商品加价波动' : '套餐内所有商品独立收费，总价根据用户选择商品合并计价'}
+                                    {pricingType === 'markup' ? '套餐售价为基本费用，总价根据随心配商品加价波动' : '套餐内所有商品独立收费，总价根据用户选择商品合并计价'}
                                 </p>
                             </FormRow>
 

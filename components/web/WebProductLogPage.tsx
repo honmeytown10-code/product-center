@@ -418,9 +418,9 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
     domain: 'archive',
     name: '商品库商品变动日志',
     subtitle: '记录商品库商品的启售、停售、归档、资料变更及分类、规格、做法、加料调整。',
-    operationOptions: operationOptions(['商品新建', '商品停售', '商品启售', '商品归档', '商品资料变更', '销售价变更', '前台分类变更', '后台分类变更', '规格变更', '做法变更', '加料变更']),
+    operationOptions: operationOptions(['商品新建', '商品停售', '商品启售', '商品归档', '商品资料变更', '售价变更', '前台分类变更', '后台分类变更', '规格变更', '做法变更', '加料变更']),
     filterDefs: [
-      { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['商品新建', '商品停售', '商品启售', '商品归档', '商品资料变更', '销售价变更', '前台分类变更', '后台分类变更', '规格变更', '做法变更', '加料变更']) },
+      { key: 'operationType', label: '操作类型', type: 'select', options: operationOptions(['商品新建', '商品停售', '商品启售', '商品归档', '商品资料变更', '售价变更', '前台分类变更', '后台分类变更', '规格变更', '做法变更', '加料变更']) },
       { key: 'objectName', label: '商品名称', type: 'text', placeholder: '请输入商品名称' },
       { key: 'objectId', label: '商品ID', type: 'text', placeholder: '请输入商品ID' },
       { key: 'objectType', label: '商品类型', type: 'select', options: operationOptions(['标准商品', '套餐商品']) },
@@ -517,7 +517,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
             title: '商品属性',
             fields: [
               { label: '规格', before: '', after: '多规格' },
-              { label: '规格明细', before: '', after: '中杯 | 销售价 18 元 | 规格编码 SG-GRAPE-M\n大杯 | 销售价 20 元 | 规格编码 SG-GRAPE-L' },
+              { label: '规格明细', before: '', after: '中杯 | 售价 18 元 | 规格编码 SG-GRAPE-M\n大杯 | 售价 20 元 | 规格编码 SG-GRAPE-L' },
               { label: '做法', before: '', after: '糖度: 无糖 / 半糖 / 七分糖 / 全糖\n温度: 正常冰 / 少冰 / 去冰' },
               { label: '加料配置', before: '', after: '珍珠 / 椰果 / 西柚粒' },
               { label: '加料规则', before: '', after: '点餐时起购 0 份，单个加料限购 2 份' },
@@ -535,8 +535,8 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
           {
             title: '销售属性',
             fields: [
-              { label: '销售价', before: '', after: '中杯 18 元\n大杯 20 元' },
-              { label: '市场价', before: '', after: '中杯 22 元\n大杯 24 元' },
+              { label: '售价', before: '', after: '中杯 18 元\n大杯 20 元' },
+              { label: '划线价', before: '', after: '中杯 22 元\n大杯 24 元' },
               { label: '预估成本价', before: '', after: '中杯 6.5 元\n大杯 7.8 元' },
               { label: '库存设置', before: '', after: '按规格管理库存' },
               { label: '销售渠道', before: '', after: 'POS / 小程序堂食 / 小程序外卖' },
@@ -556,8 +556,8 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectName: '招牌芝士莓莓',
         objectId: 'P1008645',
         objectType: '标准商品',
-        operationType: '销售价变更',
-        operationContent: '调整了多规格商品销售价。',
+        operationType: '售价变更',
+        operationContent: '调整了多规格商品售价。',
         beforeChange: '中杯 18 元 / 大杯 20 元',
         afterChange: '中杯 19 元 / 大杯 22 元',
         operatorName: '运营小雨',
@@ -658,7 +658,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
             title: '基础信息',
             fields: [
               { label: '套餐名称', before: '', after: '双人欢聚套餐' },
-              { label: '基础价格', before: '', after: '58 元' },
+              { label: '售价', before: '', after: '58 元' },
               { label: '前台分类', before: '', after: '双人套餐' },
               { label: '商品类目', before: '', after: '套餐商品' },
               { label: '计量单位', before: '', after: '份' },
@@ -1302,7 +1302,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
   {
     id: 'ops_template',
     domain: 'operations',
-    name: '商品模板变动日志',
+    name: '商品下发模板变动日志',
     subtitle: '记录模板本身的新增、删除、编辑及适用门店、适用渠道变化。',
     operationOptions: operationOptions(['模板新建', '模板删除', '模板编辑', '模板适用门店变更', '模板适用渠道变更']),
     filterDefs: [
@@ -1320,13 +1320,13 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'TPL001',
         templateName: '春季饮品模板',
         operationType: '模板新建',
-        operationContent: '新建商品模板。',
+        operationContent: '新建单品下发模板。',
         operatorName: '运营静静',
         operatorAccount: '15051404240',
         operationPlatform: 'PC后台',
         operationTime: '2026-05-28 15:04:31',
-        operationModule: '商品模板',
-        snapshot: snapshot('商品模板编辑页快照', [
+        operationModule: '商品下发模板',
+        snapshot: snapshot('商品下发模板编辑页快照', [
           {
             title: '模板基础信息',
             fields: [
@@ -1348,8 +1348,8 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operatorAccount: '18362905581',
         operationPlatform: 'PC后台',
         operationTime: '2026-05-27 21:14:47',
-        operationModule: '商品模板',
-        snapshot: snapshot('商品模板编辑页快照', [
+        operationModule: '商品下发模板',
+        snapshot: snapshot('商品下发模板编辑页快照', [
           {
             title: '模板基础信息',
             fields: [
@@ -1373,7 +1373,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operatorAccount: '15051404240',
         operationPlatform: 'PC后台',
         operationTime: '2026-05-27 16:04:31',
-        operationModule: '商品模板',
+        operationModule: '商品下发模板',
         detailList: {
           title: '模板适用门店明细',
           beforeTitle: '变更前门店',
@@ -1395,7 +1395,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         operatorAccount: '15051404240',
         operationPlatform: 'PC后台',
         operationTime: '2026-05-27 15:08:19',
-        operationModule: '商品模板',
+        operationModule: '商品下发模板',
       },
       {
         id: 'ops-template-5',
@@ -1403,12 +1403,12 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         objectId: 'TPL006',
         templateName: '短期活动模板',
         operationType: '模板删除',
-        operationContent: '删除商品模板。',
+        operationContent: '删除商品下发模板。',
         operatorName: '运营静静',
         operatorAccount: '15051404240',
         operationPlatform: 'PC后台',
         operationTime: '2026-05-26 14:08:19',
-        operationModule: '商品模板',
+        operationModule: '商品下发模板',
       },
     ],
     enableSnapshot: true,
@@ -1969,7 +1969,7 @@ const LOG_TYPE_CONFIGS: LogTypeConfig[] = [
         storeName: '一级门店8',
         sourceType: '门店手工修改',
         operationType: '分类新建',
-        operationContent: '门店新建商品分类。',
+        operationContent: '门店新建单品分类。',
         operatorName: '督导王芳',
         operatorAccount: '18900012311',
         operationPlatform: 'PC后台',

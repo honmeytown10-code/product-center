@@ -85,7 +85,7 @@ export const TabItem: React.FC<{ label: string; count?: number; active: boolean;
       aria-selected={active}
       onClick={onClick}
       className={`
-        flex h-8 items-center rounded-md px-3 transition-colors
+        console-status-tab flex h-8 items-center rounded-md px-3 transition-colors
         ${active ? 'bg-white font-semibold text-[#008F4C] shadow-sm' : 'font-medium text-[#667085] hover:bg-white/70 hover:text-[#333]'}
       `}
     >

@@ -50,8 +50,8 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         label: '展示设置',
         desc: '对应创建表单里的展示设置区域，按列表页与详情页拆分。',
         groups: [
-            { id: 'display_list', label: '列表页展示', desc: '列表卡片中直接展示的图片、文案与标签。', fieldIds: ['p_img', 'p_list_desc', 'p_desc_tags', 'p_badge'], showHeader: true },
-            { id: 'display_detail', label: '详情页展示', desc: '详情页内容和富文本展示信息。', fieldIds: ['p_video', 'p_rich_desc'], showHeader: true },
+            { id: 'display_list', label: '列表页展示', desc: '列表卡片中直接展示的图片、文案与标签。', fieldIds: ['p_img', 'p_cover_img', 'p_list_desc', 'p_desc_tags', 'p_badge'], showHeader: true },
+            { id: 'display_detail', label: '详情页展示', desc: '商品详情图、说明与底部图片。', fieldIds: ['p_detail_images', 'p_rich_desc', 'p_detail_bottom_img', 'p_video'], showHeader: true },
         ],
     },
     {
@@ -67,7 +67,7 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         label: '其他属性',
         desc: '对应创建表单里的其他属性区域，统一展示会员、开票、原料与补充属性配置。',
         groups: [
-            { id: 'other_main', label: '其他属性', desc: '会员、税务、原料及其他补充属性。', fieldIds: ['st_member', 'o_tax', 'o_invoice', 'o_origin', 'o_ingredients', 'o_print_stat_test', 'o_1202_attr'] },
+            { id: 'other_main', label: '其他属性', desc: '会员、税务、原料及其他补充属性。', fieldIds: ['st_member', 'o_tax', 'o_invoice', 'o_origin', 'o_ingredients'] },
         ],
     },
 ];
@@ -132,7 +132,7 @@ interface Props {
     configs: CommonFieldConfigs;
     initialType?: 'standard' | 'combo';
     initialCategoryId?: string | null;
-    fieldScope?: 'master' | 'channel' | 'store';
+    fieldScope?: 'master' | 'channel' | 'unified' | 'store';
     scopeLabel?: string;
     onBack: () => void;
     onSave: (type: 'standard' | 'combo', categoryId: string, fieldConfigs: CategoryFieldConfig[]) => void;

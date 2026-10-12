@@ -336,7 +336,7 @@ export const WebProductWorkbench: React.FC<Props> = ({ onNavigate }) => {
               <h1 className="text-[19px] font-bold leading-7 text-[#1D2129]">商品工作台</h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[#86909C]">
                 <span>当前身份</span><strong className="font-medium text-[#4E5969]">品牌商品管理员</strong>
-                <span className="text-[#C9CDD4]">·</span><span>{config.collaborationMode === 'unified' ? '统一管理' : '分渠道协作'}</span>
+                <span className="text-[#C9CDD4]">·</span><span>{config.collaborationMode === 'unified' ? '各渠道共用一套商品资料' : '各渠道分别维护商品资料'}</span>
                 <span className="text-[#C9CDD4]">·</span><span>{channelGroups.length} 个渠道商品库</span>
                 <span className="text-[#C9CDD4]">·</span><span>数据截至今天 09:00</span>
                 <button type="button" onClick={() => notify('工作台数据已刷新')} className="font-medium text-[#008F4C]">刷新</button>
@@ -353,7 +353,7 @@ export const WebProductWorkbench: React.FC<Props> = ({ onNavigate }) => {
                   </div>
                 )}
               </div>
-              <button type="button" onClick={() => onNavigate('product_list', { createType: 'standard' })} className="h-8 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F55]">＋ 新建商品主档</button>
+              <button type="button" onClick={() => onNavigate('product_list', { createType: 'standard' })} className="h-8 rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F55]">＋ 新建单品主档</button>
             </div>
           </div>
 

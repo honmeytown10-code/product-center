@@ -93,6 +93,7 @@ export const WebAttributeMutexRuleEditor: React.FC<{
           <div className="rounded-lg border border-[#FFE1E1] bg-[#FFF8F8] px-4 py-3 text-xs leading-6 text-[#999]">
             <span className="font-bold text-[#FF4D4F]">注意：</span>
             若已配置新版的商品互斥规则，请确保相关小程序已升级到支持版本后再正式使用；互斥条件用于限制同一商品下不可同时选择的规格、做法与加料组合。
+            <p className="mt-1">美团外卖的互斥属性在对应商品的渠道专属属性中设置，不使用此处的公共规则。</p>
           </div>
 
           <div className="mt-6 space-y-6">

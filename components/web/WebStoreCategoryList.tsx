@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronDown, ArrowUpDown, ChevronLeft,
-  ChevronRight, GripVertical, CheckCircle2, X, Circle, Plus, Minus, AlertCircle, Trash2
+  ChevronRight, GripVertical, CheckCircle2, X, Plus, Minus, AlertCircle, Trash2, Store
 } from 'lucide-react';
+import { WebStoreScopeSelector } from './WebStoreScopeSelector';
 
 type StoreCategoryRecord = {
   id: string;
@@ -179,7 +180,6 @@ const FilterInput = ({
 export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({ onCancelEntry }) => {
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeStoreId, setActiveStoreId] = useState('');
-  const [draftStoreId, setDraftStoreId] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [categoryCode, setCategoryCode] = useState('');
   const [categories, setCategories] = useState(MOCK_STORE_CATEGORIES);
@@ -192,40 +192,15 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
   const [sortDraftRows, setSortDraftRows] = useState<CategorySortDraftRow[]>([]);
   const [expandedParentCodes, setExpandedParentCodes] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [showStorePicker, setShowStorePicker] = useState(true);
-  const [storePickerKeyword, setStorePickerKeyword] = useState('');
-  const [selectedGroupId, setSelectedGroupId] = useState('g1');
   const [limitTimeSlots, setLimitTimeSlots] = useState([{ id: 'slot-1', startDate: '', endDate: '', startTime: '00:00', endTime: '23:59' }]);
 
   const tabs = useMemo(() => [{ id: 'all', label: '全部渠道' }, ...DEFAULT_CHANNELS], []);
   const currentStore = STORE_OPTIONS.find(item => item.id === activeStoreId);
-  const storeGroupTree = useMemo(() => {
-    const rootGroups = [...new Map(
-      STORE_OPTIONS.map(store => [
-        store.rootGroupId,
-        { id: store.rootGroupId, name: store.rootGroupName, children: [] as Array<{ id: string; name: string }> },
-      ])
-    ).values()];
-
-    rootGroups.forEach(root => {
-      root.children = [...new Map(
-        STORE_OPTIONS
-          .filter(store => store.rootGroupId === root.id)
-          .map(store => [store.groupId, { id: store.groupId, name: store.groupName }])
-      ).values()];
-    });
-
-    return rootGroups;
-  }, []);
-
-  const storePickerRows = useMemo(() => {
-    return STORE_OPTIONS.filter(store => {
-      const matchGroup = selectedGroupId ? (store.rootGroupId === selectedGroupId || store.groupId === selectedGroupId) : true;
-      const keyword = storePickerKeyword.trim().toLowerCase();
-      const matchKeyword = !keyword || [store.name, store.code, store.merchantId].join(' ').toLowerCase().includes(keyword);
-      return matchGroup && matchKeyword;
-    });
-  }, [selectedGroupId, storePickerKeyword]);
+  const selectableStores = useMemo(() => STORE_OPTIONS.map(store => ({
+    id: store.id, name: store.name, code: store.code,
+    organization: `${store.rootGroupName} / ${store.groupName}`,
+    tags: [], searchKeywords: store.merchantId,
+  })), []);
 
   const scopedCategories = useMemo<StoreCategoryListRow[]>(() => {
     let next = categories.filter(item => item.storeId === activeStoreId);
@@ -472,27 +447,6 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     ));
   };
 
-  const handleConfirmStore = () => {
-    if (!draftStoreId) return;
-    setActiveStoreId(draftStoreId);
-    setShowStorePicker(false);
-  };
-
-  const handleOpenStorePicker = () => {
-    setDraftStoreId(activeStoreId || draftStoreId);
-    setStorePickerKeyword('');
-    setSelectedGroupId(STORE_OPTIONS.find(store => store.id === (activeStoreId || draftStoreId))?.rootGroupId || 'g1');
-    setShowStorePicker(true);
-  };
-
-  const handleCancelStorePicker = () => {
-    if (!activeStoreId && onCancelEntry) {
-      onCancelEntry();
-      return;
-    }
-    setShowStorePicker(false);
-  };
-
   const openCreateDialog = () => {
     if (!currentStore) return;
     const defaultChannelIds = activeTabId === 'all' ? ['mini_dine'] : [activeTabId];
@@ -547,7 +501,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     }));
     setCategories(prev => [...prev, ...additions]);
     setCreateDraft(null);
-    setNotification({ type: 'success', message: `已新增门店分类“${createDraft.name.trim()}”` });
+    setNotification({ type: 'success', message: `已新增门店前台分类“${createDraft.name.trim()}”` });
   };
 
   const confirmDeleteCategory = () => {
@@ -558,8 +512,8 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
     setNotification({
       type: 'success',
       message: deleteTarget.isAllChannels
-        ? `已删除“${deleteTarget.row.name}”在全部渠道下的门店分类`
-        : `已删除门店分类“${deleteTarget.row.name}”`,
+        ? `已删除“${deleteTarget.row.name}”在全部渠道下的门店前台分类`
+        : `已删除门店前台分类“${deleteTarget.row.name}”`,
     });
     setDeleteTarget(null);
   };
@@ -869,29 +823,27 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
         <div className="border-b border-[#E8E8E8] bg-white px-5 py-[18px] shrink-0 z-20">
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             <div className="flex flex-wrap gap-3 items-center">
-            <FilterInput label="分类名称" placeholder="请输入" value={categoryName} onChange={setCategoryName} />
-            <FilterInput label="分类标识" placeholder="请输入" value={categoryCode} onChange={setCategoryCode} />
             <div className="flex items-center">
               <span className="text-xs text-[#666] mr-2 shrink-0">机构门店</span>
-              <div className="flex min-h-[34px] min-w-[220px] items-center justify-between rounded border border-[#E8E8E8] bg-white px-3">
-                <span className="truncate text-sm text-[#333]">{currentStore?.name || '请选择门店'}</span>
-                <button
-                  onClick={handleOpenStorePicker}
-                  className="ml-3 shrink-0 text-xs font-bold text-[#00C06B] hover:text-[#00A35B]"
-                >
-                  更换门店
-                </button>
-              </div>
+              <WebStoreScopeSelector
+                stores={selectableStores}
+                value={activeStoreId ? [activeStoreId] : []}
+                onChange={storeIds => { setActiveStoreId(storeIds[0] || ''); setExpandedParentCodes([]); }}
+                selectionMode="single"
+                widthClassName="w-[220px]"
+              />
             </div>
+            <FilterInput label="分类名称" placeholder="请输入" value={categoryName} onChange={setCategoryName} />
+            <FilterInput label="分类标识" placeholder="请输入" value={categoryCode} onChange={setCategoryCode} />
             </div>
             <div className="flex items-center space-x-3 shrink-0">
               <button onClick={() => { setCategoryName(''); setCategoryCode(''); }} className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
-              <button onClick={() => setNotification({ type: 'success', message: `已查询到 ${filteredCategories.length} 个门店分类` })} className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
+              <button disabled={!currentStore} onClick={() => setNotification({ type: 'success', message: `已查询到 ${filteredCategories.length} 个门店前台分类` })} className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-[#F2F3F5] disabled:text-[#86909C]">查询</button>
             </div>
           </div>
         </div>
 
-        <div className="px-5 py-4 flex justify-between items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-4">
+        {currentStore ? <><div className="px-5 py-4 flex justify-between items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-4">
           <div className="flex items-center space-x-4 min-w-0">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-2.5 text-[#999]" />
@@ -1035,7 +987,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
               ))}
               {visibleCategories.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-[#999]">暂无门店商品分类数据</td>
+                  <td colSpan={9} className="py-10 text-center text-[#667085]">{categoryName || categoryCode ? '未找到符合条件的分类，请调整筛选条件' : '该门店暂无分类，可添加分类'}</td>
                 </tr>
               )}
             </tbody>
@@ -1060,23 +1012,8 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
               <ChevronRight size={12} />
             </button>
           </div>
-        </div>
+        </div></> : <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center"><Store size={28} className="text-[#667085]" /><h2 className="text-base font-semibold text-[#1D2129]">选择要管理的门店</h2><p className="max-w-[400px] text-sm leading-6 text-[#667085]">请在上方选择门店，查看和管理各渠道的分类。</p></div>}
       </div>
-      {showStorePicker && (
-        <StorePickerModal
-          groups={storeGroupTree}
-          stores={storePickerRows}
-          selectedGroupId={selectedGroupId}
-          onSelectGroup={setSelectedGroupId}
-          selectedStoreId={draftStoreId}
-          onSelectStore={setDraftStoreId}
-          searchValue={storePickerKeyword}
-          onSearchChange={setStorePickerKeyword}
-          onCancel={handleCancelStorePicker}
-          onConfirm={handleConfirmStore}
-          disableCancel={false}
-        />
-      )}
       {editingSecondCategory && (
         <SecondaryCategoryEditorModal
           draft={editingSecondCategory}
@@ -1149,7 +1086,7 @@ const StoreCategoryCreateModal = ({
       <div className="w-full max-w-[680px] overflow-hidden rounded-xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
           <div>
-            <div className="text-[20px] font-black text-[#1F2129]">新增门店分类</div>
+            <div className="text-[20px] font-black text-[#1F2129]">新增门店前台分类</div>
             <div className="mt-1 text-sm text-[#98A2B3]">当前门店：{storeName}</div>
           </div>
           <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
@@ -1234,7 +1171,7 @@ const StoreCategoryDeleteModal = ({
     <div className="fixed inset-0 z-[97] flex items-center justify-center bg-black/35 px-6">
       <div className="w-full max-w-[560px] overflow-hidden rounded-xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div className="flex items-center justify-between border-b border-[#EEF1F5] px-8 py-6">
-          <div className="text-[20px] font-black text-[#1F2129]">{blocked ? '暂时无法删除分类' : '删除门店分类'}</div>
+          <div className="text-[20px] font-black text-[#1F2129]">{blocked ? '暂时无法删除分类' : '删除门店前台分类'}</div>
           <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]"><X size={22} /></button>
         </div>
         <div className="space-y-4 px-8 py-6">
@@ -1529,164 +1466,6 @@ const CategorySortModal = ({
           <button onClick={onConfirm} className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white">
             确定
           </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const StorePickerModal = ({
-  groups,
-  stores,
-  selectedGroupId,
-  onSelectGroup,
-  selectedStoreId,
-  onSelectStore,
-  searchValue,
-  onSearchChange,
-  onCancel,
-  onConfirm,
-  disableCancel,
-}: {
-  groups: Array<{ id: string; name: string; children: Array<{ id: string; name: string }> }>;
-  stores: StoreOption[];
-  selectedGroupId: string;
-  onSelectGroup: (groupId: string) => void;
-  selectedStoreId: string;
-  onSelectStore: (storeId: string) => void;
-  searchValue: string;
-  onSearchChange: (value: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-  disableCancel: boolean;
-}) => {
-  const selectedStore = stores.find(store => store.id === selectedStoreId) || STORE_OPTIONS.find(store => store.id === selectedStoreId) || null;
-
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-6">
-      <div className="w-full max-w-[1120px] rounded-[16px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
-        <div className="flex items-center justify-between border-b border-[#EEF1F5] px-6 py-4">
-              <div className="text-[18px] font-semibold text-[#1F2129]">请选择需要管理的门店</div>
-          {!disableCancel ? (
-            <button onClick={onCancel} className="text-[#9AA3B2] hover:text-[#5B6475]">
-              <X size={22} />
-            </button>
-          ) : (
-            <div className="w-[22px]"></div>
-          )}
-        </div>
-
-        <div className="px-6 py-5">
-          <div className="grid grid-cols-1 gap-4">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A6AEBE]" />
-              <input
-                value={searchValue}
-                onChange={e => onSearchChange(e.target.value)}
-                placeholder="请输入门店名称/编码/ID"
-                className="h-[42px] w-full rounded-[10px] border border-[#E5EAF1] bg-white pl-9 pr-3 text-sm text-[#1F2129] outline-none focus:border-[#00C06B]"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-[260px_minmax(0,1fr)] gap-4">
-            <div className="rounded-[12px] border border-[#EEF1F5] bg-white">
-              <div className="border-b border-[#F1F3F7] px-4 py-3 text-sm font-bold text-[#1F2129]">门店组</div>
-              <div className="max-h-[340px] overflow-y-auto no-scrollbar py-2">
-                {groups.map(group => {
-                  const activeRoot = selectedGroupId === group.id;
-                  return (
-                    <div key={group.id}>
-                      <button
-                        onClick={() => onSelectGroup(group.id)}
-                        className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors ${
-                          activeRoot ? 'bg-[#EAF7F0] text-[#16A34A]' : 'text-[#3C4353] hover:bg-[#FAFBFC]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <ChevronDown size={16} className={activeRoot ? 'text-[#16A34A]' : 'text-[#94A3B8]'} />
-                          <span className="font-bold">{group.name}</span>
-                        </div>
-                        <span className={`text-xs font-bold ${activeRoot ? 'text-[#16A34A]' : 'text-[#B6BDCA]'}`}>品牌+</span>
-                      </button>
-                      {group.children.map(child => {
-                        const activeChild = selectedGroupId === child.id;
-                        return (
-                          <button
-                            key={child.id}
-                            onClick={() => onSelectGroup(child.id)}
-                            className={`flex w-full items-center justify-between pl-10 pr-4 py-3 text-left text-sm transition-colors ${
-                              activeChild ? 'bg-[#F1FCF4] text-[#16A34A]' : 'text-[#3C4353] hover:bg-[#FAFBFC]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <ChevronRight size={14} className={activeChild ? 'text-[#16A34A]' : 'text-[#94A3B8]'} />
-                              <span className="font-medium">{child.name}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="rounded-[12px] border border-[#EEF1F5] bg-white">
-              <div className="grid grid-cols-[56px_minmax(0,1fr)_220px_180px] border-b border-[#F1F3F7] px-4 py-3 text-sm font-bold text-[#5B6475]">
-                <div></div>
-                <div>门店名称</div>
-                <div>门店 ID</div>
-                <div>门店编码</div>
-              </div>
-              <div className="max-h-[340px] overflow-y-auto no-scrollbar">
-                {stores.map(store => {
-                  const checked = selectedStoreId === store.id;
-                  return (
-                    <button
-                      key={store.id}
-                      onClick={() => onSelectStore(store.id)}
-                      className={`grid w-full grid-cols-[56px_minmax(0,1fr)_220px_180px] items-center border-b border-[#F5F7FA] px-4 py-4 text-left text-sm transition-colors ${
-                        checked ? 'bg-[#F1FCF4]' : 'hover:bg-[#FCFDFE]'
-                      }`}
-                    >
-                      <div className="flex justify-center">
-                        {checked ? <CheckCircle2 size={18} className="text-[#00C06B]" /> : <Circle size={18} className="text-[#C7CEDA]" />}
-                      </div>
-                      <div className="font-medium text-[#1F2129]">{store.name}</div>
-                      <div className="text-[#4B5565]">{store.merchantId}</div>
-                      <div className="text-[#4B5565]">{store.code}</div>
-                    </button>
-                  );
-                })}
-                {!stores.length ? <div className="px-4 py-14 text-center text-sm text-[#98A0B3]">暂无符合条件的门店</div> : null}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-[#EEF1F5] px-6 py-4">
-          <div className="text-sm text-[#5B6475]">
-            已选择：
-            <span className="ml-1 font-bold text-[#1F2129]">{selectedStore ? selectedStore.name : '未选择门店'}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {!disableCancel ? (
-              <button
-                onClick={onCancel}
-                className="rounded-[10px] border border-[#E5EAF1] bg-white px-6 py-2.5 text-sm font-bold text-[#5B6475]"
-              >
-                取消
-              </button>
-            ) : null}
-            <button
-              onClick={onConfirm}
-              disabled={!selectedStoreId}
-              className="rounded-[10px] bg-[#00C06B] px-6 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#9DDDBB]"
-            >
-              确定
-            </button>
-          </div>
         </div>
       </div>
     </div>

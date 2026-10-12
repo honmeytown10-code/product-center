@@ -816,9 +816,9 @@ export const WebTakeoutMenuSync: React.FC = () => {
             {!creationComplete ? (
               <button disabled className="h-9 bg-gray-300 px-6 text-sm font-medium text-white">正在创建...</button>
             ) : failedCount > 0 ? (
-              <><button onClick={closeCreationModal} className="h-9 border border-gray-200 px-5 text-sm text-gray-600">查看同步记录</button><button onClick={retryFailedCreations} className="h-9 bg-[#00C06B] px-6 text-sm font-medium text-white">重试失败任务</button></>
+              <><button onClick={closeCreationModal} className="h-9 border border-gray-200 px-5 text-sm text-gray-600">查看同步任务</button><button onClick={retryFailedCreations} className="h-9 bg-[#00C06B] px-6 text-sm font-medium text-white">重试失败任务</button></>
             ) : (
-              <button onClick={closeCreationModal} className="h-9 bg-[#00C06B] px-6 text-sm font-medium text-white">查看同步记录</button>
+              <button onClick={closeCreationModal} className="h-9 bg-[#00C06B] px-6 text-sm font-medium text-white">查看同步任务</button>
             )}
           </div>
         </div>

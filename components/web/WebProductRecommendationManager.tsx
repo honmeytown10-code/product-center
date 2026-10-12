@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -44,7 +44,14 @@ type RecommendationActivity = {
   updatedAt: string;
   supportsTemplates: boolean;
   productAction?: 'manage' | 'exclude';
+  displayName?: string;
+  icon?: string;
+  selectedIcon?: string;
+  tag?: string;
+  bannerImage?: string;
 };
+
+type RecommendationActivityDraft = Pick<RecommendationActivity, 'id' | 'name' | 'description' | 'enabled' | 'displayName' | 'icon' | 'selectedIcon' | 'tag' | 'bannerImage'>;
 
 type DeliveryRule = {
   channels: string[];
@@ -69,7 +76,8 @@ type RecommendationTemplate = {
   rule: DeliveryRule;
 };
 
-const CUSTOM_ACTIVITY_LIMIT = 20;
+const CUSTOM_ACTIVITY_LIMIT = 8;
+const ACTIVITY_INPUT_CLASS = 'h-9 w-full rounded-md border border-[#DDE2E8] bg-white px-3 text-[13px] outline-none focus:border-[#00B460]';
 const CHANNELS = ['微信小程序', '支付宝小程序'];
 const SALE_TYPES = ['堂食', '外卖'];
 const STORE_OPTIONS = ['上海静安店', '上海虹桥店', '杭州湖滨店', '杭州城西店', '南京新街口店', '苏州中心店'];
@@ -180,8 +188,12 @@ export const WebProductRecommendationManager: React.FC = () => {
     setRowMenuId(null);
   };
 
-  const saveActivity = (draft: Pick<RecommendationActivity, 'id' | 'name' | 'description' | 'enabled'>) => {
+  const saveActivity = (draft: RecommendationActivityDraft) => {
     if (activityEditor === 'create') {
+      if (customCount >= CUSTOM_ACTIVITY_LIMIT) {
+        notify(`最多支持 ${CUSTOM_ACTIVITY_LIMIT} 个自定义推荐，请先删除不再使用的推荐`);
+        return;
+      }
       const next: RecommendationActivity = { ...draft, origin: 'merchant', mode: 'manual', modeLabel: '自定义推荐', templateCount: 0, deliverySummary: '尚未配置投放规则', updatedAt: '刚刚', supportsTemplates: true, productAction: 'manage' };
       setActivities(current => [next, ...current]);
       notify(`自定义推荐“${next.name}”已创建，请继续配置推荐模板`);
@@ -291,16 +303,16 @@ const ActivityWorkspace = ({
 }) => (
   <div className="console-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4">
-      <div className="flex h-full items-center gap-7">
+      <div className="console-status-tabs flex h-full items-center gap-7" role="tablist" aria-label="推荐状态">
         {([['all', '全部'], ['enabled', '已启用'], ['disabled', '已停用']] as Array<[StatusFilter, string]>).map(([value, label]) => (
-          <button key={value} type="button" onClick={() => onStatusChange(value)} className={`h-full border-b-2 px-1 text-sm font-medium ${statusFilter === value ? 'border-[#00B460] text-[#008F4C]' : 'border-transparent text-[#667085]'}`}>
+          <button key={value} type="button" role="tab" aria-selected={statusFilter === value} onClick={() => onStatusChange(value)} className={`h-full border-b-2 px-1 text-sm font-medium ${statusFilter === value ? 'border-[#00B460] text-[#008F4C]' : 'border-transparent text-[#667085]'}`}>
             {label}<span className="ml-1 text-xs text-[#98A2B3]">{value === 'all' ? activities.length : activities.filter(item => value === 'enabled' ? item.enabled : !item.enabled).length}</span>
           </button>
         ))}
       </div>
       <div className="flex items-center gap-3">
         <span className="text-xs text-[#667085]">自定义活动 {customCount}/{CUSTOM_ACTIVITY_LIMIT}</span>
-        <button type="button" onClick={onCreate} disabled={customCount >= CUSTOM_ACTIVITY_LIMIT} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-50"><Plus size={16} />新建自定义推荐</button>
+        <button type="button" onClick={onCreate} disabled={customCount >= CUSTOM_ACTIVITY_LIMIT} title={customCount >= CUSTOM_ACTIVITY_LIMIT ? `最多支持 ${CUSTOM_ACTIVITY_LIMIT} 个自定义推荐` : undefined} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-50"><Plus size={16} />新建自定义推荐</button>
       </div>
     </div>
 
@@ -310,7 +322,7 @@ const ActivityWorkspace = ({
         <CompactSelect value={originFilter} onChange={value => onOriginChange(value as OriginFilter)} options={[['all', '全部来源'], ['system', '系统固定'], ['merchant', '商家自定义']]} />
         <button type="button" onClick={onReset} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969] hover:bg-[#F7F8FA]">重置</button>
       </div>
-      <div className="flex items-center gap-2 text-xs text-[#667085]"><ShieldCheck size={15} className="text-[#00A35B]" />系统固定活动不可删除；自定义活动上限已放宽至 {CUSTOM_ACTIVITY_LIMIT} 个</div>
+      <div className="flex items-center gap-2 text-xs text-[#667085]"><ShieldCheck size={15} className="text-[#00A35B]" />系统固定活动不可删除；最多支持 {CUSTOM_ACTIVITY_LIMIT} 个自定义推荐</div>
     </div>
 
     <div className="min-h-0 flex-1 overflow-auto">
@@ -403,18 +415,43 @@ const ActivityEditor = ({ initial, customCount, onClose, onSave }: {
   initial?: RecommendationActivity;
   customCount: number;
   onClose: () => void;
-  onSave: (draft: Pick<RecommendationActivity, 'id' | 'name' | 'description' | 'enabled'>) => void;
+  onSave: (draft: RecommendationActivityDraft) => void;
 }) => {
   const systemFixed = initial?.origin === 'system';
   const [name, setName] = useState(initial?.name || '');
   const [description, setDescription] = useState(initial?.description || '');
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
+  const [displayName, setDisplayName] = useState(initial?.displayName || '');
+  const [icon, setIcon] = useState(initial?.icon || '');
+  const [selectedIcon, setSelectedIcon] = useState(initial?.selectedIcon || '');
+  const [tag, setTag] = useState(initial?.tag || '');
+  const [bannerImage, setBannerImage] = useState(initial?.bannerImage || '');
   const [error, setError] = useState('');
   const submit = () => {
-    if (!name.trim()) return setError('请输入推荐活动名称');
-    if (!description.trim()) return setError('请输入推荐活动说明');
-    onSave({ id: initial?.id || `REC-CUS-${Date.now()}`, name: name.trim(), description: description.trim(), enabled });
+    if (!name.trim()) return setError('请输入推荐名称');
+    if (systemFixed && !description.trim()) return setError('请输入推荐活动说明');
+    if (!systemFixed && !displayName.trim()) return setError('请输入 C 端展示名称');
+    if (!systemFixed && Array.from(displayName.trim()).length > 5) return setError('C 端展示名称最多 5 个字');
+    if (!systemFixed && Array.from(description).length > 50) return setError('推荐描述最多 50 个字');
+    if (!initial && customCount >= CUSTOM_ACTIVITY_LIMIT) return setError(`最多支持 ${CUSTOM_ACTIVITY_LIMIT} 个自定义推荐`);
+    onSave({ id: initial?.id || `REC-CUS-${Date.now()}`, name: name.trim(), description: description.trim(), enabled, ...(!systemFixed ? { displayName: displayName.trim(), icon, selectedIcon, tag, bannerImage } : {}) });
   };
+  // Production fields follow the supplied create dialog. Media upload is local-only;
+  // the production implementation should use the shared material selector.
+  if (!systemFixed) return (
+    <ModalFrame width="w-[600px]" title={initial ? '编辑自定义推荐' : '新增自定义推荐'} onClose={onClose} footerActions={<><button type="button" onClick={onClose} className="console-secondary-button">取消</button><button type="button" onClick={submit} className="console-primary-button">确定</button></>}>
+      <div style={{ scrollbarWidth: 'none' }} className="max-h-[calc(100vh-184px)] space-y-5 overflow-y-auto px-6 py-5 text-[13px]">
+        <FormRow label="推荐名称" required><input aria-label="推荐名称" value={name} onChange={event => setName(event.target.value.slice(0, 30))} placeholder="请输入推荐名称" className={ACTIVITY_INPUT_CLASS} /></FormRow>
+        <FormRow label="C端展示名称" required><div className="relative"><input aria-label="C端展示名称" value={displayName} onChange={event => setDisplayName(Array.from(event.target.value).slice(0, 5).join(''))} placeholder="请输入C端展示名称" className={`${ACTIVITY_INPUT_CLASS} pr-12`} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{Array.from(displayName).length}/5</span></div></FormRow>
+        <FormRow label="图标"><RecommendationImageUpload label="图标" value={icon} onChange={setIcon} onError={setError} /><p className="mt-1 text-xs leading-5 text-[#98A2B3]">建议图标比例 1:1</p></FormRow>
+        <FormRow label="选中图标"><RecommendationImageUpload label="选中图标" value={selectedIcon} onChange={setSelectedIcon} onError={setError} /><p className="mt-1 text-xs leading-5 text-[#98A2B3]">选中图标仅横排展示时生效，建议图标比例 1:1</p></FormRow>
+        <FormRow label="推荐描述"><div className="relative"><textarea aria-label="推荐描述" value={description} onChange={event => setDescription(Array.from(event.target.value).slice(0, 50).join(''))} placeholder="请输入推荐描述" rows={3} className="w-full resize-none rounded-md border border-[#DDE2E8] px-3 py-2 pb-6 outline-none focus:border-[#00B460]" /><span className="pointer-events-none absolute bottom-2 right-3 text-xs text-[#98A2B3]">{Array.from(description).length}/50</span></div></FormRow>
+        <FormRow label="标签"><label className="relative block"><select aria-label="推荐标签" value={tag} onChange={event => setTag(event.target.value)} className={`${ACTIVITY_INPUT_CLASS} appearance-none pr-8 ${tag ? '' : 'text-[#98A2B3]'}`}><option value="">请选择</option>{tag && <option value={tag}>{tag}</option>}</select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /></label>{/* Tag options must be supplied by the production recommendation definition; do not invent an enum. */}</FormRow>
+        <FormRow label="竖向banner图"><RecommendationImageUpload label="竖向banner图" value={bannerImage} onChange={setBannerImage} onError={setError} /><p className="mt-1 text-xs leading-5 text-[#98A2B3]">建议图片尺寸：275px × 70px</p></FormRow>
+        {error && <div role="alert" className="ml-[132px] flex items-center gap-2 text-[#D92D20]"><AlertCircle size={15} />{error}</div>}
+      </div>
+    </ModalFrame>
+  );
   return (
     <ModalFrame width="w-[620px]" title={initial ? `编辑推荐活动 · ${initial.name}` : '新建自定义推荐'} subtitle={systemFixed ? '系统固定活动仅可调整展示说明和启用状态，不可删除或改变生成方式。' : `商家可创建独立推荐活动，当前 ${customCount}/${CUSTOM_ACTIVITY_LIMIT} 个。`} onClose={onClose} footerActions={<><button type="button" onClick={onClose} className="console-secondary-button">取消</button><button type="button" onClick={submit} className="console-primary-button">保存</button></>}>
       <div className="space-y-5 p-5 text-[13px]">
@@ -427,6 +464,36 @@ const ActivityEditor = ({ initial, customCount, onClose, onSave }: {
       </div>
     </ModalFrame>
   );
+};
+
+const RecommendationImageUpload = ({ label, value, onChange, onError }: { label: string; value: string; onChange: (value: string) => void; onError: (message: string) => void }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const readerRef = useRef<FileReader | null>(null);
+  const [reading, setReading] = useState(false);
+  useEffect(() => () => {
+    if (readerRef.current) {
+      readerRef.current.onload = null;
+      readerRef.current.onerror = null;
+      if (readerRef.current.readyState === FileReader.LOADING) readerRef.current.abort();
+    }
+  }, []);
+  const upload = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return onError('请选择图片文件');
+    const reader = new FileReader();
+    readerRef.current = reader;
+    setReading(true);
+    reader.onload = () => { onChange(String(reader.result || '')); setReading(false); onError(''); };
+    reader.onerror = () => { setReading(false); onError('图片读取失败，请重新选择'); };
+    reader.readAsDataURL(file);
+  };
+  return <div>
+    <input ref={inputRef} type="file" accept="image/*" aria-label={`上传${label}`} className="sr-only" tabIndex={-1} onChange={event => { upload(event.target.files?.[0]); event.target.value = ''; }} />
+    <button type="button" disabled={reading} aria-label={value ? `更换${label}` : `上传${label}`} onClick={() => inputRef.current?.click()} className="flex h-[104px] w-[104px] flex-col items-center justify-center gap-2 overflow-hidden rounded-md bg-[#F7F8FA] text-[#98A2B3] hover:bg-[#EEF0F3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460] disabled:cursor-wait">
+      {value ? <img src={value} alt={label} className="h-full w-full object-contain" /> : reading ? <span>读取中…</span> : <><Plus size={24} strokeWidth={1.5} /><span>上传图片</span></>}
+    </button>
+    {value && <button type="button" onClick={() => onChange('')} className="mt-1 text-xs text-[#008F4C]" aria-label={`移除${label}`}>移除图片</button>}
+  </div>;
 };
 
 const TemplateEditor = ({ activity, initial, onClose, onSave }: { activity: RecommendationActivity; initial?: RecommendationTemplate; onClose: () => void; onSave: (template: RecommendationTemplate) => void }) => {

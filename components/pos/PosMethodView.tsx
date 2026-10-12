@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { PosCategories, PosStatusFilters, PosDialog, PosDock, PosEmpty, PosResult, PosSelection } from './PosWorkspace';
-type MethodRow = {
+export type MethodRow = {
   id: string;
   storeId: string;
   methodName: string;
@@ -14,7 +14,7 @@ type MethodRow = {
   enabled: boolean;
 };
 
-const INITIAL_METHOD_ROWS: MethodRow[] = [
+export const INITIAL_METHOD_ROWS: MethodRow[] = [
   { id: 'r1', storeId: 's1', methodName: '温度哒', methodValue: '热', methodCode: '', remark: '', prompt: '', multiValue: false, optionType: '必选', enabled: true },
   { id: 'r2', storeId: 's1', methodName: '温度哒', methodValue: '少冰', methodCode: '', remark: '', prompt: '', multiValue: false, optionType: '必选', enabled: true },
   { id: 'r3', storeId: 's1', methodName: '温度哒', methodValue: '多冰', methodCode: '', remark: '', prompt: '', multiValue: false, optionType: '必选', enabled: true },

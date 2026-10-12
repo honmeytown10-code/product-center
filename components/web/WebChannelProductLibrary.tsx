@@ -25,7 +25,7 @@ import {
   getOmnichannelConfig,
   isThirdPartyChannelId,
 } from '../../omnichannel';
-import type { OmnichannelChannelId, Product, ThirdPartyChannelId } from '../../types';
+import type { OmnichannelBrandConfig, OmnichannelChannelId, Product, ThirdPartyChannelId } from '../../types';
 import {
   WebOnlineOrderingPlatformHub,
   type OnlineOrderingPlatform,
@@ -229,6 +229,8 @@ export type ChannelProductsSyncRequest = Omit<ChannelProductEditRequest, 'produc
   products: Product[];
 };
 
+import { WebOnlineOrderingEntry } from './WebOnlineOrderingEntry';
+
 interface Props {
   onEditProduct?: (request: ChannelProductEditRequest) => void;
   onEditMasterProduct?: (request: ChannelProductEditRequest) => void;
@@ -238,6 +240,13 @@ interface Props {
   onOpenSyncRecords?: () => void;
   productOverrides?: Record<string, any>;
   initialGroupId?: string;
+  configOverride?: OmnichannelBrandConfig;
+  initialWorkspace?: { platform: OnlineOrderingPlatform; view: OnlineOrderingPlatformView };
+  onLeaveWorkspace?: () => void;
+  unifiedManagementView?: boolean;
+  workspaceNavigation?: React.ReactNode;
+  automaticSubmissions?: Record<string, Record<string, string>>;
+  onOpenWorkspace?: (platform: OnlineOrderingPlatform, view: OnlineOrderingPlatformView, catalogId: string) => void;
 }
 
 export const WebChannelProductLibrary: React.FC<Props> = ({
@@ -249,13 +258,20 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   onOpenSyncRecords,
   productOverrides = {},
   initialGroupId,
+  configOverride,
+  initialWorkspace,
+  onLeaveWorkspace,
+  unifiedManagementView = false,
+  workspaceNavigation,
+  automaticSubmissions,
+  onOpenWorkspace,
 }) => {
   const { products, activeBrandId, brandConfigs } = useProducts();
   const activeBrandConfig = brandConfigs[activeBrandId] || brandConfigs.b_1;
-  const config = useMemo(() => getOmnichannelConfig(activeBrandConfig), [activeBrandConfig]);
+  const config = useMemo(() => configOverride || getOmnichannelConfig(activeBrandConfig), [activeBrandConfig, configOverride]);
   const availableGroups = useMemo(() => getEffectiveChannelGroups(config), [config]);
   const unifiedCatalog = config.collaborationMode === 'unified';
-  const canCreateMasterFromCatalog = config.channelProductCreationMode === 'create_master_and_channel';
+  const canCreateMasterFromCatalog = config.collaborationMode === 'unified';
   const [activeGroupId, setActiveGroupId] = useState(
     availableGroups.some(group => group.id === initialGroupId)
       ? initialGroupId || ''
@@ -312,7 +328,11 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const [platformWorkspace, setPlatformWorkspace] = useState<{
     platform: OnlineOrderingPlatform;
     view: OnlineOrderingPlatformView;
-  } | null>(null);
+  } | null>(initialWorkspace || null);
+
+  useEffect(() => {
+    setPlatformWorkspace(initialWorkspace || null);
+  }, [initialWorkspace?.platform, initialWorkspace?.view]);
 
   useEffect(() => {
     if (initialGroupId && availableGroups.some(group => group.id === initialGroupId)) {
@@ -495,7 +515,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const getPlatformWorkspaceKey = (platform: OnlineOrderingPlatform) => `${activeGroup.id}:${platform}`;
 
   const getGeneratedPlatformProductIds = (platform: OnlineOrderingPlatform) => {
-    const generatedIds = platformProductIds[getPlatformWorkspaceKey(platform)] || activeProductIds.slice(0, 3);
+    const generatedIds = [...new Set([...(platformProductIds[getPlatformWorkspaceKey(platform)] || activeProductIds.slice(0, 3)), ...Object.keys(automaticSubmissions?.[platform] || {})])];
     return platform === 'meituan'
       ? generatedIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
       : generatedIds;
@@ -607,7 +627,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     setShowPlatformSyncDialog(false);
     setPlatformSyncTargets([]);
     setSelectedProductIds([]);
-    setOperationMessage(`已创建 ${taskSummaries.length} 个平台同步子任务（${taskSummaries.join('、')}），各平台独立执行，可在发布中心「同步记录」查看进度。`);
+    setOperationMessage(`已创建 ${taskSummaries.length} 个平台同步子任务（${taskSummaries.join('、')}），各平台独立执行，可在商品批量管理「同步任务」查看进度。`);
   };
 
   const openProductScopeEditor = () => {
@@ -747,7 +767,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   };
 
   const exportChannelProducts = () => {
-    const header = ['商品ID', '商品主档SKUID', '渠道商品名称', '商品类型', '前台分类', '基础价格', '售卖状态'];
+    const header = ['商品ID', '商品主档SKUID', '渠道商品名称', '商品类型', '前台分类', '售价', '售卖状态'];
     const rows = displayedProducts.map(product => [
       product.id,
       product.skuCode,
@@ -784,12 +804,24 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   if (platformWorkspace) {
     return (
       <WebOnlineOrderingPlatformHub
+        key={`${activeGroup.id}:${platformWorkspace.platform}`}
+        stateKey={`${activeBrandId}:${activeGroup.id}:${platformWorkspace.platform}`}
+        automaticSubmissions={automaticSubmissions?.[platformWorkspace.platform]}
         platform={platformWorkspace.platform}
         initialView={platformWorkspace.view}
         catalogName={activeGroup.name}
+        unifiedManagementView={unifiedManagementView}
+        navigation={workspaceNavigation}
+        automaticSync={unifiedManagementView && config.operationStyle === 'direct'}
         products={effectiveProducts.filter(product => activeProductIds.includes(product.id))}
+        syncProducts={effectiveProducts.filter(product => {
+          if (!activeProductIds.includes(product.id)) return false;
+          if (!unifiedManagementView) return true;
+          const channels = product.formData?.applicableChannelIds || product.formData?.salesScope?.channelIds;
+          return !Array.isArray(channels) || channels.includes(platformWorkspace.platform === 'douyin' ? 'douyin' : 'meituan_dine');
+        })}
         platformProductIds={getGeneratedPlatformProductIds(platformWorkspace.platform)}
-        onBack={() => setPlatformWorkspace(null)}
+        onBack={() => onLeaveWorkspace ? onLeaveWorkspace() : setPlatformWorkspace(null)}
         onEditProduct={editChannelProduct}
         onOpenSyncRecords={onOpenSyncRecords}
         onSyncProducts={(platform, productIds) => submitPlatformSync(platform, productIds)}
@@ -845,7 +877,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               {canCreateMasterFromCatalog && (
                 <div className="relative">
                   <button type="button" onClick={() => setShowCreateMenu(value => !value)} className="console-primary-button" aria-haspopup="menu" aria-expanded={showCreateMenu}>
-                    <Plus size={16} /> 新建商品 <ChevronDown size={14} />
+                    <Plus size={16} /> 新建单品 <ChevronDown size={14} />
                   </button>
                   {showCreateMenu && (
                     <div role="menu" className="absolute right-0 top-[42px] z-50 w-[240px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 shadow-xl">
@@ -922,85 +954,10 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
-              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPlatformMenu(value => !value);
-                      setShowImportExportMenu(false);
-                    }}
-                    className="console-secondary-button min-w-[112px] justify-center"
-                    aria-haspopup="menu"
-                    aria-expanded={showPlatformMenu}
-                    title="管理当前商品库生成的平台商品"
-                  >
-                    <Boxes size={15} />
-                    平台商品
-                    <ChevronDown size={14} className={`transition-transform ${showPlatformMenu ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showPlatformMenu && (
-                    <div role="menu" className="absolute right-0 top-[42px] z-50 w-[336px] overflow-hidden rounded-md border border-[#E5E6EB] bg-white py-1 shadow-xl">
-                      {hasDouyinOnlineOrdering && (
-                        <>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setShowPlatformMenu(false);
-                              setPlatformWorkspace({ platform: 'douyin', view: 'products' });
-                            }}
-                            className="group flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
-                          >
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-medium text-[#1D2129]">抖音在线点商品</span>
-                              <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">查看商品资料、同步与审核状态</span>
-                            </span>
-                            <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('douyin').length}</span>
-                            <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setShowPlatformMenu(false);
-                              setPlatformWorkspace({ platform: 'douyin', view: 'addons' });
-                            }}
-                            className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
-                          >
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#E8FAF7] text-[11px] font-bold text-[#00A6A6]">抖</span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-medium text-[#1D2129]">抖音在线点加料</span>
-                              <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">维护加料资料并查看同步状态</span>
-                            </span>
-                            <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
-                          </button>
-                        </>
-                      )}
-                      {hasMeituanOnlineOrdering && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setShowPlatformMenu(false);
-                            setPlatformWorkspace({ platform: 'meituan', view: 'products' });
-                          }}
-                          className="group flex w-full items-center gap-3 border-t border-[#F0F1F2] px-3 py-3 text-left hover:bg-[#F7F8FA] focus-visible:bg-[#F7F8FA] focus-visible:outline-none"
-                        >
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#FFF5D6] text-[11px] font-bold text-[#9A6A00]">美</span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-medium text-[#1D2129]">美团在线点商品</span>
-                            <span className="mt-0.5 block truncate text-[11px] text-[#86909C]">查看商品资料与平台同步结果</span>
-                          </span>
-                          <span className="text-xs tabular-nums text-[#86909C]">{getGeneratedPlatformProductIds('meituan').length}</span>
-                          <ChevronRight size={14} className="text-[#C2C7D0] group-hover:text-[#00A35B]" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              <WebOnlineOrderingEntry douyin={hasDouyinOnlineOrdering} meituan={hasMeituanOnlineOrdering} onOpen={(platform, view) => {
+                if (onOpenWorkspace) onOpenWorkspace(platform, view, activeGroup.id);
+                else setPlatformWorkspace({ platform, view });
+              }} />
               {selectedProductIds.length > 0 ? <button type="button" onClick={syncSelectedFromMaster} className="console-secondary-button" title={`从主档更新已选 ${selectedProductIds.length} 个商品`}><RefreshCw size={15} />从主档更新</button> : (
                 <>
                   <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>
@@ -1049,7 +1006,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                   </div>
                 </>
               )}
-              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && (
+              {(hasDouyinOnlineOrdering || hasMeituanOnlineOrdering) && !(unifiedManagementView && config.operationStyle === 'direct') && (
                 <button type="button" onClick={() => openPlatformSyncDialog(selectedProductIds)} className="console-primary-button">
                   <Send size={15} />同步至平台{selectedProductIds.length > 0 ? `（${selectedProductIds.length}）` : ''}
                 </button>
@@ -1123,7 +1080,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                   <th className="w-[250px] border-b border-[#E8E8E8] px-5 py-3">商品</th>
                   <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">商品类型</th>
                   <th className="w-[170px] border-b border-[#E8E8E8] px-4 py-3">前台分类</th>
-                  <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">基础价格</th>
+                  <th className="w-[120px] border-b border-[#E8E8E8] px-4 py-3">售价</th>
                   <th className="w-[110px] border-b border-[#E8E8E8] px-4 py-3">售卖状态</th>
                   <th className="w-[140px] border-b border-[#E8E8E8] px-4 py-3">更新时间</th>
                   <th className="sticky right-0 z-20 w-[280px] border-b border-l border-[#E8E8E8] bg-[#F7F8FA] px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">操作</th>
@@ -1155,7 +1112,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     </td>
                   </tr>
                 ))}
-                {displayedProducts.length === 0 && <tr><td colSpan={8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建商品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建商品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建商品</button>}</div>}</td></tr>}
+                {displayedProducts.length === 0 && <tr><td colSpan={8} className="console-empty-state"><strong>{hasActiveFilters ? '没有符合条件的渠道商品' : '当前渠道商品库暂无商品'}</strong><span>{hasActiveFilters ? '请调整筛选条件后重新查询。' : canCreateMasterFromCatalog ? '可选择已有主档，或直接新建单品并一次填写主档资料与当前渠道商品资料。' : unifiedCatalog ? '新建单品主档后，系统会自动生成对应渠道商品。' : '从商品主档选择需要由当前渠道团队维护的商品。'}</span>{!hasActiveFilters && <div className="mt-4 flex items-center gap-2"><button type="button" onClick={openProductScopeEditor} className={canCreateMasterFromCatalog ? 'console-secondary-button' : 'console-primary-button'}><Plus size={15} />{canCreateMasterFromCatalog ? '选择已有主档' : '从商品主档添加'}</button>{canCreateMasterFromCatalog && <button type="button" onClick={() => setShowCreateMenu(true)} className="console-primary-button"><Plus size={15} />新建单品</button>}</div>}</td></tr>}
               </tbody>
             </table>
             </div>
@@ -1250,7 +1207,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               </div>
             </div>
             <div className="flex items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
-              <button type="button" onClick={onOpenSyncRecords} className="text-[13px] font-medium text-[#008F4C] hover:text-[#006E3A]">查看历史同步记录</button>
+              <button type="button" onClick={onOpenSyncRecords} className="text-[13px] font-medium text-[#008F4C] hover:text-[#006E3A]">查看历史同步任务</button>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowPlatformSyncDialog(false)} className="console-secondary-button">取消</button>
                 <button type="button" onClick={confirmPlatformSync} disabled={platformSyncTargets.length === 0} className="console-primary-button disabled:cursor-not-allowed disabled:opacity-50"><Send size={15} />确认同步{platformSyncTargets.length > 0 ? `（${platformSyncTargets.length} 个平台）` : ''}</button>
@@ -1341,7 +1298,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               <div className="flex shrink-0 items-center justify-between border-t border-[#E5E6EB] bg-[#F7F8FA] px-6 py-4">
                 <div className="text-[11px] text-[#86909C]">审核结果以抖音平台回调为准；同步执行明细仍在发布中心查看。</div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={onOpenSyncRecords} className="console-secondary-button">查看同步记录</button>
+                  <button type="button" onClick={onOpenSyncRecords} className="console-secondary-button">查看同步任务</button>
                   <button type="button" onClick={() => setAuditProductId(null)} className="console-primary-button">关闭</button>
                 </div>
               </div>

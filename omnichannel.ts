@@ -30,6 +30,7 @@ export const PRIVATE_CHANNELS: Array<OmnichannelChannel & { id: PrivateChannelId
 export const THIRD_PARTY_CHANNELS: Array<OmnichannelChannel & { id: ThirdPartyChannelId }> = [
   { id: 'meituan', name: '美团外卖', shortName: '美团外卖', type: 'third_party', platformProductScope: 'store_only', supportsServiceProviderBilling: true },
   { id: 'taobao', name: '淘宝闪购', shortName: '淘宝闪购', type: 'third_party', platformProductScope: 'store_only', supportsServiceProviderBilling: true },
+  { id: 'jd', name: '京东外卖', shortName: '京东外卖', type: 'third_party', platformProductScope: 'store_only' },
   { id: 'douyin', name: '抖音在线点', shortName: '抖音在线点', type: 'third_party', platformProductScope: 'brand_and_store', requiresBrandReview: true },
   { id: 'meituan_dine', name: '美团在线点', shortName: '美团在线点', type: 'third_party', platformProductScope: 'brand_and_store' },
   { id: 'meituan_pinhaofan', name: '美团拼好饭', shortName: '美团拼好饭', type: 'third_party', platformProductScope: 'store_only' },
@@ -45,21 +46,24 @@ export const TAKEAWAY_STORE_BINDING_URL = 'https://console.qmai.co/commonCenter/
 
 export const DEFAULT_OMNICHANNEL_CONFIG: OmnichannelBrandConfig = {
   enabled: true,
+  operationStyle: 'rules',
   collaborationMode: 'channel_division',
   channelProductCreationMode: 'existing_master_only',
   thirdPartyStrategies: {
     meituan: 'qimai',
     taobao: 'qimai',
+    jd: 'qimai',
     douyin: 'qimai',
     meituan_dine: 'qimai',
     meituan_pinhaofan: 'qimai',
   },
   channelConnections: {
-    meituan: { capabilities: ['order_receiving', 'product_operations'] },
-    taobao: { capabilities: ['order_receiving', 'product_operations'] },
-    douyin: { capabilities: ['order_receiving', 'product_operations'] },
-    meituan_dine: { capabilities: ['order_receiving', 'product_operations'] },
-    meituan_pinhaofan: { capabilities: ['order_receiving', 'product_operations'] },
+    meituan: { capabilities: ['product_operations'] },
+    taobao: { capabilities: ['product_operations'] },
+    jd: { capabilities: ['product_operations'] },
+    douyin: { capabilities: ['product_operations'] },
+    meituan_dine: { capabilities: ['product_operations'] },
+    meituan_pinhaofan: { capabilities: ['product_operations'] },
   },
   channelGroups: [
     {
@@ -70,7 +74,7 @@ export const DEFAULT_OMNICHANNEL_CONFIG: OmnichannelBrandConfig = {
     {
       id: 'delivery-catalog',
       name: '外卖商品库',
-      channels: ['mini_program_delivery', 'meituan', 'taobao', 'meituan_pinhaofan'],
+      channels: ['mini_program_delivery', 'meituan', 'taobao', 'jd', 'meituan_pinhaofan'],
     },
     {
       id: 'online-order-catalog',
@@ -83,13 +87,20 @@ export const DEFAULT_OMNICHANNEL_CONFIG: OmnichannelBrandConfig = {
 export const getOmnichannelConfig = (brandConfig?: BrandConfig): OmnichannelBrandConfig => ({
   ...DEFAULT_OMNICHANNEL_CONFIG,
   ...(brandConfig?.omnichannel || {}),
+  // Legacy creation modes now share one workflow; publishing is chosen per save, not per brand.
+  operationStyle: 'rules',
+  channelProductCreationMode: brandConfig?.omnichannel?.collaborationMode === 'unified'
+    ? 'create_master_and_channel'
+    : 'existing_master_only',
   thirdPartyStrategies: {
     ...DEFAULT_OMNICHANNEL_CONFIG.thirdPartyStrategies,
     ...(brandConfig?.omnichannel?.thirdPartyStrategies || {}),
   },
   channelConnections: {
-    ...DEFAULT_OMNICHANNEL_CONFIG.channelConnections,
-    ...(brandConfig?.omnichannel?.channelConnections || {}),
+    ...Object.fromEntries(THIRD_PARTY_CHANNELS.map(channel => [channel.id, {
+      capabilities: (brandConfig?.omnichannel?.channelConnections?.[channel.id]?.capabilities || DEFAULT_OMNICHANNEL_CONFIG.channelConnections[channel.id].capabilities)
+        .filter(capability => capability === 'product_operations'),
+    }])) as OmnichannelBrandConfig['channelConnections'],
   },
   channelGroups: brandConfig?.omnichannel?.channelGroups || DEFAULT_OMNICHANNEL_CONFIG.channelGroups,
 });
@@ -130,7 +141,7 @@ export const getQimaiManagedChannels = (config: OmnichannelBrandConfig) => (
 
 /**
  * 需要由渠道商品库准备企迈侧门店渠道商品的渠道。
- * 平台维护平台资料并不等于退出企迈商品链路：只要启用了接单或商品经营能力，
+ * 平台维护平台资料并不等于退出企迈商品链路：启用商品经营能力时，
  * 仍需从渠道商品库下发门店渠道商品，并以此建立映射。
  */
 export const getChannelCatalogChannels = (config: OmnichannelBrandConfig) => (
@@ -209,7 +220,7 @@ export const getProductSourceForChannel = (
       type: 'channel_catalog',
       id: `channel_catalog:${group?.id || UNIFIED_CHANNEL_CATALOG_ID}`,
       label: `渠道商品库 · ${group?.name || '品牌默认商品库'}`,
-      description: '新建商品主档后自动生成渠道商品，渠道销售属性在品牌默认商品库维护。',
+      description: '新建单品主档后自动生成渠道商品，渠道销售属性在品牌默认商品库维护。',
     };
   }
 

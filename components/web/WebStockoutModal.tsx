@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { WebTakeoutSyncPreview } from './WebTakeoutSyncPreview';
 import { AlertCircle, ChevronDown, X } from 'lucide-react';
 import { ShelfChannelId, getShelfChannelLabel } from './WebShelfConfirmModal';
 
@@ -18,6 +19,7 @@ export const WebStockoutModal: React.FC<{
   entityLabel?: '商品' | '加料';
   channels: ShelfChannelId[];
   isStockShared: boolean;
+  managedPlatformChannels?: string[];
   isMultiSpec: boolean;
   specs?: StockoutSpec[];
   defaultRemainStock?: string;
@@ -36,6 +38,7 @@ export const WebStockoutModal: React.FC<{
   entityLabel = '商品',
   channels,
   isStockShared,
+  managedPlatformChannels = [],
   isMultiSpec,
   specs = [],
   defaultRemainStock = '0',
@@ -321,6 +324,7 @@ export const WebStockoutModal: React.FC<{
             </div>
           </div>
 
+          <WebTakeoutSyncPreview channelIds={(isStockShared ? channels : selectedChannels).filter(id => managedPlatformChannels.includes(id))} operation="stock" />
           <div className="mt-10 flex justify-end gap-4 border-t border-[#EDEDED] pt-8">
             <button
               onClick={onClose}

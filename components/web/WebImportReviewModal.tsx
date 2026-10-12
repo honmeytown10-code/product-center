@@ -54,17 +54,17 @@ const BASE_DATA: AnalysisResult = {
   previewData: [
     { name: '牛油果甘露', price: '28.00', cat: '当季新品', spec: '多规格' },
     { name: '美式咖啡', price: '22.00', cat: '现制饮品', spec: '多规格' },
-    { name: '凯撒鸡肉卷', price: '18.00', cat: '轻食沙拉', spec: '统一规格' },
-    { name: '奥利奥蛋糕', price: '32.00', cat: '蛋糕/烘焙', spec: '统一规格' },
-    { name: '草莓圣代', price: '12.00', cat: '冰淇淋', spec: '统一规格' },
+    { name: '凯撒鸡肉卷', price: '18.00', cat: '轻食沙拉', spec: '单规格' },
+    { name: '奥利奥蛋糕', price: '32.00', cat: '蛋糕/烘焙', spec: '单规格' },
+    { name: '草莓圣代', price: '12.00', cat: '冰淇淋', spec: '单规格' },
     { name: '超级水果茶', price: '25.00', cat: '现制饮品', spec: '多规格' },
     { name: '黑糖珍珠鲜奶', price: '24.00', cat: '现制饮品', spec: '多规格' },
-    { name: '经典意面', price: '35.00', cat: '西式正餐', spec: '统一规格' },
-    { name: '香辣鸡翅', price: '15.00', cat: '小吃', spec: '统一规格' },
-    { name: '鲜榨橙汁', price: '18.00', cat: '现制饮品', spec: '统一规格' },
-    { name: '招牌红烧肉', price: '48.00', cat: '中式正餐', spec: '统一规格' },
-    { name: '米饭', price: '2.00', cat: '主食', spec: '统一规格' },
-    { name: '例汤', price: '0.00', cat: '赠品', spec: '统一规格' },
+    { name: '经典意面', price: '35.00', cat: '西式正餐', spec: '单规格' },
+    { name: '香辣鸡翅', price: '15.00', cat: '小吃', spec: '单规格' },
+    { name: '鲜榨橙汁', price: '18.00', cat: '现制饮品', spec: '单规格' },
+    { name: '招牌红烧肉', price: '48.00', cat: '中式正餐', spec: '单规格' },
+    { name: '米饭', price: '2.00', cat: '主食', spec: '单规格' },
+    { name: '例汤', price: '0.00', cat: '赠品', spec: '单规格' },
   ],
   errors: []
 };
@@ -72,7 +72,7 @@ const BASE_DATA: AnalysisResult = {
 const ERROR_DATA: AnalysisResult = {
     ...BASE_DATA,
     errors: [
-        { row: 12, productName: '超级至尊披萨', reason: '必填字段缺失：基础售价' },
+        { row: 12, productName: '超级至尊披萨', reason: '必填字段缺失：售价' },
         { row: 45, productName: '未知商品', reason: '分类“得克萨斯小吃”不存在，请检查分类名称' },
         { row: 88, productName: '冰可乐', reason: '规格值重复：少冰' }
     ]
@@ -317,7 +317,7 @@ const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => {
                         <th className="px-6 py-3 bg-gray-50/50">商品名称</th>
                         <th className="px-6 py-3 bg-gray-50/50">所属分类</th>
                         <th className="px-6 py-3 bg-gray-50/50">规格类型</th>
-                        <th className="px-6 py-3 bg-gray-50/50 text-right">基础售价</th>
+                        <th className="px-6 py-3 bg-gray-50/50 text-right">售价</th>
                     </tr>
                 </thead>
                 <tbody className="text-sm">

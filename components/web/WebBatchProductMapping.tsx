@@ -187,6 +187,9 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   const [selectedTags, setSelectedTags] = useState(['华南区域', '直营门店']);
 
   const productById = (id?: string) => products.find(item => item.id === id);
+  const getQimaiSkuId = (product?: Product, specIndex = 0) => product
+    ? `${product.skuCode}${product.specs && product.specs.length > 1 ? `-${specIndex + 1}` : ''}`
+    : '';
   const relationIsInScope = (relation: StoreRelation, storeIds: string[]) => !storeIds.length || storeIds.includes(relation.storeCode);
   const statsFor = (batchProductId: string, storeIds = selectedStoreIds) => {
     const scoped = relations.filter(item => item.batchProductId === batchProductId && relationIsInScope(item, storeIds));
@@ -229,10 +232,13 @@ export const WebBatchProductMapping: React.FC<Props> = ({
   const detailRelations = useMemo(() => relations.filter(item => {
     if (!detailProductId || item.batchProductId !== detailProductId) return false;
     const qimai = productById(item.qimaiProductId);
+    const qimaiSpecIndex = item.qimaiSpecIndex || 0;
+    const platformSearchText = `${activeProduct?.name || ''}${activeProduct?.specName || ''}${item.platformProductId}${item.platformSkuId}${item.platformSkuCode}`.toLowerCase();
+    const qimaiSearchText = `${qimai?.name || ''}${qimai?.id || ''}${getQimaiSkuId(qimai, qimaiSpecIndex)}${qimai?.specs?.[qimaiSpecIndex]?.name || item.qimaiSpec || ''}${qimai?.skuCode || ''}`.toLowerCase();
     return (detailStatus === 'all' || item.status === detailStatus)
       && relationIsInScope(item, detailStoreIds)
-      && (!detailPlatformKeyword || `${item.platformProductId}${item.platformSkuId}${item.platformSkuCode}`.toLowerCase().includes(detailPlatformKeyword.trim().toLowerCase()))
-      && (!detailQimaiKeyword || `${qimai?.name || ''}${qimai?.specs?.[item.qimaiSpecIndex || 0]?.name || item.qimaiSpec || ''}${qimai?.skuCode || ''}`.toLowerCase().includes(detailQimaiKeyword.trim().toLowerCase()));
+      && (!detailPlatformKeyword || platformSearchText.includes(detailPlatformKeyword.trim().toLowerCase()))
+      && (!detailQimaiKeyword || qimaiSearchText.includes(detailQimaiKeyword.trim().toLowerCase()));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [detailPlatformKeyword, detailProductId, detailQimaiKeyword, detailStatus, detailStoreIds, relations, products]);
 
@@ -391,8 +397,8 @@ export const WebBatchProductMapping: React.FC<Props> = ({
             </div>
             <div className="flex shrink-0 flex-wrap items-end gap-2 border-b border-[#E5E6EB] px-6 py-3">
               <WebStoreScopeSelector stores={storeScopeOptions} value={detailStoreIds} onChange={storeIds => { setDetailStoreIds(storeIds); setSelectedRelationIds([]); }} widthClassName="w-[210px]" />
-              <label className="flex h-9 min-w-[240px] flex-[1.3] items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailPlatformKeyword} onChange={event => setDetailPlatformKeyword(event.target.value)} placeholder="平台 SPU ID / SKU ID / SKU码" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
-              <label className="flex h-9 min-w-[200px] flex-1 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailQimaiKeyword} onChange={event => setDetailQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / 规格 / SKU" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+              <label className="flex h-9 min-w-[240px] flex-[1.3] items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailPlatformKeyword} onChange={event => setDetailPlatformKeyword(event.target.value)} placeholder="平台商品名称 / SPU ID / SKU ID" aria-label="搜索平台商品名称、SPU ID 或 SKU ID" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
+              <label className="flex h-9 min-w-[240px] flex-1 items-center rounded-md border border-[#C9CDD4] px-3"><Search size={15} className="mr-2 shrink-0 text-[#86909C]" /><input value={detailQimaiKeyword} onChange={event => setDetailQimaiKeyword(event.target.value)} placeholder="企迈商品名称 / SPU ID / SKU ID" aria-label="搜索企迈商品名称、SPU ID 或 SKU ID" className="min-w-0 flex-1 text-[13px] outline-none" /></label>
               <select value={detailStatus} onChange={event => setDetailStatus(event.target.value as typeof detailStatus)} className="h-9 w-[160px] rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]"><option value="all">全部绑定状态</option><option value="mapped">已绑定</option><option value="unmapped">未绑定</option></select>
               <button type="button" onClick={() => { setDetailStoreIds([]); setDetailPlatformKeyword(''); setDetailQimaiKeyword(''); setDetailStatus('all'); }} className="h-9 rounded-md border border-[#C9CDD4] bg-white px-3 text-[13px] text-[#4E5969]">重置</button>
             </div>
@@ -405,7 +411,7 @@ export const WebBatchProductMapping: React.FC<Props> = ({
                   <div className="min-w-0 pr-3"><div className="truncate font-medium text-[#1D2129]">{relation.storeName}</div><div className="mt-1 text-[11px] text-[#86909C]">门店编号 {relation.storeCode}</div></div>
                   <div className="min-w-0 pr-3"><div className="truncate text-[#1D2129]">{activeProduct.name} · {activeProduct.specName}</div><div className="mt-1 truncate font-mono text-[11px] text-[#667085]">SPU ID {relation.platformProductId} · SKU ID {relation.platformSkuId}</div><div className="mt-0.5 truncate font-mono text-[11px] text-[#667085]">SKU码 {relation.platformSkuCode}</div></div>
                   <div><span className={`inline-flex whitespace-nowrap rounded px-2 py-1 text-[12px] font-medium ${relation.status === 'mapped' ? 'bg-[#E8FFF3] text-[#008A4B]' : 'bg-[#FFF7E8] text-[#D46B08]'}`}>{relation.status === 'mapped' ? '已绑定' : '未绑定'}</span></div>
-                  <div className="min-w-0 pr-3">{qimai ? <><div className="truncate font-bold text-[#1D2129]">{qimai.name}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{qimai.specs?.[relation.qimaiSpecIndex || 0]?.name || relation.qimaiSpec || '默认规格'} · 企迈 SKU {qimai.skuCode}{qimai.specs && qimai.specs.length > 1 ? `-${(relation.qimaiSpecIndex || 0) + 1}` : ''}</div></> : <span className="text-[#98A2B3]">--</span>}</div>
+                  <div className="min-w-0 pr-3">{qimai ? <><div className="truncate font-bold text-[#1D2129]">{qimai.name}</div><div className="mt-1 truncate text-[11px] text-[#86909C]">{qimai.specs?.[relation.qimaiSpecIndex || 0]?.name || relation.qimaiSpec || '默认规格'} · 企迈 SKU {getQimaiSkuId(qimai, relation.qimaiSpecIndex || 0)}</div></> : <span className="text-[#98A2B3]">--</span>}</div>
                   <div className="text-[12px] text-[#667085]">{relation.updatedAt || '--'}</div>
                   <div className="flex items-center gap-3 whitespace-nowrap">{relation.status === 'mapped' ? <><button type="button" onClick={() => startBinding(detailProductId, [relation.id], `换绑 ${relation.storeName}`)} className="font-medium text-[#00A35B]">换绑</button><button type="button" onClick={() => unbindRelations([relation.id])} className="text-[#4E5969]">解绑</button></> : <button type="button" onClick={() => startBinding(detailProductId, [relation.id], `绑定 ${relation.storeName}`)} className="font-medium text-[#00A35B]">绑定</button>}</div>
                 </div>; })}

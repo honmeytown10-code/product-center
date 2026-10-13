@@ -19,7 +19,8 @@ import { INITIAL_PRODUCTS } from '../../types';
 import { ALL_OMNICHANNEL_CHANNELS, getOmnichannelConfig, isThirdPartyChannelId, resolveTemplateProductSource } from '../../omnichannel';
 import type { OmnichannelChannel } from '../../omnichannel';
 import { WebProductTemplateDetail } from './WebProductTemplateDetail';
-import type { Product } from '../../types';
+import type { Category, CategoryFieldConfig, Product } from '../../types';
+import './templateProductEditing.css';
 
 type TemplateStatus = 'enabled' | 'disabled';
 
@@ -75,7 +76,7 @@ const EMPTY_EDITOR: TemplateEditorState = {
   channels: ['pos', 'mini_program_dine_in'],
 };
 
-export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) => void; productMemberships?: Record<string, string[]>; onMembershipChange?: (templateId: string, ids: string[]) => void; channelProductOverrides?: Record<string, Product>; onChannelProductSaved?: (key: string, product: Product) => void }> = ({ onNavigate, productMemberships, onMembershipChange, channelProductOverrides = {}, onChannelProductSaved }) => {
+export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) => void; productMemberships?: Record<string, string[]>; onMembershipChange?: (templateId: string, ids: string[]) => void; channelProductOverrides?: Record<string, Product>; templateProductOverrides?: Record<string, Product>; onTemplateProductSaved?: (key: string, product: Product) => void; categories: Category[]; commonFieldConfigs?: Record<string, CategoryFieldConfig[]>; channelEditableFieldIds?: string[] }> = ({ onNavigate, productMemberships, onMembershipChange, channelProductOverrides = {}, templateProductOverrides = {}, onTemplateProductSaved, categories, commonFieldConfigs, channelEditableFieldIds }) => {
   const { products, activeBrandId, brandConfigs } = useProducts();
   const omnichannelConfig = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
   // Mock memberships use stable IDs: archiving must not silently fill the gap with another product.
@@ -156,6 +157,7 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
     setRecords(prev => [{ ...record, id, name: `${record.name}-副本`, status: 'disabled' }, ...prev]);
     setTemplateProductIds(prev => ({ ...prev, [id]: [...(prev[record.id] || [])] }));
     setTemplateStoreIds(prev => ({ ...prev, [id]: [...(prev[record.id] || [])] }));
+    Object.entries(templateProductOverrides).filter(([key]) => key.startsWith(`${record.id}:`)).forEach(([key, product]) => onTemplateProductSaved?.(`${id}:${key.slice(record.id.length + 1)}`, structuredClone(product)));
     setRowMenuId(null);
     setMessage(`已复制“${record.name}”，副本默认停用`);
   };
@@ -208,7 +210,8 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
   if (managedTemplate) {
     const source = resolveTemplateProductSource(omnichannelConfig, managedTemplate.channels);
     const catalogId = source.source?.type === 'channel_catalog' ? source.source.id.replace('channel_catalog:', '') : null;
-    const catalogChannelIds = omnichannelConfig.channelGroups.find(group => group.id === catalogId)?.channels.filter(isThirdPartyChannelId) || [];
+    const catalogChannelIds = managedTemplate.channels.filter(isThirdPartyChannelId).filter(id => omnichannelConfig.thirdPartyStrategies[id] === 'qimai');
+    const sourceProducts = catalogId ? products.map(product => channelProductOverrides[`${catalogId}:${product.id}`] || product) : products;
     const storeConflicts = (Object.entries(templateStoreIds) as Array<[string, string[]]>).reduce<Record<string, string>>((acc, [templateId, storeIds]) => {
       const other = records.find(record => record.id === templateId && record.id !== managedTemplate.id && record.status === 'enabled' && record.channels.some(channel => managedTemplate.channels.includes(channel)));
       if (other) storeIds.forEach(storeId => { acc[storeId] = other.name; });
@@ -217,16 +220,18 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
     return (
       <WebProductTemplateDetail
         template={managedTemplate}
-        products={products}
+        products={sourceProducts}
         productIds={templateProductIds[managedTemplate.id] || []}
         storeIds={templateStoreIds[managedTemplate.id] || []}
         sourceLabel={source.source?.label || '配置待完善'}
         sourceDescription={source.message}
         storeConflicts={storeConflicts}
-        catalogId={catalogId}
         catalogChannelIds={catalogChannelIds}
-        channelProductOverrides={channelProductOverrides}
-        onChannelProductSaved={onChannelProductSaved}
+        templateProductOverrides={templateProductOverrides}
+        onTemplateProductSaved={onTemplateProductSaved}
+        categories={categories}
+        commonFieldConfigs={commonFieldConfigs}
+        channelEditableFieldIds={channelEditableFieldIds}
         onCreatePublish={() => onNavigate?.('product_sync')}
         onProductIdsChange={ids => {
           onMembershipChange?.(managedTemplate.id, ids);
@@ -243,7 +248,7 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
   }
 
   return (
-    <div className="relative flex-1 bg-[#F5F6FA] p-3">
+    <div className="template-management relative flex-1 bg-[#F5F6FA] p-3">
       <div className="console-panel flex h-full flex-col overflow-hidden">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#EDEDED] px-4">
           <div className="console-status-tabs flex h-full items-center gap-8" role="tablist" aria-label="模板状态">
@@ -270,7 +275,7 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
           </div>
 
           <div className="min-w-0 flex-1 overflow-auto">
-            <table className="min-w-[1040px] table-fixed text-left text-sm">
+            <table className="template-record-table min-w-[1040px] table-fixed text-left text-sm">
               <thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-[#555]"><tr><th className="w-12 border-b border-[#EDEDED] px-4 py-3"><input type="checkbox" checked={allVisibleSelected} onChange={() => setSelectedIds(prev => allVisibleSelected ? prev.filter(id => !visibleIds.includes(id)) : Array.from(new Set([...prev, ...visibleIds])))} className="h-4 w-4 accent-[#00C06B]" /></th><th className="w-[260px] border-b border-[#EDEDED] px-4 py-3">模板</th><th className="w-[200px] border-b border-[#EDEDED] px-4 py-3">商品来源</th><th className="w-[260px] border-b border-[#EDEDED] px-4 py-3">适用渠道</th><th className="w-[110px] border-b border-[#EDEDED] px-4 py-3">范围</th><th className="w-[100px] border-b border-[#EDEDED] px-4 py-3">状态</th><th className="w-[160px] border-b border-[#EDEDED] px-4 py-3">操作</th></tr></thead>
               <tbody>{filteredRecords.map(record => { const source = resolveTemplateProductSource(omnichannelConfig, record.channels); const selected = selectedIds.includes(record.id); return <tr key={record.id} className={selected ? 'bg-[#F0FBF5]' : 'hover:bg-[#FAFBFC]'}><td className="border-b border-[#F1F1F1] px-4 py-4"><input type="checkbox" checked={selected} onChange={() => setSelectedIds(prev => selected ? prev.filter(id => id !== record.id) : [...prev, record.id])} className="h-4 w-4 accent-[#00C06B]" /></td><td className="border-b border-[#F1F1F1] px-4 py-4"><button type="button" onClick={() => setManagedTemplateId(record.id)} className="max-w-full truncate font-medium text-[#00A35B] hover:underline" title={record.name}>{record.name}</button><div className="mt-1 truncate text-xs text-[#999]" title={record.description}>{record.description} · {record.id}</div></td><td className="border-b border-[#F1F1F1] px-4 py-4"><div className={`text-sm ${source.valid ? 'text-[#444]' : 'text-[#D92D20]'}`}>{source.source?.label || '来源冲突'}</div>{!source.valid && <div className="mt-1 text-xs text-[#D92D20]">需拆分模板</div>}</td><td className="border-b border-[#F1F1F1] px-4 py-4"><div className="flex flex-wrap gap-1">{record.channels.map(channelId => <span key={channelId} className="rounded border border-[#E5E7EB] bg-white px-2 py-1 text-[11px] text-[#666]">{ALL_OMNICHANNEL_CHANNELS.find(channel => channel.id === channelId)?.shortName}</span>)}</div></td><td className="border-b border-[#F1F1F1] px-4 py-4 text-[#666]">{record.productCount} 商品<br /><span className="text-xs text-[#999]">{record.storeCount} 门店</span></td><td className="border-b border-[#F1F1F1] px-4 py-4"><span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${record.status === 'enabled' ? 'bg-[#EAF8F1] text-[#00A35B]' : 'bg-[#F5F5F5] text-[#999]'}`}>{record.status === 'enabled' ? '已启用' : '已停用'}</span></td><td className="relative border-b border-[#F1F1F1] px-4 py-4"><button type="button" onClick={() => setManagedTemplateId(record.id)} className="mr-4 text-[#00A35B]">管理</button><button type="button" onClick={() => openEdit(record)} className="mr-3 text-[#00A35B]">编辑</button><button type="button" onClick={() => setRowMenuId(rowMenuId === record.id ? null : record.id)} className="rounded p-1 text-[#999] hover:bg-[#F5F5F5]" aria-label={`${record.name}更多操作`}><MoreHorizontal size={16} /></button>{rowMenuId === record.id && <div className="absolute right-4 top-11 z-20 w-32 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white py-1 shadow-lg"><button type="button" onClick={() => copyTemplate(record)} className="flex w-full items-center px-3 py-2 text-left text-xs text-[#555] hover:bg-[#F5FBF8]"><Copy size={13} className="mr-2" />复制模板</button><button type="button" onClick={() => setConfirmAction({ type: record.status === 'enabled' ? 'disable' : 'enable', record })} className="flex w-full items-center px-3 py-2 text-left text-xs text-[#555] hover:bg-[#F5FBF8]">{record.status === 'enabled' ? '停用模板' : '启用模板'}</button><button type="button" onClick={() => setConfirmAction({ type: 'delete', record })} className="flex w-full items-center px-3 py-2 text-left text-xs text-[#D92D20] hover:bg-[#FFF8F7]"><Trash2 size={13} className="mr-2" />删除模板</button></div>}</td></tr>; })}{filteredRecords.length === 0 && <tr><td colSpan={7} className="py-16 text-center"><div className="text-sm text-[#999]">{records.length === 0 ? '暂未创建商品下发模板' : '没有符合条件的模板'}</div><button type="button" onClick={() => records.length === 0 ? openCreate() : (setKeyword(''), setChannelFilter('all'), setStatusFilter('all'), setActiveGroupId('all'))} className="mt-2 text-sm text-[#00A35B]">{records.length === 0 ? '创建第一个模板' : '清空筛选条件'}</button></td></tr>}</tbody>
             </table>

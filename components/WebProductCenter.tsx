@@ -48,10 +48,10 @@ export const WebProductCenter: React.FC = () => {
       const visibleGroups = [...groups, { title: '商品设置', items: [
         { id: 'general_settings', label: '商品设置', matches: ['channel_override_settings', 'omnichannel_settings', 'common_field_settings'] },
       ] }];
-      return <aside className="console-sidebar z-30 flex w-[216px] shrink-0 flex-col overflow-y-auto border-r border-[#E8E8E8] bg-white py-2 no-scrollbar" aria-label="商品中心菜单" tabIndex={0}>
+      return <aside className="console-sidebar product-navigation z-30 flex w-[216px] shrink-0 flex-col overflow-y-auto border-r border-[#E8E8E8] bg-white py-2 no-scrollbar" aria-label="商品中心菜单" tabIndex={0}>
         <div className="flex items-center gap-2 px-5 py-4 text-[14px] font-semibold">商品中心</div>
-        {visibleGroups.map(group => <div key={group.title} className="pb-2">
-          <div className="px-5 pb-1 pt-2 text-[12px] text-[#667085]">{group.title}</div>
+        {visibleGroups.map(group => <div key={group.title} className="product-navigation-section pb-2">
+          <div className="product-navigation-group">{group.title}</div>
           {group.items.map(item => {
             const active = activeMenu === item.id || item.matches?.includes(activeMenu);
             return <button key={item.id} aria-current={active ? 'page' : undefined} onClick={() => navigate(item.id === 'store_category_list' ? 'store_addon_list' : item.id)} className={`flex min-h-10 w-full items-center gap-3 px-5 py-2 text-left text-[14px] leading-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460] ${active ? 'bg-[#EAF8F2] font-semibold text-[#008F4C]' : 'text-[#4E5969] hover:bg-[#F7F8FA]'}`}><span className="min-w-0">{item.label}</span></button>;

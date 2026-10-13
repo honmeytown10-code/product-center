@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, FolderTree, Layers3, RotateCcw, Save, ShieldCheck, Sparkles } from 'lucide-react';
+import { categorySupplementFields } from './productCategoryFields';
 import { AVAILABLE_DYNAMIC_FIELDS, Category, CategoryFieldConfig, COMMON_FIELD_CHILD_CONFIG_LIBRARY, DynamicFieldConfig, resolveChildRequiredConfigs } from '../../types';
 
 type WebCategoryLike = Category & {
@@ -30,7 +31,7 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         label: '基础信息',
         desc: '对应创建表单里的基础信息区域，包含名称、分类、单位等基础录入字段。',
         groups: [
-            { id: 'base_main', label: '基础信息', desc: '商品基础标识、分类、单位及展示类型等基础录入字段。', fieldIds: ['p_name', 'p_alias', 'p_code', 'p_front_cat', 'p_back_cat', 'p_cat', 'p_weight_flag', 'p_unit', 'p_display_type', 'p_remark', 'p_stat_tags', 'p_tare_weight'] },
+            { id: 'base_main', label: '基础信息', desc: '商品基础标识、分类、单位及展示类型等基础录入字段。', fieldIds: ['p_name', 'p_alias', 'p_code', 'p_front_cat', 'p_back_cat', 'p_cat', 'p_weight_flag', 'p_unit', 'p_display_type', 'p_remark', 'p_stat_tags', 'p_tare_weight', 'c_hotpot_type'] },
         ],
     },
     {
@@ -51,7 +52,7 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         desc: '对应创建表单里的展示设置区域，按列表页与详情页拆分。',
         groups: [
             { id: 'display_list', label: '列表页展示', desc: '列表卡片中直接展示的图片、文案与标签。', fieldIds: ['p_img', 'p_cover_img', 'p_list_desc', 'p_desc_tags', 'p_badge'], showHeader: true },
-            { id: 'display_detail', label: '详情页展示', desc: '商品详情图、说明与底部图片。', fieldIds: ['p_detail_images', 'p_rich_desc', 'p_detail_bottom_img', 'p_video'], showHeader: true },
+            { id: 'display_detail', label: '详情页展示', desc: '商品详情图、说明与底部图片。', fieldIds: ['p_detail_images', 'p_rich_desc', 'p_detail_bottom_img', 'p_video', 'p_nutrition_public'], showHeader: true },
         ],
     },
     {
@@ -59,7 +60,7 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         label: '销售属性',
         desc: '对应创建表单里的销售属性区域，统一展示售卖规则等配置字段。',
         groups: [
-            { id: 'sales_main', label: '销售属性', desc: '售卖规则、起购限购、分时段销售及税率等配置。', fieldIds: ['s_price', 's_cost', 's_market_price', 's_pack_fee', 's_stock', 's_limit', 's_pos_edit', 's_min_purchase_toggle', 's_min_purchase_value', 's_max_purchase_toggle', 's_max_purchase_value', 's_time_sale_toggle', 's_time_sale_rule', 's_sale_mode', 's_takeout_rule', 's_sale_settings', 's_tax_rate'] },
+            { id: 'sales_main', label: '销售属性', desc: '售卖规则、起购限购、分时段销售及税率等配置。', fieldIds: ['st_member', 's_reservation', 's_reservation_lead_time', 's_require_message', 's_selling_point', 's_max_reservation_days', 's_auto_cart', 's_exclude_cup_count', 'c_blind_draw_count', 'c_pos_discount', 's_price', 's_cost', 's_market_price', 's_pack_fee', 's_stock', 's_limit', 's_pos_edit', 's_min_purchase_toggle', 's_min_purchase_value', 's_max_purchase_toggle', 's_max_purchase_value', 's_time_sale_toggle', 's_time_sale_rule', 's_sale_mode', 's_takeout_rule', 's_sale_settings', 's_tax_rate'] },
         ],
     },
     {
@@ -67,7 +68,9 @@ const FORM_STRUCTURE: FieldModuleSection[] = [
         label: '其他属性',
         desc: '对应创建表单里的其他属性区域，统一展示会员、开票、原料与补充属性配置。',
         groups: [
-            { id: 'other_main', label: '其他属性', desc: '会员、税务、原料及其他补充属性。', fieldIds: ['st_member', 'o_tax', 'o_invoice', 'o_origin', 'o_ingredients'] },
+            { id: 'other_main', label: '其他属性', desc: '会员、税务、原料及其他补充属性。', fieldIds: ['o_tax', 'o_invoice', 'o_small_ingredient', 'o_combo_addon_restrict', 'c_diners_min', 'c_diners_max'] },
+            { id: 'cup_label', label: '杯贴设置', desc: '仅现制饮品显示，用于 POS 杯贴打印。', fieldIds: ['o_origin', 'o_ingredients', 'o_main_ingredients', 'o_ingredient_description', 'o_flavor', 'o_flavor_description', 'o_nutrition_image', 'o_creation_date', 'o_storage_temperature', 'o_shelf_life_days'] },
+            { id: 'storage', label: '储存信息', desc: '维护现有储存温度和保质期。', fieldIds: ['o_storage_temperature', 'o_shelf_life_days'] },
         ],
     },
 ];
@@ -180,7 +183,8 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
 
     const categoryFieldConfigs = useMemo<CategoryFieldConfig[]>(() => {
         if (!selectedCategory) return [];
-        return activeType === 'standard' ? selectedCategory.standardFields : selectedCategory.comboFields;
+        const existing = activeType === 'standard' ? selectedCategory.standardFields : selectedCategory.comboFields;
+        return [...existing.filter(field => selectedCategory.id === 'w_cat_s2' || !['o_origin', 'o_ingredients'].includes(field.id)), ...categorySupplementFields(selectedCategory.id).filter(field => !existing.some(config => config.id === field.id)).map(field => ({ id: field.id, isRequired: false, displayMode: 'collapsed' as const }))];
     }, [activeType, selectedCategory]);
     const categoryFieldConfigMap = useMemo(
         () => new Map(categoryFieldConfigs.map(config => [config.id, config])),
@@ -190,12 +194,13 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
     const availableCategoryFields = useMemo(() => (
         categoryFieldConfigs
             .filter(config => {
+                if (config.id === 'st_member') return false;
                 if (fieldScope === 'master') return MASTER_FIELD_IDS.has(config.id);
                 if (fieldScope === 'channel') return !CHANNEL_HIDDEN_FIELD_IDS.has(config.id);
                 return true;
             })
             .map(config => {
-                const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === config.id);
+                const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === config.id) || categorySupplementFields(selectedCategory?.id || '').find(item => item.id === config.id);
                 return field ? { config, field } : null;
             })
             .filter((item): item is { config: CategoryFieldConfig; field: typeof AVAILABLE_DYNAMIC_FIELDS[number] } => !!item)
@@ -262,7 +267,9 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
         FORM_STRUCTURE.map(section => ({
             ...section,
             groups: section.groups
-                .filter(group => !group.type || group.type === 'all' || group.type === activeType)
+                .filter(group => (!group.type || group.type === 'all' || group.type === activeType)
+                    && (group.id !== 'cup_label' || selectedCategory?.id === 'w_cat_s2')
+                    && (group.id !== 'storage' || selectedCategory?.id !== 'w_cat_s2'))
                 .map(group => ({
                     ...group,
                     items: group.fieldIds
@@ -272,7 +279,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                 }))
                 .filter(group => group.items.length > 0),
         })).filter(section => section.groups.length > 0)
-    ), [activeType, fieldLookup]);
+    ), [activeType, fieldLookup, selectedCategory?.id]);
 
     const currentConfigKey = selectedCategory ? getConfigKey(activeType, selectedCategory.id) : '';
     const persistedSelection = configs[currentConfigKey] || [];
@@ -542,6 +549,7 @@ export const WebCommonFieldSettings: React.FC<Props> = ({
                                                         const disabled = requiredFieldIds.includes(field.id);
                                                         const currentDraftConfig = normalizedDraftConfigMap.get(field.id);
                                                         const childTemplates = (COMMON_FIELD_CHILD_CONFIG_LIBRARY[field.id] || []).filter(child => {
+                                                            if (field.id === 'm_methods' && child.id === 'm_method_sync' && fieldScope !== 'channel') return false;
                                                             if (fieldScope === 'master') {
                                                                 if (field.id === 's_specs') return MASTER_SPEC_CHILD_IDS.has(child.id);
                                                                 if (field.id === 'm_methods') return MASTER_METHOD_CHILD_IDS.has(child.id);

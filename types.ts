@@ -195,7 +195,7 @@ export const COMMON_FIELD_CHILD_CONFIG_LIBRARY: Record<string, FieldChildOption[
   ],
   m_methods: [
     { id: 'm_method_name', label: '做法值', isSystem: true, isDefaultSelected: true, description: '做法值名称，默认保留。' },
-    { id: 'm_method_sync', label: '同步', isDefaultSelected: true, description: '是否同步到相关规格或门店。' },
+    { id: 'm_method_sync', label: '渠道状态', isDefaultSelected: true, description: '控制做法值在当前渠道启用或禁用。' },
     { id: 'm_method_markup', label: '做法加价', isDefaultSelected: true, description: '做法附加价格。' },
     { id: 'm_method_code', label: '标识码', isDefaultSelected: true, description: '做法编码或标识码。' },
     { id: 'm_method_remark', label: '备注', isDefaultSelected: true, description: '做法备注信息。' },

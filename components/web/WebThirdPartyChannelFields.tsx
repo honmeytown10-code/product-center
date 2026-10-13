@@ -153,7 +153,7 @@ type Props = {
   showSalesChannelSelector?: boolean;
   addonItems?: ChannelAddonItem[];
   validationError?: string;
-  location: 'master' | 'channel' | 'channel_catalog';
+  location: 'master' | 'channel' | 'channel_catalog' | 'template' | 'store';
   title?: string;
   compact?: boolean;
   embedded?: boolean;
@@ -198,7 +198,7 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, select
   return (
     <div className={`overflow-hidden bg-white ${embedded ? '' : 'border border-[#DDE3E8]'}`}>
       {validationError && <p role="alert" className="px-5 pt-3 text-xs text-[#B42318]">{validationError}</p>}
-      {showSalesChannelSelector && location !== 'master' && channelIds.length > 0 && <fieldset className="px-5 py-4">
+      {showSalesChannelSelector && location !== 'master' && location !== 'store' && channelIds.length > 0 && <fieldset className="px-5 py-4">
         <legend className="sr-only">售卖渠道</legend>
         <div className="mb-2 text-sm font-semibold text-[#4E5969]">售卖渠道</div>
         <div className="flex flex-wrap gap-x-6 gap-y-2">{channelIds.map(id => <label key={id} className="inline-flex cursor-pointer items-center gap-2 text-sm text-[#344054]"><input type="checkbox" checked={selectedChannelIds.includes(id)} onChange={() => onSelectedSalesChannelIdsChange?.(selectedChannelIds.includes(id) ? selectedChannelIds.filter(item => item !== id) : channelIds.filter(item => item === id || selectedChannelIds.includes(item)))} className="h-4 w-4 accent-[#00B460]" />{getThirdPartyChannel(id).name}</label>)}</div>

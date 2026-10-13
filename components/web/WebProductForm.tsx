@@ -12,6 +12,11 @@ import { Switch, SectionHeader, FormRow } from './WebCommon';
 import { WebProductAmountControl } from './WebProductAmountControl';
 import { WebProductPickerLayer } from './WebProductPickerLayer';
 import { WebCategorySelectModal } from './WebModals';
+import { useProducts } from '../../context';
+import { PACKAGING_FIELDS, WebProductPackagingSettings } from './WebProductPackagingSettings';
+import './productFormRefinements.css';
+import { productMnemonic } from './productMnemonic';
+const conciseFieldLabel = (label: string) => label.replace(/^是否(?:为)?/, '');
 import { WebThirdPartyChannelFields, getDouyinSettingsError, normalizeDouyinChannelValues, resolveChannelFieldValues, resolveDouyinSalePeriod, resolveSelectedSalesChannelIds } from './WebThirdPartyChannelFields';
 import { WebTakeoutSyncPreview } from './WebTakeoutSyncPreview';
 import { WebStoreConnectionPrecheck } from './WebStoreConnectionPrecheck';
@@ -61,6 +66,7 @@ interface WebProductFormProps {
     thirdPartyChannelAttributeIds?: ThirdPartyChannelId[];
     thirdPartyManagementModes?: Partial<Record<ThirdPartyChannelId, ThirdPartyManagementMode>>;
     formScope?: 'master' | 'channel' | 'unified' | 'store';
+    templateContext?: { id: string; name: string };
     unifiedManagementView?: boolean;
     groupMealContext?: boolean;
     storeAdditionFlow?: boolean;
@@ -547,16 +553,16 @@ const MONEY_FIELD_IDS = new Set([
 const DISPLAY_TYPE_OPTIONS: DisplayTypeOption[] = [
     { key: 'display_product', label: '展示商品', desc: '开启后，展示商品在前端只作为展示，不支持直接下单结算。' },
     { key: 'pos_edit_price', label: 'POS 临时改价', desc: '开启后，可用于门店 POS 端临时改价场景。' },
-    { key: 'temp_product', label: '是否为临时商品', desc: '开启后，可用于临时菜品或按次上新的商品。' },
-    { key: 'market_price_product', label: '是否时价商品', desc: '开启后，可在 POS 端按实时价格售卖。' },
-    { key: 'children_meal', label: '是否为儿童餐', desc: '开启后，小程序可按儿童餐场景进行展示。' },
+    { key: 'temp_product', label: '临时商品', desc: '开启后，可用于临时菜品或按次上新的商品。' },
+    { key: 'market_price_product', label: '时价商品', desc: '开启后，可在 POS 端按实时价格售卖。' },
+    { key: 'children_meal', label: '儿童餐', desc: '开启后，小程序可按儿童餐场景进行展示。' },
 ];
 const COLLAPSIBLE_BASIC_FIELD_IDS = ['p_display_type', 'p_remark', 'p_stat_tags'] as const;
 const COLLAPSIBLE_SALES_FIELDS = [
     { id: 's_sale_settings', label: '售卖设置' },
     { id: 's_tax_rate', label: '税率' },
     { id: 'p_points_exchange_rule', label: '积分兑换规则' },
-    { id: 's_jump_third_mini_program', label: '是否跳转三方小程序' },
+    { id: 's_jump_third_mini_program', label: '跳转三方小程序' },
     { id: 's_third_mini_program_path', label: '三方小程序页面路径' },
     { id: 's_sales_commission_amount', label: '销售提成金额' },
 ] as const;
@@ -584,6 +590,7 @@ const DISPLAY_MORE_FIELD_MAPPINGS = [
     { id: 'p_video', label: '商品视频' },
 ] as const;
 const SALES_MORE_FIELD_MAPPINGS = [
+    { id: 'st_member', label: '会员折扣/积分' },
     { id: 's_sale_settings', label: '售卖设置' },
     { id: 's_tax_rate', label: '税率' },
     { id: 'p_points_exchange_rule', label: '积分兑换规则' },
@@ -842,8 +849,8 @@ const SPEC_CONFIG_MODULES: Array<{
     desc: string;
 }> = [
     { key: 'price', label: '价格设置', desc: '设置售价、划线价和预估成本。' },
-    { key: 'identity', label: '标识设置', desc: '配置商品标识、规格码和条码信息。' },
     { key: 'inventory', label: '库存设置', desc: '管理不限库存、自定义库存和计划库存。' },
+    { key: 'identity', label: '标识设置', desc: '配置商品标识、规格码和条码信息。' },
     { key: 'info', label: '规格信息', desc: '补充规格图片、规格大图、别名和商品份量。' },
     { key: 'packaging', label: '包装费设置', desc: '配置规格包装费与包装标识。' },
 ];
@@ -1032,6 +1039,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     thirdPartyChannelAttributeIds = [],
     thirdPartyManagementModes = {},
     formScope = 'store',
+    templateContext,
     unifiedManagementView = false,
     groupMealContext = false,
     storeAdditionFlow = false,
@@ -1048,6 +1056,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     onQuerySellingStores,
     onOpenChannelCatalog,
 }) => {
+    const { activeBrandId, brandConfigs } = useProducts();
+    const packageFeeSetting = brandConfigs[activeBrandId]?.packageFeeSetting || 'product';
     const defaultPreviewPreference: PreviewDisplayPreference = existingProductCount > 10 ? 'collapsed' : 'expanded';
     const isComboProduct = type === 'combo';
     const isMasterForm = formScope === 'master';
@@ -1157,7 +1167,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const channelRequiresMainImage = (isChannelForm || isUnifiedForm) && (
         channelGroupIncludesMiniProgram(effectiveChannelIds)
     );
-    const initialMasterProductName = String(initialProduct?.masterName || channelContext?.masterName || initialProduct?.name || '');
+    const initialMasterProductName = String(initialProduct?.masterName || initialProduct?.name || (mode === 'edit' ? channelContext?.masterName : '') || '');
     const [masterProductName, setMasterProductName] = useState(initialMasterProductName);
     const [dynamicFormData, setDynamicFormData] = useState<Record<string, any>>(() => initialProduct ? {
         p_name: initialProduct.name || '',
@@ -1192,6 +1202,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         p_deposit_required: category.businessType === 'buffet_ticket',
         p_unit: '',
     });
+    const manualMnemonic = useRef(!!initialProduct?.formData?.p_code && initialProduct.formData.p_code !== productMnemonic(initialMasterProductName));
+    const updateProductName = (name: string) => {
+        if (isUnifiedForm) setMasterProductName(name);
+        setDynamicFormData(previous => ({ ...previous, p_name: name,
+            ...(!manualMnemonic.current && (mode === 'create' || !previous.p_code) ? { p_code: productMnemonic(name) } : {}),
+        }));
+    };
     const formContentRef = useRef<HTMLDivElement | null>(null);
     const stickyToolbarRef = useRef<HTMLDivElement | null>(null);
     const specTableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1208,8 +1225,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         }
         return availableChannelIds;
     });
-    const activeThirdPartyChannelAttributeIds = isStoreForm ? baseThirdPartyChannelAttributeIds.filter(id => selectedStoreChannelIds.map(value => value === 'douyin_dine' ? 'douyin' : value).includes(id)) : baseThirdPartyChannelAttributeIds;
-    const selectedSalesChannelIds = isUnifiedForm && unifiedManagementView
+    const activeThirdPartyChannelAttributeIds = isStoreForm ? baseThirdPartyChannelAttributeIds.filter(id => selectedStoreChannelIds.map(value => value === 'eleme' ? 'taobao' : value === 'douyin_dine' ? 'douyin' : value).includes(id)) : baseThirdPartyChannelAttributeIds;
+    const selectedSalesChannelIds = isStoreForm || (isUnifiedForm && unifiedManagementView)
         ? activeThirdPartyChannelAttributeIds
         : resolveSelectedSalesChannelIds(activeThirdPartyChannelAttributeIds, dynamicFormData);
     const selectedStoreChannelImpacts = useMemo(() => selectedStoreChannelIds.map(channelId => ({
@@ -1493,6 +1510,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         );
         // Weight is derived from the category, not a duplicate editable/status field.
         categoryUnavailableFieldIds.add('p_weight_flag');
+        // Only show the existing selling-settings membership option. Keep
+        // legacy st_member values in formData; do not merge their semantics.
+        categoryUnavailableFieldIds.add('st_member');
+        if (currentCategory.id !== 'w_cat_s2') ['o_origin', 'o_ingredients'].forEach(id => categoryUnavailableFieldIds.add(id));
         if (!isWeightCategory) {
             categoryUnavailableFieldIds.add('p_tare_weight');
         }
@@ -1575,7 +1596,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         ...(currentFieldConfigMap.get(id) || { id, isRequired: true }),
                         displayMode: 'visible' as const,
                     })),
-                    ...scopeVisibleIds.map(id => ({
+                    ...scopeVisibleIds.filter(id => !configuredIdSet.has(id)).map(id => ({
                         ...(currentFieldConfigMap.get(id) || { id, isRequired: false }),
                         displayMode: 'visible' as const,
                     })),
@@ -1646,9 +1667,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const value = dynamicFormData[field.id];
         if (requiredSupplementIds.has(field.id) && (value === undefined || value === null || String(value).trim() === '')) supplementalErrors[field.id] = `请填写${field.label}。`;
     });
+    const cupLabelFieldIds = new Set(currentCategory.id === 'w_cat_s2' ? ['o_origin', 'o_ingredients', 'o_main_ingredients', 'o_ingredient_description', 'o_flavor', 'o_flavor_description', 'o_nutrition_image', 'o_creation_date', 'o_storage_temperature', 'o_shelf_life_days'] : []);
     const renderCategoryFields = (module: 'base' | 'sales' | 'display' | 'others') => <WebCategorySupplementFields
         key={`${currentCategory.id}-${module}`} categoryId={currentCategory.id} module={module}
-        value={dynamicFormData} onChange={setDynamicFormData} allowedIds={visibleFieldIds} requiredIds={requiredSupplementIds}
+        value={dynamicFormData} onChange={setDynamicFormData} allowedIds={new Set(categorySupplementFields(currentCategory.id).filter(field => isFieldRendered(field.id) && (module !== 'others' || !cupLabelFieldIds.has(field.id)) && (module !== 'sales' || !['s_reservation', 's_reservation_lead_time'].includes(field.id))).map(field => field.id))} requiredIds={requiredSupplementIds}
         errors={saveAttempted ? supplementalErrors : {}} autoCartEligible={specDisplayMode !== 'multi' && methodConfigRows.length <= 1 && addonConfigRows.length === 0}
     />;
     const moreFieldMappings = useMemo(() => ([
@@ -1659,14 +1681,27 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         ...DISPLAY_MORE_FIELD_MAPPINGS,
         ...SALES_MORE_FIELD_MAPPINGS,
         ...OTHER_MORE_FIELD_MAPPINGS,
+        ...categorySupplementFields(currentCategory.id).map(field => ({ id: field.id, label: conciseFieldLabel(field.label) })),
+        ...['o_origin', 'o_ingredients'].filter(id => currentCategory.id === 'w_cat_s2').map(id => ({ id, label: AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === id)!.label })),
         { id: 's_specs', label: '规格信息' },
         { id: 'm_methods', label: '做法' },
         { id: 'a_addons', label: '加料' },
-    ].filter(item => collapsedCommonFieldIdSet.has(item.id) && (!groupMealContext || item.id !== 'p_display_type'))), [collapsedCommonFieldIdSet, groupMealContext]);
+    ].filter(item => collapsedCommonFieldIdSet.has(item.id) && (!groupMealContext || item.id !== 'p_display_type'))), [collapsedCommonFieldIdSet, groupMealContext, currentCategory.id]);
     const expandedMoreFieldSet = useMemo(() => new Set(expandedMoreFields), [expandedMoreFields]);
     const isCommonFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId) && commonFieldIdSet.has(fieldId);
     const isMoreFieldEnabled = (fieldId: string) => visibleFieldIds.has(fieldId) && collapsedCommonFieldIdSet.has(fieldId) && expandedMoreFieldSet.has(fieldId);
     const isFieldRendered = (fieldId: string) => isCommonFieldEnabled(fieldId) || isMoreFieldEnabled(fieldId);
+    const enabledCupLabelIds = [...cupLabelFieldIds].filter(id => visibleFieldIds.has(id));
+    const cupLabelCollapsed = enabledCupLabelIds.some(id => collapsedCommonFieldIdSet.has(id));
+    const cupLabelExpanded = enabledCupLabelIds.length > 0 && (!cupLabelCollapsed
+        || expandedMoreFieldSet.has('cup-label-settings')
+        || enabledCupLabelIds.some(id => expandedMoreFieldSet.has(id))
+        || (saveAttempted && enabledCupLabelIds.some(id => !!supplementalErrors[id])));
+    const sellingSettingsIds = ['s_sale_settings', 's_reservation', 's_reservation_lead_time'].filter(id => visibleFieldIds.has(id));
+    const sellingSettingsCollapsed = sellingSettingsIds.length > 0 && sellingSettingsIds.every(id => !commonFieldIdSet.has(id));
+    const sellingSettingsExpanded = sellingSettingsIds.some(id => isFieldRendered(id))
+        || expandedMoreFieldSet.has('selling-settings')
+        || (saveAttempted && sellingSettingsIds.some(id => !!supplementalErrors[id]));
     const expandedBasicFields = useMemo(
         () => COLLAPSIBLE_BASIC_FIELD_IDS.filter(id => expandedMoreFieldSet.has(id)),
         [expandedMoreFieldSet]
@@ -1688,17 +1723,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         [expandedMoreFieldSet, commonFieldIdSet]
     );
     const basicCollapsedFieldMappings = useMemo(
-        () => COLLAPSIBLE_BASIC_FIELD_IDS
+        () => [...COLLAPSIBLE_BASIC_FIELD_IDS, ...categorySupplementFields(currentCategory.id).filter(field => field.module === 'base').map(field => field.id)]
             .map(id => {
-                const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === id);
+                const field = AVAILABLE_DYNAMIC_FIELDS.find(item => item.id === id) || categorySupplementFields(currentCategory.id).find(item => item.id === id);
                 return field
                     && collapsedCommonFieldIdSet.has(id)
-                    && (!isUnifiedForm || MASTER_FIELD_IDS.has(id) || (unifiedManagementView && UNIFIED_CHANNEL_BASIC_FIELD_IDS.has(id)))
+                    && (!isUnifiedForm || CATEGORY_SUPPLEMENT_IDS.has(id) || MASTER_FIELD_IDS.has(id) || (unifiedManagementView && UNIFIED_CHANNEL_BASIC_FIELD_IDS.has(id)))
                     ? { id, label: field.label }
                     : null;
             })
             .filter((item): item is { id: string; label: string } => !!item),
-        [collapsedCommonFieldIdSet, isUnifiedForm, unifiedManagementView]
+        [collapsedCommonFieldIdSet, isUnifiedForm, unifiedManagementView, currentCategory.id]
     );
     const unifiedChannelBasicCollapsedFieldMappings = useMemo(
         () => COLLAPSIBLE_BASIC_FIELD_IDS
@@ -1716,19 +1751,20 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         [collapsedCommonFieldIdSet, isUnifiedForm, unifiedManagementView]
     );
     const displayCollapsedFieldMappings = useMemo(
-        () => DISPLAY_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id) && !(unifiedManagementView && ['p_cover_img', 'p_detail_images', 'p_detail_bottom_img'].includes(item.id))),
-        [collapsedCommonFieldIdSet, unifiedManagementView]
+        () => [...DISPLAY_MORE_FIELD_MAPPINGS, ...categorySupplementFields(currentCategory.id).filter(field => field.module === 'display').map(field => ({ id: field.id, label: conciseFieldLabel(field.label) }))].filter(item => collapsedCommonFieldIdSet.has(item.id) && !(unifiedManagementView && ['p_cover_img', 'p_detail_images', 'p_detail_bottom_img'].includes(item.id))),
+        [collapsedCommonFieldIdSet, unifiedManagementView, currentCategory.id]
     );
     const salesCollapsedFieldMappings = useMemo(
-        () => SALES_MORE_FIELD_MAPPINGS.filter(item => (
+        () => [...SALES_MORE_FIELD_MAPPINGS, ...categorySupplementFields(currentCategory.id).filter(field => field.module === 'sales').map(field => ({ id: field.id, label: conciseFieldLabel(field.label) }))].filter(item => (
             collapsedCommonFieldIdSet.has(item.id)
+            && !['s_sale_settings', 's_reservation', 's_reservation_lead_time'].includes(item.id)
             && !((isMasterForm || isUnifiedForm) && item.id === 's_tax_rate')
-        )),
-        [collapsedCommonFieldIdSet, isMasterForm, isUnifiedForm]
+        )).concat(sellingSettingsCollapsed ? [{ id: 'selling-settings', label: '售卖设置' }] : []),
+        [collapsedCommonFieldIdSet, isMasterForm, isUnifiedForm, currentCategory.id, sellingSettingsCollapsed]
     );
     const otherCollapsedFieldMappings = useMemo(
-        () => OTHER_MORE_FIELD_MAPPINGS.filter(item => collapsedCommonFieldIdSet.has(item.id)),
-        [collapsedCommonFieldIdSet]
+        () => [...OTHER_MORE_FIELD_MAPPINGS, ...categorySupplementFields(currentCategory.id).filter(field => field.module === 'others').map(field => ({ id: field.id, label: conciseFieldLabel(field.label) })), ...['o_origin', 'o_ingredients'].filter(id => currentCategory.id === 'w_cat_s2').map(id => ({ id, label: AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === id)!.label }))].filter(item => collapsedCommonFieldIdSet.has(item.id)),
+        [collapsedCommonFieldIdSet, currentCategory.id]
     );
     const collapsedAttrModuleMappings = useMemo(
         () => [
@@ -1753,7 +1789,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const getFieldSection = (field: DynamicFieldConfig): SectionId => {
         if (field.id === 'p_img') return isMasterForm || (isUnifiedForm && !unifiedManagementView) ? 'basic' : 'display';
         if (isUnifiedForm && UNIFIED_CHANNEL_BASIC_FIELD_IDS.has(field.id)) return unifiedManagementView ? 'basic' : 'display';
-        if (field.id === 'p_points_exchange_rule') return 'spec';
+        if (field.id === 'p_points_exchange_rule' || field.id === 'st_member') return 'spec';
         if (field.module === 'base') return 'basic';
         if (field.module === 'display') return 'display';
         if (field.module === 'sales') return 'spec';
@@ -1778,6 +1814,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         && fieldId === 's_spec_alias'
     );
     const isChildFieldAllowed = (fieldId: string, childId: string) => {
+        if (fieldId === 'm_methods' && childId === 'm_method_sync' && !isChannelForm) return false;
         if (fieldId === 's_specs' && childId === 's_spec_code') return false;
         if (isMasterForm) {
             if (fieldId === 's_specs') return MASTER_SPEC_CHILD_IDS.has(childId);
@@ -1921,6 +1958,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         () => (specDisplayMode === 'single' ? specConfigRows.slice(0, 1) : specConfigRows),
         [specConfigRows, specDisplayMode]
     );
+    const specRowsForSave = packageFeeSetting === 'product' && !isMasterForm && specConfigRows.length > 0
+        ? specConfigRows.map(row => ({ ...row, ...Object.fromEntries(PACKAGING_FIELDS.map(field => [field.key, specConfigRows[0][field.key]])) })) : specConfigRows;
     const takeoutSnapshot: TakeoutSnapshot = {
         specGroupCount: specDisplayMode === 'single' ? 0 : Object.keys(selectedSpecValuesByGroup).length,
         skus: visibleSpecRows.map(row => ({ id: row.id, name: row.s_spec_name, price: row.s_spec_channel_price || row.s_spec_price, stock: row.s_spec_initial_stock, maxStock: row.s_spec_max_stock, autoRestock: row.s_spec_auto_restock, packagingFee: row.s_spec_take_pack_fee || row.s_spec_store_pack_fee, inventoryMode: row.s_spec_inventory_mode, amount: row.s_spec_amount, amountUnit: row.s_spec_amount_unit })),
@@ -1935,7 +1974,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const channelSettingsError = (isChannelForm || isUnifiedForm) && activeThirdPartyChannelAttributeIds.length > 0
         ? selectedSalesChannelIds.length === 0 ? '请选择至少一个售卖渠道' : selectedSalesChannelIds.includes('douyin') ? getDouyinSettingsError(resolvedChannelValues, enabledChannelAddonItems) : ''
         : '';
-    const takeoutFormState = { specDisplayMode, selectedSpecValuesByGroup, specConfigRows, methodConfigRows, addonConfigRows, comboGroupCards, addonScope, addonTotalRule, addonGroupRules, prepEnabled, prepScope, splitByStockState, uniformPrepRule, uniformStockRules, specPrepRules, attrPanelOrder, attrDefaultSelections, attrGroupSortEnabled, attrRecommendedSelections };
+    const takeoutFormState = { specDisplayMode, selectedSpecValuesByGroup, specConfigRows: specRowsForSave, methodConfigRows, addonConfigRows, comboGroupCards, addonScope, addonTotalRule, addonGroupRules, prepEnabled, prepScope, splitByStockState, uniformPrepRule, uniformStockRules, specPrepRules, attrPanelOrder, attrDefaultSelections, attrGroupSortEnabled, attrRecommendedSelections };
     const recoverySnapshot = JSON.stringify({ version: 1, categoryId: currentCategory.id, product: {
         id: savedProductId, name: isUnifiedForm ? masterProductName : String(dynamicFormData.p_name || ''),
         price: Number(visibleSpecRows[0]?.s_spec_price || dynamicFormData.s_price || 0), image: String(dynamicFormData.p_img || ''),
@@ -1983,8 +2022,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     );
 
     const isSpecPackFilled = useMemo(
-        () => visibleSpecRows.every(row => String(row.s_spec_store_pack_fee ?? '').trim() !== '' || String(row.s_spec_take_pack_fee ?? '').trim() !== ''),
-        [visibleSpecRows]
+        () => (packageFeeSetting === 'product' ? visibleSpecRows.slice(0, 1) : visibleSpecRows).every(row => String(row.s_spec_store_pack_fee ?? '').trim() !== '' || String(row.s_spec_take_pack_fee ?? '').trim() !== ''),
+        [visibleSpecRows, packageFeeSetting]
     );
     const isSpecPriceRequired = useMemo(
         () => !!(currentFieldConfigMap.get('s_price')?.isRequired || AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === 's_price')?.isRequired),
@@ -2068,8 +2107,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         ) {
             items.push({
                 key: 'spec-pack',
-                label: '规格包装费',
-                section: 'method',
+                label: '包装费',
+                section: 'spec',
                 filled: isSpecPackFilled,
                 type: 'required',
             });
@@ -2206,6 +2245,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             's_sale_mode',
             's_takeout_rule',
             's_sale_settings',
+            'st_member',
             's_tax_rate',
             'p_points_exchange_rule',
             's_jump_third_mini_program',
@@ -2232,10 +2272,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         [sectionVisibility]
     );
     const getSectionLabel = (section: SectionId) => {
-        if (section === 'sales-scope') return activeThirdPartyChannelAttributeIds.length ? '销售渠道与专属属性' : '销售范围';
+        if (section === 'sales-scope') return '销售渠道';
         if (isMasterForm) {
             if (section === 'basic') return '主档信息';
-            if (section === 'method') return '商品结构';
+            if (section === 'method') return '商品属性';
             if (section === 'display') return '识别图片';
             if (section === 'settings') return '补充资料';
         }
@@ -2246,12 +2286,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         }
         if (isUnifiedForm) {
             if (section === 'basic') return unifiedManagementView ? '基础信息' : '主档基础资料';
-            if (section === 'method') return unifiedManagementView ? '商品结构' : '主档商品结构';
+            if (section === 'method') return unifiedManagementView ? '商品属性' : '主档商品属性';
             if (section === 'display') return unifiedManagementView ? '展示设置' : '渠道展示资料';
             if (section === 'spec') return unifiedManagementView ? '销售设置' : '渠道售卖资料';
             if (section === 'settings') return unifiedManagementView ? '其他设置' : '渠道补充资料';
             if (section === 'third_party') return '渠道专属属性';
         }
+        if (isStoreForm && section === 'third_party') return '渠道专属属性';
         return SECTION_LABELS[section];
     };
     const firstVisibleSection = visibleSectionOrder[0] || 'basic';
@@ -2322,8 +2363,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     useEffect(() => {
         const validFieldIds = new Set(moreFieldMappings.map(item => item.id));
+        if (currentCategory.id === 'w_cat_s2') validFieldIds.add('cup-label-settings');
+        validFieldIds.add('selling-settings');
         setExpandedMoreFields(prev => prev.filter(id => validFieldIds.has(id)));
-    }, [moreFieldMappings]);
+    }, [moreFieldMappings, currentCategory.id]);
 
     useEffect(() => {
         if (!isComboProduct) return;
@@ -2337,10 +2380,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const getFieldDescription = (field: DynamicFieldConfig) => {
         if (field.id === 'p_weight_flag') return undefined;
         if (field.id === 'p_name' && isChannelForm) {
-            return '仅修改当前渠道商品库的售卖名称，不会修改商品主档名称。';
+            return templateContext ? '仅修改当前模板商品，不会修改商品主档或来源商品库。' : '仅修改当前渠道商品库的售卖名称，不会修改商品主档名称。';
         }
         if (field.id === 'p_front_cat' && isChannelForm) {
-            return '默认继承商品主档的前台分类；修改后仅对当前渠道商品库生效，不回写商品主档。';
+            return templateContext ? '仅修改当前模板的前台分类，不回写来源商品库。' : '默认继承商品主档的前台分类；修改后仅对当前渠道商品库生效，不回写商品主档。';
         }
         if (field.id === 'p_unit') {
             return isWeightProduct ? '称重商品的价格单位，单位设置建议与电子秤单位一致' : undefined;
@@ -2352,14 +2395,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         if (field.id === 'p_name' && isChannelForm) return isComboProduct ? '渠道套餐名称' : '渠道商品名称';
         if (field.id === 'p_name' && isMasterForm) return isComboProduct ? '主档套餐名称' : '主档商品名称';
         if (field.id === 'p_front_cat' && isChannelForm) return '前台分类';
-        if (!isComboProduct) return field.label;
+        if (!isComboProduct) return conciseFieldLabel(field.label);
         if (field.id === 'p_name') return '套餐名称';
         if (field.id === 'p_alias') return '商品别名';
-        return field.label;
+        return conciseFieldLabel(field.label);
     };
 
     const getValidationAnchorId = (itemKey: string) => `required-field-${itemKey.replace('recommend-', '')}`;
     const getValidationModuleTargetId = (itemKey: string) => {
+        if (itemKey === 'spec-pack') return 'product-packaging-settings';
         if (['spec-price', 'spec-stock', 'spec-pack', 's_specs', 'c_groups'].includes(itemKey)) return 'field-s_specs';
         const rawKey = itemKey.replace('recommend-', '');
         return `field-${rawKey}`;
@@ -2375,7 +2419,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     ) => {
         if (items.length === 0) return null;
         const itemIds = items.map(item => item.id);
-        const localExpandedIds = expandedMoreFields.filter(id => itemIds.includes(id));
+        const relatedIds = [...itemIds,
+            ...(itemIds.includes('cup-label-settings') ? [...cupLabelFieldIds] : []),
+            ...(itemIds.includes('selling-settings') ? sellingSettingsIds : []),
+        ];
+        const localExpandedIds = itemIds.filter(id => id === 'cup-label-settings' ? cupLabelExpanded : id === 'selling-settings' ? sellingSettingsExpanded : expandedMoreFields.includes(id));
         return (
             <div className="pt-1">
                 {renderCollapsedFieldControls(
@@ -2383,11 +2431,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     localExpandedIds,
                     () => setExpandedMoreFields(prev => Array.from(new Set([...prev, ...itemIds]))),
                     fieldId => setExpandedMoreFields(prev => (prev.includes(fieldId) ? prev : [...prev, fieldId])),
-                    () => setExpandedMoreFields(prev => prev.filter(id => !itemIds.includes(id))),
+                    () => setExpandedMoreFields(prev => prev.filter(id => !relatedIds.includes(id))),
                     {
                         gapClass: 'gap-2',
                         buttonClassName: 'px-3 py-1.5 text-xs',
                         chipClassName: 'px-3 py-1.5 text-xs',
+                        singleToggle: itemIds.some(id => ['cup-label-settings', 'selling-settings'].includes(id)),
+                        showCollapse: localExpandedIds.length > 0,
                     }
                 )}
             </div>
@@ -2701,6 +2751,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const supplementError = Object.keys(supplementalErrors)[0];
         if (supplementError) {
             const field = categorySupplementFields(currentCategory.id).find(item => item.id === supplementError);
+            setExpandedMoreFields(previous => [...new Set([...previous, ...Object.keys(supplementalErrors), ...(field?.dependsOn && field.dependsOn !== 'blind_box' ? [field.dependsOn] : [])])]);
             const section = field?.module === 'sales' ? 'spec' : field?.module === 'others' ? 'settings' : 'basic';
             if (supplementError === 'p_display_type') setExpandedMoreFields(previous => [...new Set([...previous, 'p_display_type'])]);
             scrollToSection(section);
@@ -2880,6 +2931,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             buttonClassName?: string;
             chipClassName?: string;
             showCollapse?: boolean;
+            singleToggle?: boolean;
         }
     ) => {
         const collapsedItems = items.filter(item => !expandedIds.includes(item.id));
@@ -2892,10 +2944,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
         return (
             <div className={`flex flex-wrap items-center ${gapClass}`}>
-                {hasCollapsedItems && (
+                {hasCollapsedItems && !(options?.singleToggle && expandedIds.length > 0) && (
                     <button
                         type="button"
                         onClick={onExpandAll}
+                        aria-expanded={false}
                         className={`inline-flex items-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors ${buttonClassName}`}
                     >
                         展开
@@ -2916,6 +2969,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <button
                         type="button"
                         onClick={onCollapseAll}
+                        aria-expanded={true}
                         className={`inline-flex items-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-[#1F2129] hover:border-[#00C06B] hover:text-[#00A35B] transition-colors ${buttonClassName}`}
                     >
                         收起
@@ -3322,7 +3376,12 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const existingMap = new Map(specConfigRows.map(row => [row.s_spec_name, row]));
         const nextRows = nextSpecNames.map((specName, index) => {
             const existingRow = existingMap.get(specName);
-            return existingRow || createEmptySpecConfigRow(`spec-${index + 1}`, specName);
+            if (existingRow) return existingRow;
+            const nextRow = createEmptySpecConfigRow(`spec-${index + 1}`, specName);
+            if (packageFeeSetting === 'product' && specConfigRows[0]) {
+                PACKAGING_FIELDS.forEach(field => { nextRow[field.key] = specConfigRows[0][field.key]; });
+            }
+            return nextRow;
         });
         setSelectedSpecValuesByGroup(sanitizedSelections);
         setSpecConfigRows(nextRows);
@@ -4420,7 +4479,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
     const renderDynamicInput = (field: DynamicFieldConfig & { isRequiredConfig: boolean }) => {
         const value = dynamicFormData[field.id] || '';
-        const setValue = (v: any) => setDynamicFormData(prev => ({ ...prev, [field.id]: v }));
+        const setValue = (v: any) => {
+            if (field.id === 'p_name') { updateProductName(String(v)); return; }
+            if (field.id === 'p_code') manualMnemonic.current = String(v).trim() !== '';
+            setDynamicFormData(prev => ({ ...prev, [field.id]: v }));
+        };
         const fieldLabel = getFieldDisplayLabel(field);
         const previewField: PreviewField = ['p_name', 'p_img', 'p_list_desc', 'm_methods', 'a_addons'].includes(field.id)
             ? field.id as PreviewField
@@ -4764,6 +4827,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const updateSpecConfigRow = (rowId: string, key: keyof SpecConfigRow, value: SpecConfigRow[keyof SpecConfigRow]) => {
         setSpecConfigRows(prev => prev.map(item => item.id === rowId ? { ...item, [key]: value } : item));
     };
+
+    const renderPackagingSettings = () => (
+        <WebProductPackagingSettings mode={packageFeeSetting} rows={visibleSpecRows}
+            fieldIds={isChannelForm ? PACKAGING_FIELDS.map(field => field.key) : renderedSpecChildIds}
+            onChange={(rowId, key, value) => setSpecConfigRows(prev => prev.map(row =>
+                packageFeeSetting === 'product' || row.id === rowId ? { ...row, [key]: value } : row
+            ))} />
+    );
 
     const channelSpecValues = useMemo(() => {
         const valueMap = new Map<string, number>();
@@ -5275,6 +5346,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
         return (
             <div className="space-y-2.5">
+                {renderPackagingSettings()}
                 {(isFieldEnabled('s_min_purchase_toggle') || isFieldEnabled('s_max_purchase_toggle') || isFieldEnabled('s_time_sale_toggle')) && (
                     <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
                         {isFieldEnabled('s_min_purchase_toggle') && renderSwitchRow('起购数量', 's_min_purchase_toggle', 's_min_purchase_value', '请输入起购数量')}
@@ -5345,13 +5417,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 )}
 
                 <div className="pt-1 space-y-2">
-                    {(expandedSalesFields.length > 0 || (isFieldEnabled('s_tax_rate') && (isMasterForm || isUnifiedForm))) && (
+                    {(expandedSalesFields.length > 0 || sellingSettingsExpanded || (isFieldEnabled('s_tax_rate') && (isMasterForm || isUnifiedForm))) && (
                         <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2.5">
-                                {expandedSalesFields.includes('s_sale_settings') && isFieldEnabled('s_sale_settings') && (
-                                    <div className="grid grid-cols-[120px_1fr] gap-3 items-start">
+                                {sellingSettingsExpanded && (
+                                    <div data-selling-settings className="grid grid-cols-[120px_1fr] gap-3 items-start">
                                         <div className="pt-1 text-sm font-bold text-[#1F2129]">售卖设置</div>
                                         <div className="rounded-2xl bg-[#FAFAFA] p-3.5 space-y-2.5">
-                                            {[
+                                            {(visibleFieldIds.has('s_sale_settings') ? [
                                                 {
                                                     key: '单点不送',
                                                     desc: '开启后，外卖单点该商品无法下单，需配合其他商品才可下单，常用于饮料等底价小件商品'
@@ -5370,28 +5442,31 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 },
                                                 {
                                                     key: '参与会员折扣',
-                                                    desc: '开启后，指定商品在下单时可参与会员卡折扣优惠'
+                                                    desc: '开启后，此商品下单时可享受会员卡折扣优惠；会员卡开启后才生效。'
                                                 }
-                                            ].map(item => {
+                                            ] : []).filter(item => AVAILABLE_DYNAMIC_FIELDS.find(field => field.id === 's_sale_settings')?.presetValues?.includes(item.key) || Object.prototype.hasOwnProperty.call(saleSettings, item.key)).map(item => {
                                                 const active = !!saleSettings[item.key];
                                                 return (
                                                     <label key={item.key} className="flex items-start gap-3 cursor-pointer">
                                                         <input
                                                             type="checkbox"
+                                                            aria-label={conciseFieldLabel(item.key)}
+                                                            disabled={isChannelFieldReadonly('s_sale_settings')}
                                                             className="mt-1 h-4 w-4 rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
                                                             checked={active}
                                                             onChange={() => toggleSaleSetting(item.key)}
                                                         />
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-2 text-sm font-bold text-[#1F2129]">
-                                                                <span>{item.key}</span>
+                                                        <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                                            <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-[#1F2129]">
+                                                                <span>{conciseFieldLabel(item.key)}</span>
                                                                 {(item.key === '点餐场景' || item.key === '关联档口') && <ChevronRight size={14} className="text-gray-400" />}
                                                             </div>
-                                                            <div className="mt-1 text-xs leading-5 text-gray-400">{item.desc}</div>
+                                                            <div className="text-xs leading-5 text-[#86909C]">{item.desc}</div>
                                                         </div>
                                                     </label>
                                                 );
                                             })}
+                                            <WebCategorySupplementFields categoryId={currentCategory.id} module="sales" value={dynamicFormData} onChange={setDynamicFormData} allowedIds={new Set(sellingSettingsIds)} requiredIds={requiredSupplementIds} errors={saveAttempted ? supplementalErrors : {}} />
                                         </div>
                                     </div>
                                 )}
@@ -5459,7 +5534,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 )}
                                 {expandedSalesFields.includes('s_jump_third_mini_program') && (
                                     <div className="grid grid-cols-[140px_1fr] gap-3 items-start">
-                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">是否跳转三方小程序</div>
+                                        <div className="pt-1 text-sm font-bold text-[#1F2129]">跳转三方小程序</div>
                                         <div className="flex items-center gap-3">
                                             <Switch
                                                 active={thirdMiniProgramEnabled}
@@ -5530,7 +5605,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             field.module === 'others'
             && visibleFieldIds.has(field.id)
             && !CATEGORY_SUPPLEMENT_IDS.has(field.id)
-            && !['o_more_settings', 'o_base_sales', 'o_more_barcodes', 'o_product_share'].includes(field.id)
+            && !['st_member', 'o_origin', 'o_ingredients', 'o_more_settings', 'o_base_sales', 'o_more_barcodes', 'o_product_share'].includes(field.id)
         ));
         const moreSettings = [
             {
@@ -5540,7 +5615,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             },
             {
                 key: 'o_advance_kitchen_print',
-                label: '是否提前厨打',
+                label: '提前厨打',
                 desc: '开启后，商品支持提前厨打，用于预制商品提前下单制作',
             },
             {
@@ -5887,8 +5962,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <select aria-label="库存管理" value={row.s_spec_inventory_mode} onChange={event => updateSpecConfigRow(row.id, 's_spec_inventory_mode', event.target.value as InventoryMode)} className="h-9 w-[140px] rounded-md border border-gray-200 bg-white px-3 outline-none focus:border-[#00C06B]"><option value="unlimited">不限库存</option><option value="custom">管理库存</option></select>
                         {row.s_spec_inventory_mode === 'custom' && <><input type="number" value={row.s_spec_initial_stock} onChange={event => updateSpecConfigRow(row.id, 's_spec_initial_stock', event.target.value)} className="h-9 w-[100px] rounded-md border border-gray-200 px-3 text-center outline-none focus:border-[#00C06B]" aria-label={`${row.s_spec_name}库存值`} /><span className="text-xs text-gray-400">件</span></>}
                     </div> },
-                    { label: '外带包装', content: packagingInput('store') },
-                    { label: '外卖包装', content: packagingInput('take') },
                     { label: '可售结果', content: <div><span className={enabled ? 'text-[#008F4C]' : 'text-gray-400'}>{enabled ? '可售' : '不可售'}</span>{!enabled && <div className="mt-1 text-xs text-gray-400">因 {disabledValues.join('、')} 禁用</div>}</div> },
                 ];
                 return <div data-single-channel-spec-form className="max-w-[760px] divide-y divide-gray-100 rounded-lg border border-gray-200 px-4">
@@ -5929,7 +6002,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <th className="w-[170px] border-b border-gray-200 px-3 py-3">商品规格码</th>
                                         <th className="w-[190px] border-b border-gray-200 px-3 py-3">商品条码</th>
                                         <th className="w-[260px] border-b border-gray-200 px-3 py-3">库存管理</th>
-                                        <th className="w-[320px] border-b border-gray-200 px-3 py-3">包装费与包装标识</th>
                                         <th className="w-[140px] border-b border-gray-200 px-3 py-3">可售结果</th>
                                     </tr>
                                 </thead>
@@ -5966,12 +6038,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                         </select>
                                                         {row.s_spec_inventory_mode === 'custom' && <input type="number" value={row.s_spec_initial_stock} onChange={event => updateSpecConfigRow(row.id, 's_spec_initial_stock', event.target.value)} className="h-8 w-[76px] rounded-md border border-gray-200 px-2 text-center outline-none focus:border-[#00C06B]" aria-label={`${row.s_spec_name}库存值`} />}
                                                         {row.s_spec_inventory_mode === 'custom' && <span className="text-xs text-gray-400">件</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="border-b border-gray-100 px-3 py-3">
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div className="flex items-center gap-1"><span className="w-10 text-xs text-gray-400">外带</span><input type="number" value={row.s_spec_store_pack_fee} onChange={event => updateSpecConfigRow(row.id, 's_spec_store_pack_fee', event.target.value)} className="h-8 w-16 rounded-md border border-gray-200 px-2 text-center outline-none focus:border-[#00C06B]" /><input value={row.s_spec_store_pack_mark} onChange={event => updateSpecConfigRow(row.id, 's_spec_store_pack_mark', event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 px-2 outline-none focus:border-[#00C06B]" placeholder="包装标识" /></div>
-                                                        <div className="flex items-center gap-1"><span className="w-10 text-xs text-gray-400">外卖</span><input type="number" value={row.s_spec_take_pack_fee} onChange={event => updateSpecConfigRow(row.id, 's_spec_take_pack_fee', event.target.value)} className="h-8 w-16 rounded-md border border-gray-200 px-2 text-center outline-none focus:border-[#00C06B]" /><input value={row.s_spec_take_pack_mark} onChange={event => updateSpecConfigRow(row.id, 's_spec_take_pack_mark', event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 px-2 outline-none focus:border-[#00C06B]" placeholder="包装标识" /></div>
                                                     </div>
                                                 </td>
                                                 <td className="border-b border-gray-100 px-3 py-3">
@@ -6101,20 +6167,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const showSpecCode = false; // 当前表单隐藏商品编码，保留历史 SKU 数据。
         const showSpecStock = renderedSpecChildIdSet.has('s_spec_stock');
         const showSpecPlanStock = renderedSpecChildIdSet.has('s_spec_plan_stock');
-        const showSpecImg = renderedSpecChildIdSet.has('s_spec_img');
-        const showSpecLargeImg = renderedSpecChildIdSet.has('s_spec_large_img');
-        const showSpecAlias = renderedSpecChildIdSet.has('s_spec_alias');
+        const showSpecImg = specDisplayMode === 'multi' && renderedSpecChildIdSet.has('s_spec_img');
+        const showSpecLargeImg = specDisplayMode === 'multi' && renderedSpecChildIdSet.has('s_spec_large_img');
+        const showSpecAlias = specDisplayMode === 'multi' && renderedSpecChildIdSet.has('s_spec_alias');
         const showSpecAmount = renderedSpecChildIdSet.has('s_spec_amount');
-        const showSpecStorePackFee = renderedSpecChildIdSet.has('s_spec_store_pack_fee');
-        const showSpecStorePackMark = renderedSpecChildIdSet.has('s_spec_store_pack_mark');
-        const showSpecTakePackFee = renderedSpecChildIdSet.has('s_spec_take_pack_fee');
-        const showSpecTakePackMark = renderedSpecChildIdSet.has('s_spec_take_pack_mark');
+        const showSpecStorePackFee = false; // Packaging controls are grouped under sales settings.
+        const showSpecStorePackMark = false; // Packaging controls are grouped under sales settings.
+        const showSpecTakePackFee = false; // Packaging controls are grouped under sales settings.
+        const showSpecTakePackMark = false; // Packaging controls are grouped under sales settings.
         const priceColSpan = [showSpecPrice, showSpecMarket, showSpecCost].filter(Boolean).length;
         const identityColSpan = [showSpecBarcode, showSpecMark, showSpecSkuCode, showSpecCode].filter(Boolean).length;
-        const inventoryColSpan = [showSpecStock, showSpecPlanStock].filter(Boolean).reduce((sum, visible, index) => {
-            if (!visible) return sum;
-            return sum + (index === 0 ? 2 : 2);
-        }, 0);
+        const inventoryColSpan = (showSpecStock ? 2 : 0) + (showSpecPlanStock ? 1 : 0);
         const infoColSpan = [showSpecImg, showSpecLargeImg, showSpecAlias, showSpecAmount].filter(Boolean).length;
         const packagingColSpan = [showSpecStorePackFee, showSpecStorePackMark, showSpecTakePackFee, showSpecTakePackMark].filter(Boolean).length;
         const visibleSpecModules = SPEC_CONFIG_MODULES.filter(module => (
@@ -6143,6 +6206,25 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     )}
                 </div>
             </td>
+        );
+
+        const renderPlanStock = (row: SpecConfigRow) => (
+            <div className="product-plan-stock">
+                <Switch active={row.s_spec_manage_plan_stock} label={`${row.s_spec_name}管理计划库存`} onClick={() => {
+                    setSpecConfigRows(prev => prev.map(item => item.id === row.id ? {
+                        ...item,
+                        s_spec_manage_plan_stock: !item.s_spec_manage_plan_stock,
+                        s_spec_daily_plan_stock: item.s_spec_manage_plan_stock ? '' : item.s_spec_daily_plan_stock,
+                    } : item));
+                }} />
+                {row.s_spec_manage_plan_stock ? <>
+                    <label className="text-xs text-gray-500" htmlFor={`daily-plan-${row.id}`}>每日初始计划库存</label>
+                    <input id={`daily-plan-${row.id}`} aria-label={`${row.s_spec_name}每日初始计划库存`} type="number" min="0"
+                        value={row.s_spec_daily_plan_stock}
+                        onChange={event => updateSpecConfigRow(row.id, 's_spec_daily_plan_stock', event.target.value)}
+                        className="q-form-input h-10 text-center" placeholder="请输入" />
+                </> : <span className="text-xs text-gray-400">关闭时不管理每日计划库存</span>}
+            </div>
         );
 
         const renderColumnHeader = (
@@ -6270,7 +6352,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                     onChange={e => setSpecBulkDraft(prev => ({ ...prev, autoRestock: e.target.checked }))}
                                                     className="rounded border-gray-300 text-[#00C06B] focus:ring-[#00C06B]"
                                                 />
-                                                是否自动补足
+                                                自动补足
                                             </label>
                                         </div>
                                     )}
@@ -6376,10 +6458,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             helperKey: 'estimatedCost',
                                             helperTooltip: '用于记录该规格的预计成本，便于核算毛利等经营数据。',
                                         })}</div><div className="min-w-0 max-w-[460px]">{renderMoneyInput(row, 's_spec_cost')}</div></div>}
-                {showSpecBarcode && <div role="group" aria-labelledby="single-spec-field-3" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-3" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品条码', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_barcode', { maxLength: 50, className: 'pr-14' })}</div></div>}
-                {showSpecMark && <div role="group" aria-labelledby="single-spec-field-4" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-4" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品标识', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_mark', { maxLength: 50, className: 'pr-14' })}</div></div>}
-                {showSpecSkuCode && <div role="group" aria-labelledby="single-spec-field-5" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-5" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品规格码', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_sku_code', { maxLength: 50, className: 'pr-14' })}</div></div>}
-                {showSpecCode && <div role="group" aria-labelledby="single-spec-field-6" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-6" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品编码', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_code', { maxLength: 50, className: 'pr-14' })}</div></div>}
                 {showSpecStock && <div role="group" aria-labelledby="single-spec-field-7" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-7" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('库存设置', undefined)}</div><div className="min-w-0 max-w-[460px]"><div className="space-y-2">
                                                     <label className="flex items-center gap-2 text-sm text-gray-600">
                                                         <input
@@ -6423,27 +6501,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 ) : (
                                                     <div className="rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm text-gray-400">不限库存时无需设置库存值</div>
                                                 )}</div></div>}
-                {showSpecPlanStock && <div role="group" aria-labelledby="single-spec-field-9" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-9" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('是否管理计划库存')}</div><div className="min-w-0 max-w-[460px]"><Switch
-                                                    active={row.s_spec_manage_plan_stock}
-                                                    label={`${row.s_spec_name}计划库存`}
-                                                    onClick={() => {
-                                                        const checked = !row.s_spec_manage_plan_stock;
-                                                        updateSpecConfigRow(row.id, 's_spec_manage_plan_stock', checked);
-                                                        if (!checked) updateSpecConfigRow(row.id, 's_spec_daily_plan_stock', '');
-                                                    }}
-                                                /></div></div>}
-                {showSpecPlanStock && <div role="group" aria-labelledby="single-spec-field-10" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-10" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('每日计划库存', undefined)}</div><div className="min-w-0 max-w-[460px]">{row.s_spec_manage_plan_stock ? (
-                                                    <input
-                                                        onFocus={() => setActivePreviewField('s_specs')}
-                                                        type="number"
-                                                        value={row.s_spec_daily_plan_stock}
-                                                        onChange={e => updateSpecConfigRow(row.id, 's_spec_daily_plan_stock', e.target.value)}
-                                                        className="q-form-input h-10 text-center font-bold"
-                                                        placeholder="请输入"
-                                                    />
-                                                ) : (
-                                                    <div className="text-sm text-gray-400">开启后展示</div>
-                                                )}</div></div>}
+                {showSpecPlanStock && <div role="group" aria-label="管理计划库存" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div className="pt-2 text-sm text-[#4E5969]">管理计划库存</div><div className="min-w-0 max-w-[460px]">{renderPlanStock(row)}</div></div>}
+                {showSpecBarcode && <div role="group" aria-labelledby="single-spec-field-3" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-3" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品条码', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_barcode', { maxLength: 50, className: 'pr-14' })}</div></div>}
+                {showSpecMark && <div role="group" aria-labelledby="single-spec-field-4" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-4" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品标识', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_mark', { maxLength: 50, className: 'pr-14' })}</div></div>}
+                {showSpecSkuCode && <div role="group" aria-labelledby="single-spec-field-5" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-5" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品规格码', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_sku_code', { maxLength: 50, className: 'pr-14' })}</div></div>}
+                {showSpecCode && <div role="group" aria-labelledby="single-spec-field-6" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-6" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('商品编码', undefined)}</div><div className="min-w-0 max-w-[460px]">{renderTextInput(row, 's_spec_code', { maxLength: 50, className: 'pr-14' })}</div></div>}
                 {showSpecImg && <div role="group" aria-labelledby="single-spec-field-11" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-11" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('规格图片')}</div><div className="min-w-0 max-w-[460px]"><button
                                                     type="button"
                                                     onClick={() => {
@@ -6597,19 +6659,19 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         >
                                             价格设置
                                         </th>}
-                                        {identityColSpan > 0 && <th
-                                            ref={node => { specSectionHeaderRefs.current.identity = node; }}
-                                            className="border-b border-r border-gray-200 bg-[#F7F8FA] px-4 py-3 text-[#1F2129]"
-                                            colSpan={identityColSpan}
-                                        >
-                                            标识设置
-                                        </th>}
                                         {inventoryColSpan > 0 && <th
                                             ref={node => { specSectionHeaderRefs.current.inventory = node; }}
                                             className="border-b border-r border-gray-200 bg-[#F7F8FA] px-4 py-3 text-[#1F2129]"
                                             colSpan={inventoryColSpan}
                                         >
                                             库存设置
+                                        </th>}
+                                        {identityColSpan > 0 && <th
+                                            ref={node => { specSectionHeaderRefs.current.identity = node; }}
+                                            className="border-b border-r border-gray-200 bg-[#F7F8FA] px-4 py-3 text-[#1F2129]"
+                                            colSpan={identityColSpan}
+                                        >
+                                            标识设置
                                         </th>}
                                         {infoColSpan > 0 && <th
                                             ref={node => { specSectionHeaderRefs.current.info = node; }}
@@ -6640,14 +6702,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             helperKey: 'estimatedCost',
                                             helperTooltip: '用于记录该规格的预计成本，便于核算毛利等经营数据。',
                                         })}</th>}
+                                        {showSpecStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('库存设置', 'inventory_mode')}</th>}
+                                        {showSpecStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('初始库存', 'stock')}</th>}
+                                        {showSpecPlanStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('管理计划库存', 'daily_plan_stock')}</th>}
                                         {showSpecBarcode && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品条码', 's_spec_barcode')}</th>}
                                         {showSpecMark && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品标识', 's_spec_mark')}</th>}
                                         {showSpecSkuCode && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品规格码', 's_spec_sku_code')}</th>}
                                         {showSpecCode && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('商品编码', 's_spec_code')}</th>}
-                                        {showSpecStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('库存设置', 'inventory_mode')}</th>}
-                                        {showSpecStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('初始库存', 'stock')}</th>}
-                                        {showSpecPlanStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('是否管理计划库存')}</th>}
-                                        {showSpecPlanStock && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('每日计划库存', 'daily_plan_stock')}</th>}
                                         {showSpecImg && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('规格图片')}</th>}
                                         {showSpecLargeImg && <th className="border-b border-r border-gray-200 bg-[#FCFCFD] px-4 py-3">{renderColumnHeader('规格大图', undefined, {
                                             helperKey: 'specLargeImage',
@@ -6668,10 +6729,6 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             {showSpecPrice && <td className="border-b border-r border-gray-100 px-4 py-4">{renderMoneyInput(row, 's_spec_price', '请输入销售价')}</td>}
                                             {showSpecMarket && <td className="border-b border-r border-gray-100 px-4 py-4">{renderMoneyInput(row, 's_spec_market')}</td>}
                                             {showSpecCost && <td className="border-b border-r border-gray-100 px-4 py-4">{renderMoneyInput(row, 's_spec_cost')}</td>}
-                                            {showSpecBarcode && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_barcode', { maxLength: 50, className: 'pr-14' })}</td>}
-                                            {showSpecMark && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_mark', { maxLength: 50, className: 'pr-14' })}</td>}
-                                            {showSpecSkuCode && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_sku_code', { maxLength: 50, className: 'pr-14' })}</td>}
-                                            {showSpecCode && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_code', { maxLength: 50, className: 'pr-14' })}</td>}
                                             {showSpecStock && <td className="border-b border-r border-gray-100 px-4 py-4">
                                                 <div className="space-y-2">
                                                     <label className="flex items-center gap-2 text-sm text-gray-600">
@@ -6719,31 +6776,11 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                     <div className="rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm text-gray-400">不限库存时无需设置库存值</div>
                                                 )}
                                             </td>}
-                                            {showSpecPlanStock && <td className="border-b border-r border-gray-100 px-4 py-4">
-                                                <Switch
-                                                    active={row.s_spec_manage_plan_stock}
-                                                    label={`${row.s_spec_name}计划库存`}
-                                                    onClick={() => {
-                                                        const checked = !row.s_spec_manage_plan_stock;
-                                                        updateSpecConfigRow(row.id, 's_spec_manage_plan_stock', checked);
-                                                        if (!checked) updateSpecConfigRow(row.id, 's_spec_daily_plan_stock', '');
-                                                    }}
-                                                />
-                                            </td>}
-                                            {showSpecPlanStock && <td className="border-b border-r border-gray-100 px-4 py-4">
-                                                {row.s_spec_manage_plan_stock ? (
-                                                    <input
-                                                        onFocus={() => setActivePreviewField('s_specs')}
-                                                        type="number"
-                                                        value={row.s_spec_daily_plan_stock}
-                                                        onChange={e => updateSpecConfigRow(row.id, 's_spec_daily_plan_stock', e.target.value)}
-                                                        className="q-form-input h-10 text-center font-bold"
-                                                        placeholder="请输入"
-                                                    />
-                                                ) : (
-                                                    <div className="text-sm text-gray-400">开启后展示</div>
-                                                )}
-                                            </td>}
+                                            {showSpecPlanStock && <td className="border-b border-r border-gray-100 px-4 py-4">{renderPlanStock(row)}</td>}
+                                            {showSpecBarcode && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_barcode', { maxLength: 50, className: 'pr-14' })}</td>}
+                                            {showSpecMark && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_mark', { maxLength: 50, className: 'pr-14' })}</td>}
+                                            {showSpecSkuCode && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_sku_code', { maxLength: 50, className: 'pr-14' })}</td>}
+                                            {showSpecCode && <td className="border-b border-r border-gray-100 px-4 py-4">{renderTextInput(row, 's_spec_code', { maxLength: 50, className: 'pr-14' })}</td>}
                                             {showSpecImg && <td className="border-b border-r border-gray-100 px-4 py-4">
                                                 <button
                                                     type="button"
@@ -7318,7 +7355,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             </div>
                             <div className="rounded-2xl bg-[#FAFAFA] px-4 py-3 text-sm text-gray-500">
                                 {comboPackMode === 'whole'
-                                    ? '按整个套餐收取包装费时，无需在此处单独填写费用，具体包装费可在规格列表对应字段中配置。'
+                                    ? '按整个套餐收取包装费时，无需在此处单独填写费用，具体包装费可在销售设置的包装设置中配置。'
                                     : '使用套餐内商品的包装设置时，将按套餐内商品自身的包装费规则进行汇总展示。'}
                             </div>
                         </div>
@@ -7627,7 +7664,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                             <>
                                                 <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg bg-[#F8FAFB] px-4 py-3">
                                                     <div>
-                                                        <div className="text-sm font-medium text-[#1F2129]">是否必选</div>
+                                                        <div className="text-sm font-medium text-[#1F2129]">必选</div>
                                                         <div className="mt-1 text-xs text-gray-400">必选时，起购数量不能小于 1。</div>
                                                     </div>
                                                     <div className="flex rounded-lg border border-gray-200 bg-white p-1">
@@ -8120,7 +8157,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         const renderedMethodChildIdSet = new Set(renderedMethodChildIds);
         const renderedAddonChildIdSet = new Set(renderedAddonChildIds);
         const showMethodName = renderedMethodChildIdSet.has('m_method_name');
-        const showMethodSync = renderedMethodChildIdSet.has('m_method_sync');
+        const showMethodSync = isChannelForm && renderedMethodChildIdSet.has('m_method_sync');
         const showMethodMarkup = renderedMethodChildIdSet.has('m_method_markup');
         const showMethodCode = renderedMethodChildIdSet.has('m_method_code');
         const showMethodRemark = renderedMethodChildIdSet.has('m_method_remark');
@@ -9935,7 +9972,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="flex items-center gap-3">
                             <h3 className="truncate text-[18px] font-bold text-[#1F2129]">
                                 {pageView === 'form' && (
-                                    isChannelForm
+                                    templateContext ? `编辑模板${isComboProduct ? '套餐商品' : '商品'}` : isChannelForm
                                         ? `编辑渠道${isComboProduct ? '套餐商品' : '商品'}`
                                         : isUnifiedForm
                                             ? `${hasSavedProduct ? '编辑' : '新建'}${isComboProduct ? '套餐商品' : hasSavedProduct ? '商品' : '单品'}${unifiedManagementView ? '' : '（主档 + 渠道商品）'}`
@@ -9961,6 +9998,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 </button>
                             )}
                         </div>
+                        {pageView === 'form' && templateContext && <p className="mt-0.5 truncate text-xs text-gray-500" title={templateContext.name}>{templateContext.name} · 仅修改当前模板，发布后更新门店</p>}
                         {pageView === 'form' && isStoreForm && (
                             <p className="truncate text-xs text-gray-400 mt-0.5">
                                 {storeContext?.storeName || '当前门店'} · 仅影响当前门店，不修改商品库或其他门店 · 商品 ID：{initialProduct?.baseProductId || initialProduct?.id || '--'}
@@ -10197,7 +10235,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 </button>
                                             ))}
                                         </div>
-                                        {!isStoreForm && !unifiedManagementView && <div className="shrink-0">
+                                        {!isStoreForm && !templateContext && onOpenCommonFieldSettings && <div className="shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => onOpenCommonFieldSettings?.(type, currentCategory.id)}
@@ -10287,8 +10325,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                     placeholder={`请输入${isComboProduct ? '套餐' : '商品'}名称`}
                                                     onChange={event => {
                                                         const nextName = event.target.value;
-                                                        setMasterProductName(nextName);
-                                                        setDynamicFormData(prev => ({ ...prev, p_name: nextName }));
+                                                        updateProductName(nextName);
                                                     }}
                                                 />
                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#98A2B3]">{masterProductName.length}/70</span>
@@ -10404,8 +10441,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     addonItems={enabledChannelAddonItems}
                                     validationError={saveAttempted ? channelSettingsError : ''}
                                     unifiedManagementView={unifiedManagementView}
-                                    location={isChannelForm || isUnifiedForm ? 'channel' : 'master'}
-                                    title={isChannelForm || isUnifiedForm ? '渠道专属属性' : '三方渠道发布属性'}
+                                    location={templateContext ? 'template' : isStoreForm ? 'store' : isChannelForm || isUnifiedForm ? 'channel' : 'master'}
+                                    title={isChannelForm || isUnifiedForm || isStoreForm ? '渠道专属属性' : '三方渠道发布属性'}
                                     value={channelSpecificValues}
                                     onChange={setChannelSpecificValues}
                                     productType={type}
@@ -10486,7 +10523,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         const isRequired = currentFieldConfigMap.get(field.id)?.isRequired || field.isRequired;
                                         return (
                                         <div id={`field-${field.id}`} key={field.id} className={field.type === 'textarea' ? 'col-span-full' : 'col-span-1'}>
-                                            <FormRow label={field.label} required={isRequired}>
+                                            <FormRow label={conciseFieldLabel(field.label)} required={isRequired}>
                                                 {renderDynamicInput({ ...field, isRequiredConfig: !!isRequired })}
                                             </FormRow>
                                         </div>
@@ -10503,7 +10540,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 {renderOthersAttributePanel()}
                                 {!isMasterForm && <WebProductCustomFields attributes={activeCustomAttributes} value={dynamicFormData} onChange={setDynamicFormData} showErrors={saveAttempted} />}
                                 {renderCategoryFields('others')}
-                                {renderSectionCollapsedEntry(otherCollapsedFieldMappings)}
+                                {cupLabelExpanded && <section data-cup-label-settings className="space-y-3">
+                                    <div><h4 className="text-sm font-semibold text-[#1F2129]">杯贴设置</h4><p className="mt-1 text-xs text-[#86909C]">以下内容用于 POS 杯贴打印。</p></div>
+                                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{AVAILABLE_DYNAMIC_FIELDS.filter(field => ['o_origin', 'o_ingredients'].includes(field.id) && visibleFieldIds.has(field.id)).map(field => <div key={field.id} id={`field-${field.id}`}><fieldset disabled={isChannelFieldReadonly(field.id)}><FormRow label={field.label}>{renderDynamicInput({ ...field, isRequiredConfig: !!currentFieldConfigMap.get(field.id)?.isRequired })}</FormRow></fieldset></div>)}</div>
+                                    <WebCategorySupplementFields categoryId={currentCategory.id} module="others" value={dynamicFormData} onChange={setDynamicFormData} allowedIds={new Set(enabledCupLabelIds)} requiredIds={requiredSupplementIds} errors={saveAttempted ? supplementalErrors : {}} />
+                                </section>}
+                                {renderSectionCollapsedEntry([
+                                    ...otherCollapsedFieldMappings.filter(field => !cupLabelFieldIds.has(field.id)),
+                                    ...(cupLabelCollapsed ? [{ id: 'cup-label-settings', label: '杯贴设置' }] : []),
+                                ])}
                             </div>
                         )}
 

@@ -1,0 +1,30 @@
+.template-record-table,
+.template-detail-table > table {
+  width: 100%;
+}
+
+.template-record-table th:last-child,
+.template-record-table td:last-child,
+.template-detail-table > table th:last-child,
+.template-detail-table > table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  white-space: nowrap;
+  background: var(--colorBgContainer, #fff);
+  box-shadow: -4px 0 6px -4px rgba(0, 0, 0, .16);
+}
+
+.template-record-table th:last-child,
+.template-detail-table > table th:last-child {
+  z-index: 12;
+  background: var(--colorBgLayout, #f7f8fa);
+}
+
+.template-record-table tr:has(input:checked) td:last-child {
+  background: #f0fbf5;
+}
+
+.template-record-table td:last-child:has(> div) {
+  z-index: 20;
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { categorySupplementFields, isCategorySupplementActive } from './productCategoryFields';
 import type { FieldModule } from '../../types';
 
@@ -10,23 +10,15 @@ type CategoryFieldsProps = {
 };
 export const WebCategorySupplementFields: React.FC<CategoryFieldsProps> = ({ categoryId, module, value, onChange, allowedIds, requiredIds, errors, autoCartEligible = true }) => {
     const fields = categorySupplementFields(categoryId).filter(field => field.module === module && allowedIds.has(field.id));
-    const [open, setOpen] = useState(false);
     const [uploadError, setUploadError] = useState('');
-    const hasError = fields.some(field => errors[field.id]);
-    const filled = fields.filter(field => value[field.id] !== undefined && value[field.id] !== '' && value[field.id] !== false).length;
-    useEffect(() => { if (hasError) setOpen(true); }, [hasError]);
-    useEffect(() => { setOpen(false); setUploadError(''); }, [categoryId]);
+    useEffect(() => { setUploadError(''); }, [categoryId]);
     useEffect(() => {
         if (categoryId === 'w_cat_c5' && allowedIds.has('c_hotpot_type') && !value.c_hotpot_type) onChange(previous => ({ ...previous, c_hotpot_type: '固定锅底' }));
     }, [categoryId, module, value.c_hotpot_type, allowedIds.has('c_hotpot_type')]);
     if (!fields.length) return null;
-    const title = module === 'base' ? '锅底设置' : module === 'sales' ? '类目销售设置' : module === 'display' ? '营养公开设置' : categoryId === 'w_cat_c5' ? '用餐人数限制' : '类目补充信息';
     const set = (id: string, next: any) => onChange(previous => ({ ...previous, [id]: next }));
     return <div className="pt-2" data-category-supplement={module}>
-        <button type="button" aria-expanded={open} aria-controls={`category-${module}-fields`} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 rounded py-2 text-left text-sm text-[#008F4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460]">
-            <ChevronDown size={16} className={open ? 'rotate-180' : ''} /><span className="font-medium">{title}</span><span className="text-xs text-[#667085]">{filled ? `已填写 ${filled} 项` : `${fields.length} 项可选`}</span>
-        </button>
-        {open && <div id={`category-${module}-fields`} className="grid grid-cols-1 gap-x-6 gap-y-5 py-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-5 py-3 lg:grid-cols-2">
             {fields.filter(field => isCategorySupplementActive(field, value)).map(field => {
                 const disabled = field.id === 's_auto_cart' && !autoCartEligible;
                 const fieldValue = value[field.id] ?? '';
@@ -53,6 +45,6 @@ export const WebCategorySupplementFields: React.FC<CategoryFieldsProps> = ({ cat
                     {field.type === 'image' && uploadError && <p role="alert" className="mt-1 text-xs text-[#D92D20]">{uploadError}</p>}
                 </div>;
             })}
-        </div>}
+        </div>
     </div>;
 };

@@ -669,6 +669,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   const [channelCommonFieldConfigs, setChannelCommonFieldConfigs] = useState<CommonFieldConfigs>(() => buildInitialCommonFieldConfigs(INITIAL_WEB_CATEGORIES));
   const [channelEditableFieldIds, setChannelEditableFieldIds] = useState<string[]>(['p_name']);
   const [channelProductOverrides, setChannelProductOverrides] = useState<Record<string, any>>({});
+  const [templateProductOverrides, setTemplateProductOverrides] = useState<Record<string, Product>>({});
   const [masterChannelSyncDialogContext, setMasterChannelSyncDialogContext] = useState<MasterChannelSyncDialogContext | null>(null);
   const [masterChannelSyncRecords, setMasterChannelSyncRecords] = useState<MasterChannelSyncRecord[]>([]);
   const [commonFieldSettingsContext, setCommonFieldSettingsContext] = useState<{
@@ -1400,7 +1401,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                   },
                   scope: 'store',
                   formScope: 'store',
-                  channelAttributeIds: product.channels.map(id => id === 'douyin_dine' ? 'douyin' : id).filter(isThirdPartyChannelId).filter(id => omnichannelConfig.thirdPartyStrategies[id] === 'qimai'),
+                  channelAttributeIds: (channelId === 'all' ? product.channels : [channelId]).map(id => id === 'eleme' ? 'taobao' : id === 'douyin_dine' ? 'douyin' : id).filter(isThirdPartyChannelId).filter(id => omnichannelConfig.thirdPartyStrategies[id] === 'qimai'),
                   storeContext: {
                     storeId: product.storeId,
                     storeName: product.storeName,
@@ -1657,7 +1658,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       }
 
       if (activeMenu === 'product_template') {
-          return <WebProductTemplateManager channelProductOverrides={channelProductOverrides} onChannelProductSaved={(key, product) => setChannelProductOverrides(prev => ({ ...prev, [key]: product }))} productMemberships={templateMemberships} onMembershipChange={(templateId, ids) => setTemplateMembershipsByBrand(current => ({ ...current, [activeBrandId]: { ...templateMemberships, [templateId]: ids } }))} onNavigate={(path) => {
+          return <WebProductTemplateManager channelProductOverrides={channelProductOverrides} templateProductOverrides={templateProductOverrides} onTemplateProductSaved={(key, product) => setTemplateProductOverrides(prev => ({ ...prev, [key]: product }))} categories={webCategories} commonFieldConfigs={channelCommonFieldConfigs} channelEditableFieldIds={channelEditableFieldIds} productMemberships={templateMemberships} onMembershipChange={(templateId, ids) => setTemplateMembershipsByBrand(current => ({ ...current, [activeBrandId]: { ...templateMemberships, [templateId]: ids } }))} onNavigate={(path) => {
             if (path === 'product_sync') setProductSyncInitialTab('publish');
             navigateExperience(path);
           }} />;
@@ -2214,14 +2215,14 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
            </div>
         </aside>
         ) : (
-        <aside className="z-30 flex w-[216px] shrink-0 flex-col overflow-y-auto border-r border-[#E8E8E8] bg-white pt-2 no-scrollbar">
+        <aside aria-label="商品中心导航" className="product-navigation z-30 flex w-[216px] shrink-0 flex-col overflow-y-auto border-r border-[#E8E8E8] bg-white pt-2 no-scrollbar">
            <div className="px-4 py-3 mb-2">
               <div className="flex items-center font-bold text-[#333] mb-1">
                  <Box size={18} className="mr-2 text-[#00C06B]"/> 商品中心
               </div>
            </div>
 
-           <div className="px-5 pb-1 pt-2 text-[12px] font-medium text-[#98A2B3]">商品资料</div>
+           <div className="product-navigation-group">商品资料</div>
            <SidebarItem
              label="商品主档"
              icon={<Package size={17} />}
@@ -2241,7 +2242,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
              onClick={() => { setLastRecipeMenu('recipe_new'); setActiveMenu('recipe_new'); setCreationContext(null); }}
            />
 
-           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">渠道经营</div>
+           <div className="product-navigation-group">渠道经营</div>
            {channelCatalogMenuVisible && (
              <>
                <SidebarItem
@@ -2277,7 +2278,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
              onClick={() => { setActiveMenu('product_recommendation'); setCreationContext(null); }}
            />
 
-           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">发布与治理</div>
+           <div className="product-navigation-group">发布与治理</div>
            <SidebarItem
              label="发布中心"
              icon={<Rocket size={17} />}
@@ -2292,7 +2293,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                onClick={() => { setActiveMenu('product_mapping'); setCreationContext(null); }}
              />
            )}
-           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">门店经营</div>
+           <div className="product-navigation-group">门店经营</div>
            <SidebarItem
              label="门店商品"
              icon={<ShoppingBag size={17} />}
@@ -2314,7 +2315,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
              }}
            />
 
-           <div className="px-5 pb-1 pt-4 text-[12px] font-medium text-[#98A2B3]">商品设置</div>
+           <div className="product-navigation-group">商品设置</div>
            <SidebarItem
              label="商品设置"
              icon={<Settings size={17} />}

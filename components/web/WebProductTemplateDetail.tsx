@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Check, Info, Package, Plus, RefreshCw, Search, Send, Store, Trash2, X } from 'lucide-react';
-import type { Product, ThirdPartyChannelId } from '../../types';
+import type { Category, CategoryFieldConfig, Product, ThirdPartyChannelId } from '../../types';
 import type { OmnichannelChannel } from '../../omnichannel';
 import { ALL_OMNICHANNEL_CHANNELS } from '../../omnichannel';
 import { WebProductSelectorDialog } from './WebProductSelectorDialog';
-import { WebThirdPartyChannelFields, formatPlatformDateTime, getDouyinSettingsError, normalizeDouyinChannelValues, resolveDouyinSalePeriod, resolveSelectedSalesChannelIds, type ThirdPartyFieldValues } from './WebThirdPartyChannelFields';
+import { WebProductForm } from './WebProductForm';
+import './templateProductEditing.css';
 
 export type TemplateDetailRecord = {
   id: string;
@@ -48,10 +49,12 @@ type Props = {
   onStoreIdsChange: (ids: string[]) => void;
   onBack: () => void;
   onCreatePublish?: () => void;
-  catalogId?: string | null;
+  categories: Category[];
+  commonFieldConfigs?: Record<string, CategoryFieldConfig[]>;
+  channelEditableFieldIds?: string[];
   catalogChannelIds?: ThirdPartyChannelId[];
-  channelProductOverrides?: Record<string, Product>;
-  onChannelProductSaved?: (key: string, product: Product) => void;
+  templateProductOverrides?: Record<string, Product>;
+  onTemplateProductSaved?: (key: string, product: Product) => void;
 };
 
 export const WebProductTemplateDetail: React.FC<Props> = ({
@@ -66,10 +69,12 @@ export const WebProductTemplateDetail: React.FC<Props> = ({
   onStoreIdsChange,
   onBack,
   onCreatePublish,
-  catalogId,
+  categories,
+  commonFieldConfigs,
+  channelEditableFieldIds,
   catalogChannelIds = [],
-  channelProductOverrides = {},
-  onChannelProductSaved,
+  templateProductOverrides = {},
+  onTemplateProductSaved,
 }) => {
   const [activeTab, setActiveTab] = useState<'products' | 'stores'>('products');
   const [keyword, setKeyword] = useState('');
@@ -82,13 +87,10 @@ export const WebProductTemplateDetail: React.FC<Props> = ({
   const [confirmRefresh, setConfirmRefresh] = useState(false);
   const [notice, setNotice] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editingValues, setEditingValues] = useState<ThirdPartyFieldValues>({});
-  const [editingSalesChannels, setEditingSalesChannels] = useState<ThirdPartyChannelId[]>([]);
-  const [editingError, setEditingError] = useState('');
 
   const selectedProducts = useMemo(
-    () => products.filter(product => productIds.includes(product.id) && (!keyword.trim() || product.name.toLowerCase().includes(keyword.trim().toLowerCase()) || product.skuCode.includes(keyword.trim()))),
-    [keyword, productIds, products],
+    () => products.map(product => templateProductOverrides[`${template.id}:${product.id}`] || product).filter(product => productIds.includes(product.id) && (!keyword.trim() || product.name.toLowerCase().includes(keyword.trim().toLowerCase()) || product.skuCode.includes(keyword.trim()))),
+    [keyword, productIds, products, template.id, templateProductOverrides],
   );
   const selectedStores = useMemo(
     () => STORE_OPTIONS.filter(store => storeIds.includes(store.id) && (!keyword.trim() || store.name.includes(keyword.trim()) || store.organization.includes(keyword.trim()) || store.region.includes(keyword.trim()))),
@@ -117,29 +119,39 @@ export const WebProductTemplateDetail: React.FC<Props> = ({
     setRemoveTarget(null);
   };
 
-  const openChannelEditor = (product: Product) => {
-    const current = channelProductOverrides[`${catalogId}:${product.id}`] || product;
-    setEditingProduct({ ...current, createdTime: current.createdTime || formatPlatformDateTime(new Date()) });
-    setEditingError('');
-    setEditingValues(current.formData?.channelSpecificValues || {});
-    setEditingSalesChannels(resolveSelectedSalesChannelIds(catalogChannelIds, current.formData));
+  const closeProductEditor = () => {
+    if (window.confirm('返回模板商品列表？未保存的修改将丢失。')) setEditingProduct(null);
   };
 
-  const saveChannelEditor = () => {
-    if (!editingProduct || !catalogId) return;
-    const addonItems = editingProduct.formData?.channelAddonItems || [];
-    const error = editingSalesChannels.length === 0 ? '请选择至少一个售卖渠道' : editingSalesChannels.includes('douyin') ? getDouyinSettingsError(editingValues, addonItems) : '';
-    if (error) { setEditingError(error); return; }
-    const createdTime = editingProduct.createdTime || formatPlatformDateTime(new Date());
-    const savedValues = editingSalesChannels.includes('douyin') ? normalizeDouyinChannelValues(editingValues, addonItems) : editingValues;
-    const savedProduct = { ...editingProduct, createdTime, formData: { ...editingProduct.formData, salesChannelIds: editingSalesChannels, onlineSalesChannelIds: editingSalesChannels.filter(id => id === 'douyin' || id === 'meituan_dine'), channelSpecificValues: savedValues, douyinSalePeriod: editingSalesChannels.includes('douyin') ? resolveDouyinSalePeriod(savedValues, createdTime) : undefined } };
-    onChannelProductSaved?.(`${catalogId}:${editingProduct.id}`, savedProduct);
-    setEditingProduct(null);
-    showNotice(`“${savedProduct.name}”的渠道资料已保存；平台商品仍需单独同步。`);
-  };
+  if (editingProduct) {
+    const type = editingProduct.type === 'combo' ? 'combo' : 'standard';
+    const category = categories.find(item => item.classification === type && (item.id === editingProduct.formData?.prototypeCategoryId || item.id === editingProduct.formData?.p_cat || item.name === editingProduct.category))
+      || categories.filter(item => item.classification === type).flatMap(item => item.children || []).find(item => item.id === editingProduct.category)
+      || categories.find(item => item.classification === type);
+    if (category) return <WebProductForm
+      key={`${template.id}:${editingProduct.id}`}
+      type={type}
+      category={category}
+      categories={categories.filter(item => item.classification === type)}
+      mode="edit"
+      initialProduct={editingProduct}
+      formScope="channel"
+      templateContext={{ id: template.id, name: template.name }}
+      channelContext={{ catalogName: sourceLabel, channelIds: template.channels, channelNames: template.channels.map(id => ALL_OMNICHANNEL_CHANNELS.find(channel => channel.id === id)?.name || id), masterName: products.find(product => product.id === editingProduct.id)?.name || editingProduct.name, skuId: editingProduct.skuCode }}
+      commonFieldConfigs={commonFieldConfigs}
+      channelEditableFieldIds={channelEditableFieldIds}
+      thirdPartyChannelAttributeIds={catalogChannelIds}
+      onClose={closeProductEditor}
+      onProductSaved={draft => {
+        onTemplateProductSaved?.(`${template.id}:${editingProduct.id}`, { ...editingProduct, ...draft });
+        setEditingProduct(null);
+        showNotice(`“${draft.name}”已保存到当前模板，未修改来源商品库或已下发门店。`);
+      }}
+    />;
+  }
 
   return (
-    <div className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
+    <div className="template-product-detail relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-[#E8E8E8] bg-white px-6 shadow-sm">
         <div className="flex min-w-0 items-center gap-3">
           <button type="button" onClick={onBack} title="返回模板列表" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] text-[#666] hover:border-[#8BD7AE] hover:text-[#00A35B]"><ArrowLeft size={18} /></button>
@@ -163,20 +175,12 @@ export const WebProductTemplateDetail: React.FC<Props> = ({
           <div className="flex items-center gap-3">{activeTab === 'products' && <button type="button" onClick={() => setConfirmRefresh(true)} className="flex items-center rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#555] hover:bg-[#FAFAFA]"><RefreshCw size={15} className="mr-2" />更新商品资料</button>}<button type="button" onClick={activeTab === 'products' ? openProductSelector : openStoreSelector} className="flex items-center rounded-lg bg-[#00C06B] px-4 py-2 text-sm font-medium text-white hover:bg-[#00A35B]"><Plus size={15} className="mr-2" />{activeTab === 'products' ? '添加商品' : '添加门店'}</button></div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto rounded-b-lg border border-[#E8E8E8] bg-white">
-          {activeTab === 'products' ? <table className="min-w-[960px] table-fixed text-left text-sm"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-[#555]"><tr><th className="w-[72px] px-5 py-3">排序</th><th className="w-[300px] px-4 py-3">商品</th><th className="w-[120px] px-4 py-3">商品类型</th><th className="w-[150px] px-4 py-3">前台分类</th><th className="w-[120px] px-4 py-3">售价</th><th className="w-[110px] px-4 py-3">状态</th><th className="w-[180px] px-4 py-3 text-right">操作</th></tr></thead><tbody>{selectedProducts.map((product, index) => <tr key={product.id} className="border-t border-[#F0F0F0] hover:bg-[#FAFBFC]"><td className="px-5 py-4 text-[#999]">{index + 1}</td><td className="px-4 py-4"><div className="flex items-center gap-3"><img src={product.image} alt="" className="h-10 w-10 rounded border border-[#E5E7EB] object-cover" /><div className="min-w-0"><div className="truncate font-medium text-[#222]">{product.name}</div><div className="mt-1 text-xs text-[#999]">商品ID {product.id} · SKUID {product.skuCode}</div></div></div></td><td className="px-4 py-4 text-[#666]">{product.type === 'combo' ? '套餐商品' : '标准商品'}</td><td className="px-4 py-4 text-[#666]">{product.category || '--'}</td><td className="px-4 py-4 text-[#333]">¥{Number(product.price).toFixed(2)}</td><td className="px-4 py-4"><span className={product.status === 'on_shelf' ? 'text-[#00A35B]' : product.status === 'draft' ? 'text-[#D97706]' : 'text-[#999]'}>{product.status === 'on_shelf' ? '可售' : product.status === 'draft' ? '草稿' : '停售'}</span></td><td className="px-4 py-4 text-right">{catalogId && catalogChannelIds.length > 0 && <button type="button" onClick={() => openChannelEditor(product)} className="mr-3 text-[#00A35B]">渠道属性</button>}<button type="button" onClick={() => setRemoveTarget({ type: 'product', id: product.id, name: product.name })} className="text-[#D92D20]">移除</button></td></tr>)}{selectedProducts.length === 0 && <tr><td colSpan={7} className="py-16 text-center"><Package size={28} className="mx-auto text-[#C9CDD4]" /><div className="mt-3 text-sm text-[#999]">{keyword ? '没有符合条件的模板商品' : '暂无模板商品'}</div><button type="button" onClick={() => keyword ? setKeyword('') : openProductSelector()} className="mt-2 text-sm text-[#00A35B]">{keyword ? '清空搜索条件' : '添加商品'}</button></td></tr>}</tbody></table> : <table className="min-w-[820px] table-fixed text-left text-sm"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-[#555]"><tr><th className="w-[300px] px-5 py-3">门店</th><th className="w-[200px] px-4 py-3">所属机构</th><th className="w-[180px] px-4 py-3">区域</th><th className="w-[120px] px-4 py-3">状态</th><th className="w-[100px] px-4 py-3 text-right">操作</th></tr></thead><tbody>{selectedStores.map(store => <tr key={store.id} className="border-t border-[#F0F0F0] hover:bg-[#FAFBFC]"><td className="px-5 py-4 font-medium text-[#222]">{store.name}</td><td className="px-4 py-4 text-[#666]">{store.organization}</td><td className="px-4 py-4 text-[#666]">{store.region}</td><td className="px-4 py-4"><span className="text-[#00A35B]">营业中</span></td><td className="px-4 py-4 text-right"><button type="button" onClick={() => setRemoveTarget({ type: 'store', id: store.id, name: store.name })} className="text-[#D92D20]">移除</button></td></tr>)}{selectedStores.length === 0 && <tr><td colSpan={5} className="py-16 text-center"><Store size={28} className="mx-auto text-[#C9CDD4]" /><div className="mt-3 text-sm text-[#999]">{keyword ? '没有符合条件的适用门店' : '暂无适用门店'}</div><button type="button" onClick={() => keyword ? setKeyword('') : openStoreSelector()} className="mt-2 text-sm text-[#00A35B]">{keyword ? '清空搜索条件' : '添加门店'}</button></td></tr>}</tbody></table>}
+        <div className="template-detail-table min-h-0 flex-1 overflow-auto rounded-b-lg border border-[#E8E8E8] bg-white">
+          {activeTab === 'products' ? <table className="min-w-[960px] table-fixed text-left text-sm"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-[#555]"><tr><th className="w-[72px] px-5 py-3">排序</th><th className="w-[300px] px-4 py-3">商品</th><th className="w-[120px] px-4 py-3">商品类型</th><th className="w-[150px] px-4 py-3">前台分类</th><th className="w-[120px] px-4 py-3">售价</th><th className="w-[110px] px-4 py-3">状态</th><th className="w-[180px] px-4 py-3 text-right">操作</th></tr></thead><tbody>{selectedProducts.map((product, index) => <tr key={product.id} className="border-t border-[#F0F0F0] hover:bg-[#FAFBFC]"><td className="px-5 py-4 text-[#999]">{index + 1}</td><td className="px-4 py-4"><div className="flex items-center gap-3"><img src={product.image} alt="" className="h-10 w-10 rounded border border-[#E5E7EB] object-cover" /><div className="min-w-0"><div className="truncate font-medium text-[#222]">{product.name}</div><div className="mt-1 text-xs text-[#999]">商品ID {product.id} · SKUID {product.skuCode}</div></div></div></td><td className="px-4 py-4 text-[#666]">{product.type === 'combo' ? '套餐商品' : '标准商品'}</td><td className="px-4 py-4 text-[#666]">{product.category || '--'}</td><td className="px-4 py-4 text-[#333]">¥{Number(product.price).toFixed(2)}</td><td className="px-4 py-4"><span className={product.status === 'on_shelf' ? 'text-[#00A35B]' : product.status === 'draft' ? 'text-[#D97706]' : 'text-[#999]'}>{product.status === 'on_shelf' ? '可售' : product.status === 'draft' ? '草稿' : '停售'}</span></td><td className="px-4 py-4 text-right"><button type="button" onClick={() => setEditingProduct(structuredClone(product))} className="mr-3 text-[#00A35B]">编辑</button><button type="button" onClick={() => setRemoveTarget({ type: 'product', id: product.id, name: product.name })} className="text-[#D92D20]">移除</button></td></tr>)}{selectedProducts.length === 0 && <tr><td colSpan={7} className="py-16 text-center"><Package size={28} className="mx-auto text-[#C9CDD4]" /><div className="mt-3 text-sm text-[#999]">{keyword ? '没有符合条件的模板商品' : '暂无模板商品'}</div><button type="button" onClick={() => keyword ? setKeyword('') : openProductSelector()} className="mt-2 text-sm text-[#00A35B]">{keyword ? '清空搜索条件' : '添加商品'}</button></td></tr>}</tbody></table> : <table className="min-w-[820px] table-fixed text-left text-sm"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-xs font-bold text-[#555]"><tr><th className="w-[300px] px-5 py-3">门店</th><th className="w-[200px] px-4 py-3">所属机构</th><th className="w-[180px] px-4 py-3">区域</th><th className="w-[120px] px-4 py-3">状态</th><th className="w-[100px] px-4 py-3 text-right">操作</th></tr></thead><tbody>{selectedStores.map(store => <tr key={store.id} className="border-t border-[#F0F0F0] hover:bg-[#FAFBFC]"><td className="px-5 py-4 font-medium text-[#222]">{store.name}</td><td className="px-4 py-4 text-[#666]">{store.organization}</td><td className="px-4 py-4 text-[#666]">{store.region}</td><td className="px-4 py-4"><span className="text-[#00A35B]">营业中</span></td><td className="px-4 py-4 text-right"><button type="button" onClick={() => setRemoveTarget({ type: 'store', id: store.id, name: store.name })} className="text-[#D92D20]">移除</button></td></tr>)}{selectedStores.length === 0 && <tr><td colSpan={5} className="py-16 text-center"><Store size={28} className="mx-auto text-[#C9CDD4]" /><div className="mt-3 text-sm text-[#999]">{keyword ? '没有符合条件的适用门店' : '暂无适用门店'}</div><button type="button" onClick={() => keyword ? setKeyword('') : openStoreSelector()} className="mt-2 text-sm text-[#00A35B]">{keyword ? '清空搜索条件' : '添加门店'}</button></td></tr>}</tbody></table>}
         </div>
       </div>
 
       <WebProductSelectorDialog open={productSelectorOpen} title="选择模板商品" description={`商品来源：${sourceLabel}。已选商品保留勾选，可继续追加或取消。`} products={products} selectedIds={draftProductIds} onSelectedIdsChange={setDraftProductIds} onCancel={() => setProductSelectorOpen(false)} onConfirm={() => { const added = draftProductIds.filter(id => !productIds.includes(id)).length; onProductIdsChange(draftProductIds); setProductSelectorOpen(false); showNotice(`商品范围已保存，新增 ${added} 个商品`); }} confirmLabel="保存商品范围" />
-
-      {editingProduct && <div className="absolute inset-0 z-[65] flex justify-end bg-black/35" role="dialog" aria-modal="true" aria-label={`维护${editingProduct.name}的渠道属性`}>
-        <div className="flex h-full w-full max-w-[760px] flex-col bg-white shadow-xl">
-          <div className="flex shrink-0 items-center justify-between border-b border-[#E8E8E8] px-5 py-4"><div><h3 className="text-base font-bold text-[#1D2129]">维护渠道属性</h3><p className="mt-1 text-xs text-[#667085]">{editingProduct.name} · 修改商品库资料，不会立即同步平台</p></div><button type="button" onClick={() => setEditingProduct(null)} aria-label="关闭渠道属性编辑" className="rounded p-1 text-[#667085] hover:bg-[#F7F8FA]"><X size={18} /></button></div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5"><WebThirdPartyChannelFields channelIds={catalogChannelIds} selectedSalesChannelIds={editingSalesChannels} onSelectedSalesChannelIdsChange={setEditingSalesChannels} location="channel" value={editingValues} onChange={setEditingValues} addonItems={editingProduct.formData?.channelAddonItems || []} /></div>
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#E8E8E8] px-5 py-4"><span role="alert" className="text-xs text-[#B42318]">{editingError}</span><div className="flex gap-3"><button type="button" onClick={() => setEditingProduct(null)} className="rounded border border-[#DDE3E8] px-4 py-2 text-sm text-[#344054]">取消</button><button type="button" onClick={saveChannelEditor} className="rounded bg-[#00B460] px-4 py-2 text-sm font-medium text-white">保存商品资料</button></div></div>
-        </div>
-      </div>}
 
       {storeSelectorOpen && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/35 p-6"><div className="flex h-[680px] w-[820px] max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-lg bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-[#E5E7EB] px-6 py-4"><div><div className="text-base font-bold text-[#222]">选择适用门店</div><div className="mt-1 text-xs text-[#999]">同渠道下已被其他启用模板覆盖的门店不可重复选择</div></div><button type="button" onClick={() => setStoreSelectorOpen(false)} className="text-[#999]" aria-label="关闭"><X size={18} /></button></div><div className="border-b border-[#E5E7EB] bg-[#F7F8FA] p-4"><div className="relative w-[320px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" /><input value={storeSelectorKeyword} onChange={event => setStoreSelectorKeyword(event.target.value)} placeholder="搜索门店、机构、区域" className="w-full rounded-lg border border-[#E5E7EB] bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" /></div></div><div className="min-h-0 flex-1 overflow-y-auto p-4"><div className="overflow-hidden rounded-lg border border-[#E5E7EB]">{selectorStores.map(store => { const conflictTemplate = storeConflicts[store.id]; const selected = draftStoreIds.includes(store.id); const disabled = Boolean(conflictTemplate && !storeIds.includes(store.id)); return <label key={store.id} className={`flex items-start gap-3 border-b border-[#F0F0F0] px-4 py-3 last:border-b-0 ${disabled ? 'cursor-not-allowed bg-[#FAFAFA]' : 'cursor-pointer hover:bg-[#FAFCFB]'}`}><input type="checkbox" disabled={disabled} checked={selected} onChange={event => setDraftStoreIds(prev => event.target.checked ? [...prev, store.id] : prev.filter(id => id !== store.id))} className="mt-0.5 h-4 w-4 accent-[#00C06B]" /><div className="min-w-0 flex-1"><div className={`text-sm font-medium ${disabled ? 'text-[#999]' : 'text-[#222]'}`}>{store.name}</div><div className="mt-1 text-xs text-[#999]">{store.organization} · {store.region}</div>{disabled && <div className="mt-1 flex items-center text-xs text-[#D92D20]"><AlertTriangle size={12} className="mr-1" />已用于模板“{conflictTemplate}”</div>}</div></label>; })}{selectorStores.length === 0 && <div className="py-12 text-center text-sm text-[#999]">没有符合条件的门店</div>}</div></div><div className="flex items-center justify-between border-t border-[#E5E7EB] px-6 py-4"><div className="text-sm text-[#666]">已选择 <span className="font-bold text-[#00A35B]">{draftStoreIds.length}</span> 家门店</div><div className="flex gap-3"><button type="button" onClick={() => setDraftStoreIds([])} className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#666]">清空选择</button><button type="button" onClick={() => setStoreSelectorOpen(false)} className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-sm text-[#666]">取消</button><button type="button" onClick={() => { const added = draftStoreIds.filter(id => !storeIds.includes(id)).length; onStoreIdsChange(draftStoreIds); setStoreSelectorOpen(false); showNotice(`门店范围已保存，新增 ${added} 家门店`); }} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-medium text-white">保存门店范围</button></div></div></div></div>}
 

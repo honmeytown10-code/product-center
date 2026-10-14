@@ -468,9 +468,10 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   })), [omnichannelConfig]);
   const productMenuGuideStorageKey = 'web-admin-product-menu-upgrade-guide-v2';
   // Navigation State
+  const isAddonSalePreview = new URLSearchParams(window.location.search).get('preview') === 'addon-sale-exclusions';
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>(() => (experience?.initialMenu === 'product_logs' ? 'brand' : 'store'));
   const [activeMenu, setActiveMenu] = useState(() => (
-    experience?.initialMenu || new URLSearchParams(window.location.search).get('menu') || 'buffet_menu'
+    isAddonSalePreview ? 'categories' : experience?.initialMenu || new URLSearchParams(window.location.search).get('menu') || 'buffet_menu'
   ));
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
@@ -1515,7 +1516,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
           return (
             <WebProductAttributeManager
               scope="master"
-              initialTab="category"
+              initialTab={isAddonSalePreview ? 'addon' : 'category'}
             />
           );
       }

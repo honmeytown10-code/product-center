@@ -4,6 +4,7 @@ import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart
 import { WebCustomAttributeManager } from './WebCustomAttributeManager';
 import { ATTRIBUTE_EXPLANATIONS, WebAttributeExampleDialog, type AttributeExampleKind } from './WebAttributeExampleDialog';
 import { WebCategoryListManager } from './WebCategoryListManager';
+import { AddonFormData, DEFAULT_ADDON_FORM, DEMO_ADDON_FORM, WebAddonForm } from './WebAddonForm';
 
 type SpecValue = {
   id: string;
@@ -552,6 +553,13 @@ const CUSTOM_COMBO_RECORDS: CustomComboRecord[] = [
 
 const ADDON_GROUPS: AddonGroup[] = [
   {
+    id: 'addon-type-drink', typeName: '饮品加料', sort: 0, productName: '', initialPrice: 0, relatedCount: 0, createdAt: '', enabled: true,
+    children: [
+      { id: 'addon-pearl', typeName: '饮品加料', sort: 1, productName: '珍珠', initialPrice: 2, relatedCount: 3, createdAt: '2026-10-10 10:00:00', enabled: true },
+      { id: 'addon-coconut', typeName: '饮品加料', sort: 2, productName: '椰果', initialPrice: 2, relatedCount: 3, createdAt: '2026-10-10 10:00:00', enabled: true },
+    ],
+  },
+  {
     id: 'addon-type-default',
     typeName: '默认类型(222)',
     sort: 0,
@@ -665,6 +673,15 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   );
   const [activeLabelTab, setActiveLabelTab] = useState<LabelTab>(scope === 'master' ? 'stats' : 'desc');
   const [keyword, setKeyword] = useState('');
+  const [addonGroups, setAddonGroups] = useState<AddonGroup[]>(ADDON_GROUPS);
+  const [addonForms, setAddonForms] = useState<Record<string, AddonFormData>>({ 'addon-pearl': DEMO_ADDON_FORM, 'addon-coconut': { ...DEMO_ADDON_FORM, name: '椰果', unpackedScope: 'linked', excludedProductIds: [] } });
+  const [addonEditor, setAddonEditor] = useState<{ mode: 'create' | 'edit'; id?: string; initialValue: AddonFormData } | null>(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('preview') !== 'addon-sale-exclusions') return null;
+    if (query.get('addonForm') === 'create') return { mode: 'create', initialValue: { ...DEFAULT_ADDON_FORM, excludedProductIds: [] } };
+    if (query.get('addonForm') === 'edit') return { mode: 'edit', id: 'addon-pearl', initialValue: DEMO_ADDON_FORM };
+    return null;
+  });
   const [labelGroups, setLabelGroups] = useState<Record<LabelTab, LabelGroup[]>>(LABEL_GROUPS);
   const [badges, setBadges] = useState<BadgeRecord[]>(BADGE_RECORDS);
   const [seriesRecords, setSeriesRecords] = useState<SeriesRecord[]>(SERIES_RECORDS);
@@ -854,18 +871,18 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   }, [customComboRecords, normalizedKeyword]);
 
   const filteredAddonGroups = useMemo(() => {
-    if (!normalizedKeyword) return ADDON_GROUPS;
-    return ADDON_GROUPS
+    if (!normalizedKeyword) return addonGroups;
+    return addonGroups
       .map(group => {
         if (!group.children?.length) return group;
-        const children = group.children.filter(item => item.typeName.toLowerCase().includes(normalizedKeyword));
+        const children = group.children.filter(item => `${item.typeName} ${item.productName}`.toLowerCase().includes(normalizedKeyword));
         if (children.length > 0 || group.typeName.toLowerCase().includes(normalizedKeyword)) {
           return { ...group, children };
         }
         return null;
       })
       .filter(Boolean) as AddonGroup[];
-  }, [normalizedKeyword]);
+  }, [normalizedKeyword, addonGroups]);
 
   const placeholderMap: Record<AttributeTab, string> = {
     category: '搜索分类名称',
@@ -1408,6 +1425,29 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
     setChannelLibraryDelete(null);
   };
 
+  if (addonEditor) {
+    return <WebAddonForm
+      key={`${addonEditor.mode}-${addonEditor.id || 'new'}`}
+      mode={addonEditor.mode}
+      initialValue={addonEditor.initialValue}
+      typeOptions={addonGroups.map(group => group.typeName)}
+      onClose={() => setAddonEditor(null)}
+      onSave={(value, continueCreating) => {
+        const id = addonEditor.id || `addon-${crypto.randomUUID()}`;
+        const typeName = value.typeName || addonGroups[0].typeName;
+        const previous = addonGroups.flatMap(group => group.children || []).find(item => item.id === id);
+        const next: AddonGroup = { id, typeName, sort: previous?.sort ?? 0, productName: value.name, initialPrice: value.price, relatedCount: previous?.relatedCount ?? 0, createdAt: previous?.createdAt || new Date().toLocaleString('sv-SE'), enabled: true };
+        setAddonForms(current => ({ ...current, [id]: value }));
+        setAddonGroups(current => current.map(group => {
+          const children = (group.children || []).filter(item => item.id !== id);
+          return { ...group, children: group.typeName === typeName ? [...children, next] : children };
+        }));
+        setExpandedAddonGroups(current => new Set([...current, ...addonGroups.filter(group => group.typeName === typeName).map(group => group.id)]));
+        if (!continueCreating) { setAddonEditor(null); showActionNotice(`「${value.name}」已保存`); }
+      }}
+    />;
+  }
+
   return (
     <div className="console-attribute-page relative flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F5F6FA]">
       {actionNotice && <div className="absolute left-1/2 top-3 z-[120] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{actionNotice}</div>}
@@ -1524,7 +1564,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                     </>
                   ) : (
                     <>
-                      <button onClick={() => showActionNotice('创建加料沿用现有加料商品字段，正式编辑器需接入商品创建流程')} className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">创建加料</button>
+                      <button onClick={() => setAddonEditor({ mode: 'create', initialValue: { ...DEFAULT_ADDON_FORM, excludedProductIds: [] } })} className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">创建加料</button>
                       <button onClick={() => showActionNotice('发布加料类型将进入发布中心，不会在当前页直接下发')} className="rounded-lg border border-[#00C06B] bg-white px-4 py-2.5 text-sm font-bold text-[#008F4C] hover:bg-[#F3FCF7]">发布加料类型</button>
                     </>
                   )}
@@ -1686,6 +1726,8 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                 expandedGroupIds={expandedAddonGroups}
                 onToggleGroup={(id) => toggleExpanded(setExpandedAddonGroups, id)}
                 onAction={(action, name) => showActionNotice(`${name}：${action}操作已记录；发布与删除需先校验关联商品`)}
+                onEdit={(item) => setAddonEditor({ mode: 'edit', id: item.id, initialValue: addonForms[item.id] || { ...DEFAULT_ADDON_FORM, name: item.productName || item.typeName, typeName: item.typeName, price: item.initialPrice, excludedProductIds: [] } })}
+                onCreate={(typeName) => setAddonEditor({ mode: 'create', initialValue: { ...DEFAULT_ADDON_FORM, typeName, excludedProductIds: [] } })}
               />
             )
           )}
@@ -3301,12 +3343,16 @@ const AddonTable = ({
   expandedGroupIds,
   onToggleGroup,
   onAction,
+  onEdit,
+  onCreate,
   showDouyinStatus = false,
 }: {
   groups: AddonGroup[];
   expandedGroupIds: Set<string>;
   onToggleGroup: (groupId: string) => void;
   onAction: (action: string, name: string) => void;
+  onEdit: (item: AddonGroup) => void;
+  onCreate: (typeName: string) => void;
   showDouyinStatus?: boolean;
 }) => (
   <div className="overflow-auto">
@@ -3344,7 +3390,7 @@ const AddonTable = ({
               {showDouyinStatus && <td className="px-4 py-4 text-[#98A2B3]">类型不单独同步</td>}
               <td className="px-4 py-4 text-[#666]">{group.createdAt || ''}</td>
               <td className="px-4 py-4 text-right">
-                <ActionButtons actions={['编辑类型', '新增加料项', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => onAction(label, group.typeName) }))} />
+                <ActionButtons actions={['编辑类型', '新增加料项', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => label === '新增加料项' ? onCreate(group.typeName) : onAction(label, group.typeName) }))} />
               </td>
             </tr>
             {expandedGroupIds.has(group.id) && group.children?.map(item => (
@@ -3365,7 +3411,7 @@ const AddonTable = ({
                 )}
                 <td className="px-4 py-4 text-[#666]">{item.createdAt}</td>
                 <td className="px-4 py-4 text-right">
-                  <ActionButtons actions={['编辑', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => onAction(label, item.typeName) }))} />
+                  <ActionButtons actions={['编辑', '删除'].map(label => ({ label, danger: label === '删除', onClick: () => label === '编辑' ? onEdit(item) : onAction(label, item.productName || item.typeName) }))} />
                 </td>
               </tr>
             ))}

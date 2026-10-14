@@ -1,24 +1,83 @@
-import React, { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowUpDown, Lock, Plus, Search } from 'lucide-react';
+import { WebStoreScopeSelector } from './WebStoreScopeSelector';
+import { WebStoreMenuSortDialog } from './WebStoreMenuSortDialog';
+import { WebStoreMenuDisplayGuide } from './WebStoreMenuDisplayGuide';
+import { WebStoreMenuFormDialog } from './WebStoreMenuFormDialog';
+import { WebStoreMenuDeleteDialog } from './WebStoreMenuDeleteDialog';
+import { MENU_STORES, menuStoreName, type StoreMenuRecord } from './storeMenus';
 
-type StoreOption = { id: string; name: string };
-export type StoreRegionRecord = { id: string; storeId: string; sort: number; name: string; relatedProductCount: number };
-const STORE_OPTIONS: StoreOption[] = [{ id: 'all', name: '全部门店' }, { id: 's1', name: '范先生的门店' }, { id: 's2', name: '南山万象店' }, { id: 's3', name: '福田卓悦店' }];
-export const MOCK_STORE_REGIONS: StoreRegionRecord[] = [
-  { id: 'region-1', storeId: 's1', sort: 1, name: '1楼', relatedProductCount: 0 }, { id: 'region-2', storeId: 's1', sort: 2, name: '2楼', relatedProductCount: 0 }, { id: 'region-3', storeId: 's2', sort: 1, name: 'A区', relatedProductCount: 12 }, { id: 'region-4', storeId: 's3', sort: 1, name: '外摆区', relatedProductCount: 6 },
-];
+type Props = {
+  menus: StoreMenuRecord[];
+  onMenusChange: (menus: StoreMenuRecord[]) => void;
+  storeId: string;
+  onStoreChange: (id: string) => void;
+  onEditMenu: (menu: StoreMenuRecord) => void;
+  message?: string;
+  onMessageRead?: () => void;
+  // API/permission adapter states; local prototype defaults to full access.
+  state?: 'success' | 'loading' | 'error' | 'no-permission' | 'partial-permission';
+  onRetry?: () => void;
+};
+const buttonClass = 'h-9 rounded-md border border-[#DDE2E8] bg-white px-4 text-[13px] disabled:cursor-not-allowed disabled:opacity-40';
+const primaryClass = 'inline-flex h-9 items-center justify-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40';
 
-export const WebStoreRegionList: React.FC<{ onEditRegion?: (region: StoreRegionRecord) => void }> = ({ onEditRegion }) => {
-  const [regions, setRegions] = useState(MOCK_STORE_REGIONS);
-  const [storeId, setStoreId] = useState('s1');
+// Retain the historical component/route identifier for existing prototype links.
+// Production: QmList/QmSearch/QmListTable + business store selector + el-dialog/el-form.
+export const WebStoreRegionList: React.FC<Props> = ({ menus, onMenusChange, storeId, onStoreChange, onEditMenu, message, onMessageRead, state = 'success', onRetry }) => {
   const [keyword, setKeyword] = useState('');
-  const [sorting, setSorting] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [editing, setEditing] = useState<StoreMenuRecord | 'create' | null>(null);
+  const [deleting, setDeleting] = useState<StoreMenuRecord | null>(null);
   const [toast, setToast] = useState('');
-  const filteredRegions = useMemo(() => regions.filter(item => (storeId === 'all' || item.storeId === storeId) && (!keyword.trim() || item.name.includes(keyword.trim()))).sort((a, b) => a.sort - b.sort), [keyword, regions, storeId]);
-  const move = (region: StoreRegionRecord, direction: -1 | 1) => { const siblings = regions.filter(item => item.storeId === region.storeId).sort((a, b) => a.sort - b.sort); const index = siblings.findIndex(item => item.id === region.id); const target = siblings[index + direction]; if (!target) return; setRegions(current => current.map(item => item.id === region.id ? { ...item, sort: target.sort } : item.id === target.id ? { ...item, sort: region.sort } : item)); };
-  return <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#F5F6FA] p-3">{toast && <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white">{toast}</div>}<div className="console-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E9EDF2] px-4 py-3"><div className="flex items-center gap-2"><label className="relative"><select value={storeId} onChange={e => setStoreId(e.target.value)} className="h-9 w-[240px] appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]">{STORE_OPTIONS.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /></label><label className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="区域名称" className="h-9 w-48 rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px]" /></label><button onClick={() => { setStoreId('s1'); setKeyword(''); }} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">重置</button></div><div className="flex gap-2">{sorting && <button onClick={() => { setSorting(false); setToast('区域排序已保存，仅影响堂食桌点单页展示顺序'); window.setTimeout(() => setToast(''), 2400); }} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">完成排序</button>}<button onClick={() => setSorting(value => !value)} className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white"><ArrowUpDown size={14} className="mr-1.5" />{sorting ? '退出排序' : '排序管理'}</button></div></div>
-    <div className="flex shrink-0 items-center justify-between border-b border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]"><span>共 <strong className="text-[#1D2129]">{filteredRegions.length}</strong> 个区域 · 已关联商品 {filteredRegions.reduce((sum, item) => sum + item.relatedProductCount, 0)} 个</span><span>区域来源于机构门店设置；本页只维护堂食桌点单页排序和关联商品</span></div>
-    <div className="min-h-0 flex-1 overflow-auto"><table className="w-full min-w-[780px] table-fixed border-collapse text-left text-[13px]"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]"><tr className="border-b border-[#E5E7EB]"><th className="w-[130px] px-4 py-3 font-medium">排序</th><th className="px-3 py-3 font-medium">区域名称</th><th className="w-[220px] px-3 py-3 font-medium">所属门店</th><th className="w-[160px] px-3 py-3 font-medium">关联商品</th><th className="w-[120px] px-3 py-3 font-medium">操作</th></tr></thead><tbody>{filteredRegions.map(region => <tr key={region.id} className="border-b border-[#EEF0F3] hover:bg-[#FAFCFB]"><td className="px-4 py-3">{sorting ? <div className="flex items-center gap-2"><button onClick={() => move(region, -1)} className="rounded border border-[#DDE2E8] p-1"><ArrowUp size={14} /></button><span className="w-6 text-center">{region.sort}</span><button onClick={() => move(region, 1)} className="rounded border border-[#DDE2E8] p-1"><ArrowDown size={14} /></button></div> : region.sort}</td><td className="px-3 py-3 font-medium">{region.name}</td><td className="px-3 py-3">{STORE_OPTIONS.find(item => item.id === region.storeId)?.name || region.storeId}</td><td className="px-3 py-3">{region.relatedProductCount} 个</td><td className="px-3 py-3"><button onClick={() => onEditRegion?.(region)} className="text-[#008F4C]">管理商品</button></td></tr>)}</tbody></table>{filteredRegions.length === 0 && <div className="flex h-56 flex-col items-center justify-center text-[13px] text-[#98A2B3]"><Search size={28} className="mb-3" /><span>没有符合当前条件的门店区域</span><button onClick={() => { setStoreId('all'); setKeyword(''); }} className="mt-2 text-[#008F4C]">清空筛选</button></div>}</div>
-  </div></div>;
+  useEffect(() => { if (message) { setToast(message); onMessageRead?.(); } }, [message, onMessageRead]);
+  useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(''), 2600); return () => window.clearTimeout(timer); }, [toast]);
+  const storeMenus = useMemo(() => menus.filter(item => item.storeId === storeId).sort((a, b) => a.sort - b.sort), [menus, storeId]);
+  const filtered = storeMenus.filter(item => !keyword.trim() || item.name.toLowerCase().includes(keyword.trim().toLowerCase()));
+  const canManage = !!storeId && !['loading', 'error', 'no-permission'].includes(state);
+  return <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#F5F6FA] p-3">
+    {toast && <div role="status" className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white">{toast}</div>}
+    <div className="console-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#E9EDF2] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] text-[#667085]">门店</span>
+          <WebStoreScopeSelector stores={MENU_STORES} value={storeId ? [storeId] : []} disabled={['loading', 'error', 'no-permission'].includes(state)} selectionMode="single" onChange={ids => { onStoreChange(ids[0] || ''); setKeyword(''); }} widthClassName="w-[200px]" />
+          <label className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input aria-label="搜索菜单名称" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="菜单名称" className="h-9 w-48 rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] disabled:bg-[#F7F8FA]" /></label>
+          <button onClick={() => setKeyword('')} className={buttonClass}>重置</button>
+        </div>
+        <div className="flex gap-2"><button disabled={!canManage || storeMenus.length < 2} title="调整当前门店的小程序横向菜单顺序" onClick={() => setSortOpen(true)} className={`${buttonClass} inline-flex items-center`}><ArrowUpDown size={14} className="mr-1.5" />排序管理</button><button disabled={!canManage} onClick={() => setEditing('create')} className={primaryClass}><Plus size={15} className="mr-1.5" />新建菜单</button></div>
+      </div>
+      <WebStoreMenuDisplayGuide />
+      <div className="shrink-0 border-y border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]">{storeId ? <>{menuStoreName(storeId)} · 共 <strong className="text-[#1D2129]">{filtered.length}</strong> 个菜单</> : '请选择门店后管理菜单'}</div>
+      {state === 'partial-permission' && <div role="status" className="border-b border-[#E9EDF2] bg-[#FFFAEB] px-4 py-2 text-[13px] text-[#B54708]">仅展示有权限的门店菜单，其他门店不可查看或操作</div>}
+      {state === 'loading' || state === 'error' || state === 'no-permission' ? <div role="status" className="flex flex-1 flex-col items-center justify-center gap-3 text-[13px] text-[#667085]">{state === 'no-permission' && <Lock size={24} />}<span>{state === 'loading' ? '正在加载门店菜单…' : state === 'error' ? '菜单加载失败，请重试' : '暂无门店菜单查看权限，请联系管理员'}</span>{state === 'error' && <button onClick={onRetry} className={buttonClass}>重新加载</button>}</div> : <>
+        <div className="min-h-0 flex-1 overflow-auto no-scrollbar"><table className="w-full min-w-[780px] table-fixed border-collapse text-left text-[13px]"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#4E5969]"><tr className="border-b border-[#E5E7EB]"><th className="px-4 py-3 font-medium">菜单名称</th><th className="w-[200px] px-3 py-3 font-medium">所属门店</th><th className="w-[140px] px-3 py-3 font-medium">关联商品</th><th className="w-[240px] px-3 py-3 font-medium">操作</th></tr></thead><tbody>{filtered.map(menu => <tr key={menu.id} className="border-b border-[#EEF0F3] hover:bg-[#FAFCFB]"><td className="px-4 py-3 font-medium"><div className="flex min-w-0 items-center gap-2">{menu.icon && <img src={menu.icon} alt={`${menu.name}菜单图标`} width={28} height={28} className="h-7 w-7 shrink-0 rounded object-contain" />}<span className="truncate" title={menu.name}>{menu.name}</span></div></td><td className="px-3 py-3"><div className="truncate" title={menuStoreName(menu.storeId)}>{menuStoreName(menu.storeId)}</div></td><td className="px-3 py-3">{menu.productIds.length} 个</td><td className="px-3 py-3"><div className="flex gap-4"><button onClick={() => onEditMenu(menu)} className="text-[#008F4C] disabled:opacity-40">管理商品</button><button onClick={() => setEditing(menu)} className="text-[#008F4C]">编辑</button><button onClick={() => setDeleting(menu)} className="text-[#D92D20]">删除</button></div></td></tr>)}</tbody></table>
+          {filtered.length === 0 && <div className="flex h-56 flex-col items-center justify-center gap-2 text-[13px] text-[#98A2B3]"><Search size={28} className="mb-1" /><span>{!storeId ? '请选择要管理的门店' : keyword.trim() ? '没有符合当前条件的菜单' : '当前门店尚未创建菜单'}</span>{storeId && <button onClick={() => keyword.trim() ? setKeyword('') : setEditing('create')} className="text-[#008F4C]">{keyword.trim() ? '清空搜索' : '新建菜单'}</button>}</div>}
+        </div>
+      </>}
+    </div>
+    {sortOpen && <WebStoreMenuSortDialog menus={storeMenus} storeId={storeId} onCancel={() => setSortOpen(false)} onSave={orderedIds => {
+      const positions = new Map(orderedIds.map((id, index) => [id, index + 1]));
+      onMenusChange(menus.map(menu => positions.has(menu.id) ? { ...menu, sort: positions.get(menu.id)! } : menu));
+      setSortOpen(false);
+      setToast('菜单排序已保存');
+    }} />}
+    {editing && <WebStoreMenuFormDialog storeId={storeId} menu={editing === 'create' ? undefined : editing} menus={menus} onCancel={() => setEditing(null)} onSave={value => {
+      if (!canManage) return;
+      onMenusChange(editing === 'create'
+        ? [...menus, { id: `menu-${crypto.randomUUID()}`, storeId, ...value, sort: Math.max(0, ...storeMenus.map(menu => menu.sort)) + 1, productIds: [] }]
+        : menus.map(menu => menu.id === editing.id ? { ...menu, ...value } : menu));
+      setToast(editing === 'create' ? '菜单已创建，可继续管理商品' : '菜单已保存');
+      setEditing(null);
+      setKeyword('');
+    }} />}
+    {deleting && <WebStoreMenuDeleteDialog menu={deleting} onCancel={() => setDeleting(null)} onConfirm={() => {
+      if (!canManage) return;
+      const remaining = menus.filter(menu => menu.id !== deleting.id);
+      const positions = new Map(remaining.filter(menu => menu.storeId === deleting.storeId).sort((a, b) => a.sort - b.sort).map((menu, index) => [menu.id, index + 1]));
+      onMenusChange(remaining.map(menu => positions.has(menu.id) ? { ...menu, sort: positions.get(menu.id)! } : menu));
+      setToast('菜单已删除');
+      setDeleting(null);
+    }} />}
+  </div>;
 };

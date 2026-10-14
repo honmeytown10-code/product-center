@@ -37,6 +37,7 @@ import { WebStoreRegionList } from './web/WebStoreRegionList';
 import { MOCK_REQUIRED_POLICIES, WebRequiredProductPolicyList, type RequiredPolicyRecord } from './web/WebRequiredProductPolicyList';
 import { WebRequiredProductPolicyEditor } from './web/WebRequiredProductPolicyEditor';
 import { WebStoreRegionEditor } from './web/WebStoreRegionEditor';
+import { INITIAL_STORE_MENUS, type StoreMenuRecord } from './web/storeMenus';
 import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebCategorySelectModal, WebImportModal, WebThirdPartyImportRecordsModal } from './web/WebModals';
@@ -470,7 +471,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   // Navigation State
   const isAddonSalePreview = new URLSearchParams(window.location.search).get('preview') === 'addon-sale-exclusions';
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>(() => (experience?.initialMenu === 'product_logs' ? 'brand' : 'store'));
-  const [activeMenu, setActiveMenu] = useState(() => (
+  const [activeMenu, setActiveMenuState] = useState(() => (
     isAddonSalePreview ? 'categories' : experience?.initialMenu || new URLSearchParams(window.location.search).get('menu') || 'buffet_menu'
   ));
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
@@ -662,7 +663,20 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       ? { mode: 'create' }
       : null
   ));
-  const [storeRegionEditorContext, setStoreRegionEditorContext] = useState<any>(null);
+  const [storeRegionEditorContext, setStoreRegionEditorContext] = useState<StoreMenuRecord | null>(null);
+  const [storeMenus, setStoreMenus] = useState<StoreMenuRecord[]>(INITIAL_STORE_MENUS);
+  const [storeMenuStoreId, setStoreMenuStoreId] = useState('s1');
+  const [storeMenuDirty, setStoreMenuDirty] = useState(false);
+  const [storeMenuNotice, setStoreMenuNotice] = useState('');
+  const confirmLeaveStoreMenu = () => !storeMenuDirty || window.confirm('菜单商品尚未保存，确认放弃修改？');
+  const setActiveMenu = (target: string) => {
+    if (target !== activeMenu && activeMenu === 'store_region_list') {
+      if (!confirmLeaveStoreMenu()) return;
+      setStoreMenuDirty(false);
+      setStoreRegionEditorContext(null);
+    }
+    setActiveMenuState(target);
+  };
   const [attributeMutexEditorContext, setAttributeMutexEditorContext] = useState<{ mode: 'create' | 'edit'; rule?: any } | null>(null);
   const [showProductMenuGuide, setShowProductMenuGuide] = useState(false);
   const [currentProductMenuGuideStep, setCurrentProductMenuGuideStep] = useState(0);
@@ -868,17 +882,19 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
 
   const switchTopNav = (target: TopNavView) => {
     if (target === activeTopNav) return;
+    if (activeMenu === 'store_region_list' && !confirmLeaveStoreMenu()) return;
+    setStoreMenuDirty(false);
     resetTransientViews();
     setActiveTopNav(target);
 
     if (target === 'brand') {
       setExpandedMenus(['security_compliance', 'log_audit']);
-      setActiveMenu('product_logs');
+      setActiveMenuState('product_logs');
       return;
     }
 
     setExpandedMenus([]);
-    setActiveMenu('product_list');
+    setActiveMenuState('product_list');
   };
 
   useEffect(() => {
@@ -1348,8 +1364,16 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       if (activeMenu === 'store_region_list' && storeRegionEditorContext) {
           return (
               <WebStoreRegionEditor
-                  region={storeRegionEditorContext}
-                  onBack={() => setStoreRegionEditorContext(null)}
+                  key={storeRegionEditorContext.id}
+                  menu={storeRegionEditorContext}
+                  onDirtyChange={setStoreMenuDirty}
+                  onBack={() => { setStoreMenuDirty(false); setStoreRegionEditorContext(null); }}
+                  onSave={menu => {
+                    setStoreMenus(current => current.map(item => item.id === menu.id ? menu : item));
+                    setStoreMenuNotice(`菜单商品已保存，共 ${menu.productIds.length} 个`);
+                    setStoreMenuDirty(false);
+                    setStoreRegionEditorContext(null);
+                  }}
               />
           );
       }
@@ -1483,7 +1507,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       }
 
       if (activeMenu === 'store_region_list') {
-          return <WebStoreRegionList onEditRegion={(region) => setStoreRegionEditorContext(region)} />;
+          return <WebStoreRegionList menus={storeMenus} onMenusChange={setStoreMenus} storeId={storeMenuStoreId} onStoreChange={setStoreMenuStoreId} onEditMenu={setStoreRegionEditorContext} message={storeMenuNotice} onMessageRead={() => setStoreMenuNotice('')} />;
       }
 
       if (activeMenu === 'required_product_policy') {
@@ -1967,11 +1991,13 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
         },
         {
           key: 'store-region',
-          label: '门店区域商品',
+          label: '小程序横向菜单',
           active: activeMenu === 'store_region_list',
           onClick: () => {
+            if (!confirmLeaveStoreMenu()) return;
+            setStoreMenuDirty(false);
             setStoreRegionEditorContext(null);
-            setActiveMenu('store_region_list');
+            setActiveMenuState('store_region_list');
           },
         },
       ];
@@ -2035,7 +2061,9 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
 
   const navigateExperience = (menu: string) => {
     const targetMenu = ['product_sync', 'product_publish', 'product_batch'].includes(menu) ? 'product_sync' : menu;
-    setActiveMenu(targetMenu);
+    if (activeMenu === 'store_region_list' && !confirmLeaveStoreMenu()) return;
+    setStoreMenuDirty(false);
+    setActiveMenuState(targetMenu);
     setCreationContext(null);
     setDetailContext(null);
     setCategorySelectContext(null);

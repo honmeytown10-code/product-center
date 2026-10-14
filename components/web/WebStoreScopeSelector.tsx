@@ -20,6 +20,7 @@ type Props = {
   widthClassName?: string;
   placement?: 'above' | 'below';
   selectionMode?: 'multiple' | 'single';
+  disabled?: boolean;
 };
 
 const tabs: Array<{ id: ScopeTab; label: string; icon: React.ElementType }> = [
@@ -40,6 +41,7 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
   widthClassName = 'w-[190px]',
   placement = 'below',
   selectionMode = 'multiple',
+  disabled = false,
 }) => {
   const single = selectionMode === 'single';
   const rootRef = useRef<HTMLDivElement>(null);
@@ -103,13 +105,14 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
     <div ref={rootRef} className={`relative shrink-0 ${widthClassName}`}>
       <button
         ref={triggerRef}
+        disabled={disabled}
         type="button"
         onClick={() => open ? setOpen(false) : openSelector()}
         aria-expanded={open}
         aria-controls={open ? popupId : undefined}
         aria-label={single ? '选择要管理的门店' : undefined}
         aria-haspopup={single ? 'listbox' : undefined}
-        className={`flex h-8 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00B460] ${open ? 'border-[#00B460]' : 'border-[#C9CDD4]'}`}
+        className={`flex h-8 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00B460] disabled:cursor-not-allowed disabled:opacity-40 ${open ? 'border-[#00B460]' : 'border-[#C9CDD4]'}`}
       >
         <span className={value.length ? 'truncate text-[#1D2129]' : 'truncate text-[#98A2B3]'}>
           {value.length ? single ? stores.find(store => store.id === value[0])?.name || '请选择门店' : `已选 ${value.length} 家门店` : '请选择门店'}

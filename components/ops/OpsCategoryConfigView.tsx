@@ -9,44 +9,12 @@ import {
 } from 'lucide-react';
 import { AVAILABLE_DYNAMIC_FIELDS, FieldModule, CategoryFieldConfig, ControlType, MOCK_BRANDS, DynamicFieldConfig } from '../../types';
 import { Switch } from './OpsCommon';
+import { useProducts } from '../../context';
+import { generateInitialCategoryFields, hasCategorySceneConflict, type OpsCategoryConfig } from '../../categoryConfiguration';
 
-interface OpsCategory {
-  id: string;
-  name: string;
-  sort: number;
-  classification: 'standard' | 'combo';
-  fields: CategoryFieldConfig[];
-  productCount: number;
-  source: 'system' | 'custom';
-  applicableBrands: string[] | 'all';
-  industryDefaults: string[];
-  status: 'active' | 'disabled';
-  icon?: string;
-  selectedIcon?: string;
-  unselectedIcon?: string;
-}
-
+type OpsCategory = OpsCategoryConfig;
 const INDUSTRY_OPTIONS = ['饮品', '小吃快餐', '中式正餐', '异国料理', '火锅', '地方菜系', '烘焙甜品', '零售'];
-
-// 初始系统字段生成逻辑
-const generateInitialFields = (type: 'standard' | 'combo') => {
-    const fields: CategoryFieldConfig[] = [];
-    AVAILABLE_DYNAMIC_FIELDS.filter(f => f.isSystem && !f.id.includes('_spec_') && !f.id.includes('_method_')).forEach(f => {
-        fields.push({ id: f.id, isRequired: true });
-    });
-    if (type === 'combo') {
-        fields.push({ id: 'c_groups', isRequired: true });
-    }
-    return fields;
-};
-
-const INITIAL_OPS_CATEGORIES: OpsCategory[] = [
-  { id: 'cat_s1', name: '通用菜品', sort: 10, classification: 'standard', fields: generateInitialFields('standard'), productCount: 120, source: 'system', applicableBrands: 'all', industryDefaults: ['中式正餐', '地方菜系'], status: 'active' },
-  { id: 'cat_s2', name: '现制饮品', sort: 20, classification: 'standard', fields: [...generateInitialFields('standard'), {id: 'm_methods', isRequired: true, childConfigs: {'m_method_name': true, 'm_method_markup': true}}], productCount: 45, source: 'system', applicableBrands: 'all', industryDefaults: ['饮品'], status: 'active' },
-  { id: 'cat_s3', name: '称重商品', sort: 30, classification: 'standard', fields: generateInitialFields('standard'), productCount: 15, source: 'system', applicableBrands: 'all', industryDefaults: [], status: 'active' },
-  { id: 'cat_s4', name: '蛋糕/烘焙', sort: 40, classification: 'standard', fields: generateInitialFields('standard'), productCount: 30, source: 'system', applicableBrands: 'all', industryDefaults: ['烘焙甜品'], status: 'active' },
-  { id: 'cat_s5', name: '零售商品', sort: 50, classification: 'standard', fields: generateInitialFields('standard'), productCount: 80, source: 'system', applicableBrands: 'all', industryDefaults: ['零售'], status: 'active' },
-];
+const generateInitialFields = generateInitialCategoryFields;
 
 const productModules: { id: FieldModule; label: string; icon: React.ReactNode }[] = [
     { id: 'base', label: '基础属性', icon: null },
@@ -240,7 +208,7 @@ const SmallSwitch: React.FC<{ active: boolean; onClick: () => void }> = ({ activ
 );
 
 export const OpsCategoryConfigView: React.FC = () => {
-  const [categories, setCategories] = useState<OpsCategory[]>(INITIAL_OPS_CATEGORIES);
+  const { opsCategoryConfigs: categories, setOpsCategoryConfigs: setCategories } = useProducts();
   const [activeTab, setActiveTab] = useState<'standard' | 'combo'>('standard');
   const [selectedCategory, setSelectedCategory] = useState<OpsCategory | null>(null);
   
@@ -263,6 +231,8 @@ export const OpsCategoryConfigView: React.FC = () => {
   }, [selectedCategory]);
 
   const handleUpdateCategory = (id: string, updates: Partial<OpsCategory>) => {
+      const current = categories.find(category => category.id === id);
+      if (current && hasCategorySceneConflict({ ...current, ...updates }, categories)) { alert('所选品牌已配置盲袋专用类目，请调整适用品牌或使用场景。'); return; }
       setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
       if (selectedCategory?.id === id) {
           setSelectedCategory(prev => prev ? { ...prev, ...updates } : null);
@@ -271,7 +241,7 @@ export const OpsCategoryConfigView: React.FC = () => {
 
   const handleSaveConfig = () => {
      if (!selectedCategory) return;
-     handleUpdateCategory(selectedCategory.id, { fields: pendingFields });
+     handleUpdateCategory(selectedCategory.id, { fields: pendingFields, fieldsSaved: true });
      setIsConfigChanged(false);
      alert('字段配置已保存');
   };
@@ -401,7 +371,7 @@ export const OpsCategoryConfigView: React.FC = () => {
   }, [pendingFields]);
 
   return (
-    <div className="flex h-full overflow-hidden animate-in fade-in duration-300 relative">
+    <div data-testid="ops-category-config" className="flex h-full overflow-hidden animate-in fade-in duration-300 relative">
         {/* Sidebar */}
         <div className="w-[280px] bg-white border-r border-[#E8E8E8] flex flex-col shadow-sm shrink-0">
             <div className="p-6 border-b border-[#F5F5F5]">
@@ -416,15 +386,16 @@ export const OpsCategoryConfigView: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
                 {displayCategories.map(cat => (
-                    <div key={cat.id} className={`px-4 py-3 rounded-xl cursor-pointer transition-all flex items-center justify-between group border ${selectedCategory?.id === cat.id ? 'bg-[#F0FDF4] border-[#DCFCE7]' : 'bg-white border-transparent hover:bg-gray-50'}`}>
+                    <div key={cat.id} data-ops-category={cat.id} className={`px-4 py-3 rounded-xl cursor-pointer transition-all flex items-center justify-between group border ${selectedCategory?.id === cat.id ? 'bg-[#F0FDF4] border-[#DCFCE7]' : 'bg-white border-transparent hover:bg-gray-50'}`}>
                         <div className="flex items-center min-w-0 flex-1" onClick={() => setSelectedCategory(cat)}>
                             <Layers size={16} className={`mr-3 shrink-0 ${selectedCategory?.id === cat.id ? 'text-[#00C06B]' : 'text-gray-400'}`}/>
                             <div className="flex flex-col min-w-0">
                                 <span className={`text-[13px] font-bold truncate ${selectedCategory?.id === cat.id ? 'text-[#333]' : 'text-[#666]'}`}>{cat.name}</span>
+                                {cat.creationScene && <span className="mt-1 text-[11px] text-[#008F4C]">特殊场景 · 盲袋</span>}
                             </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                            <button onClick={(e) => { e.stopPropagation(); handleOpenEditModal(cat); }} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-gray-100 transition-all">
+                            <button aria-label={`编辑类目${cat.name}`} onClick={(e) => { e.stopPropagation(); handleOpenEditModal(cat); }} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-gray-100 transition-all">
                                 <Edit3 size={14}/>
                             </button>
                             <div onClick={(e) => e.stopPropagation()}>
@@ -455,6 +426,7 @@ export const OpsCategoryConfigView: React.FC = () => {
                             <span className="px-2 py-0.5 rounded-lg text-[10px] font-medium uppercase tracking-widest bg-[#E6F8F0] text-[#00C06B]">{selectedCategory.classification.toUpperCase()}</span>
                             <span className="text-[10px] text-gray-400 font-mono uppercase tracking-tight">ID: {selectedCategory.id}</span>
                             {selectedCategory.status === 'disabled' && <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded-lg font-bold">已禁用</span>}
+                            {selectedCategory.creationScene && <span className="text-xs text-[#008F4C]">特殊场景 · 仅盲袋入口使用</span>}
                         </div>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -482,7 +454,7 @@ export const OpsCategoryConfigView: React.FC = () => {
                                                 const hasBrands = f.applyToBrands && f.applyToBrands.length > 0;
 
                                                 return (
-                                                    <div key={f.id} onClick={() => !isSystem && !isAdded && handleAddField(f.id)} className={`px-3 py-2.5 rounded-lg border text-xs font-bold transition-all flex justify-between items-center group select-none ${isAdded || isSystem ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-default' : 'bg-white border-gray-200 hover:border-[#00C06B] hover:text-[#00C06B] hover:shadow-sm cursor-pointer text-gray-700'}`}>
+                                                    <div key={f.id} data-ops-add-field={f.id} onClick={() => !isSystem && !isAdded && handleAddField(f.id)} className={`px-3 py-2.5 rounded-lg border text-xs font-bold transition-all flex justify-between items-center group select-none ${isAdded || isSystem ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-default' : 'bg-white border-gray-200 hover:border-[#00C06B] hover:text-[#00C06B] hover:shadow-sm cursor-pointer text-gray-700'}`}>
                                                         <div className="flex items-center min-w-0">
                                                             <span className="truncate">{f.label}</span>
                                                             {isSystem && <Lock size={10} className="ml-1.5 opacity-40"/>}
@@ -518,7 +490,7 @@ export const OpsCategoryConfigView: React.FC = () => {
 
                                         <div className="grid grid-cols-1 gap-4">
                                             {moduleItems.map(({ fieldConfig, fieldDef }) => (
-                                                <div key={fieldDef.id} className={`bg-white rounded-2xl border-2 transition-all overflow-hidden ${fieldDef.isSystem ? 'border-gray-100 opacity-90' : 'border-white shadow-sm hover:shadow-md hover:border-[#00C06B]/30'}`}>
+                                                <div key={fieldDef.id} data-ops-field={fieldDef.id} className={`bg-white rounded-2xl border-2 transition-all overflow-hidden ${fieldDef.isSystem ? 'border-gray-100 opacity-90' : 'border-white shadow-sm hover:shadow-md hover:border-[#00C06B]/30'}`}>
                                                     {/* Card Header/Body Unified */}
                                                     <div className="p-5 flex items-center justify-between">
                                                         <div className="flex items-center">
@@ -564,7 +536,7 @@ export const OpsCategoryConfigView: React.FC = () => {
                                                                     <span className={`text-xs font-bold ${fieldConfig.isRequired ? 'text-[#00C06B]' : 'text-gray-400'}`}>必填</span>
                                                                 </label>
                                                             )}
-                                                            {!fieldDef.isSystem && <button onClick={() => handleRemoveField(fieldDef.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>}
+                                                            {!fieldDef.isSystem && <button aria-label={`移除字段${fieldDef.label}`} onClick={() => handleRemoveField(fieldDef.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>}
                                                         </div>
                                                     </div>
 
@@ -683,10 +655,11 @@ const CategoryFormModal = ({
     const handleIndustryChange = (ids: string[]) => {
         setFormData(prev => ({ ...prev, industryDefaults: ids }));
     };
+    const duplicateScene = hasCategorySceneConflict(formData, existingCategories);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1F2129]/60 backdrop-blur-md animate-in fade-in duration-200">
-            <div className="bg-white rounded-[32px] shadow-2xl w-[600px] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 overflow-visible">
+            <div role="dialog" aria-label={data.id ? '编辑类目' : '新建类目'} data-testid="ops-category-modal" className="bg-white rounded-lg shadow-2xl w-[600px] max-h-[calc(100vh-48px)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center">
                     <div>
                         <h3 className="text-xl font-black text-[#1F2129]">{data.id ? '编辑类目' : '新建类目'}</h3>
@@ -695,7 +668,7 @@ const CategoryFormModal = ({
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={20}/></button>
                 </div>
                 
-                <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh] overflow-visible">
+                <div className="min-h-0 p-8 space-y-6 overflow-y-auto no-scrollbar">
                     <div className="space-y-4">
                         <label className="text-[13px] font-black text-gray-700">类目名称 <span className="text-red-500">*</span></label>
                         <input 
@@ -705,6 +678,17 @@ const CategoryFormModal = ({
                             placeholder="请输入类目名称"
                         />
                     </div>
+
+                    <fieldset className="space-y-3">
+                        <legend className="mb-3 text-[13px] font-bold text-gray-700">使用场景</legend>
+                        <div className="flex gap-6 text-sm text-[#4E5969]">
+                            <label className="flex items-center gap-2"><input type="radio" name="category-creation-scene" checked={!formData.creationScene} onChange={() => setFormData(prev => ({ ...prev, creationScene: undefined }))} className="accent-[#00B460]" />普通商品创建</label>
+                            <label className="flex items-center gap-2"><input type="radio" name="category-creation-scene" checked={!!formData.creationScene} disabled={formData.classification !== 'standard'} onChange={() => setFormData(prev => ({ ...prev, creationScene: 'blind_bag', industryDefaults: [] }))} className="accent-[#00B460]" />特殊场景使用</label>
+                        </div>
+                        {formData.creationScene && <div><label htmlFor="ops-category-scene" className="mb-2 block text-xs text-[#667085]">适用场景</label><select id="ops-category-scene" value={formData.creationScene} onChange={() => setFormData(prev => ({ ...prev, creationScene: 'blind_bag' }))} className="h-9 w-full rounded-md border border-[#D9DDE3] bg-white px-3 text-sm"><option value="blind_bag">盲袋商品</option></select></div>}
+                        <p className="text-xs leading-5 text-[#667085]">{formData.creationScene ? '仅在盲袋商品入口创建时自动使用；普通商品创建及类目切换不展示此类目。字段配置继续使用当前类目配置。' : '商家在商品库创建商品时可选择此类目。'}</p>
+                        {duplicateScene && <p role="alert" className="text-xs text-[#B42318]">所选品牌已配置盲袋专用类目，请调整适用品牌或使用场景。</p>}
+                    </fieldset>
 
                     <div className="space-y-4">
                         <label className="text-[13px] font-black text-gray-700">排序</label>
@@ -761,7 +745,7 @@ const CategoryFormModal = ({
                         )}
                     </div>
 
-                    <div className="space-y-4">
+                    {!formData.creationScene && <div className="space-y-4">
                         <label className="text-[13px] font-black text-gray-700 flex items-center justify-between">
                             <span>关联行业</span>
                             <span className="text-[10px] text-gray-400 font-normal bg-gray-50 px-2 py-0.5 rounded">关联后对应行业下的商家创建商品时默认选择该类目</span>
@@ -773,7 +757,7 @@ const CategoryFormModal = ({
                             placeholder="请选择关联行业"
                             disabledOptions={disabledIndustries}
                         />
-                    </div>
+                    </div>}
                 </div>
 
                 <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
@@ -784,7 +768,7 @@ const CategoryFormModal = ({
                             // Keep the legacy field aligned so existing previews continue to work.
                             icon: formData.selectedIcon || formData.unselectedIcon || ''
                         })}
-                        disabled={!formData.name}
+                        disabled={!formData.name.trim() || !!duplicateScene || (brandsMode === 'specific' && formData.applicableBrands.length === 0)}
                         className={`px-8 py-3 rounded-xl text-xs font-black text-white shadow-lg transition-all active:scale-95 ${formData.name ? 'bg-[#1F2129] hover:bg-black' : 'bg-gray-300 cursor-not-allowed'}`}
                     >
                         保存配置

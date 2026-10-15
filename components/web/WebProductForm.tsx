@@ -1,6 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { clearProductFormRecovery } from './productFormRecovery';
+import { BLIND_BAG_PUBLISH_CHANNEL_IDS, BLIND_BAG_PUBLISH_FIELDS, normalizeBlindBagDraft } from '../../blindBag';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Pencil, Settings, Printer, 
   CupSoda, ShoppingBag, Store, Check, Plus, ImageIcon, ChevronRight, Clock3, Eye, EyeOff,
@@ -25,7 +26,7 @@ import { WebCategorySupplementFields } from './WebCategorySupplementFields';
 import { useCustomAttributeDefinitions } from './customAttributeDefinitions';
 import { WebProductCustomFields } from './WebProductCustomFields';
 
-type ProductSaveDraft = {
+export type ProductSaveDraft = {
     id: string;
     createdTime?: string;
     name: string;
@@ -34,13 +35,16 @@ type ProductSaveDraft = {
     image: string;
     skuCode: string;
     type: 'standard' | 'combo';
+    businessType?: 'buffet_ticket' | 'blind_bag';
+    status?: 'draft' | 'on_shelf' | 'off_shelf';
+    stockStatus?: 'available' | 'sold_out';
     formData?: Record<string, any>;
 };
 
 export type ProductSaveOptions = { intent: 'draft' | 'save' | 'publish'; overwriteFields?: string[]; publishScope?: ProductSalesScope; withdrawnChannelIds?: OmnichannelChannelId[]; withdrawalAction?: 'keep' | 'off_shelf' };
 const SAVE_PUBLISH_FIELDS = DEFAULT_PUBLISH_OVERWRITE_FIELDS;
 
-interface WebProductFormProps {
+export interface WebProductFormProps {
     type: 'standard' | 'combo';
     category: Category;
     categories: Category[];
@@ -63,6 +67,7 @@ interface WebProductFormProps {
     formScope?: 'master' | 'channel' | 'unified' | 'store';
     unifiedManagementView?: boolean;
     groupMealContext?: boolean;
+    blindBagContext?: boolean;
     storeAdditionFlow?: boolean;
     initialSection?: 'sales-scope' | 'third_party';
     initialPublishStoreIds?: string[];
@@ -653,14 +658,14 @@ type TaxCategoryOption = {
     rate: string;
     remark: string;
 };
-const TAX_CATEGORY_OPTIONS: TaxCategoryOption[] = [
+export const TAX_CATEGORY_OPTIONS: TaxCategoryOption[] = [
     { code: '1010101080000000000', name: '黑麦', rate: '1%', remark: '谷物及其制品' },
     { code: '1010101060000000000', name: '大麦', rate: '3%', remark: '谷物及其制品' },
     { code: '1010115013200000000', name: '石榴', rate: '13%', remark: '水果及坚果' },
     { code: '1030201010000000000', name: '饮料', rate: '6%', remark: '非酒精饮料' },
     { code: '3070401000000000000', name: '餐饮服务', rate: '13%', remark: '' },
 ];
-const DEFAULT_FRONT_CATEGORY_TREE: CategoryTreeNode[] = [
+export const DEFAULT_FRONT_CATEGORY_TREE: CategoryTreeNode[] = [
     {
         id: 'front-cat-1',
         name: '热销推荐',
@@ -694,7 +699,7 @@ const DEFAULT_FRONT_CATEGORY_TREE: CategoryTreeNode[] = [
         ],
     },
 ];
-const DEFAULT_BACK_CATEGORY_TREE: CategoryTreeNode[] = [
+export const DEFAULT_BACK_CATEGORY_TREE: CategoryTreeNode[] = [
     {
         id: 'back-cat-1',
         name: '常规商品',
@@ -1034,6 +1039,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     formScope = 'store',
     unifiedManagementView = false,
     groupMealContext = false,
+    blindBagContext = false,
     storeAdditionFlow = false,
     initialSection,
     onOpenStoreProducts,
@@ -1056,6 +1062,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const isStoreForm = formScope === 'store';
     const canConfigureAttributeSort = isChannelForm || (isUnifiedForm && unifiedManagementView);
     const [savedProductId, setSavedProductId] = useState(() => String(initialProduct?.id || `product-${Date.now()}`));
+    const blindBagSkuId = useRef(String(initialProduct?.skuCode || `BB-${crypto.randomUUID()}`));
     const [salesScope, setSalesScope] = useState<ProductSalesScope>(() => ({
         channelIds: Array.isArray(initialProduct?.formData?.salesScope?.channelIds) ? initialProduct.formData.salesScope.channelIds : initialProduct?.formData?.applicableChannelIds || [],
         storeIds: [],
@@ -1063,6 +1070,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [applicableChannelIds, setApplicableChannelIds] = useState<OmnichannelChannelId[]>(() =>
         Array.isArray(initialProduct?.formData?.applicableChannelIds) ? initialProduct.formData.applicableChannelIds : []
     );
+    const publishChannelIds = blindBagContext ? salesScope.channelIds.filter(id => BLIND_BAG_PUBLISH_CHANNEL_IDS.includes(id)) : salesScope.channelIds;
     const [channelSpecificValues, setChannelSpecificValues] = useState<Record<string, Record<string, string | boolean | string[]>>>(() =>
         initialProduct?.formData?.channelSpecificValues || {}
     );
@@ -1077,7 +1085,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const publishQueryGeneration = useRef(0);
     useEffect(() => () => { publishQueryGeneration.current += 1; }, []);
     const publishSubmitLock = useRef(false);
-    const [publishFields, setPublishFields] = useState<string[]>(SAVE_PUBLISH_FIELDS);
+    const [publishFields, setPublishFields] = useState<string[]>(blindBagContext ? BLIND_BAG_PUBLISH_FIELDS.filter(field => field !== '库存') : SAVE_PUBLISH_FIELDS);
+    const [blindBagSaveError, setBlindBagSaveError] = useState('');
     const [publishScope, setPublishScope] = useState<ProductSalesScope>({ channelIds: [], storeIds: [] });
     const [savedPublishScope, setSavedPublishScope] = useState<ProductSalesScope>({ channelIds: [], storeIds: [] });
     const [withdrawalAction, setWithdrawalAction] = useState<'keep' | 'off_shelf'>('keep');
@@ -1125,7 +1134,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const removedSalesTargets = existingProductStores.flatMap(record => record.channels.filter(id => removedChannelIds.includes(fromStoreChannel(id))).map(id => ({ ...record, channelId: fromStoreChannel(id) })));
     const beginPublish = async () => {
         const generation = ++publishQueryGeneration.current;
-        const channels = [...salesScope.channelIds];
+        const channels = [...publishChannelIds];
         setPublishScope({ channelIds: channels, storeIds: [...initialPublishStoreIds] });
         setSellingStoreCount(0);
         setConfirmPublish(true);
@@ -1481,6 +1490,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const currentFieldConfigs = useMemo(() => {
+        if (currentCategory.creationScene) return currentCategory.standardFields.filter(field => field.displayMode !== 'hidden');
         const rawConfigs = isComboProduct ? currentCategory.comboFields : currentCategory.standardFields;
         const sourceConfigs = isComboProduct && rawConfigs.length === 0 ? COMBO_FALLBACK_FIELDS : rawConfigs;
         const categoryUnavailableFieldIds = new Set<string>(
@@ -1533,7 +1543,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             if (!configMap.has(field.id)) configMap.set(field.id, { id: field.id, isRequired: false, displayMode: 'collapsed' });
         }
         return Array.from(configMap.values());
-    }, [currentCategory, isWeightCategory, isChannelForm, isComboProduct, isMasterForm, isUnifiedForm]);
+    }, [currentCategory, isWeightCategory, isChannelForm, isComboProduct, isMasterForm, isUnifiedForm, blindBagContext]);
     const currentCategoryFieldIds = useMemo(() => currentFieldConfigs.map(field => field.id), [currentFieldConfigs]);
     const currentCategoryFieldIdSet = useMemo(() => new Set(currentCategoryFieldIds), [currentCategoryFieldIds]);
     const currentFieldConfigMap = useMemo(() => new Map(currentFieldConfigs.map(field => [field.id, field])), [currentFieldConfigs]);
@@ -1937,7 +1947,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         : '';
     const takeoutFormState = { specDisplayMode, selectedSpecValuesByGroup, specConfigRows, methodConfigRows, addonConfigRows, comboGroupCards, addonScope, addonTotalRule, addonGroupRules, prepEnabled, prepScope, splitByStockState, uniformPrepRule, uniformStockRules, specPrepRules, attrPanelOrder, attrDefaultSelections, attrGroupSortEnabled, attrRecommendedSelections };
     const recoverySnapshot = JSON.stringify({ version: 1, categoryId: currentCategory.id, product: {
-        id: savedProductId, name: isUnifiedForm ? masterProductName : String(dynamicFormData.p_name || ''),
+        id: savedProductId, ...(blindBagContext ? { skuCode: blindBagSkuId.current } : {}), name: isUnifiedForm ? masterProductName : String(dynamicFormData.p_name || ''),
         price: Number(visibleSpecRows[0]?.s_spec_price || dynamicFormData.s_price || 0), image: String(dynamicFormData.p_img || ''),
         formData: { ...dynamicFormData, p_weight_flag: isWeightCategory, takeoutFormState, channelSpecificValues, salesScope: { channelIds: salesScope.channelIds }, applicableChannelIds },
     }});
@@ -1963,7 +1973,21 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         document.addEventListener('visibilitychange', onExit);
         return () => { window.removeEventListener('pagehide', onExit); document.removeEventListener('visibilitychange', onExit); persistRecovery(); };
     }, [recoveryKey, mode, isStoreForm, pageView]);
-    const closeForm = () => { recoveryDiscarded.current = true; clearProductFormRecovery(recoveryKey); onClose(); };
+    const closeForm = () => {
+        if (blindBagContext && latestRecovery.current !== recoveryBaseline.current && !window.confirm('盲袋商品有未保存的修改，确定放弃修改并离开吗？')) return;
+        recoveryDiscarded.current = true; clearProductFormRecovery(recoveryKey); onClose();
+    };
+    useEffect(() => {
+        if (!blindBagContext) return;
+        const guard = (event: MouseEvent) => {
+            if ((event.target as HTMLElement).closest('.console-sidebar button') && latestRecovery.current !== recoveryBaseline.current && !window.confirm('盲袋商品有未保存的修改，确定放弃修改并离开吗？')) {
+                event.preventDefault(); event.stopPropagation();
+            }
+        };
+        const unload = (event: BeforeUnloadEvent) => { if (latestRecovery.current !== recoveryBaseline.current) { event.preventDefault(); event.returnValue = ''; } };
+        document.addEventListener('click', guard, true); window.addEventListener('beforeunload', unload);
+        return () => { document.removeEventListener('click', guard, true); window.removeEventListener('beforeunload', unload); };
+    }, [blindBagContext]);
     const productImages = useMemo<string[]>(() => {
         const gallery = Array.isArray(dynamicFormData.p_img_gallery)
             ? dynamicFormData.p_img_gallery.filter((item: unknown): item is string => typeof item === 'string' && item.trim() !== '')
@@ -2256,7 +2280,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
     const firstVisibleSection = visibleSectionOrder[0] || 'basic';
     const isWeightProduct = isWeightCategory;
-    const isSingleSpecOnly = isWeightProduct || isBuffetTicketCategory;
+    const isSingleSpecOnly = isWeightProduct || isBuffetTicketCategory || blindBagContext;
 
     useEffect(() => {
         if (visibleSectionOrder.length === 0) return;
@@ -2303,6 +2327,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 p_applicable_people: String(Math.max(1, Math.floor(Number(prev.p_applicable_people) || 1))),
                 p_deposit_required: !!prev.p_deposit_required,
             }));
+        } else if (blindBagContext) {
+            setDynamicFormData(prev => prev.p_business_type === 'blind_bag' ? prev : { ...prev, p_business_type: 'blind_bag' });
         } else {
             setDynamicFormData(prev => {
                 if (!prev.p_business_type) return prev;
@@ -2311,7 +2337,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 return next;
             });
         }
-    }, [isBuffetTicketCategory, isSingleSpecOnly, specDisplayMode]);
+    }, [isBuffetTicketCategory, isSingleSpecOnly, specDisplayMode, blindBagContext]);
 
     useEffect(() => {
         if (specDisplayMode === 'single') {
@@ -2632,7 +2658,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 },
             }
             : dynamicFormData;
-        const savedProduct: ProductSaveDraft = {
+        let savedProduct: ProductSaveDraft = {
             id: savedProductId,
             createdTime,
             name: String(
@@ -2651,12 +2677,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     ? (dynamicFormData.p_img || '')
                     : (dynamicFormData.p_img || initialProduct?.image || 'https://images.unsplash.com/photo-1547592180-85f173990554?w=200&h=200&fit=crop')
             ),
-            skuCode: String(initialProduct?.skuCode || `${Date.now()}`.slice(-8)),
+            skuCode: blindBagContext ? blindBagSkuId.current : String(initialProduct?.skuCode || `${Date.now()}`.slice(-8)),
             type,
             formData: {
                 ...inheritedChannelFormData,
                 ...(groupMealContext ? { p_display_type: [...new Set([...(dynamicFormData.p_display_type || []), 'group_meal'])], s_sale_mode: (dynamicFormData.p_display_type || []).includes('group_meal_only') ? '仅团餐业务售卖' : '正常售卖' } : {}),
                 p_weight_flag: isWeightCategory, prototypeCategoryId: currentCategory.id,
+                ...(blindBagContext ? { p_business_type: 'blind_bag', p_cat: currentCategory.name } : {}),
                 channelSpecificValues: savedChannelFields, takeoutSnapshot, takeoutFormState,
                 ...((isChannelForm || isUnifiedForm) && activeThirdPartyChannelAttributeIds.length > 0 ? {
                     salesChannelIds: selectedSalesChannelIds,
@@ -2669,7 +2696,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             },
         };
         setSavedWithdrawal(options.intent !== 'draft' && withdrawalAction === 'off_shelf' && removedSalesTargets.length > 0);
-        onProductSaved?.(savedProduct, nextSuccessMode, { ...options, ...(options.intent !== 'draft' && removedChannelIds.length ? { withdrawnChannelIds: removedChannelIds, withdrawalAction } : {}) });
+        try {
+            if (blindBagContext) savedProduct = normalizeBlindBagDraft(savedProduct, options.intent, initialProduct, currentCategory.standardFields);
+            onProductSaved?.(savedProduct, nextSuccessMode, { ...options, ...(options.intent !== 'draft' && removedChannelIds.length ? { withdrawnChannelIds: removedChannelIds, withdrawalAction } : {}) });
+            setBlindBagSaveError('');
+        } catch (error) {
+            if (!blindBagContext) throw error;
+            setBlindBagSaveError(error instanceof Error ? error.message : '保存失败，请重试；当前输入仍保留。');
+            return false;
+        }
         recoveryBaseline.current = latestRecovery.current;
         clearProductFormRecovery(recoveryKey);
         setSavedIntent(options.intent);
@@ -2680,6 +2715,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         setHasSavedProduct(true);
         if (showSuccessPage) setPageView('success');
         setSelectedSuccessAction(null);
+        return true;
     };
 
     const handleSave = (intent: ProductSaveOptions['intent'] = 'save') => {
@@ -2740,8 +2776,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         if (selectedStoreChannelIds.length === 0) return;
         setStoreSaveStage('saving');
         window.setTimeout(() => {
-            commitProductSave(false);
-            setStoreSaveStage('result');
+            if (commitProductSave(false) !== false) setStoreSaveStage('result');
+            else setStoreSaveStage('confirm');
         }, 900);
     };
 
@@ -2751,7 +2787,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const handleSaveDraft = () => {
-        commitProductSave(false, { intent: 'draft' });
+        if (commitProductSave(false, { intent: 'draft' }) === false) return;
         setDraftSaved(true);
         setSaveAttempted(false);
     };
@@ -2802,12 +2838,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const handleContinueCreate = () => {
         recoveryDiscarded.current = false;
         clearProductFormRecovery(recoveryKey);
-        setSavedProductId(`product-${Date.now()}`);
+        setSavedProductId(blindBagContext ? `blind-bag-${crypto.randomUUID()}` : `product-${Date.now()}`);
+        if (blindBagContext) blindBagSkuId.current = `BB-${crypto.randomUUID()}`;
         setSalesScope({ channelIds: [], storeIds: [] });
         setPreviousSalesScope({ channelIds: [], storeIds: [] });
         setSaveIntent('save');
         setSavedIntent('save');
-        setPublishFields(SAVE_PUBLISH_FIELDS);
+        setPublishFields(blindBagContext ? BLIND_BAG_PUBLISH_FIELDS.filter(field => field !== '库存') : SAVE_PUBLISH_FIELDS);
         setDynamicFormData({
             p_weight_flag: category.id === 'w_cat_s3',
             p_business_type: category.businessType || '',
@@ -5372,7 +5409,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                     key: '参与会员折扣',
                                                     desc: '开启后，指定商品在下单时可参与会员卡折扣优惠'
                                                 }
-                                            ].map(item => {
+                                            ].filter(item => !blindBagContext || item.key === '参与会员折扣').map(item => {
                                                 const active = !!saleSettings[item.key];
                                                 return (
                                                     <label key={item.key} className="flex items-start gap-3 cursor-pointer">
@@ -6400,7 +6437,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                         自定义库存
                                                     </label>
                                                 </div></div></div>}
-                {showSpecStock && <div role="group" aria-labelledby="single-spec-field-8" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-8" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('初始库存', undefined)}</div><div className="min-w-0 max-w-[460px]">{row.s_spec_inventory_mode === 'custom' ? (
+                {showSpecStock && !blindBagContext && <div role="group" aria-labelledby="single-spec-field-8" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-8" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('初始库存', undefined)}</div><div className="min-w-0 max-w-[460px]">{row.s_spec_inventory_mode === 'custom' ? (
                                                     <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                                                         <div>
                                                             <div className="mb-1 text-[11px] font-bold text-gray-400">库存值</div>
@@ -6423,6 +6460,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 ) : (
                                                     <div className="rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] px-4 py-3 text-sm text-gray-400">不限库存时无需设置库存值</div>
                                                 )}</div></div>}
+                {blindBagContext && showSpecStock && <div role="group" aria-labelledby="blind-bag-initial-stock" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="blind-bag-initial-stock" className="pt-2 text-sm text-[#4E5969]">初始库存（袋）</div><div className="max-w-[460px]">{row.s_spec_inventory_mode === 'custom' ? <input aria-label="盲袋初始库存" type="number" min="0" step="1" value={row.s_spec_initial_stock} onChange={event => updateSpecConfigRow(row.id, 's_spec_initial_stock', event.target.value)} className="q-form-input h-10" placeholder="请输入非负整数" /> : <p className="pt-2 text-sm text-[#667085]">不限库存</p>}<p className="mt-2 text-xs text-[#86909C]">按袋计数，门店库存以门店当前经营数据为准。</p></div></div>}
                 {showSpecPlanStock && <div role="group" aria-labelledby="single-spec-field-9" className="grid grid-cols-[160px_minmax(0,1fr)] items-start gap-5 py-3"><div id="single-spec-field-9" className="pt-2 text-sm text-[#4E5969]">{renderColumnHeader('是否管理计划库存')}</div><div className="min-w-0 max-w-[460px]"><Switch
                                                     active={row.s_spec_manage_plan_stock}
                                                     label={`${row.s_spec_name}计划库存`}
@@ -6491,7 +6529,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                             {[
                                 { key: 'single' as const, label: '单规格' },
                                 { key: 'multi' as const, label: '多规格' },
-                            ].map(option => (
+                            ].filter(option => !blindBagContext || option.key === 'single').map(option => (
                                 <label
                                     key={option.key}
                                     className={`flex items-center gap-2 text-sm ${(isChannelForm || (isSingleSpecOnly && option.key === 'multi')) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
@@ -6538,7 +6576,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {isChannelForm ? (
                             <div className="text-xs text-gray-400">规格身份与结构继承商品主档，不可在渠道商品库修改</div>
                         ) : isSingleSpecOnly && (
-                            <div className="text-xs font-bold text-amber-600">{isBuffetTicketCategory ? '自助餐标仅支持单规格' : '称重商品不支持多规格，已自动切换为单规格'}</div>
+                            <div className={blindBagContext ? 'text-xs text-[#86909C]' : 'text-xs font-bold text-amber-600'}>{blindBagContext ? '盲袋按袋售卖，仅支持单规格' : isBuffetTicketCategory ? '自助餐标仅支持单规格' : '称重商品不支持多规格，已自动切换为单规格'}</div>
                         )}
                     </div>
                 </div>
@@ -9935,7 +9973,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         <div className="flex items-center gap-3">
                             <h3 className="truncate text-[18px] font-bold text-[#1F2129]">
                                 {pageView === 'form' && (
-                                    isChannelForm
+                                    blindBagContext ? `${hasSavedProduct ? '编辑' : '新建'}${isStoreForm ? '门店' : ''}盲袋商品` : isChannelForm
                                         ? `编辑渠道${isComboProduct ? '套餐商品' : '商品'}`
                                         : isUnifiedForm
                                             ? `${hasSavedProduct ? '编辑' : '新建'}${isComboProduct ? '套餐商品' : hasSavedProduct ? '商品' : '单品'}${unifiedManagementView ? '' : '（主档 + 渠道商品）'}`
@@ -9951,7 +9989,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 {pageView === 'detail' && '商品详情'}
                                 {pageView === 'templateHistory' && '模板批量操作历史'}
                             </h3>
-                            {pageView === 'form' && !isChannelForm && !isStoreForm && (
+                            {pageView === 'form' && !isChannelForm && !isStoreForm && currentCategory.creationScene && <span className="inline-flex items-center rounded-md border border-[#B7E7CB] bg-[#EAF9F1] px-3 py-1 font-medium text-[#00A35B]" data-testid="fixed-scene-category">商品类目：{currentCategory.name}</span>}
+                            {pageView === 'form' && !isChannelForm && !isStoreForm && !currentCategory.creationScene && (
                                 <button
                                     type="button"
                                     onClick={() => setShowCategoryPickerModal(true)}
@@ -9993,6 +10032,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 </div>
             </div>
 
+            {blindBagSaveError && <div role="alert" className="shrink-0 bg-[#FFF4F2] px-5 py-3 text-sm text-[#B42318]">{blindBagSaveError}</div>}
             {pageView === 'form' && (recovered || recoveryStorageFailed) && <div role="status" className="shrink-0 bg-[#F1FBF6] px-5 py-2 text-xs text-[#087443]">{recoveryStorageFailed ? '浏览器暂时无法缓存表单，请使用“保存为草稿”保留已填资料。' : '已恢复上次意外退出时填写的资料。手动取消或返回将清除缓存，不影响已保存的草稿。'}</div>}
             <div className="relative flex-1 flex overflow-hidden min-w-0">
                 {pageView === 'form' && !isMasterForm && isPreviewPanelOpen && (
@@ -10026,7 +10066,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                     <div className={`w-full min-w-0 mx-auto pt-3 pb-12 ${compactFormMode ? 'max-w-[1480px] space-y-1.5' : 'max-w-[1240px] space-y-2'}`}>
                         {draftSaved && pageView === 'form' && <div role="status" className="rounded-md border border-[#C9EFD8] bg-[#F2FCF6] px-4 py-2 text-sm text-[#087443]">草稿已保存，未下发门店；可继续完善商品资料。</div>}
                         {pageView === 'success' ? (
-                            isUnifiedForm && unifiedManagementView ? <WebProductSaveResult
+                            isUnifiedForm && unifiedManagementView ? <WebProductSaveResult allowTemplate={!blindBagContext}
                                 productName={savedProductForChannelAction?.name || masterProductName}
                                 mode={successMode}
                                 intent={savedIntent}
@@ -10791,15 +10831,16 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 <div ref={publishDialogRef} role="dialog" aria-modal="true" aria-labelledby="save-publish-title" className="flex max-h-[85vh] w-full max-w-[680px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
                     <header className="border-b border-[#E5E6EB] px-6 py-4"><h3 id="save-publish-title" className="text-base font-semibold text-[#1D2129]">确认保存并下发</h3></header>
                     <div className="overflow-y-auto px-6 py-4 text-sm text-[#4E5969]">
-                        <fieldset disabled={publishSubmitting || publishStoreQuery === 'loading'}><WebProductSalesScope value={{ ...publishScope, channelIds: salesScope.channelIds }} channels={salesScope.channelIds} onChange={value => setPublishScope({ ...value, channelIds: [...salesScope.channelIds] })} showErrors={false} showStores requireStores compact readOnlyChannels /></fieldset>
+                        <fieldset disabled={publishSubmitting || publishStoreQuery === 'loading'}><WebProductSalesScope value={{ ...publishScope, channelIds: publishChannelIds }} channels={publishChannelIds} onChange={value => setPublishScope({ ...value, channelIds: [...publishChannelIds] })} showErrors={false} showStores requireStores compact readOnlyChannels /></fieldset>
+                        {blindBagContext && !publishChannelIds.length && <p role="alert" className="mt-3 text-sm text-[#B42318]">盲袋暂仅支持下发小程序堂食，请先在销售范围中勾选小程序堂食。</p>}
                         {publishStoreQuery === 'loading' && <p role="status" className="mt-3 flex items-center gap-2 text-xs text-[#667085]"><LoaderCircle size={14} className="animate-spin" />正在查询商品在售门店…</p>}
                         {publishStoreQuery === 'success' && <p role="status" className="mt-3 text-xs text-[#667085]">{sellingStoreCount ? `已回显当前在售的 ${sellingStoreCount} 家门店，可调整本次下发范围。` : '当前所选渠道暂无在售门店，请选择本次下发门店。'}</p>}
                         {publishStoreQuery === 'error' && <p role="alert" className="mt-3 text-xs text-[#CB2634]">在售门店查询失败，未自动选择任何门店。<button type="button" onClick={beginPublish} className="ml-2 text-[#008F4C] underline">重新查询</button></p>}
-                        <div className="mt-5 border-t border-[#E5E6EB] pt-4"><WebProductPublishRules value={publishFields} onChange={setPublishFields} disabled={publishSubmitting} /></div>
-                        <WebStoreConnectionPrecheck storeIds={publishScope.storeIds} channelIds={salesScope.channelIds.filter(id => !isThirdPartyChannelId(id) || thirdPartyManagementModes[id] === 'qimai')} />
+                        <div className="mt-5 border-t border-[#E5E6EB] pt-4"><WebProductPublishRules value={publishFields} onChange={setPublishFields} disabled={publishSubmitting} allowedFields={blindBagContext ? BLIND_BAG_PUBLISH_FIELDS : undefined} /></div>
+                        <WebStoreConnectionPrecheck storeIds={publishScope.storeIds} channelIds={publishChannelIds.filter(id => !isThirdPartyChannelId(id) || thirdPartyManagementModes[id] === 'qimai')} />
                         {publishScope.channelIds.some(id => (id === 'douyin' || id === 'meituan_dine') && thirdPartyManagementModes[id] === 'qimai') && <p className="mt-4 text-xs leading-5 text-[#667085]">在线点需先完成品牌商品同步；抖音审核通过后继续下发，请耐心等候。</p>}
                     </div>
-                    <footer className="flex justify-end gap-3 border-t border-[#E5E6EB] px-6 py-4"><button type="button" disabled={publishSubmitting} onClick={() => { publishQueryGeneration.current += 1; setConfirmPublish(false); }} className="rounded-md border border-[#DDE3EA] px-4 py-2 text-sm text-[#4E5969] disabled:opacity-50">取消</button><button type="button" disabled={publishSubmitting || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !salesScope.channelIds.length} onClick={() => { if (publishSubmitLock.current || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !salesScope.channelIds.length) return; publishSubmitLock.current = true; setPublishSubmitting(true); try { commitProductSave(true, { intent: 'publish', overwriteFields: publishFields, publishScope: { ...publishScope, channelIds: [...salesScope.channelIds] } }); setConfirmPublish(false); } finally { setPublishSubmitting(false); publishSubmitLock.current = false; } }} className="rounded-md bg-[#00B460] px-4 py-2 text-sm font-semibold text-white hover:bg-[#009F55] disabled:opacity-50">{publishSubmitting ? '提交中…' : '保存并下发'}</button></footer>
+                    <footer className="flex justify-end gap-3 border-t border-[#E5E6EB] px-6 py-4"><button type="button" disabled={publishSubmitting} onClick={() => { publishQueryGeneration.current += 1; setConfirmPublish(false); }} className="rounded-md border border-[#DDE3EA] px-4 py-2 text-sm text-[#4E5969] disabled:opacity-50">取消</button><button type="button" disabled={publishSubmitting || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length} onClick={() => { if (publishSubmitLock.current || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length) return; publishSubmitLock.current = true; setPublishSubmitting(true); try { commitProductSave(true, { intent: 'publish', overwriteFields: publishFields, publishScope: { ...publishScope, channelIds: [...publishChannelIds] } }); setConfirmPublish(false); } finally { setPublishSubmitting(false); publishSubmitLock.current = false; } }} className="rounded-md bg-[#00B460] px-4 py-2 text-sm font-semibold text-white hover:bg-[#009F55] disabled:opacity-50">{publishSubmitting ? '提交中…' : '保存并下发'}</button></footer>
                 </div>
             </div>}
             <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; } .q-form-input:disabled, .q-form-select:disabled, fieldset:disabled .q-form-input, fieldset:disabled .q-form-select { cursor: not-allowed; border-color: #E5E7EB; color: #6B7280; background-color: #F5F6F7; }`}</style>

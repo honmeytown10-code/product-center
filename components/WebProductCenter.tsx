@@ -25,6 +25,7 @@ export const WebProductCenter: React.FC = () => {
       { id: 'product_list', label: unified ? '商品库' : '商品主档', matches: unified ? ['platform_douyin', 'platform_douyin_addons', 'platform_meituan'] : [] },
       { id: 'product_attributes', label: '分类与属性', matches: ['categories', 'category_management'] },
       { id: 'group_meal_products', label: '团餐商品' },
+      { id: 'blind_bag_products', label: '盲袋商品' },
       { id: 'recipe_new', label: '配方与营养', matches: ['ingredient_library', 'recipe_default', 'recipe_legacy', 'nutrition_manager', 'addon_group'] },
     ] },
     { title: '商品运营', items: [

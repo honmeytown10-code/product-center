@@ -54,6 +54,11 @@ import { WebProductTemplateManager, INITIAL_RECORDS as PRODUCT_TEMPLATE_RECORDS 
 import { WebSalesScopeManager } from './web/WebSalesScopeManager';
 import { WebBuffetMenuManager } from './web/WebBuffetMenuManager';
 import { WebGroupMealProducts } from './web/WebGroupMealProducts';
+import { WebBlindBagProducts } from './web/WebBlindBagProducts';
+import { WebBlindBagProductForm } from './web/WebBlindBagProductForm';
+import { WebBlindBagProductDetail } from './web/WebBlindBagProductDetail';
+import { BLIND_BAG_PUBLISH_CHANNEL_IDS, blindBagChannels, blindBagStructureError, blindBagPublishError, isBlindBagProduct } from '../blindBag';
+import { BLIND_BAG_CATEGORY_ID, resolveWebCategoryConfigs, isOrdinaryCreationCategory } from '../categoryConfiguration';
 import { productFormRecoveryKey, readProductFormRecovery } from './web/productFormRecovery';
 import { WebProductLogPage } from './web/WebProductLogPage';
 import { WebCommonFieldSettings } from './web/WebCommonFieldSettings';
@@ -443,7 +448,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
     document.body.classList.add('console-pc-active');
     return () => document.body.classList.remove('console-pc-active');
   }, []);
-  const { products, brandConfigs, activeBrandId, addProduct, updateProduct, deleteProduct } = useProducts();
+  const { products, brandConfigs, activeBrandId, opsCategoryConfigs, addProduct, updateProduct, deleteProduct } = useProducts();
   const currentProductsRef = useRef(products);
   currentProductsRef.current = products;
   const omnichannelConfig = useMemo(
@@ -478,7 +483,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   const [productSyncInitialTab, setProductSyncInitialTab] = useState<'publish' | 'qimai-records' | 'platform-records'>(() => (
     new URLSearchParams(window.location.search).get('recordView') === 'platform' ? 'platform-records' : 'publish'
   ));
-  const [productPublishPreset, setProductPublishPreset] = useState<{ productId?: string; productIds?: string[]; source?: 'master' | 'channel_catalog'; catalogId?: string; channelIds: OmnichannelChannelId[]; storeIds?: string[]; returnToStore?: StoreProductManagePreset } | null>(null);
+  const [productPublishPreset, setProductPublishPreset] = useState<{ productId?: string; productIds?: string[]; blindBagProductIds?: string[]; source?: 'master' | 'channel_catalog'; catalogId?: string; channelIds: OmnichannelChannelId[]; storeIds?: string[]; returnToStore?: StoreProductManagePreset } | null>(null);
   const [libraryBatchPreset, setLibraryBatchPreset] = useState<{ type: 'standard' | 'combo'; productIds: string[]; returnTab: 'all' | 'on_shelf' | 'off_shelf' | 'draft' } | null>(null);
   const [libraryReturnTab, setLibraryReturnTab] = useState<'all' | 'on_shelf' | 'off_shelf' | 'draft'>('on_shelf');
   const [templateMembershipsByBrand, setTemplateMembershipsByBrand] = useState<Record<string, Record<string, string[]>>>({});
@@ -488,7 +493,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
     const patches = updates.map(item => {
       const product = currentProductsRef.current.find(product => product.id === item.productId);
       if (!product) throw new Error('商品已变化，请返回商品库重新选择。');
-      return { id: product.id, patch: libraryBatchPatch(product, item.values) };
+      return { id: product.id, patch: libraryBatchPatch(product, item.values, webCategories.find(category => category.id === product.formData?.prototypeCategoryId)?.standardFields) };
     });
     patches.forEach(item => updateProduct(item.id, item.patch));
   };
@@ -643,7 +648,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
         if (!source || !channel || !detail.storeId) continue;
         const id = aliases[channel.id] || channel.id;
         const existing = records.find(record => record.baseProductId === source.id && record.storeId === detail.storeId && record.channels.includes(id));
-        const row: StoreProductRecord = { ...existing, id: existing?.id || `manual-${source.id}-${detail.storeId}-${id}`, baseProductId: source.id, storeId: detail.storeId, storeName: detail.storeName, channels: [id], name: !existing || detail.fields.includes('商品名称') ? detail.productName : existing.name, category: !existing || detail.fields.includes('前台分类') ? source.category : existing.category, image: !existing || detail.fields.includes('商品主图') ? source.image : existing.image, type: source.type === 'combo' ? 'Combo' : 'Standard', tags: existing?.tags || [], status: existing?.status || 'off_shelf', stockStatus: existing?.stockStatus || 'normal', stockCount: existing?.stockCount ?? 9999, lastSync: '刚刚', sortIndex: existing?.sortIndex || 0 };
+        const row: StoreProductRecord = { ...existing, id: existing?.id || `manual-${source.id}-${detail.storeId}-${id}`, baseProductId: source.id, businessType: source.businessType, storeId: detail.storeId, storeName: detail.storeName, channels: [id], name: !existing || detail.fields.includes('商品名称') ? detail.productName : existing.name, category: !existing || detail.fields.includes('前台分类') ? source.category : existing.category, image: !existing || detail.fields.includes('商品主图') ? source.image : existing.image, type: source.type === 'combo' ? 'Combo' : 'Standard', tags: existing?.tags || [], status: existing?.status || 'off_shelf', stockStatus: existing?.stockStatus || 'normal', stockCount: existing?.stockCount ?? 9999, lastSync: '刚刚', sortIndex: existing?.sortIndex || 0 };
         if (!existing || detail.fields.includes('库存')) {
           row.stockCount = publishedStockCount((source as any).formData || {}, row.stockCount);
           row.stockStatus = row.stockCount === 0 ? 'empty' : row.stockCount < 20 ? 'low' : 'normal';
@@ -653,6 +658,22 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       return { ...current, [activeBrandId]: records };
     });
   };
+  const handleProductLifecycleAction = (action: 'disable' | 'archive', targets: Product[]) => {
+              const ids = new Set(targets.map(product => product.id));
+              if (targets.some(target => !currentProductsRef.current.some(product => product.id === target.id))) throw new Error('商品已变更，请关闭弹窗后刷新列表再操作。');
+              if (experience?.unified) {
+                const removedRecords = directStoreProducts.filter(record => ids.has(record.baseProductId));
+                updateStoreRecords(records => action === 'archive'
+                  ? records.filter(record => !ids.has(record.baseProductId))
+                  : records.map(record => ids.has(record.baseProductId) ? { ...record, status: 'off_shelf', lastSync: '刚刚' } : record));
+                if (action === 'archive') setStoreFormOverrides(current => Object.fromEntries(Object.entries(current).filter(([key]) => !removedRecords.some(record => key.startsWith(`${activeBrandId}:${record.id}:`)))));
+                // A queued publish must not recreate archived products or undo a disable.
+                const cancelledBatches = new Set(pendingDirectJobs.filter(job => job.brandId === activeBrandId && ids.has(job.productId)).map(job => job.batch.id));
+                setPendingDirectJobs(current => current.filter(job => job.brandId !== activeBrandId || !ids.has(job.productId)));
+                if (cancelledBatches.size) setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: (current[activeBrandId] || []).map(batch => cancelledBatches.has(batch.id) ? { ...batch, status: 'failed', tasks: batch.tasks.map(task => ({ ...task, status: 'failed', progress: 100, error: action === 'archive' ? '商品已归档，未执行下发。' : '商品已停用，未执行下发。', failedCount: task.waitingCount, waitingCount: 0 })), details: batch.details?.map(detail => ({ ...detail, status: 'failed', error: action === 'archive' ? '商品已归档，未执行下发。' : '商品已停用，未执行下发。' })) } : batch) }));
+              }
+              targets.forEach(product => action === 'disable' ? updateProduct(product.id, { status: 'off_shelf' }) : deleteProduct(product.id));
+              };
   const [storeCategoryReturnMenu, setStoreCategoryReturnMenu] = useState('store_product_list');
   const [requiredPolicies, setRequiredPolicies] = useState<RequiredPolicyRecord[]>(MOCK_REQUIRED_POLICIES);
   const [requiredPolicyNotice, setRequiredPolicyNotice] = useState('');
@@ -740,14 +761,15 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   };
 
   // Category Manager State
-  const [webCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
+  const [localWebCategories, setWebCategories] = useState<WebCategory[]>(INITIAL_WEB_CATEGORIES);
+  const webCategories = useMemo(() => resolveWebCategoryConfigs(localWebCategories, opsCategoryConfigs, activeBrandId) as WebCategory[], [localWebCategories, opsCategoryConfigs, activeBrandId]);
   useEffect(() => {
     if (!categorySelectContext || categorySelectContext.scope === 'store') return;
     const scope = categorySelectContext.formScope || 'master';
     const key = productFormRecoveryKey(activeBrandId, scope, categorySelectContext.type, categorySelectContext.channelContext?.catalogId || (categorySelectContext.groupMeal ? 'group-meal' : ''));
     const recovery = readProductFormRecovery(key);
     if (!recovery) return;
-    const category = webCategories.find(item => item.id === recovery.categoryId && item.classification === categorySelectContext.type);
+    const category = webCategories.find(item => item.id === recovery.categoryId && item.classification === categorySelectContext.type && isOrdinaryCreationCategory(item));
     if (!category) return;
     setCreationContext({ ...categorySelectContext, category, mode: 'create', product: { ...recovery.product, recoveryRestored: true } });
     setCategorySelectContext(null);
@@ -912,7 +934,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
 
   useEffect(() => {
     const libraryMenus = [
-      'product_list', 'categories', 'category_management', 'product_attributes',
+      'product_list', 'blind_bag_products', 'categories', 'category_management', 'product_attributes',
       'channel_product_library', 'channel_categories', 'channel_attributes', 'channel_custom_attributes',
       'ingredient_library', 'nutrition_manager',
       'recipe_default', 'recipe_legacy', 'recipe_new', 'addon_group',
@@ -1030,6 +1052,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       }
 
       if (creationContext) {
+          const ProductForm = isBlindBagProduct(creationContext.product) ? WebBlindBagProductForm : WebProductForm;
           const effectiveFormScope = creationContext.formScope
             || (creationContext.scope === 'store'
               ? 'store'
@@ -1050,11 +1073,11 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
               : undefined
           );
           return (
-              <WebProductForm
+              <ProductForm
                   key={`${effectiveFormScope}:${creationContext.mode || 'create'}:${creationContext.product?.id || 'new'}:${creationContext.category?.id || 'uncategorized'}`}
                   type={creationContext.type} 
                   category={creationContext.category} 
-                  categories={webCategories.filter(cat => cat.classification === creationContext.type)}
+                  categories={webCategories.filter(cat => cat.classification === creationContext.type && (isBlindBagProduct(creationContext.product) ? cat.id === creationContext.category.id : isOrdinaryCreationCategory(cat)))}
                   mode={creationContext.mode || 'create'}
                   initialProduct={creationContext.product || null}
                   recoveryKey={creationContext.scope !== 'store' && creationContext.mode !== 'edit' ? productFormRecoveryKey(activeBrandId, effectiveFormScope, creationContext.type, creationContext.channelContext?.catalogId || (creationContext.groupMeal ? 'group-meal' : '')) : undefined}
@@ -1069,7 +1092,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                   onOpenSyncRecords={() => { setCreationContext(null); setProductSyncInitialTab('qimai-records'); setActiveMenu(experience ? 'product_records' : 'product_sync'); }}
                   onOpenManagementTools={() => { setCreationContext(null); setProductSyncInitialTab('publish'); setActiveMenu('product_sync'); }}
                   onOpenStorePublish={product => {
-                    setProductPublishPreset({ productId: product.id, channelIds: [...(product.formData?.salesScope?.channelIds || product.formData?.applicableChannelIds || [])], storeIds: creationContext.storeReturn?.storeId ? [creationContext.storeReturn.storeId] : undefined, returnToStore: creationContext.storeReturn });
+                    setProductPublishPreset({ productId: product.id, ...(isBlindBagProduct(product) ? { blindBagProductIds: [product.id] } : {}), channelIds: isBlindBagProduct(product) ? BLIND_BAG_PUBLISH_CHANNEL_IDS.filter(id => blindBagChannels(product).includes(id)) : [...(product.formData?.salesScope?.channelIds || product.formData?.applicableChannelIds || [])], storeIds: creationContext.storeReturn?.storeId ? [creationContext.storeReturn.storeId] : undefined, returnToStore: creationContext.storeReturn });
                     setCreationContext(null);
                     setProductSyncInitialTab('publish');
                     setActiveMenu('product_sync');
@@ -1103,13 +1126,22 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                        : []
                    )}
                    onProductSaved={(draft, action, saveOptions) => {
+                     const blindError = blindBagStructureError(draft);
+                     if (blindError) throw new Error(blindError);
+                     if (saveOptions?.intent === 'publish') {
+                       const publishError = blindBagPublishError([draft], saveOptions.publishScope?.channelIds || []);
+                       if (publishError) throw new Error(publishError);
+                     }
                      if (effectiveFormScope === 'store') {
                        const record = creationContext.product as StoreProductRecord;
                        const targets: string[] = draft.formData?.storeTargetChannelIds || record.channels;
                        updateStoreRecords(records => records.flatMap(item => {
                          if (item.id !== record.id || item.storeId !== record.storeId) return [item];
                          const remaining = item.channels.filter(channel => !targets.includes(channel));
-                         const changed = { ...item, name: draft.name, price: draft.price, image: draft.image, category: draft.category, formData: draft.formData, channels: item.channels.filter(channel => targets.includes(channel)), id: remaining.length ? `${item.id}:edited:${targets.join('-')}` : item.id };
+                         const stockCount = publishedStockCount(draft.formData || {}, item.stockCount);
+                         const changed = { ...item, businessType: draft.businessType || item.businessType, name: draft.name, price: draft.price, image: draft.image, category: draft.category, formData: draft.formData,
+                           ...(isBlindBagProduct(draft) ? { stockCount, stockStatus: stockCount === 0 ? 'empty' as const : stockCount < 20 ? 'low' as const : 'normal' as const, isMultiSpec: false, specs: [] } : {}),
+                           channels: item.channels.filter(channel => targets.includes(channel)), id: remaining.length ? `${item.id}:edited:${targets.join('-')}` : item.id };
                          return [...(remaining.length ? [{ ...item, channels: remaining }] : []), ...(changed.channels.length ? [changed] : [])];
                        }));
                        setStoreFormOverrides(current => ({ ...current, ...Object.fromEntries(targets.map(channel => [`${activeBrandId}:${record.id}:${channel}`, draft])) }));
@@ -1265,8 +1297,8 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                         addProduct({
                           ...draft,
                           id: draft.id,
-                          status: creationContext.storeAddition && saveOptions?.intent === 'save' ? 'on_shelf' : 'draft',
-                          stockStatus: 'available',
+                          status: isBlindBagProduct(draft) ? draft.status || 'draft' : creationContext.storeAddition && saveOptions?.intent === 'save' ? 'on_shelf' : 'draft',
+                          stockStatus: isBlindBagProduct(draft) ? draft.stockStatus || 'available' : 'available',
                         });
                       }
                       if (creationContext.storeAddition && saveOptions?.intent === 'save') resumeStoreAddition(creationContext.storeAddition, draft.id);
@@ -1296,6 +1328,14 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       }
 
       if (detailContext) {
+          if (isBlindBagProduct(detailContext)) return <WebBlindBagProductDetail product={detailContext} records={directStoreProducts}
+            onClose={() => setDetailContext(null)} onEdit={() => {
+              const category = webCategories.find(item => item.id === detailContext.formData?.prototypeCategoryId)
+                || webCategories.find(item => item.classification === 'standard' && !item.businessType);
+              if (!category) return;
+              setCreationContext({ type: 'standard', category, mode: 'edit', product: detailContext, scope: 'brand', formScope: experience?.unified ? 'unified' : 'master' });
+              setDetailContext(null);
+            }} />;
           return (
               <WebProductDetail 
                   product={detailContext} 
@@ -1411,6 +1451,25 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
               }}
             />
           );
+      }
+
+      if (activeMenu === 'blind_bag_products') {
+        const blindBagCategory = webCategories.find(item => item.creationScene === 'blind_bag' && item.status !== 'disabled');
+        const openBlindBag = (product?: Product) => {
+          const category = product ? webCategories.find(item => item.id === product.formData?.prototypeCategoryId && item.creationScene === 'blind_bag')
+            || blindBagCategory || webCategories.find(item => item.id === BLIND_BAG_CATEGORY_ID) : blindBagCategory;
+          if (!category) return;
+          setCreationContext({ type: 'standard', category, mode: product ? 'edit' : 'create',
+            product: product || { businessType: 'blind_bag', formData: { p_business_type: 'blind_bag' } },
+            scope: 'brand', formScope: experience?.unified ? 'unified' : 'master' });
+        };
+        return <WebBlindBagProducts creationUnavailableReason={!blindBagCategory ? '暂无可用的盲袋专用类目，请联系运营人员检查 Ops 类目的使用场景、状态和适用品牌。' : undefined} onCreate={() => openBlindBag()} onEdit={openBlindBag} storeRecords={directStoreProducts} onLifecycleAction={handleProductLifecycleAction} unifiedManagement={!!experience?.unified}
+          onPublish={(selected, allowedProductIds) => {
+            const channelIds = BLIND_BAG_PUBLISH_CHANNEL_IDS.filter(id => selected.every(product => blindBagChannels(product).includes(id)));
+            if (!channelIds.length) return;
+            setProductPublishPreset({ productIds: selected.map(product => product.id), blindBagProductIds: allowedProductIds, source: 'master', channelIds });
+            setProductSyncInitialTab('publish'); setActiveMenu('product_sync');
+          }} />;
       }
 
       if (activeMenu === 'group_meal_products') {
@@ -1828,22 +1887,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
             unifiedManagement={!!experience?.unified}
             directUse={!!experience?.unified}
             storeRecords={directStoreProducts}
-            onLifecycleAction={(action, targets) => {
-              const ids = new Set(targets.map(product => product.id));
-              if (targets.some(target => !currentProductsRef.current.some(product => product.id === target.id))) throw new Error('商品已变更，请关闭弹窗后刷新列表再操作。');
-              if (experience?.unified) {
-                const removedRecords = directStoreProducts.filter(record => ids.has(record.baseProductId));
-                updateStoreRecords(records => action === 'archive'
-                  ? records.filter(record => !ids.has(record.baseProductId))
-                  : records.map(record => ids.has(record.baseProductId) ? { ...record, status: 'off_shelf', lastSync: '刚刚' } : record));
-                if (action === 'archive') setStoreFormOverrides(current => Object.fromEntries(Object.entries(current).filter(([key]) => !removedRecords.some(record => key.startsWith(`${activeBrandId}:${record.id}:`)))));
-                // A queued publish must not recreate archived products or undo a disable.
-                const cancelledBatches = new Set(pendingDirectJobs.filter(job => job.brandId === activeBrandId && ids.has(job.productId)).map(job => job.batch.id));
-                setPendingDirectJobs(current => current.filter(job => job.brandId !== activeBrandId || !ids.has(job.productId)));
-                if (cancelledBatches.size) setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: (current[activeBrandId] || []).map(batch => cancelledBatches.has(batch.id) ? { ...batch, status: 'failed', tasks: batch.tasks.map(task => ({ ...task, status: 'failed', progress: 100, error: action === 'archive' ? '商品已归档，未执行下发。' : '商品已停用，未执行下发。', failedCount: task.waitingCount, waitingCount: 0 })), details: batch.details?.map(detail => ({ ...detail, status: 'failed', error: action === 'archive' ? '商品已归档，未执行下发。' : '商品已停用，未执行下发。' })) } : batch) }));
-              }
-              targets.forEach(product => action === 'disable' ? updateProduct(product.id, { status: 'off_shelf' }) : deleteProduct(product.id));
-            }}
+            onLifecycleAction={handleProductLifecycleAction}
             onlineChannels={{ douyin: !!unifiedDefaultGroup?.channels.includes('douyin'), meituan: !!unifiedDefaultGroup?.channels.includes('meituan_dine') }}
             onOpenOnlineProducts={(platform, view) => {
               setOnlineCatalogId(unifiedDefaultGroup?.id);

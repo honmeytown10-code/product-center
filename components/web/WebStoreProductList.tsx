@@ -10,6 +10,7 @@ import {
   FileSpreadsheet, Loader2, Settings
 } from 'lucide-react';
 import { useProducts } from '../../context';
+import { isBlindBagProduct } from '../../blindBag';
 import { ShelfChannelId, WebShelfConfirmModal, getShelfChannelLabel, isShelfChannelId } from './WebShelfConfirmModal';
 import { StockoutSpec, WebStockoutModal } from './WebStockoutModal';
 import { getOmnichannelConfig } from '../../omnichannel';
@@ -26,6 +27,8 @@ type StoreProductManagePreset = {
 export type StoreProductRecord = {
   id: string;
   baseProductId: string;
+  businessType?: 'buffet_ticket' | 'blind_bag';
+  formData?: Record<string, any>;
   name: string;
   type: 'Standard' | 'Combo';
   category: string;
@@ -992,7 +995,7 @@ export const WebStoreProductList: React.FC<{
                           </div>
                         </div>
                       </td>
-                      <td className={`${expandedChannelNavigation ? 'px-3 text-xs' : 'px-4 text-sm'} py-4 text-[#666]`}>{product.type === 'Standard' ? '标准商品' : '套餐商品'}</td>
+                      <td className={`${expandedChannelNavigation ? 'px-3 text-xs' : 'px-4 text-sm'} py-4 text-[#666]`}>{isBlindBagProduct(product) ? '标准商品 · 盲袋' : product.type === 'Standard' ? '标准商品' : '套餐商品'}</td>
                       <td className="py-4 px-4 text-[#666] max-w-[180px] truncate" title={product.category}>{product.category}</td>
                       <td className="py-4 px-4">
                         <div className="font-medium text-[#333]">{product.storeName}</div>

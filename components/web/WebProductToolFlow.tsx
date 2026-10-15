@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Loader2, Search }
 import { useProducts } from '../../context';
 import { getEffectiveChannelGroups, getOmnichannelChannel, getOmnichannelConfig, isThirdPartyChannelId } from '../../omnichannel';
 import type { OmnichannelChannelId, Product } from '../../types';
+import { isBlindBagProduct } from '../../blindBag';
 import { WebStoreScopeSelector } from './WebStoreScopeSelector';
 import { checkJdStoreReadiness, checkTakeoutProduct, isTakeoutChannel, takeoutOperationPlan } from '../../takeoutSync';
 import { WebTakeoutSyncPreview } from './WebTakeoutSyncPreview';
@@ -28,7 +29,9 @@ const channelInRecord = (record: StoreProductRecord, id: OmnichannelChannelId) =
 type Props = { tool: ProductTool; products: Product[]; catalogProductIds?: Record<string, string[]>; channelProductOverrides?: Record<string, any>; storeRecords: StoreProductRecord[]; directUse: boolean; unified: boolean; onBack: () => void; onSubmitTask?: (batch: PublishBatch) => void; onOpenRecords: () => void };
 
 /** Local prototype tasks only; no production API or platform operation is called. */
-export const WebProductToolFlow: React.FC<Props> = ({ tool, products, catalogProductIds = {}, channelProductOverrides = {}, storeRecords, directUse, unified, onBack, onSubmitTask, onOpenRecords }) => {
+export const WebProductToolFlow: React.FC<Props> = ({ tool, products: allProducts, catalogProductIds = {}, channelProductOverrides = {}, storeRecords: allStoreRecords, directUse, unified, onBack, onSubmitTask, onOpenRecords }) => {
+  const products = allProducts.filter(product => !isBlindBagProduct(product));
+  const storeRecords = allStoreRecords.filter(record => !isBlindBagProduct(record) && !isBlindBagProduct(allProducts.find(product => product.id === record.baseProductId)));
   const { activeBrandId, brandConfigs } = useProducts();
   const config = getOmnichannelConfig(brandConfigs[activeBrandId] || brandConfigs.b_1);
   const groups = getEffectiveChannelGroups(config);

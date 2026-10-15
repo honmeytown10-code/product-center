@@ -8,7 +8,10 @@ import { OpsPolicyView } from './ops/OpsPolicyView';
 import { OpsBrandConfigView } from './ops/OpsBrandConfigView';
 
 export const MerchantOps: React.FC = () => {
-  const [activeModule, setActiveModule] = useState<'metadata' | 'categories' | 'policy' | 'brand_config'>('metadata');
+  const [activeModule, setActiveModule] = useState<'metadata' | 'categories' | 'policy' | 'brand_config'>(() => {
+    const module = new URLSearchParams(window.location.search).get('opsMenu');
+    return module === 'categories' || module === 'policy' || module === 'brand_config' ? module : 'metadata';
+  });
 
   return (
     <div className="flex h-full font-sans bg-[#F5F6F8] overflow-hidden">

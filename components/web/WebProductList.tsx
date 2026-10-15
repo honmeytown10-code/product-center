@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Search, Plus, ChevronDown, MoreHorizontal, Filter, ListFilter, X, Trash2, HelpCircle, Package, ChevronLeft, ChevronRight, Box, Utensils, CupSoda, PanelLeftClose, PanelLeftOpen, Upload, ImageIcon, CheckCircle2, AlertTriangle, FileText, RefreshCw, Library, CircleCheck, CirclePause, FilePenLine } from 'lucide-react';
 import { useProducts } from '../../context';
 import type { Product } from '../../types';
+import { blindBagChannels, buildBlindBagProduct, isBlindBagProduct } from '../../blindBag';
 import { WebOnlineOrderingEntry } from './WebOnlineOrderingEntry';
 import type { OnlineOrderingPlatform, OnlineOrderingPlatformView } from './WebOnlineOrderingPlatformHub';
 import { getOmnichannelChannel } from '../../omnichannel';
@@ -32,7 +33,7 @@ const DEFAULT_FILTERS = {
   productType: 'all',
 };
 
-const getProductTypeLabel = (product: Product) => (product.type === 'combo' ? '套餐商品' : '标准商品');
+const getProductTypeLabel = (product: Product) => isBlindBagProduct(product) ? '标准商品 · 盲袋' : (product.type === 'combo' ? '套餐商品' : '标准商品');
 
 const getProductStatusLabel = (product: Product) => {
   if (product.status === 'draft') return '草稿';
@@ -40,6 +41,7 @@ const getProductStatusLabel = (product: Product) => {
 };
 
 const getFrontendCategoryName = (product: Product) => {
+  if (isBlindBagProduct(product)) return product.formData?.p_front_cat?.[0] || product.category || '未分类';
   if (product.type === 'combo') return '套餐组合';
   if (product.category === '现制饮品') return Number(product.id) % 2 === 0 ? '咖啡类' : '奶茶类';
   if (product.category === '中式正餐') return product.name.includes('火锅') ? '火锅锅底' : '炒菜/烧菜类';
@@ -77,6 +79,12 @@ const getImageTypeFromFileName = (fileName: string): BatchImageType => {
 };
 
 const buildCopyProduct = (product: Product): Product => {
+  if (isBlindBagProduct(product)) return buildBlindBagProduct({
+    id: `blind-bag-${crypto.randomUUID()}`, skuCode: `BB-${crypto.randomUUID()}`,
+    createdTime: new Date().toLocaleString('sv-SE', { hour12: false }), status: 'draft',
+    formData: { ...product.formData, p_name: `${product.name}-复制` },
+    channelIds: blindBagChannels(product), unlimited: product.stock === -1,
+  });
   const suffix = Date.now().toString().slice(-6);
   return {
     ...product,
@@ -658,7 +666,7 @@ export const WebProductList: React.FC<{
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#666]">{getProductTypeLabel(product)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#666]">{product.category || '未分类'}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[#666]">{(isBlindBagProduct(product) ? product.formData?.p_cat : product.category) || '未分类'}</td>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-[#333]">¥{product.price.toFixed(2)}</td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <span className={product.status === 'on_shelf' ? 'text-[#00A35B]' : 'text-[#999]'}>{getProductStatusLabel(product)}</span>

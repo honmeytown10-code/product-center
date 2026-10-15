@@ -21,6 +21,7 @@ import {
   Ticket,
 } from 'lucide-react';
 import { Category } from '../../types';
+import { isOrdinaryCreationCategory } from '../../categoryConfiguration';
 import { WebImportReviewModal } from './WebImportReviewModal';
 
 type ImportSource = 'local' | 'external_file' | 'takeout_auth';
@@ -1169,6 +1170,7 @@ export const WebCategorySelectModal = ({
     };
 
     const visibleCategories = categories.filter(cat => {
+        if (!isOrdinaryCreationCategory(cat)) return false;
         const classification = cat.classification;
 
         if (type === 'standard') {
@@ -1183,7 +1185,7 @@ export const WebCategorySelectModal = ({
     });
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div data-testid="product-category-picker" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="flex h-[min(700px,calc(100vh-32px))] w-[900px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useProducts } from '../../context';
 import type { Product } from '../../types';
+import { isBlindBagProduct } from '../../blindBag';
 import { WebPublishDialog } from './WebPublishDialog';
 import { INITIAL_RECORDS } from './WebProductTemplateManager';
 
@@ -21,9 +22,11 @@ export function applyLibraryPrice(product: Product, transform: (price: number) =
   });
   const patch: Record<string, any> = { price: values[0] };
   if (!rows?.length && product.specs?.length) patch.specs = product.specs.map((row, index) => ({ ...row, price: values[index] }));
+  if (isBlindBagProduct(product) && product.specs?.length) patch.specs = product.specs.map((row, index) => ({ ...row, price: values[index] }));
   if (form) patch.formData = {
     ...form,
     s_price: values[0],
+    ...(isBlindBagProduct(product) && form.takeoutSnapshot ? { takeoutSnapshot: { ...form.takeoutSnapshot, skus: form.takeoutSnapshot.skus.map((sku: any, index: number) => ({ ...sku, price: String(values[index]) })) } } : {}),
     ...(rows?.length ? { takeoutFormState: { ...form.takeoutFormState, specConfigRows: rows.map((row: any, i: number) => ({ ...row, s_spec_price: String(values[i]) })) } } : {}),
   };
   return { patch, changed, skipped };
@@ -54,6 +57,7 @@ export const WebProductLibraryBatchDialog: React.FC<{
   const close = React.useCallback(() => { if (!lock.current) onCancel(); }, [onCancel]);
   const submit = async () => {
     if (lock.current) return;
+    if (action === 'template' && targets.some(isBlindBagProduct)) { setError('盲袋商品请从专属入口下发门店，不加入普通商品模板。'); return; }
     if (targets.some(target => !products.some(product => product.id === target.id))) { setError('商品已发生变化，请关闭弹窗并重新选择。'); return; }
     if (action === 'price' && (invalidPrice || !changed)) { setError('请输入大于 0 的改价幅度，并确认至少一个规格可以改价。'); return; }
     if (action === 'template' && (!templateIds.length || !onAddToTemplates)) { setError('请选择商品下发模板。'); return; }

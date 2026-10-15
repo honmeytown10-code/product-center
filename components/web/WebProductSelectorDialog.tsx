@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { isBlindBagProduct } from '../../blindBag';
 
 export type SelectableProduct = {
+  businessType?: string;
   id: string;
   name: string;
   image?: string;
@@ -16,6 +18,7 @@ export type SelectableProduct = {
 };
 
 type Props = {
+  allowBlindBag?: boolean;
   open: boolean;
   title?: string;
   description?: string;
@@ -49,6 +52,7 @@ const getStatusLabel = (status?: string) => {
 };
 
 export const WebProductSelectorDialog: React.FC<Props> = ({
+  allowBlindBag = false,
   open,
   title = '选择商品',
   description,
@@ -94,11 +98,12 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
   }, [fixedType, open]);
 
   const categories = useMemo(
-    () => Array.from(new Set(products.map(product => product.frontendCategory || product.category).filter(Boolean))) as string[],
-    [products]
+    () => Array.from(new Set(products.filter(product => allowBlindBag || !isBlindBagProduct(product)).map(product => product.frontendCategory || product.category).filter(Boolean))) as string[],
+    [products, allowBlindBag]
   );
 
   const filteredProducts = useMemo(() => products.filter(product => {
+    if (!allowBlindBag && isBlindBagProduct(product)) return false;
     const type = product.type === 'combo' || product.type === '套餐商品' ? 'combo' : 'standard';
     const category = product.frontendCategory || product.category || '';
     return (!filters.name || product.name.toLowerCase().includes(filters.name.toLowerCase()))
@@ -107,7 +112,7 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
       && (!filters.productCode || (product.productCode || '').includes(filters.productCode))
       && (filters.category === 'all' || category === filters.category)
       && (filters.type === 'all' || type === filters.type);
-  }), [filters, products, showSkuFields]);
+  }), [filters, products, showSkuFields, allowBlindBag]);
 
   const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);

@@ -363,7 +363,10 @@ export interface Category {
   children?: Category[];
   source?: 'system' | 'brand'; 
   classification?: 'standard' | 'combo';
-  businessType?: 'buffet_ticket';
+  businessType?: 'buffet_ticket' | 'blind_bag';
+  /** Dedicated creation scenes are excluded from ordinary product pickers. */
+  creationScene?: 'blind_bag';
+  status?: 'active' | 'disabled';
 }
 
 export interface TimeRule {
@@ -387,6 +390,7 @@ export interface Product {
   stockStatus: 'available' | 'sold_out';
   image: string;
   skuCode: string;
+  formData?: Record<string, any>;
   type?: 'standard' | 'combo';
   industryId?: IndustryTemplateId;
   createdTime?: string;
@@ -404,7 +408,7 @@ export interface Product {
   timeSales?: TimeSalesConfig | null;
   linkedStallIds?: string[];
   comboItemIds?: string[];
-  businessType?: 'buffet_ticket';
+  businessType?: 'buffet_ticket' | 'blind_bag';
   applicablePeople?: number;
   depositRequired?: boolean;
 }

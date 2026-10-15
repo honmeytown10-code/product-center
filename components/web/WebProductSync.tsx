@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { WebProductToolFlow, type ProductTool } from './WebProductToolFlow';
 import { useProducts } from '../../context';
+import { BLIND_BAG_PUBLISH_CHANNEL_IDS, BLIND_BAG_PUBLISH_FIELDS, blindBagChannels, blindBagStructureError, blindBagPublishError, isBlindBagProduct } from '../../blindBag';
 import {
     channelGroupIncludesMiniProgram,
     getEffectiveChannelGroups,
@@ -52,6 +53,7 @@ type TimeSaleConfig = {
 };
 
 type EditableProduct = {
+    businessType?: Product['businessType'];
     id: string;
     name: string;
     code: string;
@@ -246,7 +248,7 @@ export const WebProductSync: React.FC<{
     initialBatch?: { type: 'standard' | 'combo'; productIds: string[] };
     onReturnToLibrary?: () => void;
     onApplyLibraryBatch?: (updates: Array<{ productId: string; values: Record<string, BatchFieldValue> }>) => void;
-    initialPublish?: { productId?: string; productIds?: string[]; source?: 'master' | 'channel_catalog'; catalogId?: string; channelIds: OmnichannelChannelId[]; storeIds?: string[] };
+    initialPublish?: { productId?: string; productIds?: string[]; blindBagProductIds?: string[]; source?: 'master' | 'channel_catalog'; catalogId?: string; channelIds: OmnichannelChannelId[]; storeIds?: string[] };
     onCreateProduct?: (type: 'standard' | 'combo', selection: { productIds: string[]; channelIds: OmnichannelChannelId[]; storeIds: string[]; source: 'master' | 'channel_catalog'; catalogId?: string }) => void;
     onReturnToStore?: () => void;
     initialTab?: 'publish' | 'records' | 'qimai-records' | 'platform-records';
@@ -321,10 +323,10 @@ export const WebProductSync: React.FC<{
     const [productSelectorMode, setProductSelectorMode] = useState<'sync' | 'batch' | null>(null);
     const [pendingSelectorProductIds, setPendingSelectorProductIds] = useState<string[]>([]);
     const [products, setProducts] = useState<EditableProduct[]>(() => sourceProducts ? sourceProducts.map((product, index) => ({
-        id: product.id, name: product.name, code: product.skuCode || product.id,
+        id: product.id, name: product.name, code: product.skuCode || product.id, businessType: product.businessType,
         type: product.type === 'combo' ? '套餐商品' : '标准商品', image: product.image, price: product.price,
         salesMode: '正常售卖', timeSale: { ...INITIAL_SYNC_PRODUCTS[0].timeSale, weekdays: [...INITIAL_SYNC_PRODUCTS[0].timeSale.weekdays] },
-        specs: product.specs?.length ? product.specs.map((spec, i) => ({ id: `${product.id}-${i}`, name: spec.name, price: spec.price ?? product.price })) : [{ id: `${product.id}-sku`, name: '单规格', price: product.price }],
+        specs: product.specs?.length ? product.specs.map((spec, i) => ({ id: isBlindBagProduct(product) ? product.formData?.takeoutSnapshot?.skus?.[i]?.id || product.skuCode : `${product.id}-${i}`, name: spec.name, price: spec.price ?? product.price })) : [{ id: `${product.id}-sku`, name: '单规格', price: product.price }],
         categories: [{ id: product.category, name: product.category, categorySort: 1, productSort: index + 1 }],
     })) : cloneInitialProducts());
     const [selectedCategoryName, setSelectedCategoryName] = useState<string>('all');
@@ -342,7 +344,10 @@ export const WebProductSync: React.FC<{
         ? products.filter(product => (catalogProductIds[sourceCatalogId] || []).includes(product.id)) : readingTemplate
         ? products.slice(0, TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.productCount || 0) : operationMode !== 'sync' && batchSource === 'store' ? sourceStoreProducts : products,
     [products, readingCatalog, readingTemplate, unifiedManagementView, catalogProductIds, sourceCatalogId, sourceTemplateId, operationMode, batchSource, sourceStoreProducts]);
-    const currentSourceProducts = useMemo(() => sourceProductPool.filter(product => operationMode === 'sync' ? !comboOnly || product.type === '套餐商品' : operationMode === 'batch_combo' ? product.type === '套餐商品' : product.type !== '套餐商品'), [sourceProductPool, operationMode, comboOnly]);
+    const blindBagPublish = publishEntry?.blindBagProductIds !== undefined;
+    const currentSourceProducts = useMemo(() => sourceProductPool.filter(product => operationMode === 'sync'
+        ? blindBagPublish ? isBlindBagProduct(product) && publishEntry!.blindBagProductIds!.includes(product.id) : !comboOnly || product.type === '套餐商品'
+        : !isBlindBagProduct(product) && (operationMode === 'batch_combo' ? product.type === '套餐商品' : product.type !== '套餐商品')), [sourceProductPool, operationMode, comboOnly, blindBagPublish, publishEntry]);
     const usingTemplateStores = readingTemplate || operationMode !== 'sync' && storeRangeMode === 'template';
     const scopeStores = usingTemplateStores ? TEMPLATE_STORES.map(store => ({ ...store, code: store.id, tags: [] })) : PRODUCT_SALES_SCOPE_STORES;
     const previousTemplateStoreScope = useRef(usingTemplateStores);
@@ -356,6 +361,10 @@ export const WebProductSync: React.FC<{
         : Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)));
     const effectiveBatchChannelIds = selectedBatchChannelIds.filter(channelId => batchChannels.includes(channelId));
 
+    const hasBlindBagSelection = blindBagPublish || selectedSyncProductIds.some(id => isBlindBagProduct(sourceProducts?.find(product => product.id === id)));
+    useEffect(() => {
+        if (hasBlindBagSelection) setOverwriteFields(BLIND_BAG_PUBLISH_FIELDS.filter(field => field !== '库存'));
+    }, [hasBlindBagSelection]);
     const availablePublishChannelIds = useMemo<OmnichannelChannelId[]>(() => (
         publishEntry?.channelIds.length ? publishEntry.channelIds : syncSource === 'template' ? TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.channels || [] : syncSource === 'channel_catalog'
             ? Array.from(new Set(
@@ -364,7 +373,7 @@ export const WebProductSync: React.FC<{
                     .flatMap(group => group.channels)
             ))
             : Array.from(new Set(channelCatalogGroups.flatMap(group => group.channels)))
-    ), [authorizedChannelCatalogGroups, selectedChannelGroupIds, syncSource, sourceTemplateId, publishEntry]);
+    ).filter(id => !hasBlindBagSelection || BLIND_BAG_PUBLISH_CHANNEL_IDS.includes(id)), [authorizedChannelCatalogGroups, selectedChannelGroupIds, syncSource, sourceTemplateId, publishEntry, hasBlindBagSelection]);
     const availablePublishChannelKey = availablePublishChannelIds.join('|');
 
     useEffect(() => {
@@ -413,6 +422,15 @@ export const WebProductSync: React.FC<{
         const productScopes = new Map<string, ProductSalesScope | undefined>((sourceProducts || []).map(product => [product.id, (product as Product & { formData?: { salesScope?: ProductSalesScope } }).formData?.salesScope] as const));
         const selectedTemplates = TEMPLATE_RANGE_OPTIONS.filter(template => templateRangeMode === 'all' || selectedTemplateIds.includes(template.id));
         const channels = operationMode === 'sync' ? selectedPublishChannelIds : storeRangeMode === 'template' ? Array.from(new Set(selectedTemplates.flatMap(template => template.channels))) : effectiveBatchChannelIds;
+        const blindBagError = blindBagPublishError(chosenProducts, channels, blindBagPublish);
+        if (blindBagError) { setPublishValidationMessage(blindBagError); return; }
+        for (const product of chosenProducts) {
+            const master = sourceProducts?.find(item => item.id === product.id);
+            if (!isBlindBagProduct(master)) continue;
+            const error = blindBagStructureError(master);
+            if (error || master?.status !== 'on_shelf') { setPublishValidationMessage(error || `请先完善并启用盲袋商品“${product.name}”。`); return; }
+            if (channels.some(id => !blindBagChannels(master).includes(id))) { setPublishValidationMessage(`“${product.name}”仅能下发到已设置的小程序销售渠道。`); return; }
+        }
         if (operationMode === 'sync') {
             const invalid = chosenProducts.find(product => {
                 const scope = productScopes.get(product.id);
@@ -433,7 +451,7 @@ export const WebProductSync: React.FC<{
         const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
         const batchId = `PB${Date.now()}`;
         const isScheduled = executionTime === 'scheduled';
-        const fieldNames = operationMode === 'sync' ? overwriteFields : batchChangeMode === 'unified' ? ['上下架'] : selectedBatchFields;
+        const fieldNames = operationMode === 'sync' ? overwriteFields.filter(field => !hasBlindBagSelection || BLIND_BAG_PUBLISH_FIELDS.includes(field)) : batchChangeMode === 'unified' ? ['上下架'] : selectedBatchFields;
         const scopeNames = selectedTargetScopes.map(scope => ({ master: unifiedManagementView ? '商品库' : '商品主档', template: '商品下发模板', channel_catalog: '渠道商品库', store: '门店商品' })[scope]);
         const source = operationMode === 'sync' ? syncSource : batchSource;
         const sourceName = source === 'channel_catalog' ? unifiedManagementView ? '商品库' : channelCatalogGroups.find(group => group.id === sourceCatalogId)?.name || '渠道商品库' : source === 'template' ? TEMPLATE_RANGE_OPTIONS.find(template => template.id === sourceTemplateId)?.name || '商品下发模板' : source === 'store' ? '门店商品' : unifiedManagementView ? '商品库' : '商品主档';
@@ -555,6 +573,7 @@ export const WebProductSync: React.FC<{
     }, [currentSourceProducts, selectedCategoryName]);
 
     const selectorProducts = useMemo<SelectableProduct[]>(() => currentSourceProducts.map(product => ({
+        businessType: product.businessType,
         id: product.id,
         name: product.name,
         image: product.image,
@@ -564,8 +583,8 @@ export const WebProductSync: React.FC<{
         frontendCategory: product.categories[0]?.name || '未分类',
         type: product.type.includes('套餐') ? 'combo' : 'standard',
         price: product.price,
-        status: 'on_shelf',
-    })), [currentSourceProducts]);
+        status: sourceProducts?.find(item => item.id === product.id)?.status || 'on_shelf',
+    })).filter(product => operationMode !== 'sync' || product.status !== 'draft'), [currentSourceProducts, sourceProducts, operationMode]);
 
     const openProductSelector = (mode: 'sync' | 'batch') => {
         setProductSelectorMode(mode);
@@ -1367,7 +1386,7 @@ export const WebProductSync: React.FC<{
             <div className="border-b border-gray-100 p-6">
                 <div className="mb-3 text-sm font-bold text-gray-700">选择商品</div>
                 <div className="flex items-center gap-6">
-                    {publishEntry?.productId ? <span className="text-sm text-[#4E5969]">商品库</span> : <>
+                    {publishEntry?.productId || blindBagPublish ? <span className="text-sm text-[#4E5969]">{blindBagPublish ? '盲袋商品' : '商品库'}</span> : <>
                     {(!channelCatalogEnabled || (!!onCreateProduct && !unifiedManagementView)) && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'master' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'master'} onChange={() => { setSyncSource('master'); setSelectedSyncProductIds([]); }} className="h-4 w-4 text-[#00C06B]" /><span>商品主档</span></label>}
                     <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'template' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'template'} onChange={() => { setSyncSource('template'); setSelectedSyncProductIds([]); }} className="h-4 w-4 text-[#00C06B]" /><span>商品下发模板</span></label>
                     {channelCatalogEnabled && <label className={`flex cursor-pointer items-center space-x-2 text-sm ${syncSource === 'channel_catalog' ? 'font-bold text-[#00A35B]' : 'text-gray-500'}`}><input type="radio" name="source" checked={syncSource === 'channel_catalog'} onChange={() => { setSyncSource('channel_catalog'); setSelectedSyncProductIds([]); }} className="h-4 w-4 text-[#00C06B]" /><span>{unifiedManagementView ? '商品库' : '渠道商品库'}</span></label>}
@@ -1647,7 +1666,7 @@ export const WebProductSync: React.FC<{
                     )}
 
                     <h3 className="font-bold text-gray-800 mb-4 text-base">{operationMode === 'sync' ? '商品下发规则' : '修改规则'}</h3>
-                    {operationMode === 'sync' ? <div className="mb-6 max-w-[680px]"><WebProductPublishRules value={overwriteFields} onChange={setOverwriteFields} defaultsBrandId={activeBrandId} /></div> : <div className="mb-6 flex items-start"><span className="w-24 shrink-0 text-sm text-gray-500">修改内容</span>{batchChangeMode === 'unified' ? <span className={`border px-3 py-1 text-xs font-bold ${unifiedShelfStatus === 'on' ? 'border-[#B7E7CB] bg-[#F4FBF7] text-[#008F53]' : 'border-gray-300 bg-gray-50 text-gray-700'}`}>统一{unifiedShelfStatus === 'on' ? '上架' : '下架'}</span> : <div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div>}</div>}
+                    {operationMode === 'sync' ? <div className="mb-6 max-w-[680px]"><WebProductPublishRules value={overwriteFields} onChange={setOverwriteFields} defaultsBrandId={hasBlindBagSelection ? undefined : activeBrandId} allowedFields={hasBlindBagSelection ? BLIND_BAG_PUBLISH_FIELDS : undefined} /></div> : <div className="mb-6 flex items-start"><span className="w-24 shrink-0 text-sm text-gray-500">修改内容</span>{batchChangeMode === 'unified' ? <span className={`border px-3 py-1 text-xs font-bold ${unifiedShelfStatus === 'on' ? 'border-[#B7E7CB] bg-[#F4FBF7] text-[#008F53]' : 'border-gray-300 bg-gray-50 text-gray-700'}`}>统一{unifiedShelfStatus === 'on' ? '上架' : '下架'}</span> : <div className="flex flex-1 flex-wrap gap-2">{selectedBatchFields.map(field => <span key={field} className="border border-[#B7E7CB] bg-[#F4FBF7] px-2.5 py-1 text-xs font-bold text-[#008F53]">{field}</span>)}</div>}</div>}
 
                     <WebPublishWarnings rows={[
                         ...takeoutPrecheckRows.map(row => ({ ...row, channel: getOmnichannelChannel(row.channel).name })),
@@ -1810,6 +1829,9 @@ export const WebProductSync: React.FC<{
                 </div>
             )}
             <WebProductSelectorDialog
+                allowBlindBag={productSelectorMode === 'sync'}
+                disabledIds={selectorProducts.filter(product => isBlindBagProduct(product) && (product.status !== 'on_shelf' || !blindBagChannels(sourceProducts?.find(source => source.id === product.id)).includes('mini_program_dine_in'))).map(product => product.id)}
+                disabledLabel={blindBagPublish ? '需启用且支持小程序堂食' : '请先完善并启用'}
                 open={productSelectorMode !== null}
                 title={productSelectorMode === 'batch' ? operationMode === 'batch_combo' ? '添加套餐商品' : '添加标准商品' : comboOnly ? '选择套餐商品' : '选择同步商品'}
                 description={productSelectorMode === 'batch'

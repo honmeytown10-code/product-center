@@ -10,6 +10,7 @@ export const WebProductSaveResult: React.FC<{
   channelCount: number;
   platformNote?: string;
   withdrawalPending?: boolean;
+  allowTemplate?: boolean;
   onBack: () => void;
   onContinueCreate: () => void;
   onEdit: () => void;
@@ -17,7 +18,7 @@ export const WebProductSaveResult: React.FC<{
   onTemplate: () => void;
   onRecords: () => void;
   onStoreProducts: () => void;
-}> = ({ productName, mode, intent, storeCount, channelCount, platformNote, withdrawalPending, onBack, onContinueCreate, onEdit, onPublish, onTemplate, onRecords, onStoreProducts }) => {
+}> = ({ productName, mode, intent, storeCount, channelCount, platformNote, withdrawalPending, allowTemplate = true, onBack, onContinueCreate, onEdit, onPublish, onTemplate, onRecords, onStoreProducts }) => {
   const published = intent === 'publish';
   const focusClass = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00B460]';
   return <div className="rounded-lg bg-white px-6 pb-10 pt-10" data-testid="product-save-result">
@@ -44,10 +45,10 @@ export const WebProductSaveResult: React.FC<{
             <span className="min-w-0"><span className="block text-base font-semibold text-[#1D2129]">商品直接下发至门店</span><span className="mt-3 block min-h-12 text-sm leading-6 text-[#667085]">按商品库资料下发，选择门店及需要覆盖的属性。</span><span className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[#008F4C]">下发至门店<ArrowRight size={16} aria-hidden="true" /></span></span>
             <Send size={40} strokeWidth={1.5} className="shrink-0 text-[#00B460]" aria-hidden="true" />
           </button>
-          <button type="button" onClick={onTemplate} className={'group flex min-h-[172px] items-center justify-between gap-5 rounded-lg bg-[#F7F8FA] p-6 text-left transition-colors hover:bg-[#EEF8F3] ' + focusClass}>
+          {allowTemplate && <button type="button" onClick={onTemplate} className={'group flex min-h-[172px] items-center justify-between gap-5 rounded-lg bg-[#F7F8FA] p-6 text-left transition-colors hover:bg-[#EEF8F3] ' + focusClass}>
             <span className="min-w-0"><span className="block text-base font-semibold text-[#1D2129]">商品通过模板下发至门店</span><span className="mt-3 block min-h-12 text-sm leading-6 text-[#667085]">区域或门店商品有差异时，先通过模板维护差异，再下发至对应门店。</span><span className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[#008F4C]">{mode === 'edit' ? '更新商品下发模板' : '加入商品下发模板'}<ArrowRight size={16} aria-hidden="true" /></span></span>
             <ClipboardList size={40} strokeWidth={1.5} className="shrink-0 text-[#00B460]" aria-hidden="true" />
-          </button>
+          </button>}
         </div>
       </section>}
     </div>

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "build:html": "vite build --mode single-html && node scripts/build-single-html.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:blind-bag": "node scripts/test-blind-bag.mjs",
+    "check:blind-bag-types": "node scripts/check-blind-bag-types.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.561.0",

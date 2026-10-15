@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, UtensilsCrossed } from 'lucide-react';
 import { useProducts } from '../../context';
+import { isBlindBagProduct } from '../../blindBag';
 import { WebProductSelectorDialog } from './WebProductSelectorDialog';
 
 export const isGroupMealProduct = (product: any) => Array.isArray(product.formData?.p_display_type) && product.formData.p_display_type.includes('group_meal');
@@ -13,6 +14,7 @@ export const WebGroupMealProducts: React.FC<{ onCreate: (type: 'standard' | 'com
   const [notice, setNotice] = useState('');
   const rows = products.filter(isGroupMealProduct).filter(product => !keyword || `${product.name} ${product.id}`.includes(keyword));
   const updateMark = (product: any, marked: boolean) => {
+    if (isBlindBagProduct(product)) return;
     const tags: string[] = product.formData?.p_display_type || [];
     updateProduct(product.id, { formData: { ...product.formData,
       p_display_type: marked ? [...new Set([...tags, 'group_meal'])] : tags.filter(tag => tag !== 'group_meal' && tag !== 'group_meal_only'),

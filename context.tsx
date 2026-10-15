@@ -5,6 +5,8 @@ import {
   INITIAL_CATEGORIES, INITIAL_PRODUCTS, MOCK_BRANDS 
 } from './types';
 import { DEFAULT_OMNICHANNEL_CONFIG } from './omnichannel';
+import { blindBagStructureError, createBlindBagDemoProducts, isBlindBagProduct } from './blindBag';
+import { INITIAL_OPS_CATEGORY_CONFIGS, type OpsCategoryConfig } from './categoryConfiguration';
 
 // Mock Policies
 const INITIAL_POLICIES: ManagementPolicy[] = [
@@ -102,6 +104,8 @@ const initialPrototypeBrandConfigs = (): Record<string, BrandConfig> => {
 interface ProductContextType {
   products: Product[];
   categories: Category[];
+  opsCategoryConfigs: OpsCategoryConfig[];
+  setOpsCategoryConfigs: React.Dispatch<React.SetStateAction<OpsCategoryConfig[]>>;
   policies: ManagementPolicy[];
   brandConfigs: Record<string, BrandConfig>;
   activeBrandId: string;
@@ -122,21 +126,31 @@ interface ProductContextType {
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(() => INITIAL_PRODUCTS.map(product => ({
+  const [products, setProducts] = useState<Product[]>(() => [...INITIAL_PRODUCTS.map(product => ({
     ...product,
     // Demo library records carry their own sales channels; store coverage remains task-derived.
     formData: {
       salesScope: { channelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'] },
       applicableChannelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'],
     },
-  })));
+  })), ...createBlindBagDemoProducts('/blind-bag-demo.svg')]);
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+  const [opsCategoryConfigs, setOpsCategoryConfigs] = useState<OpsCategoryConfig[]>(INITIAL_OPS_CATEGORY_CONFIGS);
   const [policies, setPolicies] = useState<ManagementPolicy[]>(INITIAL_POLICIES);
   const [brandConfigs, setBrandConfigs] = useState<Record<string, BrandConfig>>(initialPrototypeBrandConfigs);
   const [activeBrandId, setActiveBrandId] = useState<string>('b_1');
 
-  const addProduct = (product: Product) => setProducts([...products, product]);
+  const addProduct = (product: Product) => {
+    const error = blindBagStructureError(product);
+    if (error) throw new Error(error);
+    setProducts(current => [...current, product]);
+  };
   const updateProduct = (id: string, updates: Partial<Product>) => {
+    const previous = products.find(product => product.id === id);
+    const next = { ...previous, ...updates };
+    if (previous && isBlindBagProduct(previous) !== isBlindBagProduct(next)) throw new Error('不能通过普通商品编辑修改盲袋业务身份。请从盲袋商品入口维护。');
+    const error = blindBagStructureError(next);
+    if (error) throw new Error(error);
     setProducts(currentProducts => currentProducts.map(p => p.id === id ? { ...p, ...updates } : p));
   };
   const deleteProduct = (id: string) => setProducts(current => current.filter(p => p.id !== id));
@@ -166,7 +180,7 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   return (
     <ProductContext.Provider value={{
-      products, categories, policies, brandConfigs, activeBrandId,
+      products, categories, opsCategoryConfigs, setOpsCategoryConfigs, policies, brandConfigs, activeBrandId,
       addProduct, updateProduct, deleteProduct,
       addCategory, updateCategory, deleteCategory,
       addPolicy, updatePolicy, deletePolicy,

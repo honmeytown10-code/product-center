@@ -62,7 +62,7 @@ export const WebStoreMenuSortDialog: React.FC<{
             </div>
           </div>)}
         </div>
-        <p className="mt-3 text-[12px] text-[#667085]">保存后，当前门店的小程序横向菜单将按此顺序展示。</p>
+        <p className="mt-3 text-[12px] text-[#667085]">保存后，当前门店的小程序分区菜单将按此顺序展示。</p>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[#E9EDF2] px-5 py-3">
         <button type="button" onClick={onCancel} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">取消排序</button>

@@ -45,7 +45,7 @@ export const WebStoreRegionList: React.FC<Props> = ({ menus, onMenusChange, stor
           <label className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input aria-label="搜索菜单名称" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="菜单名称" className="h-9 w-48 rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] disabled:bg-[#F7F8FA]" /></label>
           <button onClick={() => setKeyword('')} className={buttonClass}>重置</button>
         </div>
-        <div className="flex gap-2"><button disabled={!canManage || storeMenus.length < 2} title="调整当前门店的小程序横向菜单顺序" onClick={() => setSortOpen(true)} className={`${buttonClass} inline-flex items-center`}><ArrowUpDown size={14} className="mr-1.5" />排序管理</button><button disabled={!canManage} onClick={() => setEditing('create')} className={primaryClass}><Plus size={15} className="mr-1.5" />新建菜单</button></div>
+        <div className="flex gap-2"><button disabled={!canManage || storeMenus.length < 2} title="调整当前门店的小程序分区菜单顺序" onClick={() => setSortOpen(true)} className={`${buttonClass} inline-flex items-center`}><ArrowUpDown size={14} className="mr-1.5" />排序管理</button><button disabled={!canManage} onClick={() => setEditing('create')} className={primaryClass}><Plus size={15} className="mr-1.5" />新建菜单</button></div>
       </div>
       <WebStoreMenuDisplayGuide />
       <div className="shrink-0 border-y border-[#E9EDF2] px-4 py-2.5 text-[13px] text-[#667085]">{storeId ? <>{menuStoreName(storeId)} · 共 <strong className="text-[#1D2129]">{filtered.length}</strong> 个菜单</> : '请选择门店后管理菜单'}</div>

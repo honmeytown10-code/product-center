@@ -69,7 +69,7 @@ export function cacheOnlineBrandSubmission(brandId: string, catalogId: string, p
       const index = addons.findIndex(item => item.id === addon.id), existing = addons[index];
       const unchanged = existing && existing.name === addon.name && Number(existing.price) === Number(addon.price);
       if (unchanged && (existing.syncStatus === 'syncing' || existing.syncStatus === 'synced' && existing.platformId && existing.reviewStatus !== 'rejected')) continue;
-      const row = { ...addon, addonType: addon.groupName, category: '', syncStatus: 'syncing', reviewStatus: 'reviewing', updatedAt: at };
+      const row = { ...addon, price: Number(addon.price) || 0, addonType: addon.groupName, category: '', syncStatus: 'syncing', reviewStatus: 'reviewing', updatedAt: at };
       if (index < 0) addons.push(row); else addons[index] = { ...existing, ...row };
     }
     sessionStorage.setItem(key, JSON.stringify({ ...cache, submissionSignatures: { ...cache.submissionSignatures, [product.id]: signature }, states: { ...cache.states, [product.id]: { ...state, syncStatus: 'syncing', reviewStatus: platform === 'douyin' ? 'reviewing' : 'not_submitted', updatedAt: at } }, snapshots: { ...cache.snapshots, [product.id]: product }, addons, submittedProductIds: [...new Set([...(cache.submittedProductIds || []), product.id])] }));

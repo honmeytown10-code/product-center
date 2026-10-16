@@ -477,7 +477,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   // Navigation State
   const isAddonSalePreview = new URLSearchParams(window.location.search).get('preview') === 'addon-sale-exclusions';
   const [activeTopNav, setActiveTopNav] = useState<TopNavView>(() => (experience?.initialMenu === 'product_logs' ? 'brand' : 'store'));
-  const [activeMenu, setActiveMenuState] = useState(() => (
+  const [activeMenu, setActiveMenu] = useState(() => (
     isAddonSalePreview ? 'categories' : experience?.initialMenu || new URLSearchParams(window.location.search).get('menu') || 'buffet_menu'
   ));
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
@@ -688,17 +688,6 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   const [storeRegionEditorContext, setStoreRegionEditorContext] = useState<StoreMenuRecord | null>(null);
   const [storeMenus, setStoreMenus] = useState<StoreMenuRecord[]>(INITIAL_STORE_MENUS);
   const [storeMenuStoreId, setStoreMenuStoreId] = useState('s1');
-  const [storeMenuDirty, setStoreMenuDirty] = useState(false);
-  const [storeMenuNotice, setStoreMenuNotice] = useState('');
-  const confirmLeaveStoreMenu = () => !storeMenuDirty || window.confirm('菜单商品尚未保存，确认放弃修改？');
-  const setActiveMenu = (target: string) => {
-    if (target !== activeMenu && activeMenu === 'store_region_list') {
-      if (!confirmLeaveStoreMenu()) return;
-      setStoreMenuDirty(false);
-      setStoreRegionEditorContext(null);
-    }
-    setActiveMenuState(target);
-  };
   const [attributeMutexEditorContext, setAttributeMutexEditorContext] = useState<{ mode: 'create' | 'edit'; rule?: any } | null>(null);
   const [showProductMenuGuide, setShowProductMenuGuide] = useState(false);
   const [currentProductMenuGuideStep, setCurrentProductMenuGuideStep] = useState(0);
@@ -905,19 +894,17 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
 
   const switchTopNav = (target: TopNavView) => {
     if (target === activeTopNav) return;
-    if (activeMenu === 'store_region_list' && !confirmLeaveStoreMenu()) return;
-    setStoreMenuDirty(false);
     resetTransientViews();
     setActiveTopNav(target);
 
     if (target === 'brand') {
       setExpandedMenus(['security_compliance', 'log_audit']);
-      setActiveMenuState('product_logs');
+      setActiveMenu('product_logs');
       return;
     }
 
     setExpandedMenus([]);
-    setActiveMenuState('product_list');
+    setActiveMenu('product_list');
   };
 
   useEffect(() => {
@@ -1403,13 +1390,10 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
               <WebStoreRegionEditor
                   key={storeRegionEditorContext.id}
                   menu={storeRegionEditorContext}
-                  onDirtyChange={setStoreMenuDirty}
-                  onBack={() => { setStoreMenuDirty(false); setStoreRegionEditorContext(null); }}
-                  onSave={menu => {
+                  onBack={() => setStoreRegionEditorContext(null)}
+                  onChange={menu => {
                     setStoreMenus(current => current.map(item => item.id === menu.id ? menu : item));
-                    setStoreMenuNotice(`菜单商品已保存，共 ${menu.productIds.length} 个`);
-                    setStoreMenuDirty(false);
-                    setStoreRegionEditorContext(null);
+                    setStoreRegionEditorContext(menu);
                   }}
               />
           );
@@ -1563,7 +1547,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       }
 
       if (activeMenu === 'store_region_list') {
-          return <WebStoreRegionList menus={storeMenus} onMenusChange={setStoreMenus} storeId={storeMenuStoreId} onStoreChange={setStoreMenuStoreId} onEditMenu={setStoreRegionEditorContext} message={storeMenuNotice} onMessageRead={() => setStoreMenuNotice('')} />;
+          return <WebStoreRegionList menus={storeMenus} onMenusChange={setStoreMenus} storeId={storeMenuStoreId} onStoreChange={setStoreMenuStoreId} onEditMenu={setStoreRegionEditorContext} />;
       }
 
       if (activeMenu === 'required_product_policy') {
@@ -2042,10 +2026,8 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
           label: '小程序横向菜单',
           active: activeMenu === 'store_region_list',
           onClick: () => {
-            if (!confirmLeaveStoreMenu()) return;
-            setStoreMenuDirty(false);
             setStoreRegionEditorContext(null);
-            setActiveMenuState('store_region_list');
+            setActiveMenu('store_region_list');
           },
         },
       ];
@@ -2109,9 +2091,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
 
   const navigateExperience = (menu: string) => {
     const targetMenu = ['product_sync', 'product_publish', 'product_batch'].includes(menu) ? 'product_sync' : menu;
-    if (activeMenu === 'store_region_list' && !confirmLeaveStoreMenu()) return;
-    setStoreMenuDirty(false);
-    setActiveMenuState(targetMenu);
+    setActiveMenu(targetMenu);
     setCreationContext(null);
     setDetailContext(null);
     setCategorySelectContext(null);

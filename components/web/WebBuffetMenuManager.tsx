@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -316,6 +317,38 @@ const EmptyState: React.FC<{
   </div>
 );
 
+// Portals escape the console content stacking context and cover the entire shell.
+let buffetOverlayCount = 0;
+let previousRootInert = false;
+const BuffetOverlay: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children, ...props }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const root = document.getElementById('root');
+    if (buffetOverlayCount++ === 0 && root) { previousRootInert = root.inert; root.inert = true; }
+    const frame = requestAnimationFrame(() => {
+      (ref.current?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]') || ref.current)?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (--buffetOverlayCount === 0 && root) root.inert = previousRootInert;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
+  return createPortal(<div {...props} ref={ref} tabIndex={-1} data-buffet-overlay onKeyDown={event => {
+    props.onKeyDown?.(event);
+    if (event.key !== 'Tab') return;
+    const overlays = [...document.querySelectorAll<HTMLElement>('[data-buffet-overlay]')];
+    const top = overlays.sort((a, b) => Number(getComputedStyle(a).zIndex) - Number(getComputedStyle(b).zIndex)).at(-1);
+    if (top !== ref.current) return;
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')].filter(element => element.getClientRects().length);
+    const first = focusable[0], last = focusable.at(-1);
+    if (!first) { event.preventDefault(); ref.current?.focus(); }
+    else if (event.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }}>{children}</div>, document.body);
+};
+
 const SelectionModal: React.FC<{
   title: string;
   onClose: () => void;
@@ -324,7 +357,7 @@ const SelectionModal: React.FC<{
   selectedCount: number;
   width?: string;
 }> = ({ title, onClose, onConfirm, children, selectedCount, width = 'w-[920px]' }) => (
-  <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label={title}>
+  <BuffetOverlay className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label={title}>
     <div className={`flex max-h-[calc(100vh-48px)] ${width} max-w-full flex-col overflow-hidden rounded-lg bg-white shadow-2xl`}>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#EAECF0] px-5">
         <div className="text-[16px] font-semibold text-[#1D2939]">{title}</div>
@@ -339,7 +372,7 @@ const SelectionModal: React.FC<{
         </div>
       </div>
     </div>
-  </div>
+  </BuffetOverlay>
 );
 
 const MenuSortModal: React.FC<{
@@ -353,7 +386,7 @@ const MenuSortModal: React.FC<{
   const [draggingMenuId, setDraggingMenuId] = useState<string | null>(null);
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="自助餐菜单排序">
+    <BuffetOverlay className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="自助餐菜单排序">
       <div className="flex max-h-[calc(100vh-48px)] w-[760px] max-w-full flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
         <div className="flex shrink-0 items-start justify-between border-b border-[#EAECF0] px-5 py-4">
           <div>
@@ -414,7 +447,7 @@ const MenuSortModal: React.FC<{
           <button type="button" onClick={onSave} disabled={!dirty} className="h-8 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F56] disabled:cursor-not-allowed disabled:bg-[#A6DCC2]">保存</button>
         </div>
       </div>
-    </div>
+    </BuffetOverlay>
   );
 };
 
@@ -970,7 +1003,7 @@ export const WebBuffetMenuManager: React.FC = () => {
   );
 
   const renderEditor = () => (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA]">
+    <div data-buffet-editor style={{ backgroundColor: '#FFFFFF' }} className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#EAECF0] bg-white px-5">
         <div className="flex items-center gap-3"><button type="button" onClick={() => setEditorOpen(false)} className="rounded p-1.5 text-[#667085] hover:bg-[#F2F4F7]" aria-label="返回列表"><ArrowLeft size={18} /></button><div><div className="font-semibold text-[#1D2939]">{editingId ? '编辑自助餐菜单' : '创建自助餐菜单'}</div><div className="text-[12px] text-[#98A2B3]">{editingId ? editingId.toUpperCase() : '保存后生成菜单编号'}</div></div></div>
         <div className="flex items-center gap-2"><button type="button" onClick={() => setEditorOpen(false)} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054]">取消</button><button type="button" onClick={() => saveMenu(false)} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054]">保存</button><button type="button" onClick={() => saveMenu(true)} className="h-8 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white">保存并启用</button></div>
@@ -992,7 +1025,7 @@ export const WebBuffetMenuManager: React.FC = () => {
   const renderDetailDrawer = () => {
     if (!detailMenu) return null;
     return (
-      <div className="fixed inset-0 z-[80] bg-black/20" onMouseDown={event => { if (event.target === event.currentTarget) setDetailMenu(null); }}>
+      <BuffetOverlay className="fixed inset-0 z-[80] bg-black/20" onMouseDown={event => { if (event.target === event.currentTarget) setDetailMenu(null); }}>
         <aside className="absolute inset-y-0 right-0 flex w-[520px] max-w-[calc(100vw-48px)] flex-col bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="自助餐菜单详情">
           <div className="flex h-16 shrink-0 items-start justify-between border-b border-[#EAECF0] px-5 py-3"><div className="min-w-0"><div className="truncate text-[16px] font-semibold text-[#1D2939]">{detailMenu.name}</div><div className="mt-1 flex items-center gap-2 text-[12px] text-[#98A2B3]">{detailMenu.id.toUpperCase()}<StatusBadge status={detailMenu.status} /></div></div><button type="button" onClick={() => setDetailMenu(null)} className="rounded p-1.5 text-[#667085] hover:bg-[#F2F4F7]" aria-label="关闭"><X size={18} /></button></div>
           <div className="min-h-0 flex-1 overflow-auto p-5">
@@ -1002,7 +1035,7 @@ export const WebBuffetMenuManager: React.FC = () => {
           </div>
           <div className="flex h-16 shrink-0 items-center justify-end gap-2 border-t border-[#EAECF0] px-5"><button type="button" onClick={() => copyMenu(detailMenu)} className="flex h-8 items-center gap-2 rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054]"><Copy size={14} />复制</button><button type="button" onClick={() => openEditor(detailMenu)} className="h-8 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white">编辑菜单</button></div>
         </aside>
-      </div>
+      </BuffetOverlay>
     );
   };
 
@@ -1027,7 +1060,7 @@ export const WebBuffetMenuManager: React.FC = () => {
       )}
 
       {discardSortOpen && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认放弃菜单排序修改">
+        <BuffetOverlay className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认放弃菜单排序修改">
           <div className="w-[440px] max-w-full rounded-lg bg-white shadow-2xl">
             <div className="flex items-start gap-3 p-5">
               <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF7E8] text-[#B76500]"><AlertTriangle size={18} /></span>
@@ -1038,7 +1071,7 @@ export const WebBuffetMenuManager: React.FC = () => {
               <button type="button" onClick={() => { setDiscardSortOpen(false); setSortModalOpen(false); setSortDirty(false); }} className="h-8 rounded bg-[#E5484D] px-4 text-[13px] font-medium text-white">放弃修改</button>
             </div>
           </div>
-        </div>
+        </BuffetOverlay>
       )}
 
       {ticketSelectorOpen && (
@@ -1051,7 +1084,7 @@ export const WebBuffetMenuManager: React.FC = () => {
       )}
 
       {createTicketOpen && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-6" role="dialog" aria-modal="true" aria-label="新增自助餐标">
+        <BuffetOverlay className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-6" role="dialog" aria-modal="true" aria-label="新增自助餐标">
           <div className="w-[640px] max-w-full overflow-hidden rounded-lg bg-white shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-[#EAECF0] px-5">
               <h3 className="text-[16px] font-semibold text-[#1D2939]">新增自助餐标</h3>
@@ -1070,7 +1103,7 @@ export const WebBuffetMenuManager: React.FC = () => {
               <button type="button" onClick={confirmCreateTicket} disabled={!newTicketValid} className="h-8 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:bg-[#A6DCC2]">保存并选择</button>
             </div>
           </div>
-        </div>
+        </BuffetOverlay>
       )}
 
       <WebProductSelectorDialog
@@ -1101,13 +1134,13 @@ export const WebBuffetMenuManager: React.FC = () => {
       )}
 
       {confirmToggleMenu && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认切换菜单状态">
+        <BuffetOverlay className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认切换菜单状态">
           <div className="w-[460px] max-w-full rounded-lg bg-white shadow-2xl"><div className="flex items-start gap-3 p-5"><span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${confirmToggleMenu.status === 'enabled' ? 'bg-[#FFF1F0] text-[#E5484D]' : 'bg-[#E8F8F0] text-[#008F4C]'}`}><AlertTriangle size={18} /></span><div><h3 className="text-[16px] font-semibold text-[#1D2939]">确认{confirmToggleMenu.status === 'enabled' ? '停用' : '启用'}“{confirmToggleMenu.name}”</h3><p className="mt-2 text-[13px] leading-6 text-[#667085]">影响 {confirmToggleMenu.ticketIds.length} 张餐标、{confirmToggleMenu.storeIds.length} 家门店。{confirmToggleMenu.status === 'enabled' ? '停用后，顾客将无法通过这些餐标匹配该菜单；已下单商品不回滚。' : '启用前系统将再次校验同餐标、同门店是否已有启用菜单。'}</p></div></div><div className="flex justify-end gap-2 border-t border-[#EAECF0] px-5 py-4"><button type="button" onClick={() => setConfirmToggleMenu(null)} className="h-8 rounded border border-[#D0D5DD] px-4 text-[13px]">取消</button><button type="button" onClick={confirmToggle} className={`h-8 rounded px-4 text-[13px] font-medium text-white ${confirmToggleMenu.status === 'enabled' ? 'bg-[#E5484D]' : 'bg-[#00B460]'}`}>确认{confirmToggleMenu.status === 'enabled' ? '停用' : '启用'}</button></div></div>
-        </div>
+        </BuffetOverlay>
       )}
 
       {confirmDeleteMenu && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认删除自助餐菜单">
+        <BuffetOverlay className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="确认删除自助餐菜单">
           <div className="w-[480px] max-w-full rounded-lg bg-white shadow-2xl">
             <div className="flex items-start gap-3 p-5">
               <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${confirmDeleteMenu.status === 'enabled' ? 'bg-[#FFF7E8] text-[#B76500]' : 'bg-[#FFF1F0] text-[#E5484D]'}`}><AlertTriangle size={18} /></span>
@@ -1121,7 +1154,7 @@ export const WebBuffetMenuManager: React.FC = () => {
               {confirmDeleteMenu.status === 'enabled' ? <button type="button" onClick={() => { const menu = confirmDeleteMenu; setConfirmDeleteMenu(null); setConfirmToggleMenu(menu); }} className="h-8 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white">先停用</button> : <button type="button" onClick={confirmDelete} className="h-8 rounded bg-[#E5484D] px-4 text-[13px] font-medium text-white">确认删除</button>}
             </div>
           </div>
-        </div>
+        </BuffetOverlay>
       )}
     </>
   );

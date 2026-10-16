@@ -42,6 +42,7 @@ import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebCategorySelectModal, WebImportModal, WebThirdPartyImportRecordsModal } from './web/WebModals';
 import { BadgeOptionConfig, DEFAULT_BADGE_OPTIONS, DEFAULT_GROUPED_TAG_OPTIONS, GroupedTagFieldId, GroupedTagGroup, WebProductForm } from './web/WebProductForm';
+import { cacheOnlineBrandSubmission } from './web/WebOnlinePublishPrecheck';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
@@ -1109,6 +1110,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                   onOpenStoreProducts={() => { setCreationContext(null); setStoreProductManagePreset({ keyword: creationContext.product?.name || '' }); setActiveMenu('store_product_list'); }}
                   onOpenSyncRecords={() => { setCreationContext(null); setProductSyncInitialTab('qimai-records'); setActiveMenu(experience ? 'product_records' : 'product_sync'); }}
                   onOpenManagementTools={() => { setCreationContext(null); setProductSyncInitialTab('publish'); setActiveMenu('product_sync'); }}
+                  onOpenOnlineAudit={platform => { setOnlineCatalogId(effectiveChannelContext?.catalogId || UNIFIED_CHANNEL_CATALOG_ID); setCreationContext(null); setActiveMenu(platform === 'douyin' ? 'platform_douyin' : 'platform_meituan'); }}
                   onOpenStorePublish={product => {
                     setProductPublishPreset({ productId: product.id, ...(isBlindBagProduct(product) ? { blindBagProductIds: [product.id] } : {}), channelIds: isBlindBagProduct(product) ? BLIND_BAG_PUBLISH_CHANNEL_IDS.filter(id => blindBagChannels(product).includes(id)) : [...(product.formData?.salesScope?.channelIds || product.formData?.applicableChannelIds || [])], storeIds: creationContext.storeReturn?.storeId ? [creationContext.storeReturn.storeId] : undefined, returnToStore: creationContext.storeReturn });
                     setCreationContext(null);
@@ -1231,6 +1233,25 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                             },
                           },
                         }));
+                       if (saveOptions?.intent === 'save') {
+                         const selected = (saveOptions.syncOnlineBrandChannels || draft.formData?.salesScope?.channelIds || []).filter(id => (id === 'douyin' || id === 'meituan_dine') && omnichannelConfig.thirdPartyStrategies[id] === 'qimai' && draft.formData?.salesScope?.channelIds?.includes(id));
+                         let submissionError = '';
+                         const channels = (() => {
+                           try { return cacheOnlineBrandSubmission(activeBrandId, targetCatalogId, { ...draft, id: productId }, selected, !!saveOptions.syncOnlineBrandChannels?.length); }
+                           catch (error) { submissionError = error instanceof Error ? error.message : '平台审核提交失败，请重试'; return selected; }
+                         })();
+                         const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
+                         const batches: PublishBatch[] = channels.map(channel => {
+                           const id = `BRAND-${Date.now()}-${channel}-${productId}`, name = getOmnichannelChannel(channel).name;
+                           return { id, recordType: channel === 'douyin' ? 'douyin_standard' : 'meituan_brand', title: `${name}品牌商品同步`, action: '同步品牌商品至平台', sourceType: '商品库', sourceName: draft.name, snapshot: '商品保存时自动提交平台审核；不创建门店下发任务', channels: [name], storeScope: '品牌级，不涉及门店', storeCount: 0, productCount: 1, skuCount: draft.formData?.takeoutSnapshot?.skus?.length || 1, status: submissionError ? 'failed' : 'running', createdAt, creator: '当前用户', tasks: [{ id: `${id}-task`, type: 'platform', target: `${name}品牌商品`, channels: [name], status: submissionError ? 'failed' : 'waiting', progress: submissionError ? 100 : 0, productCount: 1, skuCount: draft.formData?.takeoutSnapshot?.skus?.length || 1, storeCount: 0, successCount: 0, failedCount: submissionError ? 1 : 0, waitingCount: submissionError ? 0 : 1, startedAt: createdAt, ...(submissionError ? { error: submissionError } : { waitingReason: channel === 'douyin' ? '等待品牌商品创建及平台审核结果' : '等待品牌商品创建结果' }) }] };
+                         });
+                         const addons = draft.formData?.takeoutSnapshot?.addonItems || [];
+                         if (!submissionError && channels.includes('douyin') && addons.length) {
+                           const id = `ADDON-${Date.now()}-${productId}`;
+                           batches.push({ id, recordType: 'douyin_addon', title: '抖音在线点关联加料同步', action: '同步关联加料至平台', sourceType: '商品库关联加料', sourceName: draft.name, snapshot: addons.map((item: any) => item.name).join('、'), channels: ['抖音在线点'], storeScope: '品牌级，不涉及门店', storeCount: 0, productCount: addons.length, skuCount: addons.length, status: 'running', createdAt, creator: '当前用户', tasks: [{ id, type: 'platform', target: '抖音关联加料创建及审核', channels: ['抖音在线点'], status: 'waiting', progress: 0, productCount: addons.length, skuCount: addons.length, storeCount: 0, successCount: 0, failedCount: 0, waitingCount: addons.length, startedAt: createdAt, waitingReason: '等待所需加料创建及审核，不创建门店商品任务' }] });
+                         }
+                         if (batches.length) setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [...batches, ...(current[activeBrandId] || [])] }));
+                       }
                        if (saveOptions?.intent === 'publish') {
                          const scope = saveOptions.publishScope;
                          if (scope?.channelIds?.length && scope.storeIds?.length) {
@@ -1252,34 +1273,10 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                              }));
                            });
                            const managedPlatformChannels = scope.channelIds.filter(channelId => isThirdPartyChannelId(channelId) && omnichannelConfig.thirdPartyStrategies[channelId] === 'qimai');
-                           const onlineChannels = managedPlatformChannels.filter(channelId => channelId === 'douyin' || channelId === 'meituan_dine');
                            const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
-                           setAutomaticOnlineSubmissions(current => {
-                             const brand = current[activeBrandId] || {};
-                             return { ...current, [activeBrandId]: Object.fromEntries(['douyin', 'meituan'].map(platform => {
-                               const updates = { ...(brand[platform] || {}) };
-                               delete updates[productId];
-                               if (onlineChannels.includes(platform === 'douyin' ? 'douyin' : 'meituan_dine')) updates[productId] = createdAt;
-                               return [platform, updates];
-                             })) };
-                           });
                            const batchId = `DS${Date.now()}`;
                            const takeoutFailures = Object.fromEntries(managedPlatformChannels.filter(isTakeoutChannel).map(channel => [channel, [...checkTakeoutProduct(draft, channel), ...(channel === 'jd' ? checkJdStoreReadiness(draft.formData?.jdStoreReadiness) : [])].map(issue => `${issue.field}：${issue.message}`).join('；')]));
                            const channelNames = scope.channelIds.map(channelId => getOmnichannelChannel(channelId).name);
-                           const brandBatches: PublishBatch[] = onlineChannels.map(channelId => {
-                             const channelName = getOmnichannelChannel(channelId).name;
-                             const isDouyin = channelId === 'douyin';
-                             const waitingReason = isDouyin ? '品牌商品同步待执行；同步后需等待抖音审核通过' : '品牌商品同步待执行';
-                             return {
-                               recordType: isDouyin ? 'douyin_standard' : 'meituan_brand',
-                               id: `BR-${batchId}-${channelId}`, title: `${channelName}品牌商品同步`,
-                               action: '创建或更新平台品牌商品', sourceType: '商品库', sourceName: draft.name,
-                               snapshot: `商品 ${draft.name} · 保存时资料`, channels: [channelName],
-                               storeScope: '品牌级同步，不涉及门店', storeCount: 0, productCount: 1, skuCount: 1,
-                               status: 'running', createdAt, creator: '当前用户',
-                               tasks: [{ id: `BR-TASK-${batchId}-${channelId}`, type: 'platform', target: `${channelName}品牌商品`, channels: [channelName], status: 'waiting', progress: 0, productCount: 1, skuCount: 1, storeCount: 0, successCount: 0, failedCount: 0, waitingCount: 1, startedAt: createdAt, waitingReason }],
-                             };
-                           });
                            const batch: PublishBatch = {
                              recordType: 'store_publish', id: batchId,
                              title: `${draft.name} · 保存并下发`,
@@ -1289,7 +1286,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                              channels: channelNames, storeScope: PRODUCT_SALES_SCOPE_STORES.filter(store => scope.storeIds.includes(store.id)).map(store => store.name).join('、'), storeCount: scope.storeIds.length,
                              productCount: 1, skuCount: 1, status: 'success', createdAt, creator: '当前用户',
                              tasks: [{ id: `QM-${batchId}`, type: 'qimai', target: '企迈门店渠道商品', channels: channelNames, status: 'success', progress: 100, productCount: 1, skuCount: 1, storeCount: scope.storeIds.length, successCount: records.length, failedCount: 0, waitingCount: 0, startedAt: createdAt, finishedAt: createdAt },
-                               ...managedPlatformChannels.map(channelId => ({ id: `PL-${batchId}-${channelId}`, type: 'platform' as const, target: `${getOmnichannelChannel(channelId).name}门店商品`, channels: [getOmnichannelChannel(channelId).name], status: takeoutFailures[channelId] ? 'failed' as const : 'waiting' as const, progress: takeoutFailures[channelId] ? 100 : 0, productCount: 1, skuCount: 1, storeCount: scope.storeIds.length, successCount: 0, failedCount: takeoutFailures[channelId] ? scope.storeIds.length : 0, waitingCount: takeoutFailures[channelId] ? 0 : scope.storeIds.length, startedAt: createdAt, ...(takeoutFailures[channelId] ? { error: takeoutFailures[channelId] } : {}), ...(isTakeoutChannel(channelId) ? { waitingReason: takeoutOperationPlan(channelId, 'structure') } : channelId === 'douyin' ? { waitingReason: '等待抖音品牌商品同步并审核通过' } : channelId === 'meituan_dine' ? { waitingReason: '等待美团品牌商品同步成功' } : {}) }))],
+                               ...managedPlatformChannels.map(channelId => ({ id: `PL-${batchId}-${channelId}`, type: 'platform' as const, target: `${getOmnichannelChannel(channelId).name}门店商品`, channels: [getOmnichannelChannel(channelId).name], status: takeoutFailures[channelId] ? 'failed' as const : 'waiting' as const, progress: takeoutFailures[channelId] ? 100 : 0, productCount: 1, skuCount: 1, storeCount: scope.storeIds.length, successCount: 0, failedCount: takeoutFailures[channelId] ? scope.storeIds.length : 0, waitingCount: takeoutFailures[channelId] ? 0 : scope.storeIds.length, startedAt: createdAt, ...(takeoutFailures[channelId] ? { error: takeoutFailures[channelId] } : {}), ...(isTakeoutChannel(channelId) ? { waitingReason: takeoutOperationPlan(channelId, 'structure') } : channelId === 'douyin' ? { waitingReason: '品牌商品及关联加料已通过前置校验，等待平台门店任务执行' } : channelId === 'meituan_dine' ? { waitingReason: '品牌商品已通过前置校验，等待平台门店任务执行' } : {}) }))],
                              details: scope.storeIds.flatMap(storeId => scope.channelIds.flatMap(channelId => {
                                const detail = { productName: draft.name, productId, skuName: '当前规格', skuId: String(draft.skuId || productId), storeName: PRODUCT_SALES_SCOPE_STORES.find(store => store.id === storeId)?.name || storeId, storeId, channel: getOmnichannelChannel(channelId).name, fields: saveOptions.overwriteFields || [] };
                                return [{ ...detail, id: `${batchId}-qimai-${storeId}-${channelId}`, taskType: 'qimai' as const, action: action === 'create' ? '创建企迈门店商品' : '更新企迈门店商品', status: 'success' as const, finishedAt: createdAt }, ...(managedPlatformChannels.includes(channelId) ? [{ ...detail, id: `${batchId}-platform-${storeId}-${channelId}`, taskType: 'platform' as const, action: isTakeoutChannel(channelId) ? takeoutOperationPlan(channelId, 'structure') : '同步平台门店商品', status: takeoutFailures[channelId] ? 'failed' as const : 'waiting' as const, finishedAt: takeoutFailures[channelId] ? createdAt : '等待平台执行', ...(takeoutFailures[channelId] ? { error: takeoutFailures[channelId] } : {}) }] : [])];
@@ -1300,7 +1297,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                              tasks: batch.tasks.filter(task => task.type === 'qimai').map(task => ({ ...task, status: 'running', progress: 0, successCount: 0, waitingCount: records.length, finishedAt: undefined })),
                              details: batch.details?.filter(detail => detail.taskType === 'qimai').map(detail => ({ ...detail, status: 'running', finishedAt: '等待企迈任务执行' })),
                            };
-                           setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [pendingBatch, ...brandBatches, ...(current[activeBrandId] || [])] }));
+                           setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [pendingBatch, ...(current[activeBrandId] || [])] }));
                            setPendingDirectJobs(current => [...current, { brandId: activeBrandId, productId, records, batch, draft, previousProduct: products.find(product => product.id === productId) || creationContext.product, overwriteFields: saveOptions.overwriteFields || [], readyAt: Date.now() + 4000 }]);
                          }
                        }
@@ -1778,6 +1775,13 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
               onLeaveWorkspace={activeMenu.startsWith('platform_') ? () => navigateExperience(experience?.unified ? 'product_list' : 'channel_product_library') : undefined}
               productOverrides={channelProductOverrides}
               automaticSubmissions={automaticOnlineSubmissions[activeBrandId]}
+              onPublishToStores={(platform, catalogId) => {
+                setLibraryBatchPreset(null);
+                setProductPublishPreset({ source: experience?.unified ? 'master' : 'channel_catalog', catalogId, channelIds: [platform === 'douyin' ? 'douyin' : 'meituan_dine'] });
+                setCreationContext(null);
+                setProductSyncInitialTab('publish');
+                setActiveMenu('product_sync');
+              }}
               onOpenSyncRecords={() => {
                 setProductSyncInitialTab('platform-records');
                 setActiveMenu(experience ? 'product_records' : 'product_sync');

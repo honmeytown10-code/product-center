@@ -402,7 +402,27 @@ button:disabled {
 
 .console-figma .console-page {
   border-radius: var(--console-radius);
-  isolation: isolate;
+  /* Let full-screen page dialogs cover the shell sidebar as well. */
+  isolation: auto;
+}
+
+/* Header, channel tabs, filters and results share one continuous surface. */
+.console-shell .online-platform-workspace {
+  background: var(--console-color-container);
+}
+.console-shell .online-platform-workspace .console-view-tabs {
+  align-self: stretch;
+  width: auto;
+  max-width: none;
+  padding: 4px 20px 8px;
+  border: 0;
+  border-radius: 0;
+  background: var(--console-color-container);
+  backdrop-filter: none;
+}
+.console-shell .online-platform-workspace .console-panel {
+  border: 0;
+  border-radius: 0;
 }
 
 .console-figma .console-page > * {

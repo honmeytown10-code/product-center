@@ -238,6 +238,7 @@ interface Props {
   onCreateProduct?: (request: ChannelProductCreateRequest) => void;
   onBatchEdit?: (catalogId: string) => void;
   onOpenSyncRecords?: () => void;
+  onPublishToStores?: (platform: OnlineOrderingPlatform, catalogId: string) => void;
   productOverrides?: Record<string, any>;
   initialGroupId?: string;
   configOverride?: OmnichannelBrandConfig;
@@ -256,6 +257,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   onCreateProduct,
   onBatchEdit,
   onOpenSyncRecords,
+  onPublishToStores,
   productOverrides = {},
   initialGroupId,
   configOverride,
@@ -515,7 +517,9 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const getPlatformWorkspaceKey = (platform: OnlineOrderingPlatform) => `${activeGroup.id}:${platform}`;
 
   const getGeneratedPlatformProductIds = (platform: OnlineOrderingPlatform) => {
-    const generatedIds = [...new Set([...(platformProductIds[getPlatformWorkspaceKey(platform)] || activeProductIds.slice(0, 3)), ...Object.keys(automaticSubmissions?.[platform] || {})])];
+    let shortcutIds: string[] = [];
+    try { shortcutIds = JSON.parse(sessionStorage.getItem(`online-entry:${activeBrandId}:${activeGroup.id}:${platform}`) || 'null')?.submittedProductIds || []; } catch { /* Status cache unavailable: retain incumbent list behavior. */ }
+    const generatedIds = [...new Set([...(platformProductIds[getPlatformWorkspaceKey(platform)] || activeProductIds.slice(0, 3)), ...Object.keys(automaticSubmissions?.[platform] || {}), ...shortcutIds])];
     return platform === 'meituan'
       ? generatedIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
       : generatedIds;
@@ -824,6 +828,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         onBack={() => onLeaveWorkspace ? onLeaveWorkspace() : setPlatformWorkspace(null)}
         onEditProduct={editChannelProduct}
         onOpenSyncRecords={onOpenSyncRecords}
+        onPublishToStores={onPublishToStores ? () => onPublishToStores(platformWorkspace.platform, activeGroup.id) : undefined}
         onSyncProducts={(platform, productIds) => submitPlatformSync(platform, productIds)}
       />
     );

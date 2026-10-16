@@ -4,13 +4,14 @@ import { ChevronDown, ChevronRight, Store } from 'lucide-react';
 import type { OnlineOrderingPlatform, OnlineOrderingPlatformView } from './WebOnlineOrderingPlatformHub';
 
 interface Props {
+  label?: string;
   douyin: boolean;
   meituan: boolean;
   onOpen: (platform: OnlineOrderingPlatform, view: OnlineOrderingPlatformView) => void;
 }
 
 // One entrance shared by the product library and the current channel library.
-export const WebOnlineOrderingEntry: React.FC<Props> = ({ douyin, meituan, onOpen }) => {
+export const WebOnlineOrderingEntry: React.FC<Props> = ({ douyin, meituan, onOpen, label = '在线点商品' }) => {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const trigger = useRef<HTMLButtonElement>(null);
@@ -39,9 +40,9 @@ export const WebOnlineOrderingEntry: React.FC<Props> = ({ douyin, meituan, onOpe
   }, [open, options.length]);
   if (!options.length) return null;
   return <>
-    <button ref={trigger} type="button" className="console-secondary-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); } }}><Store size={15} />在线点商品<ChevronDown size={14} /></button>
-    {open && createPortal(<div ref={menu} role="menu" aria-label="在线点商品入口" style={position} className="fixed z-[100] w-[224px] rounded-md border border-[#E5E6EB] bg-white p-1 shadow-lg" onKeyDown={event => {
-      const buttons = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('button') || []);
+    <button ref={trigger} type="button" className="console-secondary-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); } }}><Store size={15} />{label}<ChevronDown size={14} /></button>
+    {open && createPortal(<div ref={menu} role="menu" aria-label={label + '入口'} style={position} className="fixed z-[100] w-[224px] rounded-md border border-[#E5E6EB] bg-white p-1 shadow-lg" onKeyDown={event => {
+      const buttons: HTMLButtonElement[] = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('button') || []);
       const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
       if (event.key === 'Escape' || event.key === 'Tab') { if (event.key === 'Escape') event.preventDefault(); close(); }
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }

@@ -27,7 +27,7 @@ export const WebProductSaveResult: React.FC<{
         <CheckCircle2 size={64} strokeWidth={1.5} className="mb-5 text-[#00B460]" aria-hidden="true" />
         <h2 className="max-w-full break-words text-xl font-semibold leading-8 text-[#1D2129]">{published ? '商品已保存，下发任务已提交' : `商品“${productName}”${intent === 'draft' ? '草稿已保存' : mode === 'edit' ? '编辑成功' : '创建成功'}`}</h2>
         <p className="mt-3 text-sm leading-6 text-[#667085]">{published ? `已创建 ${storeCount} 家门店、${channelCount} 个渠道的下发任务。请在同步任务中查看进度和明细，任务完成后门店商品才会更新。` : intent === 'draft' ? '完善商品资料后，请下发至门店进行售卖。' : mode === 'edit' ? '本次修改已保存，请将更新后的商品资料下发至门店。' : '商品创建完成，请将商品下发至门店进行售卖。'}</p>
-        {published && platformNote && <p className="mt-2 text-sm leading-6 text-[#667085]">{platformNote}</p>}
+        {intent !== 'draft' && platformNote && <p className="mt-2 text-sm leading-6 text-[#667085]">{platformNote}{!published && <button type="button" onClick={onRecords} className={'ml-1 text-[#008F4C] hover:underline ' + focusClass}>查看同步任务</button>}</p>}
         {withdrawalPending && <p className="mt-2 text-sm leading-6 text-[#667085]">取消渠道的门店商品下架任务已提交。<button type="button" onClick={onRecords} className={'ml-1 text-[#008F4C] hover:underline ' + focusClass}>查看下架任务</button></p>}
       </div>
       <div className="mt-6 flex flex-wrap justify-center gap-3">

@@ -1,6 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { clearProductFormRecovery } from './productFormRecovery';
+import { checkOnlinePublish, isOnlineSubmissionCurrent, OnlineAuditDemoControl, WebOnlinePublishPrecheck, type OnlineAuditScenario, type OnlineAuditCheck } from './WebOnlinePublishPrecheck';
 import { BLIND_BAG_PUBLISH_CHANNEL_IDS, BLIND_BAG_PUBLISH_FIELDS, normalizeBlindBagDraft } from '../../blindBag';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Pencil, Settings, Printer, 
@@ -20,7 +21,6 @@ import { productMnemonic } from './productMnemonic';
 const conciseFieldLabel = (label: string) => label.replace(/^是否(?:为)?/, '');
 import { WebThirdPartyChannelFields, getDouyinSettingsError, normalizeDouyinChannelValues, resolveChannelFieldValues, resolveDouyinSalePeriod, resolveSelectedSalesChannelIds } from './WebThirdPartyChannelFields';
 import { WebTakeoutSyncPreview } from './WebTakeoutSyncPreview';
-import { WebStoreConnectionPrecheck } from './WebStoreConnectionPrecheck';
 import { isTakeoutChannel, type TakeoutSnapshot } from '../../takeoutSync';
 import { PRODUCT_SALES_SCOPE_STORES, ProductSalesScope, WebProductSalesScope, getProductStoreRecords, fromStoreChannel } from './WebProductSalesScope';
 import type { StoreProductRecord } from './WebStoreProductList';
@@ -46,7 +46,7 @@ export type ProductSaveDraft = {
     formData?: Record<string, any>;
 };
 
-export type ProductSaveOptions = { intent: 'draft' | 'save' | 'publish'; overwriteFields?: string[]; publishScope?: ProductSalesScope; withdrawnChannelIds?: OmnichannelChannelId[]; withdrawalAction?: 'keep' | 'off_shelf' };
+export type ProductSaveOptions = { intent: 'draft' | 'save' | 'publish'; overwriteFields?: string[]; publishScope?: ProductSalesScope; withdrawnChannelIds?: OmnichannelChannelId[]; withdrawalAction?: 'keep' | 'off_shelf'; syncOnlineBrandChannels?: OmnichannelChannelId[] };
 const SAVE_PUBLISH_FIELDS = DEFAULT_PUBLISH_OVERWRITE_FIELDS;
 
 export interface WebProductFormProps {
@@ -98,6 +98,7 @@ export interface WebProductFormProps {
     storeRecords?: StoreProductRecord[];
     onQuerySellingStores?: (productId: string) => Promise<StoreProductRecord[]>;
     onOpenChannelCatalog?: (action: 'add' | 'update', product: ProductSaveDraft) => void;
+    onOpenOnlineAudit?: (platform: 'douyin' | 'meituan') => void;
 }
 
 const DEFAULT_RESET_FIELD_IDS = new Set(['p_weight_flag', 'st_member']);
@@ -1061,6 +1062,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     storeRecords = [],
     onQuerySellingStores,
     onOpenChannelCatalog,
+    onOpenOnlineAudit,
 }) => {
     const { activeBrandId, brandConfigs } = useProducts();
     const packageFeeSetting = brandConfigs[activeBrandId]?.packageFeeSetting || 'product';
@@ -1089,6 +1091,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [savedIntent, setSavedIntent] = useState<ProductSaveOptions['intent']>('save');
     const [savedWithdrawal, setSavedWithdrawal] = useState(false);
     const [confirmPublish, setConfirmPublish] = useState(false);
+    const [onlineAuditScenario, setOnlineAuditScenario] = useState<OnlineAuditScenario>('current');
+    const [onlineAuditChecks, setOnlineAuditChecks] = useState<OnlineAuditCheck[]>([]);
+    const [onlineAuditQuery, setOnlineAuditQuery] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [onlineAuditError, setOnlineAuditError] = useState('');
+    const [onlineAuditRefresh, setOnlineAuditRefresh] = useState(0);
+    const [onlineQuickSyncing, setOnlineQuickSyncing] = useState(false);
+    const [onlineQuickNotice, setOnlineQuickNotice] = useState('');
+    const onlineQuickLock = useRef(false);
     const [publishSubmitting, setPublishSubmitting] = useState(false);
     const [publishStoreQuery, setPublishStoreQuery] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [sellingStoreCount, setSellingStoreCount] = useState(0);
@@ -1107,9 +1117,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         publishDialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
         const keyboard = (event: KeyboardEvent) => {
             if (document.querySelector('[class*="z-[420]"]')) return;
-            if (event.key === 'Escape' && !publishSubmitLock.current) { publishQueryGeneration.current += 1; setConfirmPublish(false); }
+            if (event.key === 'Escape' && !publishSubmitLock.current && !onlineQuickLock.current) { publishQueryGeneration.current += 1; setConfirmPublish(false); }
             if (event.key !== 'Tab') return;
-            const controls = publishDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)');
+            const controls = publishDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary');
             if (!controls?.length) return;
             const first = controls[0], last = controls[controls.length - 1];
             if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -1981,6 +1991,20 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
     const resolvedChannelValues = { ...channelSpecificValues, ...resolveChannelFieldValues(activeThirdPartyChannelAttributeIds, channelSpecificValues) };
     const enabledChannelAddonItems = takeoutSnapshot.addonItems.map(({ groupName, name }) => ({ groupName, name }));
+    const onlineAuditChannelIds = publishChannelIds.filter(id => (id === 'douyin' || id === 'meituan_dine') && thirdPartyManagementModes[id] === 'qimai');
+    const onlineAuditChannelKey = onlineAuditChannelIds.join('|');
+    const onlineAuditAddonKey = JSON.stringify(takeoutSnapshot.addonItems || []);
+    const readOnlineAudit = () => checkOnlinePublish({ channelIds: onlineAuditChannelIds, brandId: activeBrandId, catalogId: String((channelContext as any)?.catalogId || ''), productId: savedProductId, addons: takeoutSnapshot.addonItems || [], scenario: onlineAuditScenario });
+    const onlinePublishReady = !onlineAuditChannelIds.length || onlineAuditQuery === 'success' && onlineAuditChecks.length === onlineAuditChannelIds.length && onlineAuditChecks.every(check => check.ready);
+    useEffect(() => {
+        if (!confirmPublish || !onlineAuditChannelIds.length) { setOnlineAuditChecks([]); setOnlineAuditQuery('idle'); return; }
+        setOnlineAuditQuery('loading'); setOnlineAuditError('');
+        const timer = window.setTimeout(() => {
+            try { setOnlineAuditChecks(readOnlineAudit()); setOnlineAuditQuery('success'); }
+            catch (error) { setOnlineAuditError(error instanceof Error ? error.message : '平台状态查询失败，请重试'); setOnlineAuditQuery('error'); }
+        }, 180);
+        return () => window.clearTimeout(timer);
+    }, [confirmPublish, onlineAuditChannelKey, onlineAuditAddonKey, onlineAuditScenario, onlineAuditRefresh, savedProductId, activeBrandId, (channelContext as any)?.catalogId]);
     const channelSettingsError = (isChannelForm || isUnifiedForm) && activeThirdPartyChannelAttributeIds.length > 0
         ? selectedSalesChannelIds.length === 0 ? '请选择至少一个售卖渠道' : selectedSalesChannelIds.includes('douyin') ? getDouyinSettingsError(resolvedChannelValues, enabledChannelAddonItems) : ''
         : '';
@@ -2688,6 +2712,10 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     };
 
     const commitProductSave = (showSuccessPage = true, options: ProductSaveOptions = { intent: 'save' }) => {
+        if (options.intent === 'publish' && onlineAuditChannelIds.length) {
+            try { const checks = readOnlineAudit(); setOnlineAuditChecks(checks); if (!checks.every(check => check.ready)) return false; }
+            catch (error) { setOnlineAuditError(error instanceof Error ? error.message : '平台状态查询失败，请重试'); setOnlineAuditQuery('error'); return false; }
+        }
         const nextSuccessMode = hasSavedProduct ? 'edit' : 'create';
         const createdTime = String(initialProduct?.createdTime || savedProductForChannelAction?.createdTime || formatDateTime(new Date()));
         const savedChannelFields = selectedSalesChannelIds.includes('douyin') ? normalizeDouyinChannelValues(resolvedChannelValues, enabledChannelAddonItems) : resolvedChannelValues;
@@ -2746,6 +2774,18 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             },
         };
         setSavedWithdrawal(options.intent !== 'draft' && withdrawalAction === 'off_shelf' && removedSalesTargets.length > 0);
+        // An approval for an older source snapshot cannot authorize this edit.
+        // Persist and submit the new source first, without creating any store job.
+        if (options.intent === 'publish' && onlineAuditScenario === 'current' && onlineAuditChannelIds.length) {
+            try {
+                if (!isOnlineSubmissionCurrent(activeBrandId, String((channelContext as any)?.catalogId || ''), savedProduct, onlineAuditChannelIds)) {
+                    if (commitProductSave(false, { intent: 'save' }) === false) return false;
+                    setOnlineAuditRefresh(value => value + 1);
+                    setOnlineQuickNotice('商品资料已更新并提交平台审核；请审核通过后重新下发，尚未创建门店下发任务。');
+                    return false;
+                }
+            } catch (error) { setOnlineAuditError(error instanceof Error ? error.message : '平台审核状态查询失败，请重试'); setOnlineAuditQuery('error'); return false; }
+        }
         try {
             if (blindBagContext) savedProduct = normalizeBlindBagDraft(savedProduct, options.intent, initialProduct, currentCategory.standardFields);
             onProductSaved?.(savedProduct, nextSuccessMode, { ...options, ...(options.intent !== 'draft' && removedChannelIds.length ? { withdrawnChannelIds: removedChannelIds, withdrawalAction } : {}) });
@@ -2768,6 +2808,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         return true;
     };
 
+    const syncOnlineBrandBeforePublish = async () => {
+        if (onlineQuickLock.current || !onlineAuditChannelIds.length) return;
+        onlineQuickLock.current = true; setOnlineQuickSyncing(true); setOnlineQuickNotice('');
+        try {
+            await Promise.resolve();
+            if (commitProductSave(false, { intent: 'save', syncOnlineBrandChannels: onlineAuditChecks.filter(check => !check.ready && check.canSync).map(check => check.channelId) }) === false) return;
+            setOnlineAuditScenario('current'); setOnlineAuditRefresh(value => value + 1);
+            setOnlineQuickNotice('商品已保存，品牌商品及所需加料同步已提交。请等待平台处理后重新查询；尚未创建门店下发任务。');
+        } catch (error) { setOnlineAuditError(error instanceof Error ? error.message : '同步提交失败，请重试；当前表单仍保留。'); setOnlineAuditQuery('error'); }
+        finally { onlineQuickLock.current = false; setOnlineQuickSyncing(false); }
+    };
     const handleSave = (intent: ProductSaveOptions['intent'] = 'save') => {
         setSaveIntent(intent);
         setDraftSaved(false);
@@ -10110,7 +10161,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 intent={savedIntent}
                                 storeCount={savedPublishScope.storeIds.length}
                                 channelCount={savedPublishScope.channelIds.length}
-                                platformNote={savedPublishScope.channelIds.includes('douyin') ? '抖音在线点需等待平台审核通过后继续下发，请耐心等候。' : savedPublishScope.channelIds.includes('meituan_dine') ? '美团在线点完成品牌商品同步后，将继续下发至平台门店。' : undefined}
+                                platformNote={savedIntent === 'save' && onlineAuditChannelIds.length ? '已按所选在线点渠道触发品牌商品同步。请在同步任务中查看提交进度和异常，平台审核通过后再下发至门店。' : onlineAuditScenario !== 'current' && onlineAuditChannelIds.length ? '本次平台状态为原型模拟，不代表真实审核结果。' : savedPublishScope.channelIds.some(id => id === 'douyin' || id === 'meituan_dine') ? '品牌商品及所需加料已通过前置校验，门店任务等待平台异步处理。' : undefined}
                                 withdrawalPending={savedWithdrawal}
                                 onBack={onClose}
                                 onContinueCreate={handleContinueCreate}
@@ -10143,7 +10194,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                                 : isUnifiedForm
                                                     ? unifiedManagementView
                                                         ? savedIntent === 'publish'
-                                                            ? `商品资料已保存，已创建 ${savedPublishScope.storeIds.length} 家门店、${savedPublishScope.channelIds.length} 个渠道的下发任务。可在同步任务中查看进度和明细，任务完成后门店商品才会更新。${savedPublishScope.channelIds.includes('douyin') ? '抖音在线点需等待平台审核通过后继续下发，请耐心等候。' : savedPublishScope.channelIds.includes('meituan_dine') ? '美团在线点完成品牌商品同步后，将继续下发至平台门店。' : ''}`
+                                                            ? `商品资料已保存，已创建 ${savedPublishScope.storeIds.length} 家门店、${savedPublishScope.channelIds.length} 个渠道的下发任务。可在同步任务中查看进度和明细，任务完成后门店商品才会更新。${savedPublishScope.channelIds.includes('douyin') ? '在线点品牌商品及关联加料已通过前置校验，门店任务等待平台处理。' : savedPublishScope.channelIds.includes('meituan_dine') ? '美团在线点品牌商品已通过前置校验，门店任务等待平台处理。' : ''}`
                                                             : savedIntent === 'draft' ? '草稿已保存，尚未下发。完善商品资料后，请下发到门店使用。' : `商品库资料已保存，尚未下发商品资料。请下发到门店后使用。${savedWithdrawal ? '取消渠道的门店商品下架任务已提交，可在同步任务中查看。' : ''}`
                                                         : successMode === 'edit'
                                                         ? `主档资料与${channelContext?.catalogName || '当前渠道商品库'}中的渠道商品资料已保存，可选择将主档属性立即更新到其他渠道商品库，也可同步至门店或更新模板。`
@@ -10874,18 +10925,17 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
             </div>}
             {confirmPublish && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 p-5">
                 <div ref={publishDialogRef} role="dialog" aria-modal="true" aria-labelledby="save-publish-title" className="flex max-h-[85vh] w-full max-w-[680px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-                    <header className="border-b border-[#E5E6EB] px-6 py-4"><h3 id="save-publish-title" className="text-base font-semibold text-[#1D2129]">确认保存并下发</h3></header>
+                    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E6EB] px-6 py-4"><h3 id="save-publish-title" className="text-base font-semibold text-[#1D2129]">确认保存并下发</h3>{!!onlineAuditChannelIds.length && <OnlineAuditDemoControl value={onlineAuditScenario} onChange={value => { setOnlineAuditScenario(value); setOnlineQuickNotice(''); }} disabled={onlineQuickSyncing || publishSubmitting} />}</header>
                     <div className="overflow-y-auto px-6 py-4 text-sm text-[#4E5969]">
-                        <fieldset disabled={publishSubmitting || publishStoreQuery === 'loading'}><WebProductSalesScope value={{ ...publishScope, channelIds: publishChannelIds }} channels={publishChannelIds} onChange={value => setPublishScope({ ...value, channelIds: [...publishChannelIds] })} showErrors={false} showStores requireStores compact readOnlyChannels /></fieldset>
+                        <fieldset disabled={publishSubmitting || onlineQuickSyncing || publishStoreQuery === 'loading'}><WebProductSalesScope value={{ ...publishScope, channelIds: publishChannelIds }} channels={publishChannelIds} onChange={value => setPublishScope({ ...value, channelIds: [...publishChannelIds] })} showErrors={false} showStores requireStores compact readOnlyChannels /></fieldset>
                         {blindBagContext && !publishChannelIds.length && <p role="alert" className="mt-3 text-sm text-[#B42318]">盲袋暂仅支持下发小程序堂食，请先在销售范围中勾选小程序堂食。</p>}
                         {publishStoreQuery === 'loading' && <p role="status" className="mt-3 flex items-center gap-2 text-xs text-[#667085]"><LoaderCircle size={14} className="animate-spin" />正在查询商品在售门店…</p>}
                         {publishStoreQuery === 'success' && <p role="status" className="mt-3 text-xs text-[#667085]">{sellingStoreCount ? `已回显当前在售的 ${sellingStoreCount} 家门店，可调整本次下发范围。` : '当前所选渠道暂无在售门店，请选择本次下发门店。'}</p>}
                         {publishStoreQuery === 'error' && <p role="alert" className="mt-3 text-xs text-[#CB2634]">在售门店查询失败，未自动选择任何门店。<button type="button" onClick={beginPublish} className="ml-2 text-[#008F4C] underline">重新查询</button></p>}
+                        {!!onlineAuditChannelIds.length && <WebOnlinePublishPrecheck loading={onlineAuditQuery === 'loading' || onlineAuditQuery === 'idle'} error={onlineAuditError} checks={onlineAuditChecks} onRetry={() => setOnlineAuditRefresh(value => value + 1)} onSync={syncOnlineBrandBeforePublish} syncing={onlineQuickSyncing} notice={onlineQuickNotice} onViewStatus={onOpenOnlineAudit ? () => { if (commitProductSave(false) !== false) { setConfirmPublish(false); onOpenOnlineAudit(onlineAuditChecks.find(check => !check.ready)?.platform || 'douyin'); } } : undefined} />}
                         <div className="mt-5 border-t border-[#E5E6EB] pt-4"><WebProductPublishRules value={publishFields} onChange={setPublishFields} disabled={publishSubmitting} allowedFields={blindBagContext ? BLIND_BAG_PUBLISH_FIELDS : undefined} /></div>
-                        <WebStoreConnectionPrecheck storeIds={publishScope.storeIds} channelIds={publishChannelIds.filter(id => !isThirdPartyChannelId(id) || thirdPartyManagementModes[id] === 'qimai')} />
-                        {publishScope.channelIds.some(id => (id === 'douyin' || id === 'meituan_dine') && thirdPartyManagementModes[id] === 'qimai') && <p className="mt-4 text-xs leading-5 text-[#667085]">在线点需先完成品牌商品同步；抖音审核通过后继续下发，请耐心等候。</p>}
                     </div>
-                    <footer className="flex justify-end gap-3 border-t border-[#E5E6EB] px-6 py-4"><button type="button" disabled={publishSubmitting} onClick={() => { publishQueryGeneration.current += 1; setConfirmPublish(false); }} className="rounded-md border border-[#DDE3EA] px-4 py-2 text-sm text-[#4E5969] disabled:opacity-50">取消</button><button type="button" disabled={publishSubmitting || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length} onClick={() => { if (publishSubmitLock.current || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length) return; publishSubmitLock.current = true; setPublishSubmitting(true); try { commitProductSave(true, { intent: 'publish', overwriteFields: publishFields, publishScope: { ...publishScope, channelIds: [...publishChannelIds] } }); setConfirmPublish(false); } finally { setPublishSubmitting(false); publishSubmitLock.current = false; } }} className="rounded-md bg-[#00B460] px-4 py-2 text-sm font-semibold text-white hover:bg-[#009F55] disabled:opacity-50">{publishSubmitting ? '提交中…' : '保存并下发'}</button></footer>
+                    <footer className="flex justify-end gap-3 border-t border-[#E5E6EB] px-6 py-4"><button type="button" disabled={publishSubmitting || onlineQuickSyncing} onClick={() => { publishQueryGeneration.current += 1; setConfirmPublish(false); }} className="rounded-md border border-[#DDE3EA] px-4 py-2 text-sm text-[#4E5969] disabled:opacity-50">取消</button><button type="button" disabled={publishSubmitting || onlineQuickSyncing || !onlinePublishReady || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length} onClick={() => { if (publishSubmitLock.current || onlineQuickLock.current || !onlinePublishReady || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length) return; publishSubmitLock.current = true; setPublishSubmitting(true); try { if (commitProductSave(true, { intent: 'publish', overwriteFields: publishFields, publishScope: { ...publishScope, channelIds: [...publishChannelIds] } }) !== false) setConfirmPublish(false); } finally { setPublishSubmitting(false); publishSubmitLock.current = false; } }} className="rounded-md bg-[#00B460] px-4 py-2 text-sm font-semibold text-white hover:bg-[#009F55] disabled:opacity-50">{publishSubmitting ? '提交中…' : '保存并下发'}</button></footer>
                 </div>
             </div>}
             <style>{`.q-form-input { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; transition: all 0.2s; background: white; } .q-form-input:focus { border-color: #00C06B; box-shadow: 0 0 0 3px rgba(0, 192, 107, 0.1); } .q-form-select { width: 100%; border: 1px solid #E8E8E8; border-radius: 8px; padding: 8px 12px; min-height: 38px; font-size: 13px; outline: none; background: white; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; } .q-form-input:disabled, .q-form-select:disabled, fieldset:disabled .q-form-input, fieldset:disabled .q-form-select { cursor: not-allowed; border-color: #E5E7EB; color: #6B7280; background-color: #F5F6F7; }`}</style>

@@ -316,7 +316,7 @@ export const WebProductList: React.FC<{
           })}
         </div>
         <div className="flex shrink-0 items-center gap-4">
-        {unifiedManagement && onlineChannels && onOpenOnlineProducts && <WebOnlineOrderingEntry {...onlineChannels} onOpen={onOpenOnlineProducts} />}
+        {unifiedManagement && onlineChannels && onOpenOnlineProducts && <WebOnlineOrderingEntry label="在线点商品审核状态" {...onlineChannels} onOpen={onOpenOnlineProducts} />}
         <button onClick={() => showNotice('回收站暂无已归档商品')} className="flex items-center text-[13px] text-[#666] hover:text-[#333]">
           <Trash2 size={14} className="mr-1.5" /> 回收站
         </button>

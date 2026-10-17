@@ -2030,7 +2030,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
         },
         {
           key: 'store-region',
-          label: '小程序横向菜单',
+          label: '小程序分区菜单',
           active: activeMenu === 'store_region_list',
           onClick: () => {
             setStoreRegionEditorContext(null);

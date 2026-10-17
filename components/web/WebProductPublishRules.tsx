@@ -26,7 +26,8 @@ export const WebProductPublishRules: React.FC<{
   disabled?: boolean;
   defaultsBrandId?: string;
   allowedFields?: string[];
-}> = ({ value, onChange, disabled = false, defaultsBrandId, allowedFields = PUBLISH_OVERWRITE_FIELDS }) => {
+  compact?: boolean;
+}> = ({ value, onChange, disabled = false, defaultsBrandId, allowedFields = PUBLISH_OVERWRITE_FIELDS, compact = false }) => {
   const [draftDefaults, setDraftDefaults] = useState<string[] | null>(null);
   const [saveError, setSaveError] = useState('');
   const close = useCallback(() => { setDraftDefaults(null); setSaveError(''); }, []);
@@ -41,7 +42,7 @@ export const WebProductPublishRules: React.FC<{
   <label className="flex items-center gap-2 text-sm text-[#4E5969]"><input type="radio" checked readOnly aria-label="相同商品合并到门店商品" className="h-4 w-4 accent-[#00B460]" />合并到门店商品</label>
   <div className="text-xs leading-5 text-[#667085]">新增商品使用完整资料；相同商品仅覆盖勾选属性，其余资料及上下架状态保留。</div>
   <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium text-[#4E5969]">覆盖属性</span>{defaultsBrandId && <button type="button" onClick={() => { setDraftDefaults(getPublishOverwriteDefaults(defaultsBrandId)); setSaveError(''); }} className="flex items-center gap-1 text-xs text-[#008647] hover:underline"><Settings2 size={14} />默认参数配置</button>}</div>
-  <div className="grid grid-cols-3 gap-x-4 gap-y-3">{allowedFields.map(field => <label key={field} className="flex items-center gap-2 text-sm text-[#4E5969]"><input type="checkbox" checked={value.includes(field)} onChange={() => onChange(value.includes(field) ? value.filter(item => item !== field) : [...value, field])} className="h-4 w-4 shrink-0 accent-[#00B460]" />{field}</label>)}</div>
+  <div className={compact ? 'grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-3 gap-x-4 gap-y-3'}>{allowedFields.map(field => <label key={field} className="flex items-center gap-2 text-sm text-[#4E5969]"><input type="checkbox" checked={value.includes(field)} onChange={() => onChange(value.includes(field) ? value.filter(item => item !== field) : [...value, field])} className="h-4 w-4 shrink-0 accent-[#00B460]" />{field}</label>)}</div>
 </fieldset>
 {draftDefaults && <WebPublishDialog title="默认参数配置" onClose={close} footer={<><button type="button" onClick={close} className="rounded-md border border-[#E5E6EB] px-5 py-2 text-sm text-[#4E5969]">取消</button><button type="button" onClick={saveDefaults} className="rounded-md bg-[#008647] px-5 py-2 text-sm font-medium text-white">保存并应用</button></>}>
   <p className="mb-4 text-sm leading-6 text-[#4E5969]">设置当前品牌下发相同商品时的默认覆盖属性。保存后应用于本次任务，后续任务默认使用；单次调整不会改变默认值。</p>

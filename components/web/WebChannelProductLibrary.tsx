@@ -229,7 +229,6 @@ export type ChannelProductsSyncRequest = Omit<ChannelProductEditRequest, 'produc
   products: Product[];
 };
 
-import { WebOnlineOrderingEntry } from './WebOnlineOrderingEntry';
 
 interface Props {
   onEditProduct?: (request: ChannelProductEditRequest) => void;
@@ -239,6 +238,7 @@ interface Props {
   onBatchEdit?: (catalogId: string) => void;
   onOpenSyncRecords?: () => void;
   onPublishToStores?: (platform: OnlineOrderingPlatform, catalogId: string) => void;
+  onPlatformSubmitted?: (platform: OnlineOrderingPlatform, kind: 'products' | 'addons', items: { id: string; name: string }[], catalogId: string) => void;
   productOverrides?: Record<string, any>;
   initialGroupId?: string;
   configOverride?: OmnichannelBrandConfig;
@@ -258,6 +258,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   onBatchEdit,
   onOpenSyncRecords,
   onPublishToStores,
+  onPlatformSubmitted,
   productOverrides = {},
   initialGroupId,
   configOverride,
@@ -534,7 +535,9 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     const supportedIds = platform === 'meituan'
       ? channelIds.filter(productId => effectiveProducts.find(product => product.id === productId)?.type !== 'combo')
       : channelIds;
-    const eligibleIds = platform === 'douyin' && reviewChannel
+    // The workspace selector uses its persisted platform state. Do not override
+    // it with this legacy list's index-based demonstration review states.
+    const eligibleIds = !platformWorkspace && platform === 'douyin' && reviewChannel
       ? supportedIds.filter(productId => !isPlatformReviewing(getPlatformStatus(productId) as PlatformStatus))
       : supportedIds;
     return {
@@ -619,6 +622,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         ...syncableProductIds,
       ])),
     }));
+    onPlatformSubmitted?.(platform, 'products', effectiveProducts.filter(product => syncableProductIds.includes(product.id)), activeGroup.id);
   };
 
   const confirmPlatformSync = () => {
@@ -816,7 +820,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         catalogName={activeGroup.name}
         unifiedManagementView={unifiedManagementView}
         navigation={workspaceNavigation}
-        automaticSync={unifiedManagementView && config.operationStyle === 'direct'}
+        automaticSync={false}
         products={effectiveProducts.filter(product => activeProductIds.includes(product.id))}
         syncProducts={effectiveProducts.filter(product => {
           if (!activeProductIds.includes(product.id)) return false;
@@ -830,6 +834,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
         onOpenSyncRecords={onOpenSyncRecords}
         onPublishToStores={onPublishToStores ? () => onPublishToStores(platformWorkspace.platform, activeGroup.id) : undefined}
         onSyncProducts={(platform, productIds) => submitPlatformSync(platform, productIds)}
+        onSyncAddons={items => onPlatformSubmitted?.('douyin', 'addons', items, activeGroup.id)}
       />
     );
   }
@@ -959,10 +964,6 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <WebOnlineOrderingEntry douyin={hasDouyinOnlineOrdering} meituan={hasMeituanOnlineOrdering} onOpen={(platform, view) => {
-                if (onOpenWorkspace) onOpenWorkspace(platform, view, activeGroup.id);
-                else setPlatformWorkspace({ platform, view });
-              }} />
               {selectedProductIds.length > 0 ? <button type="button" onClick={syncSelectedFromMaster} className="console-secondary-button" title={`从主档更新已选 ${selectedProductIds.length} 个商品`}><RefreshCw size={15} />从主档更新</button> : (
                 <>
                   <button type="button" onClick={openCategorySortDialog} className="console-secondary-button" title={selectedQuickCategory ? `管理“${selectedQuickCategory}”下的商品排序` : '请先从左侧选择前台分类'}>

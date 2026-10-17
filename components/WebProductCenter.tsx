@@ -19,18 +19,18 @@ export const WebProductCenter: React.FC = () => {
     'sales-rules': 'sales_scope', publish: 'product_sync', mapping: 'product_mapping',
   };
   const oldMenu = params.get('menu') || oldPages[params.get('page') || ''] || 'product_list';
-  const initialMenu = oldMenu === 'v2_management' ? 'omnichannel_settings' : ['takeout_menu_sync', 'product_publish', 'product_batch'].includes(oldMenu) ? 'product_sync' : oldMenu;
+  const initialMenu = oldMenu === 'special_products' ? 'group_meal_products' : oldMenu === 'v2_management' ? 'omnichannel_settings' : ['takeout_menu_sync', 'product_publish', 'product_batch'].includes(oldMenu) ? 'product_sync' : oldMenu;
   const groups: Group[] = [
     { title: '商品资料', items: [
-      { id: 'product_list', label: unified ? '商品库' : '商品主档', matches: unified ? ['platform_douyin', 'platform_douyin_addons', 'platform_meituan'] : [] },
+      { id: 'product_list', label: unified ? '商品库' : '商品主档' },
       { id: 'product_attributes', label: '分类与属性', matches: ['categories', 'category_management'] },
-      { id: 'group_meal_products', label: '团餐商品' },
-      { id: 'blind_bag_products', label: '盲袋商品' },
+      { id: 'online_ordering', label: '在线点商品', matches: ['platform_douyin', 'platform_douyin_addons', 'platform_meituan'] },
+      { id: 'special_products', label: '专用商品', matches: ['group_meal_products', 'blind_bag_products'] },
       { id: 'recipe_new', label: '配方与营养', matches: ['ingredient_library', 'recipe_default', 'recipe_legacy', 'nutrition_manager', 'addon_group'] },
     ] },
     { title: '商品运营', items: [
       ...(!unified ? [
-        { id: 'channel_product_library', label: '渠道商品', matches: ['platform_douyin', 'platform_douyin_addons', 'platform_meituan'] },
+        { id: 'channel_product_library', label: '渠道商品' },
         { id: 'channel_attributes', label: '渠道属性', matches: ['channel_categories', 'channel_custom_attributes'] },
       ] : []),
       { id: 'product_sync', label: '商品批量管理', matches: ['product_publish', 'product_batch', 'product_records', 'product_template'] },

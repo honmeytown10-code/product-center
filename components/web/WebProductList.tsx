@@ -5,8 +5,6 @@ import { Search, Plus, ChevronDown, MoreHorizontal, Filter, ListFilter, X, Trash
 import { useProducts } from '../../context';
 import type { Product } from '../../types';
 import { blindBagChannels, buildBlindBagProduct, isBlindBagProduct } from '../../blindBag';
-import { WebOnlineOrderingEntry } from './WebOnlineOrderingEntry';
-import type { OnlineOrderingPlatform, OnlineOrderingPlatformView } from './WebOnlineOrderingPlatformHub';
 import { getOmnichannelChannel } from '../../omnichannel';
 import { getProductStoreRecords, fromStoreChannel, type ProductSalesScope } from './WebProductSalesScope';
 import type { StoreProductRecord } from './WebStoreProductList';
@@ -111,9 +109,7 @@ export const WebProductList: React.FC<{
   templateProductIds?: Record<string, string[]>;
   onAddToTemplates?: (templateIds: string[], productIds: string[]) => void | Promise<void>;
   initialTab?: ProductTab;
-  onlineChannels?: { douyin: boolean; meituan: boolean };
-  onOpenOnlineProducts?: (platform: OnlineOrderingPlatform, view: OnlineOrderingPlatformView) => void;
-}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, onSyncToChannelProducts, unifiedManagement = false, directUse = false, storeRecords = [], onLifecycleAction, onBatchEdit, templateProductIds, onAddToTemplates, initialTab = 'on_shelf', onlineChannels, onOpenOnlineProducts }) => {
+}> = ({ onCreateClick, onImportClick, onImportRecordsClick, onViewDetail, onEditProduct, onSyncToChannelProducts, unifiedManagement = false, directUse = false, storeRecords = [], onLifecycleAction, onBatchEdit, templateProductIds, onAddToTemplates, initialTab = 'on_shelf' }) => {
   const { products, categories, addProduct, updateProduct, deleteProduct, toggleShelfStatus } = useProducts();
   const [activeTab, setActiveTab] = useState<ProductTab>(initialTab);
   const [batchDialog, setBatchDialog] = useState<'price' | 'template' | 'enable' | null>(null);
@@ -316,7 +312,6 @@ export const WebProductList: React.FC<{
           })}
         </div>
         <div className="flex shrink-0 items-center gap-4">
-        {unifiedManagement && onlineChannels && onOpenOnlineProducts && <WebOnlineOrderingEntry label="在线点商品审核状态" {...onlineChannels} onOpen={onOpenOnlineProducts} />}
         <button onClick={() => showNotice('回收站暂无已归档商品')} className="flex items-center text-[13px] text-[#666] hover:text-[#333]">
           <Trash2 size={14} className="mr-1.5" /> 回收站
         </button>

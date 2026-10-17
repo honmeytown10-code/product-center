@@ -42,7 +42,6 @@ import { WebAttributeMutexRuleList } from './web/WebAttributeMutexRuleList';
 import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebCategorySelectModal, WebImportModal, WebThirdPartyImportRecordsModal } from './web/WebModals';
 import { BadgeOptionConfig, DEFAULT_BADGE_OPTIONS, DEFAULT_GROUPED_TAG_OPTIONS, GroupedTagFieldId, GroupedTagGroup, WebProductForm } from './web/WebProductForm';
-import { cacheOnlineBrandSubmission } from './web/WebOnlinePublishPrecheck';
 import { WebProductDetail } from './web/WebProductDetail';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
@@ -480,6 +479,13 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   const [activeMenu, setActiveMenu] = useState(() => (
     isAddonSalePreview ? 'categories' : experience?.initialMenu || new URLSearchParams(window.location.search).get('menu') || 'buffet_menu'
   ));
+  useEffect(() => {
+    if (activeMenu !== 'online_ordering') return;
+    const group = getEffectiveChannelGroups(omnichannelConfig).find(item => item.channels.some(id => id === 'douyin' || id === 'meituan_dine'));
+    if (!group) return;
+    setOnlineCatalogId(group.id);
+    setActiveMenu(group.channels.includes('douyin') ? 'platform_douyin' : 'platform_meituan');
+  }, [activeMenu, omnichannelConfig]);
   const [newRecipeEnabled, setNewRecipeEnabled] = useState(true);
   const [lastRecipeMenu, setLastRecipeMenu] = useState<'recipe_legacy' | 'recipe_new'>('recipe_new');
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -536,7 +542,6 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
     setActiveMenu('product_sync');
   };
   const [onlineCatalogId, setOnlineCatalogId] = useState<string | undefined>();
-  const [automaticOnlineSubmissions, setAutomaticOnlineSubmissions] = useState<Record<string, Record<string, Record<string, string>>>>({});
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
   const [directStoreProductsByBrand, setDirectStoreProductsByBrand] = useState<Record<string, StoreProductRecord[]>>({});
   // Explicit legacy demo aliases only; production queries use canonical SPU IDs, never product names.
@@ -1099,7 +1104,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                   onOpenManagementTools={() => { setCreationContext(null); setProductSyncInitialTab('publish'); setActiveMenu('product_sync'); }}
                   onOpenOnlineAudit={platform => { setOnlineCatalogId(effectiveChannelContext?.catalogId || UNIFIED_CHANNEL_CATALOG_ID); setCreationContext(null); setActiveMenu(platform === 'douyin' ? 'platform_douyin' : 'platform_meituan'); }}
                   onOpenStorePublish={product => {
-                    setProductPublishPreset({ productId: product.id, ...(isBlindBagProduct(product) ? { blindBagProductIds: [product.id] } : {}), channelIds: isBlindBagProduct(product) ? BLIND_BAG_PUBLISH_CHANNEL_IDS.filter(id => blindBagChannels(product).includes(id)) : [...(product.formData?.salesScope?.channelIds || product.formData?.applicableChannelIds || [])], storeIds: creationContext.storeReturn?.storeId ? [creationContext.storeReturn.storeId] : undefined, returnToStore: creationContext.storeReturn });
+                    setProductPublishPreset({ productId: product.id, ...(isBlindBagProduct(product) ? { blindBagProductIds: [product.id] } : {}), channelIds: isBlindBagProduct(product) ? BLIND_BAG_PUBLISH_CHANNEL_IDS.filter(id => blindBagChannels(product).includes(id)) : (product.formData?.salesScope?.channelIds || product.formData?.applicableChannelIds || []).filter(id => id !== 'douyin' && id !== 'meituan_dine'), storeIds: creationContext.storeReturn?.storeId ? [creationContext.storeReturn.storeId] : undefined, returnToStore: creationContext.storeReturn });
                     setCreationContext(null);
                     setProductSyncInitialTab('publish');
                     setActiveMenu('product_sync');
@@ -1220,27 +1225,10 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                             },
                           },
                         }));
-                       if (saveOptions?.intent === 'save') {
-                         const selected = (saveOptions.syncOnlineBrandChannels || draft.formData?.salesScope?.channelIds || []).filter(id => (id === 'douyin' || id === 'meituan_dine') && omnichannelConfig.thirdPartyStrategies[id] === 'qimai' && draft.formData?.salesScope?.channelIds?.includes(id));
-                         let submissionError = '';
-                         const channels = (() => {
-                           try { return cacheOnlineBrandSubmission(activeBrandId, targetCatalogId, { ...draft, id: productId }, selected, !!saveOptions.syncOnlineBrandChannels?.length); }
-                           catch (error) { submissionError = error instanceof Error ? error.message : '平台审核提交失败，请重试'; return selected; }
-                         })();
-                         const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
-                         const batches: PublishBatch[] = channels.map(channel => {
-                           const id = `BRAND-${Date.now()}-${channel}-${productId}`, name = getOmnichannelChannel(channel).name;
-                           return { id, recordType: channel === 'douyin' ? 'douyin_standard' : 'meituan_brand', title: `${name}品牌商品同步`, action: '同步品牌商品至平台', sourceType: '商品库', sourceName: draft.name, snapshot: '商品保存时自动提交平台审核；不创建门店下发任务', channels: [name], storeScope: '品牌级，不涉及门店', storeCount: 0, productCount: 1, skuCount: draft.formData?.takeoutSnapshot?.skus?.length || 1, status: submissionError ? 'failed' : 'running', createdAt, creator: '当前用户', tasks: [{ id: `${id}-task`, type: 'platform', target: `${name}品牌商品`, channels: [name], status: submissionError ? 'failed' : 'waiting', progress: submissionError ? 100 : 0, productCount: 1, skuCount: draft.formData?.takeoutSnapshot?.skus?.length || 1, storeCount: 0, successCount: 0, failedCount: submissionError ? 1 : 0, waitingCount: submissionError ? 0 : 1, startedAt: createdAt, ...(submissionError ? { error: submissionError } : { waitingReason: channel === 'douyin' ? '等待品牌商品创建及平台审核结果' : '等待品牌商品创建结果' }) }] };
-                         });
-                         const addons = draft.formData?.takeoutSnapshot?.addonItems || [];
-                         if (!submissionError && channels.includes('douyin') && addons.length) {
-                           const id = `ADDON-${Date.now()}-${productId}`;
-                           batches.push({ id, recordType: 'douyin_addon', title: '抖音在线点关联加料同步', action: '同步关联加料至平台', sourceType: '商品库关联加料', sourceName: draft.name, snapshot: addons.map((item: any) => item.name).join('、'), channels: ['抖音在线点'], storeScope: '品牌级，不涉及门店', storeCount: 0, productCount: addons.length, skuCount: addons.length, status: 'running', createdAt, creator: '当前用户', tasks: [{ id, type: 'platform', target: '抖音关联加料创建及审核', channels: ['抖音在线点'], status: 'waiting', progress: 0, productCount: addons.length, skuCount: addons.length, storeCount: 0, successCount: 0, failedCount: 0, waitingCount: addons.length, startedAt: createdAt, waitingReason: '等待所需加料创建及审核，不创建门店商品任务' }] });
-                         }
-                         if (batches.length) setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [...batches, ...(current[activeBrandId] || [])] }));
-                       }
+                       // Source persistence is independent of online platform submission.
+                       // Brand/addon synchronization is an explicit action in Online Products.
                        if (saveOptions?.intent === 'publish') {
-                         const scope = saveOptions.publishScope;
+                         const scope = saveOptions.publishScope && { ...saveOptions.publishScope, channelIds: saveOptions.publishScope.channelIds.filter(id => id !== 'douyin' && id !== 'meituan_dine') };
                          if (scope?.channelIds?.length && scope.storeIds?.length) {
                            const channelAlias: Record<string, string> = {
                              mini_program_dine_in: 'mini_dine', mini_program_delivery: 'mini_take',
@@ -1737,6 +1725,9 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
           return <WebBuffetMenuManager />;
       }
 
+      if (activeMenu === 'online_ordering') {
+        return <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-white p-6 text-sm text-[#667085]"><h2 className="text-base font-semibold text-[#1D2129]">在线点商品</h2><p>当前未配置可用的在线点渠道，请先在商品设置中完成渠道配置。</p><button type="button" className="console-secondary-button" onClick={() => navigateExperience('general_settings')}>前往商品设置</button></div>;
+      }
       if (activeMenu === 'channel_product_library' || activeMenu === 'platform_douyin' || activeMenu === 'platform_douyin_addons' || activeMenu === 'platform_meituan') {
           return (
             <WebChannelProductLibrary
@@ -1752,13 +1743,26 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
               workspaceNavigation={experience && activeMenu.startsWith('platform_') ? <div className="console-view-tabs flex h-12 shrink-0 items-end gap-6 border-b border-[#E5E6EB] bg-white px-5" role="tablist" aria-label="在线点商品视图">{[
                 ['platform_douyin', '抖音在线点商品'], ['platform_douyin_addons', '抖音在线点加料'], ['platform_meituan', '美团在线点商品'],
               ].filter(([menu]) => {
-                const group = getEffectiveChannelGroups(omnichannelConfig).find(item => item.id === onlineCatalogId)
-                  || getEffectiveChannelGroups(omnichannelConfig).find(item => item.channels.includes(activeMenu === 'platform_meituan' ? 'meituan_dine' : 'douyin'));
-                return group?.channels.includes(menu === 'platform_meituan' ? 'meituan_dine' : 'douyin');
-              }).map(([menu, label]) => <button key={menu} type="button" role="tab" aria-selected={activeMenu === menu} aria-current={activeMenu === menu ? 'page' : undefined} onClick={() => navigateExperience(menu)} className={`h-full border-b-2 px-1 text-[14px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460] ${activeMenu === menu ? 'border-[#00B460] text-[#008F4C]' : 'border-transparent text-[#667085] hover:text-[#1D2129]'}`}>{label}</button>)}</div> : undefined}
+                return getEffectiveChannelGroups(omnichannelConfig).some(group => group.channels.includes(menu === 'platform_meituan' ? 'meituan_dine' : 'douyin'));
+              }).map(([menu, label]) => <button key={menu} type="button" role="tab" aria-selected={activeMenu === menu} aria-current={activeMenu === menu ? 'page' : undefined} onClick={() => { setOnlineCatalogId(getEffectiveChannelGroups(omnichannelConfig).find(group => group.channels.includes(menu === 'platform_meituan' ? 'meituan_dine' : 'douyin'))?.id); navigateExperience(menu); }} className={`h-full border-b-2 px-1 text-[14px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460] ${activeMenu === menu ? 'border-[#00B460] text-[#008F4C]' : 'border-transparent text-[#667085] hover:text-[#1D2129]'}`}>{label}</button>)}</div> : undefined}
               onLeaveWorkspace={activeMenu.startsWith('platform_') ? () => navigateExperience(experience?.unified ? 'product_list' : 'channel_product_library') : undefined}
               productOverrides={channelProductOverrides}
-              automaticSubmissions={automaticOnlineSubmissions[activeBrandId]}
+              onPlatformSubmitted={(platform, kind, items, catalogId) => {
+                if (!items.length) return;
+                const id = `ONLINE-${Date.now()}-${platform}-${kind}`;
+                const name = platform === 'douyin' ? '抖音在线点' : '美团在线点';
+                const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
+                const batch: PublishBatch = {
+                  id, recordType: kind === 'addons' ? 'douyin_addon' : platform === 'douyin' ? 'douyin_standard' : 'meituan_brand',
+                  title: `${name}${kind === 'addons' ? '加料' : '品牌商品'}同步`, action: '同步至平台',
+                  sourceType: kind === 'addons' ? '商品库加料' : '商品库', sourceName: items.map(item => item.name).join('、'),
+                  snapshot: `主动提交平台同步；来源商品库 ${catalogId}；不创建门店下发任务`, channels: [name],
+                  storeScope: '品牌级，不涉及门店', storeCount: 0, productCount: items.length, skuCount: items.length,
+                  status: 'running', createdAt, creator: '当前用户',
+                  tasks: [{ id: `${id}-platform`, type: 'platform', target: kind === 'addons' ? '平台加料' : '平台品牌商品', channels: [name], status: 'waiting', progress: 0, productCount: items.length, skuCount: items.length, storeCount: 0, successCount: 0, failedCount: 0, waitingCount: items.length, startedAt: createdAt, waitingReason: '已提交平台，等待处理结果；不会自动下发门店' }],
+                };
+                setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [batch, ...(current[activeBrandId] || [])] }));
+              }}
               onPublishToStores={(platform, catalogId) => {
                 setLibraryBatchPreset(null);
                 setProductPublishPreset({ source: experience?.unified ? 'master' : 'channel_catalog', catalogId, channelIds: [platform === 'douyin' ? 'douyin' : 'meituan_dine'] });
@@ -1902,11 +1906,6 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
             directUse={!!experience?.unified}
             storeRecords={directStoreProducts}
             onLifecycleAction={handleProductLifecycleAction}
-            onlineChannels={{ douyin: !!unifiedDefaultGroup?.channels.includes('douyin'), meituan: !!unifiedDefaultGroup?.channels.includes('meituan_dine') }}
-            onOpenOnlineProducts={(platform, view) => {
-              setOnlineCatalogId(unifiedDefaultGroup?.id);
-              navigateExperience(platform === 'meituan' ? 'platform_meituan' : view === 'addons' ? 'platform_douyin_addons' : 'platform_douyin');
-            }}
          />
       );
   };
@@ -1933,6 +1932,14 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
 
     let ariaLabel = '';
     let tabs: ContextTab[] = [];
+
+    if (['group_meal_products', 'blind_bag_products'].includes(activeMenu)) {
+      ariaLabel = '专用商品';
+      tabs = [
+        { key: 'group_meal_products', label: '团餐商品' },
+        { key: 'blind_bag_products', label: '盲袋商品' },
+      ].map(({ key, label }) => ({ key, label, active: activeMenu === key, onClick: () => navigateExperience(key) }));
+    }
 
     if ((experience || activeMenu === 'product_template') && ['product_sync', 'product_publish', 'product_batch', 'product_records', 'product_template'].includes(activeMenu)) {
       ariaLabel = '商品批量管理';
@@ -2090,7 +2097,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   };
 
   const navigateExperience = (menu: string) => {
-    const targetMenu = ['product_sync', 'product_publish', 'product_batch'].includes(menu) ? 'product_sync' : menu;
+    const targetMenu = menu === 'special_products' ? 'group_meal_products' : ['product_sync', 'product_publish', 'product_batch'].includes(menu) ? 'product_sync' : menu;
     setActiveMenu(targetMenu);
     setCreationContext(null);
     setDetailContext(null);
@@ -2292,6 +2299,8 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
              active={['product_attributes', 'categories', 'category_management'].includes(activeMenu)}
              onClick={() => { setActiveMenu('product_attributes'); setCreationContext(null); }}
            />
+           <SidebarItem label="在线点商品" icon={<UtensilsCrossed size={17} />} active={['online_ordering', 'platform_douyin', 'platform_douyin_addons', 'platform_meituan'].includes(activeMenu)} onClick={() => { setActiveMenu('online_ordering'); setCreationContext(null); }} />
+           <SidebarItem label="专用商品" icon={<Package size={17} />} active={['group_meal_products', 'blind_bag_products'].includes(activeMenu)} onClick={() => navigateExperience('special_products')} />
            <SidebarItem
              label="配方与营养"
              icon={<FlaskConical size={17} />}

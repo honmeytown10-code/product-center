@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft,
-  ChevronRight,
   History,
   Plus,
   Search,
@@ -31,6 +29,7 @@ interface Props {
   onOpenSyncRecords?: () => void;
   onPublishToStores?: () => void;
   onSyncProducts?: (platform: OnlineOrderingPlatform, productIds: string[]) => void;
+  onSyncAddons?: (items: { id: string; name: string }[]) => void;
 }
 
 type SyncStatus = 'not_synced' | 'syncing' | 'synced' | 'failed';
@@ -83,6 +82,7 @@ const REVIEW_META: Record<ReviewStatus, { label: string; className: string }> = 
 };
 
 const platformName = (platform: OnlineOrderingPlatform) => platform === 'douyin' ? '抖音在线点' : '美团在线点';
+const sourceSignature = (product: Product) => JSON.stringify({ name: product.name, price: product.price, image: product.image, category: product.category, type: product.type, formData: product.formData });
 
 const getPlatformCategory = (product: Product, platform: OnlineOrderingPlatform) => {
   const saved = (product as Product & { formData?: { channelSpecificValues?: Record<string, Record<string, unknown>> } }).formData?.channelSpecificValues;
@@ -136,6 +136,7 @@ export const WebOnlineOrderingPlatformHub: React.FC<Props> = ({
   onOpenSyncRecords,
   onPublishToStores,
   onSyncProducts,
+  onSyncAddons,
 }) => {
   const [activeView, setActiveView] = useState<OnlineOrderingPlatformView>(initialView);
   useEffect(() => { setActiveView(initialView); setKeyword(''); setSyncFilter('all'); setReviewFilter('all'); setSelectedAddonIds([]); }, [initialView]);
@@ -174,7 +175,7 @@ export const WebOnlineOrderingPlatformHub: React.FC<Props> = ({
       updatedAt: time,
     }])) }));
   }, [automaticSync, automaticSubmissions, platform]);
-  useEffect(() => { if (stateKey) { try { sessionStorage.setItem(`online-entry:${stateKey}`, JSON.stringify({ ...cache, states: productStates, snapshots: submittedSnapshots, addons })); } catch { /* Preview remains usable when storage is unavailable. */ } } }, [stateKey, productStates, submittedSnapshots, addons]);
+  useEffect(() => { if (stateKey) { try { sessionStorage.setItem(`online-entry:${stateKey}`, JSON.stringify({ ...cache, states: productStates, snapshots: submittedSnapshots, addons, submittedProductIds: platformProductIds })); } catch { /* Preview remains usable when storage is unavailable. */ } } }, [stateKey, productStates, submittedSnapshots, addons, platformProductIds]);
 
   const managedProducts = useMemo(() => products.filter(product => (
     platformProductIds.includes(product.id) && (platform !== 'meituan' || product.type !== 'combo')
@@ -230,6 +231,7 @@ export const WebOnlineOrderingPlatformHub: React.FC<Props> = ({
   };
 
   const confirmSync = () => {
+    onSyncAddons?.(addons.filter(item => selectedAddonIds.includes(item.id)));
     setAddons(current => current.map(item => selectedAddonIds.includes(item.id) ? { ...item, syncStatus: 'syncing', updatedAt: '2026-09-10 21:48' } : item));
     setSelectedAddonIds([]);
     setShowSyncConfirm(false);
@@ -256,14 +258,10 @@ export const WebOnlineOrderingPlatformHub: React.FC<Props> = ({
     <main className="online-platform-workspace relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
       {notice && <div className="absolute left-1/2 top-3 z-[100] flex -translate-x-1/2 items-center gap-3 rounded-md bg-[#1D2129] px-4 py-2.5 text-sm text-white shadow-xl"><span>{notice}</span><button type="button" onClick={() => setNotice('')}><X size={14} /></button></div>}
       <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 bg-white px-5 py-3">
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={onBack} className="rounded-md p-2 text-[#4E5969] hover:bg-[#F2F3F5]" aria-label={unifiedManagementView ? '返回商品库' : `返回${catalogName}`} title={unifiedManagementView ? '返回商品库' : '返回渠道商品库'}><ArrowLeft size={18} /></button>
-          <div>
-            <div className="flex items-center gap-2 text-[15px] font-bold text-[#1D2129]"><button type="button" onClick={onBack} className="font-normal text-[#667085] hover:text-[#008F4C]">{unifiedManagementView ? '商品库' : catalogName}</button><ChevronRight size={14} className="text-[#98A2B3]" /><span>在线点商品审核状态</span></div>
-            <div className="mt-0.5 text-[12px] text-[#667085]">{automaticSync ? '自动同步 · 商品资料在商品库维护' : '商品资料在原商品库维护，此处查看平台结果'}</div>
-          </div>
+        <div>
+          <h1 className="text-base font-semibold text-[#1D2129]">在线点商品</h1>
+          <p className="mt-1 text-xs text-[#667085]">{unifiedManagementView ? '共用商品库资料' : `资料来源：${catalogName}`}，保存资料不会自动提交平台。请在此同步商品、加料并查看处理结果，再下发至门店。</p>
         </div>
-        <div className="flex items-center gap-4"><button type="button" onClick={onOpenSyncRecords} className="console-text-button"><History size={15} />任务记录</button>{activeView === 'products' && onPublishToStores && <button type="button" onClick={onPublishToStores} className="console-secondary-button"><Send size={15} />下发至门店</button>}</div>
       </div>
 
       {navigation || (platform === 'douyin' && (
@@ -275,11 +273,26 @@ export const WebOnlineOrderingPlatformHub: React.FC<Props> = ({
       <div className="flex min-h-0 flex-1 flex-col">
         <section className="console-panel shrink-0 rounded-b-none border-b-0">
           <div className="flex flex-wrap items-center gap-3 bg-white px-5 pb-4 pt-3">
-            <label className="flex h-9 w-[300px] items-center rounded-md border border-[#E5E6EB] bg-white px-3 focus-within:border-[#00B460]"><Search size={15} className="mr-2 text-[#98A2B3]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder={activeView === 'addons' ? '搜索加料名称' : '搜索商品名称、商品ID、SKUID'} className="min-w-0 flex-1 text-sm outline-none" /></label>
-            <label className="flex h-9 items-center gap-2 rounded-md border border-[#E5E6EB] bg-white px-3 text-xs text-[#667085]">同步状态<select value={syncFilter} onChange={event => setSyncFilter(event.target.value as 'all' | SyncStatus)} className="bg-transparent text-sm text-[#1D2129] outline-none"><option value="all">全部状态</option><option value="not_synced">待同步</option><option value="syncing">同步中</option><option value="synced">同步成功</option><option value="failed">同步失败</option></select></label>
-            {platform === 'douyin' && activeView === 'products' && <label className="flex h-9 items-center gap-2 rounded-md border border-[#E5E6EB] bg-white px-3 text-xs text-[#667085]">审核状态<select value={reviewFilter} onChange={event => setReviewFilter(event.target.value as 'all' | ReviewStatus)} className="bg-transparent text-sm text-[#1D2129] outline-none"><option value="all">全部状态</option><option value="not_submitted">未提交</option><option value="reviewing">审核中</option><option value="approved">审核通过</option><option value="rejected">审核失败</option></select></label>}
-            <button type="button" onClick={() => { setKeyword(''); setSyncFilter('all'); setReviewFilter('all'); }} className="console-secondary-button">重置</button>
-            {activeView === 'addons' ? <div className="ml-auto flex items-center gap-2"><button type="button" onClick={() => setShowAddonPicker(true)} className="console-secondary-button"><Plus size={15} />{unifiedManagementView ? '从商品加料添加' : '从主档加料添加'}</button>{!automaticSync && <button type="button" onClick={openSyncConfirm} className="console-primary-button"><Send size={15} />同步至平台{selectedSyncIds.length > 0 ? `（${selectedSyncIds.length}）` : ''}</button>}</div> : !automaticSync && <div className="ml-auto"><button type="button" onClick={openProductPicker} className="console-primary-button"><Send size={15} />同步至平台</button></div>}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex h-9 w-[300px] items-center rounded-md border border-[#E5E6EB] bg-white px-3 focus-within:border-[#00B460]"><Search size={15} className="mr-2 text-[#98A2B3]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder={activeView === 'addons' ? '搜索加料名称' : '搜索商品名称、商品ID、SKUID'} className="min-w-0 flex-1 text-sm outline-none" /></label>
+              <label className="flex h-9 items-center gap-2 rounded-md border border-[#E5E6EB] bg-white px-3 text-xs text-[#667085]">同步状态<select value={syncFilter} onChange={event => setSyncFilter(event.target.value as 'all' | SyncStatus)} className="bg-transparent text-sm text-[#1D2129] outline-none"><option value="all">全部状态</option><option value="not_synced">待同步</option><option value="syncing">同步中</option><option value="synced">同步成功</option><option value="failed">同步失败</option></select></label>
+              {platform === 'douyin' && activeView === 'products' && <label className="flex h-9 items-center gap-2 rounded-md border border-[#E5E6EB] bg-white px-3 text-xs text-[#667085]">审核状态<select value={reviewFilter} onChange={event => setReviewFilter(event.target.value as 'all' | ReviewStatus)} className="bg-transparent text-sm text-[#1D2129] outline-none"><option value="all">全部状态</option><option value="not_submitted">未提交</option><option value="reviewing">审核中</option><option value="approved">审核通过</option><option value="rejected">审核失败</option></select></label>}
+              <button type="button" onClick={() => { setKeyword(''); setSyncFilter('all'); setReviewFilter('all'); }} className="console-secondary-button">重置</button>
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2" role="group" aria-label="在线点列表操作">
+              {activeView === 'addons' ? (
+                <>
+                  <button type="button" onClick={() => setShowAddonPicker(true)} className="console-secondary-button"><Plus size={15} />{unifiedManagementView ? '从商品加料添加' : '从主档加料添加'}</button>
+                  {!automaticSync && <button type="button" onClick={openSyncConfirm} className="console-primary-button"><Send size={15} />同步至平台{selectedSyncIds.length > 0 ? `（${selectedSyncIds.length}）` : ''}</button>}
+                </>
+              ) : (
+                <>
+                  {onPublishToStores && <button type="button" onClick={onPublishToStores} className="console-primary-button"><Send size={15} />下发至门店</button>}
+                  {!automaticSync && <button type="button" onClick={openProductPicker} className="console-primary-button"><Send size={15} />同步至平台</button>}
+                </>
+              )}
+              <button type="button" onClick={onOpenSyncRecords} className="console-text-button"><History size={15} />任务记录</button>
+            </div>
           </div>
         </section>
 
@@ -313,7 +326,7 @@ export const WebOnlineOrderingPlatformHub: React.FC<Props> = ({
                       </td>
                       <td className="border-b px-4 py-3 text-[#4E5969]">{state.platformId || '--'}</td>
                       <td className="border-b px-4 py-3 text-[#4E5969]">{getPlatformCategory(product, platform)}</td>
-                      <td className="border-b px-4 py-3"><span className={`inline-flex items-center gap-2 font-medium ${syncMeta.className}`}><i className={`h-2 w-2 rounded-full ${syncMeta.dot}`} />{syncMeta.label}</span>{state.syncStatus === 'failed' && <div className="mt-1 text-[11px] text-[#D9363E]">{state.reviewStatus === 'rejected' ? '请修改资料后重新提交' : '请检查资料或重试'}</div>}</td>
+                      <td className="border-b px-4 py-3"><span className={`inline-flex items-center gap-2 font-medium ${syncMeta.className}`}><i className={`h-2 w-2 rounded-full ${syncMeta.dot}`} />{syncMeta.label}</span>{state.syncStatus === 'failed' && <div className="mt-1 text-[11px] text-[#D9363E]">{state.reviewStatus === 'rejected' ? '请修改资料后重新提交' : '请检查资料或重试'}</div>}{submittedSnapshots[product.id] && sourceSignature(product) !== sourceSignature(submittedSnapshots[product.id]) && <div className="mt-1 text-xs leading-5 text-[#B54708]">商品库资料已更新，尚未同步本次修改</div>}</td>
                       {platform === 'douyin' && <td className="border-b px-4 py-3"><span className={`inline-flex items-center gap-2 text-xs font-medium ${reviewMeta.className}`}><i className={`h-2 w-2 rounded-full ${reviewDot}`} />{reviewMeta.label}</span></td>}
                       <td className="border-b px-4 py-3 text-xs tabular-nums text-[#667085]">{state.updatedAt}</td>
                       <td className="sticky right-0 border-b border-l bg-white px-4 py-3 group-hover:bg-[#FAFBFC]"><div className="flex items-center gap-4 whitespace-nowrap text-xs font-bold"><button type="button" onClick={() => onEditProduct?.(product)} className="text-[#008F4C]">修改资料</button>{submittedSnapshots[product.id] && <button type="button" onClick={() => setSubmittedProduct(submittedSnapshots[product.id])} className="text-[#245B8A]">已提交资料</button>}{state.syncStatus === 'failed' && state.reviewStatus !== 'rejected' && <button type="button" onClick={() => { setProductPickerIds([product.id]); setShowProductSyncConfirm(true); }} className="text-[#008F4C]">重试</button>}{platform === 'douyin' && state.reviewStatus !== 'not_submitted' && <button type="button" onClick={() => setAuditProduct(product)} className="text-[#245B8A]">审核记录</button>}</div></td>

@@ -28,6 +28,8 @@ import { MobileStandardProductCreator, type MobileStandardProductDraft } from '.
 import { useProducts } from '../../context';
 import { MobileQuickCreate, QuickCreateSavedDraft, QuickEntryScreen } from './MobileQuickCreate';
 import { MobileBadgeItem, MobileLabelGroup, STORE_CREATION_CATEGORIES } from './productMeta';
+import type { LocalMethod } from './types';
+import type { ProductMethodConfig } from './productMethodState';
 
 type CreateStep =
   | 'type_select'
@@ -87,6 +89,9 @@ interface Props {
   onLabelGroupsChange: (groups: MobileLabelGroup[]) => void;
   onBadgesChange: (badges: MobileBadgeItem[]) => void;
   packageFeeLevel?: 'product' | 'spec';
+  methodLibrary?: LocalMethod[];
+  storeName?: string;
+  onSaveMethods?: (productId: string, config: ProductMethodConfig[], library: LocalMethod[]) => void;
 }
 
 const PHOTO_POSITIVE_TIPS = ['菜单平整', '正对拍摄', '清晰无遮挡'];
@@ -236,7 +241,7 @@ const MOBILE_THIRD_PRODUCTS: Record<MobileThirdPlatform, MobileThirdProduct[]> =
   ],
 };
 
-export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange, packageFeeLevel = 'product' }) => {
+export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labelGroups, badges, onLabelGroupsChange, onBadgesChange, packageFeeLevel = 'product', methodLibrary = [], storeName, onSaveMethods }) => {
   const { addProduct } = useProducts();
   const [createStep, setCreateStep] = useState<CreateStep>('type_select');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -679,6 +684,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
   };
 
   const handleManualSave = (data: MobileStandardProductDraft, continueAdding = false) => {
+    const newProductId = crypto.randomUUID();
     const money = (value?: string) => value?.trim() ? Number(value) : undefined;
     const multiSpec = data.specType === 'multi';
     const specFees = packageFeeLevel === 'spec';
@@ -695,7 +701,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
       storePackMark: data.storePackMark || undefined, takePackMark: data.takePackMark || undefined,
     }] : undefined;
     addProduct({
-      id: crypto.randomUUID(), name: data.name, category: data.category,
+      id: newProductId, name: data.name, category: data.category,
       price: multiSpec ? Math.min(...data.specItems.map(item => Number(item.price))) : Number(data.basePrice),
       stock: data.stock.trim() ? Number(data.stock) : -1,
       status: 'on_shelf', stockStatus: 'available', type: 'standard',
@@ -703,6 +709,7 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
       ...(!specFees ? { storePackFee: money(data.storePackFee), takePackFee: money(data.takePackFee), storePackMark: data.storePackMark || undefined, takePackMark: data.takePackMark || undefined } : {}),
       linkedStallIds: data.linkedStallIds,
     });
+    onSaveMethods?.(newProductId, data.methodConfiguration ?? [], data.methodDefinitions ?? methodLibrary);
     if (continueAdding) {
       setCreationFormData({});
       setCreationCategory(null);
@@ -947,6 +954,8 @@ export const MobileProductCreator: React.FC<Props> = ({ onBack, categories, labe
     return (
       <MobileStandardProductCreator
         onBack={handleBack}
+        methodLibrary={methodLibrary}
+        storeName={storeName}
         categories={categories}
         productType={targetProductType}
         packageFeeLevel={packageFeeLevel}

@@ -8,7 +8,9 @@ import { Category } from '../../types';
 import { MobileCategorySelector } from './MobileCategorySelector';
 import { MobileProductAttributeSorter } from './MobileProductAttributeSorter';
 import { MobileProductChannelSelector } from './MobileProductChannelSelector';
-import { LocalSpec } from './types';
+import { LocalMethod, LocalSpec } from './types';
+import { MobileProductMethodEditor, MethodDiscardDialog } from './MobileProductMethodEditor';
+import { methodConfigError, methodConfigSummary, ProductMethodConfig } from './productMethodState';
 import { MobileBadgeItem, MobileLabelGroup, MobileStallOption, VisualStyleType, DEFAULT_STORE_STALLS } from './productMeta';
 import { MobileStallSelector } from './MobileStallSelector';
 import { MobilePackagingEditor, hasPackaging, packagingError, packagingSummary } from './MobilePackagingEditor';
@@ -30,6 +32,8 @@ interface Props {
   categoryName?: string;
   saveMode?: 'default' | 'ai_confirm';
   onSaveDraft?: (data: { name: string; basePrice: string; category: string }) => void;
+  methodLibrary?: LocalMethod[];
+  storeName?: string;
   onPrimaryAction?: (data: {
     name: string;
     category: string;
@@ -49,6 +53,8 @@ interface Props {
     takePackFee: string;
     storePackMark: string;
     takePackMark: string;
+    methodConfiguration?: ProductMethodConfig[];
+    methodDefinitions?: LocalMethod[];
   }) => void;
   onSecondaryAction?: (data: MobileStandardProductDraft) => void;
   /** 来自商品设置的包装费粒度，不能在规格编辑器内重复配置。 */
@@ -81,6 +87,8 @@ interface Props {
     takePackFee?: string;
     storePackMark?: string;
     takePackMark?: string;
+    methodConfiguration?: ProductMethodConfig[];
+    methodDefinitions?: LocalMethod[];
   };
 }
 
@@ -147,11 +155,15 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   channelSelectorHelperText,
   onBeforeChannelToggle,
   packageFeeLevel = 'product',
+  methodLibrary = [],
+  storeName = '当前门店',
 }: Props) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
   const [saveError, setSaveError] = useState('');
   const [showTimeSalesEditor, setShowTimeSalesEditor] = useState(false);
   const [showPackagingEditor, setShowPackagingEditor] = useState(false);
+  const [showMethodEditor, setShowMethodEditor] = useState(false);
+  const [leavingMethods, setLeavingMethods] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [showAttributeSorter, setShowAttributeSorter] = useState(false);
   const [showChannelSelector, setShowChannelSelector] = useState(false);
@@ -209,7 +221,11 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
     takePackFee: initialData?.takePackFee || '',
     storePackMark: initialData?.storePackMark || '',
     takePackMark: initialData?.takePackMark || '',
+    methodConfiguration: structuredClone(initialData?.methodConfiguration ?? []),
+    methodDefinitions: structuredClone(initialData?.methodDefinitions ?? methodLibrary),
   });
+  const methodsChanged = JSON.stringify(formData.methodConfiguration) !== JSON.stringify(initialData?.methodConfiguration ?? []) || JSON.stringify(formData.methodDefinitions) !== JSON.stringify(initialData?.methodDefinitions ?? methodLibrary);
+  const leaveForm = () => methodsChanged ? setLeavingMethods(true) : onBack();
   const [specLibrary, setSpecLibrary] = useState<LocalSpec[]>(initialData?.specLibrary || DEFAULT_SPEC_LIBRARY);
   const [specFlowSelection, setSpecFlowSelection] = useState<SpecFlowSelection>(
     initialData?.specSelection || { groupIds: [], valueMap: {} }
@@ -322,6 +338,12 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   };
 
   const handleSubmit = (continueAdding = false) => {
+    const methodError = methodConfigError(formData.methodConfiguration, formData.methodDefinitions);
+    if (methodError) {
+      setSaveError(methodError);
+      setShowMethodEditor(true);
+      return;
+    }
     const feeRows = packageFeeLevel === 'spec' && formData.specType === 'multi'
       ? formData.specItems : [formData];
     const feeError = feeRows.map(packagingError).find(Boolean);
@@ -356,7 +378,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
     <div className="flex-1 min-h-0 flex flex-col bg-[#F5F6FA] h-full relative overflow-hidden font-sans select-none animate-in slide-in-from-right duration-300">
       {/* Header */}
       <div className="h-[50px] bg-white border-b border-gray-100 flex items-center px-4 shrink-0 z-30">
-        <button onClick={onBack} className="p-2 -ml-2 text-gray-600"><ChevronLeft size={24} /></button>
+        <button aria-label="返回商品列表" onClick={leaveForm} className="p-2 -ml-2 text-gray-600"><ChevronLeft size={24} /></button>
         <span className="flex-1 text-center font-bold text-base mr-6 text-[#1F2129]">{title || (saveMode === 'ai_confirm' ? '编辑商品' : mode === 'edit' ? '编辑商品' : '创建标准商品')}</span>
       </div>
 
@@ -553,13 +575,10 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
                 </div>
             )}
 
-            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <label className="text-sm font-bold text-gray-700">商品做法</label>
-                <div className="flex items-center text-sm text-gray-400 font-bold">
-                    <span>设置做法</span>
-                    <ChevronRight size={16} className="ml-1"/>
-                </div>
-            </div>
+            <button aria-label="设置商品做法" onClick={() => setShowMethodEditor(true)} className="flex w-full items-center justify-between gap-3 border-b border-gray-50 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-700">
+                <span className="text-sm font-bold text-gray-700">商品做法</span>
+                <span className="flex items-center gap-1 text-xs text-gray-600"><span>{methodConfigSummary(formData.methodConfiguration, formData.methodDefinitions)}{methodsChanged ? ' · 待保存' : ''}</span><ChevronRight size={16} className="shrink-0" /></span>
+            </button>
             <div className="flex justify-between items-center py-2">
                 <label className="text-sm font-bold text-gray-700">商品加料</label>
                 <div className="flex items-center text-sm text-gray-400 font-bold">
@@ -905,6 +924,20 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
         )}
       </div>
 
+      {showMethodEditor && <MobileProductMethodEditor
+        productName={formData.name}
+        storeName={storeName}
+        config={formData.methodConfiguration}
+        library={formData.methodDefinitions}
+        mode={mode}
+        onBack={() => setShowMethodEditor(false)}
+        onConfirm={(next, definitions) => {
+          setFormData(previous => ({ ...previous, methodConfiguration: next, methodDefinitions: definitions }));
+          setSaveError('');
+          setShowMethodEditor(false);
+        }}
+      />}
+      {leavingMethods && <MethodDiscardDialog onCancel={() => setLeavingMethods(false)} onDiscard={onBack} description="商品做法尚未保存，离开后这些修改不会生效。" />}
       {/* 分时段销售编辑器 */}
       {showPackagingEditor && <MobilePackagingEditor
         level={packageFeeLevel}

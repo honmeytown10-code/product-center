@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Monitor, Tablet, Smartphone, ShieldCheck } from 'lucide-react';
 import { ProductProvider } from './context';
 import { WebProductCenter } from './components/WebProductCenter';
@@ -14,6 +14,12 @@ const App: React.FC = () => {
     return view === 'ops' || view === 'pos' || view === 'mobile' ? view : 'web';
   });
   const [clientSwitcherOpen, setClientSwitcherOpen] = useState(false);
+  useEffect(() => {
+    if (currentView !== 'mobile') return;
+    const previousMinWidth = document.body.style.minWidth;
+    document.body.style.minWidth = '0';
+    return () => { document.body.style.minWidth = previousMinWidth; };
+  }, [currentView]);
   const clientSwitcherCloseTimer = useRef<number | null>(null);
   const openClientSwitcher = () => {
     if (clientSwitcherCloseTimer.current !== null) window.clearTimeout(clientSwitcherCloseTimer.current);

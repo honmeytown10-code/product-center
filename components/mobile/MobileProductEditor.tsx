@@ -5,6 +5,8 @@ import { MobileStandardProductCreator } from './MobileStandardProductCreator';
 import { MobileBadgeItem, MobileLabelGroup } from './productMeta';
 import { ChevronLeft, Printer, ShoppingBag, Smartphone, Store, X } from 'lucide-react';
 import { LocalSpec } from './types';
+import type { LocalMethod } from './types';
+import type { ProductMethodConfig } from './productMethodState';
 
 interface SpecItemDraft {
   name: string;
@@ -37,6 +39,11 @@ interface Props {
   draftBasePrice?: string;
   draftSpecItems?: SpecItemDraft[];
   packageFeeLevel?: 'product' | 'spec';
+  methodConfiguration?: ProductMethodConfig[];
+  methodLibrary?: LocalMethod[];
+  storeName?: string;
+  onSaveMethods?: (config: ProductMethodConfig[]) => void;
+  onSaveMethodLibrary?: (library: LocalMethod[]) => void;
 }
 
 export const MobileProductEditor: React.FC<Props> = ({
@@ -52,6 +59,11 @@ export const MobileProductEditor: React.FC<Props> = ({
   draftBasePrice,
   draftSpecItems,
   packageFeeLevel = 'product',
+  methodConfiguration = [],
+  methodLibrary = [],
+  storeName,
+  onSaveMethods,
+  onSaveMethodLibrary,
 }: Props) => {
   const { products } = useProducts();
   const initialChannels = getInitialChannels(activeChannel);
@@ -65,6 +77,8 @@ export const MobileProductEditor: React.FC<Props> = ({
     takePackFee: string;
     storePackMark: string;
     takePackMark: string;
+    methodConfiguration?: ProductMethodConfig[];
+    methodDefinitions?: LocalMethod[];
   }>(null);
   const [effectiveChannels, setEffectiveChannels] = useState<string[]>(['mini', 'meituan', 'taobao', 'pos']);
 
@@ -80,9 +94,13 @@ export const MobileProductEditor: React.FC<Props> = ({
   };
 
   const submitEdit = (
-    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[]; storePackFee: string; takePackFee: string; storePackMark: string; takePackMark: string },
-    options?: { mode: 'all' | 'partial'; channels: string[] }
+    payload: { name: string; category: string; basePrice: string; specItems: SpecItemDraft[]; linkedStallIds: string[]; storePackFee: string; takePackFee: string; storePackMark: string; takePackMark: string; methodConfiguration?: ProductMethodConfig[]; methodDefinitions?: LocalMethod[] },
+    options?: { mode: 'all' | 'partial'; channels: string[] },
+    methodsOnly = false,
   ) => {
+    if (payload.methodDefinitions && JSON.stringify(payload.methodDefinitions) !== JSON.stringify(methodLibrary)) onSaveMethodLibrary?.(payload.methodDefinitions);
+    if (payload.methodConfiguration && JSON.stringify(payload.methodConfiguration) !== JSON.stringify(methodConfiguration)) onSaveMethods?.(payload.methodConfiguration);
+    if (methodsOnly) { onBack(); return; }
     const nextPrice = payload.basePrice.trim() ? Number(payload.basePrice) : product.price;
     const nextSpecs = product.isMultiSpec && payload.specItems.length
       ? payload.specItems.map((item, index) => ({
@@ -124,6 +142,23 @@ export const MobileProductEditor: React.FC<Props> = ({
     onBack();
   };
 
+  const initialSpecItems = draftSpecItems ?? (product.specs || []).map(spec => ({
+    name: spec.name,
+    price: String(spec.price ?? product.price),
+    stock: spec.unlimited || spec.stock === -1 ? '' : String(spec.stock ?? ''),
+    unlimited: !!spec.unlimited || spec.stock === -1,
+    storePackFee: spec.storePackFee === undefined ? '' : String(spec.storePackFee),
+    takePackFee: spec.takePackFee === undefined ? '' : String(spec.takePackFee),
+    storePackMark: spec.storePackMark || '',
+    takePackMark: spec.takePackMark || '',
+  }));
+  const initialPackaging = {
+    storePackFee: String((packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.storePackFee : product.storePackFee) ?? ''),
+    takePackFee: String((packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.takePackFee : product.takePackFee) ?? ''),
+    storePackMark: (packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.storePackMark : product.storePackMark) || '',
+    takePackMark: (packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.takePackMark : product.takePackMark) || '',
+  };
+
   return (
     <>
       <MobileStandardProductCreator
@@ -137,6 +172,8 @@ export const MobileProductEditor: React.FC<Props> = ({
         lockSpecEdit
         lockStockEdit
         packageFeeLevel={packageFeeLevel}
+        methodLibrary={methodLibrary}
+        storeName={storeName}
         channelSelectorHelperText="渠道开启后商品将在门店上架售卖，关闭后商品将从渠道移除。"
         onBeforeChannelToggle={guardChannelClose}
         labelGroups={labelGroups}
@@ -144,6 +181,7 @@ export const MobileProductEditor: React.FC<Props> = ({
         onLabelGroupsChange={onLabelGroupsChange}
         onBadgesChange={onBadgesChange}
         initialData={{
+          methodConfiguration,
           name: product.name,
           category: product.category,
           basePrice: draftBasePrice ?? String(product.price),
@@ -156,20 +194,8 @@ export const MobileProductEditor: React.FC<Props> = ({
           selectedBadgeId: '',
           badgeStartDate: '',
           badgeEndDate: '',
-          specItems: draftSpecItems ?? (product.specs || []).map(spec => ({
-            name: spec.name,
-            price: String(spec.price ?? product.price),
-            stock: spec.unlimited || spec.stock === -1 ? '' : String(spec.stock ?? ''),
-            unlimited: !!spec.unlimited || spec.stock === -1,
-            storePackFee: spec.storePackFee === undefined ? '' : String(spec.storePackFee),
-            takePackFee: spec.takePackFee === undefined ? '' : String(spec.takePackFee),
-            storePackMark: spec.storePackMark || '',
-            takePackMark: spec.takePackMark || '',
-          })),
-          storePackFee: String((packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.storePackFee : product.storePackFee) ?? ''),
-          takePackFee: String((packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.takePackFee : product.takePackFee) ?? ''),
-          storePackMark: (packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.storePackMark : product.storePackMark) || '',
-          takePackMark: (packageFeeLevel === 'spec' && !product.isMultiSpec ? product.specs?.[0]?.takePackMark : product.takePackMark) || '',
+          specItems: initialSpecItems,
+          ...initialPackaging,
           specSelection: inferSpecSelection((product.specs || []).map(spec => spec.name), DEFAULT_SPEC_LIBRARY),
           specLibrary: DEFAULT_SPEC_LIBRARY,
           linkedStallIds: product.linkedStallIds || [],
@@ -185,7 +211,20 @@ export const MobileProductEditor: React.FC<Props> = ({
             takePackFee: data.takePackFee,
             storePackMark: data.storePackMark,
             takePackMark: data.takePackMark,
+            methodConfiguration: data.methodConfiguration,
+            methodDefinitions: data.methodDefinitions,
           };
+          const methodsChanged = JSON.stringify(data.methodConfiguration) !== JSON.stringify(methodConfiguration) || JSON.stringify(data.methodDefinitions) !== JSON.stringify(methodLibrary);
+          const otherFieldsUnchanged = data.name === product.name && data.category === product.category
+            && data.basePrice === (draftBasePrice ?? String(product.price))
+            && JSON.stringify(data.channels) === JSON.stringify(initialChannels)
+            && JSON.stringify(data.specItems) === JSON.stringify(initialSpecItems)
+            && JSON.stringify(data.linkedStallIds) === JSON.stringify(product.linkedStallIds || [])
+            && Object.entries(initialPackaging).every(([key, value]) => data[key] === value);
+          if (methodsChanged && otherFieldsUnchanged) {
+            submitEdit(payload, undefined, true);
+            return;
+          }
           if (activeChannel === 'all') {
             setPendingPayload(payload);
             setEffectiveChannels(['mini', 'meituan', 'taobao', 'pos']);
@@ -197,6 +236,7 @@ export const MobileProductEditor: React.FC<Props> = ({
 
       {pendingPayload ? (
         <ApplyChannelModal
+          methodsChanged={JSON.stringify(pendingPayload.methodConfiguration) !== JSON.stringify(methodConfiguration)}
           selectedChannels={effectiveChannels}
           onClose={() => setPendingPayload(null)}
           onToggleChannel={channel =>
@@ -253,11 +293,13 @@ const ApplyChannelModal = ({
   onClose,
   onToggleChannel,
   onConfirm,
+  methodsChanged,
 }: {
   selectedChannels: string[];
   onClose: () => void;
   onToggleChannel: (channel: string) => void;
   onConfirm: () => void;
+  methodsChanged?: boolean;
 }) => (
   <div className="absolute inset-0 z-[120] flex flex-col justify-end bg-black/50 animate-in fade-in">
     <div className="flex-1" onClick={onClose}></div>
@@ -272,6 +314,7 @@ const ApplyChannelModal = ({
         </div>
       </div>
       <div className="mt-4 rounded-2xl bg-[#F7F9FC] p-3">
+        {methodsChanged && <p className="mb-3 text-xs leading-5 text-gray-600">做法启停对当前门店的此商品生效，不受下方渠道选择限制。</p>}
         <div className="mb-3 text-[12px] font-bold text-[#667085]">选择渠道</div>
         <div className="grid grid-cols-2 gap-2">
           {APPLY_CHANNEL_OPTIONS.map(option => {

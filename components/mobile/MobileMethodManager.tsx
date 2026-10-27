@@ -7,7 +7,7 @@ import { LocalMethod, LocalMethodValue } from './types';
 import { Product } from '../../types';
 import { MobileMethodGroupManagerPage } from './MobileMethodGroupManagerPage';
 
-const INITIAL_LOCAL_METHODS: LocalMethod[] = [
+export const INITIAL_LOCAL_METHODS: LocalMethod[] = [
   {
     id: 'm_brand_1',
     name: '甜度',
@@ -48,10 +48,18 @@ const INITIAL_LOCAL_METHODS: LocalMethod[] = [
 interface Props {
   onBack: () => void;
   products: Product[];
+  methods?: LocalMethod[];
+  onMethodsChange?: (methods: LocalMethod[]) => void;
 }
 
-export const MobileMethodManager: React.FC<Props> = ({ onBack, products }) => {
-  const [localMethods, setLocalMethods] = useState<LocalMethod[]>(INITIAL_LOCAL_METHODS);
+export const MobileMethodManager: React.FC<Props> = ({ onBack, products, methods, onMethodsChange }) => {
+  const [fallbackMethods, setFallbackMethods] = useState<LocalMethod[]>(INITIAL_LOCAL_METHODS);
+  const localMethods = methods ?? fallbackMethods;
+  const setLocalMethods: React.Dispatch<React.SetStateAction<LocalMethod[]>> = update => {
+    const next = typeof update === 'function' ? update(localMethods) : update;
+    if (onMethodsChange) onMethodsChange(next);
+    else setFallbackMethods(next);
+  };
   const [selectedGroupId, setSelectedGroupId] = useState<string>(INITIAL_LOCAL_METHODS[0].id);
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

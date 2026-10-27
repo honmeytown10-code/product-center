@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ScanLine, ChevronDown, CheckCircle2, 
   ShoppingBag, Plus, Layers, Database, Tag, Scale, Box, Edit3, Store, ChevronLeft,
@@ -8,7 +8,9 @@ import { useProducts } from '../context';
 import { MobileProductList } from './mobile/MobileProductList';
 import { MobileCategoryManager } from './mobile/MobileCategoryManager';
 import { MobileSpecManager } from './mobile/MobileSpecManager';
-import { MobileMethodManager } from './mobile/MobileMethodManager';
+import { MobileMethodManager, INITIAL_LOCAL_METHODS } from './mobile/MobileMethodManager';
+import type { LocalMethod } from './mobile/types';
+import { demoProductMethods, ProductMethodConfig } from './mobile/productMethodState';
 import { MobileComboGroupManager } from './mobile/MobileComboGroupManager';
 import { MobileProductCreator } from './mobile/MobileProductCreator';
 import { MobileAddonManager } from './mobile/MobileAddonManager';
@@ -65,11 +67,23 @@ const ORG_TREE: OrgNode[] = [
 export const MobileApp: React.FC = () => {
   const { products, activeBrandId, brandConfigs, categories, toggleShelfStatus, updateProduct } = useProducts();
   
-  const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
+  const previewParams = new URLSearchParams(window.location.search);
+  const previewProduct = previewParams.get('screen') === 'product-edit' ? products.find(item => item.id === previewParams.get('productId')) : undefined;
+  const [currentScreen, setCurrentScreen] = useState<Screen>(previewProduct ? 'product_edit' : 'dashboard');
   const [activeOrg, setActiveOrg] = useState<OrgNode>(ORG_TREE[0].children![0].children![0]); 
   const [showOrgSelector, setShowOrgSelector] = useState(false);
   const [returnScreen, setReturnScreen] = useState<Screen>('dashboard');
-  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<any>(previewProduct ? { product: previewProduct, activeChannel: 'all' } : null);
+  const [methodConfigurations, setMethodConfigurations] = useState<Record<string, ProductMethodConfig[]>>({});
+  const [storeMethodLibraries, setStoreMethodLibraries] = useState<Record<string, LocalMethod[]>>({});
+  const [methodNotice, setMethodNotice] = useState('');
+  const methodScope = `${activeBrandId}:${activeOrg.id}`;
+  const methodLibrary = storeMethodLibraries[methodScope] ?? INITIAL_LOCAL_METHODS;
+  useEffect(() => {
+    if (!methodNotice) return;
+    const timer = window.setTimeout(() => setMethodNotice(''), 3000);
+    return () => window.clearTimeout(timer);
+  }, [methodNotice]);
   const [storeLabelGroups, setStoreLabelGroups] = useState<MobileLabelGroup[]>(() => cloneLabelGroups(DEFAULT_STORE_LABEL_GROUPS));
   const [storeBadges, setStoreBadges] = useState<MobileBadgeItem[]>(() => cloneBadges(DEFAULT_STORE_BADGES));
 
@@ -344,7 +358,7 @@ export const MobileApp: React.FC = () => {
                         onBack={() => { setCurrentScreen(returnScreen); setIsBatchMode(false); }}
                         onNavigate={(target) => {
                             if (target === 'category_list') setCurrentScreen('category_list');
-                            if (target === 'create') setCurrentScreen('product_create');
+                            if (target === 'create') { setReturnScreen('product_list'); setCurrentScreen('product_create'); }
                             if (target === 'batch_action') setBatchStep('menu'); // Open menu overlay
                             if (target === 'batch_entry') setCurrentScreen('batch_operation_select'); // Optimization: Direct jump to batch ops
                             if (target === 'batch_next') setCurrentScreen('batch_config'); // Optimization: Direct jump to config
@@ -383,6 +397,12 @@ export const MobileApp: React.FC = () => {
             return (
               <MobileProductCreator
                 onBack={() => setCurrentScreen(returnScreen)}
+                storeName={activeOrg.name}
+                methodLibrary={methodLibrary}
+                onSaveMethods={(productId, config, library) => {
+                  setMethodConfigurations(previous => ({ ...previous, [`${methodScope}:${productId}`]: structuredClone(config) }));
+                  setStoreMethodLibraries(previous => ({ ...previous, [methodScope]: structuredClone(library) }));
+                }}
                 categories={categories}
                 labelGroups={storeLabelGroups}
                 badges={storeBadges}
@@ -396,6 +416,14 @@ export const MobileApp: React.FC = () => {
               <MobileProductEditor
                 product={editingProduct?.product}
                 activeChannel={editingProduct?.activeChannel}
+                storeName={activeOrg.name}
+                methodLibrary={methodLibrary}
+                methodConfiguration={methodConfigurations[`${methodScope}:${editingProduct?.product?.id}`] ?? demoProductMethods(editingProduct?.product?.id)}
+                onSaveMethodLibrary={library => setStoreMethodLibraries(previous => ({ ...previous, [methodScope]: structuredClone(library) }))}
+                onSaveMethods={config => {
+                  setMethodConfigurations(previous => ({ ...previous, [`${methodScope}:${editingProduct.product.id}`]: structuredClone(config) }));
+                  setMethodNotice('商品做法已保存（原型演示）');
+                }}
                 onBack={() => setCurrentScreen('product_list')}
                 categories={categories}
                 labelGroups={storeLabelGroups}
@@ -422,7 +450,7 @@ export const MobileApp: React.FC = () => {
           case 'spec_list': 
             return <MobileSpecManager onBack={() => setCurrentScreen(returnScreen)} />;
           case 'method_list': 
-            return <MobileMethodManager onBack={() => setCurrentScreen(returnScreen)} products={products} />;
+            return <MobileMethodManager onBack={() => setCurrentScreen(returnScreen)} products={products} methods={methodLibrary} onMethodsChange={next => setStoreMethodLibraries(previous => ({ ...previous, [methodScope]: next }))} />;
           case 'combo_list': 
             return <MobileComboGroupManager onBack={() => setCurrentScreen(returnScreen)} />;
           case 'label_list':
@@ -465,6 +493,7 @@ export const MobileApp: React.FC = () => {
     <div className="mobile-app-shell w-full h-full min-h-0 overflow-hidden bg-[#F5F6FA] flex flex-col font-sans text-gray-800 relative no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Content Render */}
       {renderContent()}
+      {methodNotice && <div role="status" className="pointer-events-none absolute inset-x-4 top-16 z-[200] rounded-xl bg-gray-900 px-4 py-3 text-center text-xs leading-5 text-white">{methodNotice}</div>}
 
       {/* Org Selector Modal */}
       {showOrgSelector && (<div className="absolute inset-0 z-[100] bg-[#F5F6FA] flex flex-col animate-in slide-in-from-bottom duration-300"><div className="h-[50px] flex items-center px-4 bg-white border-b border-gray-100"><button onClick={() => setShowOrgSelector(false)} className="mr-4"><ChevronLeft size={24}/></button><span className="font-bold text-base">切换身份角色</span></div><div className="flex-1 overflow-y-auto no-scrollbar p-4"><div className="mb-6"><div className="text-xs font-bold text-gray-400 mb-2 px-2">总部视角</div><div onClick={() => handleSwitchOrg(ORG_TREE[0])} className={`bg-white p-4 rounded-xl shadow-sm flex items-center justify-between border-2 transition-all ${activeOrg.id === ORG_TREE[0].id ? 'border-[#00C06B]' : 'border-transparent'}`}><div className="flex items-center"><div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-lg flex items-center justify-center mr-3 font-bold">HQ</div><div><div className="font-black text-sm text-gray-800">{ORG_TREE[0].name}</div><div className="text-xs text-gray-400 mt-0.5">admin</div></div></div>{activeOrg.id === ORG_TREE[0].id && <CheckCircle2 className="text-[#00C06B]" size={20} fill="currentColor" color="white"/>}</div></div><div><div className="text-xs font-bold text-gray-400 mb-2 px-2">门店视角</div><div className="space-y-3">{ORG_TREE[0].children?.map(child => (<React.Fragment key={child.id}>{child.type === 'region' ? (child.children?.map(store => (<OrgCard key={store.id} node={store} activeId={activeOrg.id} onClick={() => handleSwitchOrg(store)} />))) : (<OrgCard key={child.id} node={child} activeId={activeOrg.id} onClick={() => handleSwitchOrg(child)} />)}</React.Fragment>))}</div></div></div></div>)}

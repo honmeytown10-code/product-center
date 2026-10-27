@@ -5,6 +5,8 @@ import { getThirdPartyChannel } from '../../omnichannel';
 import { isTakeoutChannel, type TakeoutSnapshot } from '../../takeoutSync';
 import { WebJdCategoryBrandFields } from './WebJdCategoryBrandFields';
 import { WebMeituanProductMutex } from './WebMeituanProductMutex';
+import { WebMeituanOnlineMutex } from './WebMeituanOnlineMutex';
+import type { OnlineMutexContext } from '../../meituanOnlineMutex';
 
 type FieldDefinition = {
   id: string;
@@ -162,9 +164,10 @@ type Props = {
   onChange?: (value: ThirdPartyFieldValues) => void;
   productType?: string;
   snapshot?: TakeoutSnapshot;
+  onlineMutexContext?: OnlineMutexContext;
 };
 
-export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, selectedSalesChannelIds, onSelectedSalesChannelIdsChange, showSalesChannelSelector = true, addonItems = [], validationError, location, title, compact = false, embedded = false, unifiedManagementView = false, value, onChange, productType, snapshot }) => {
+export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, selectedSalesChannelIds, onSelectedSalesChannelIdsChange, showSalesChannelSelector = true, addonItems = [], validationError, location, title, compact = false, embedded = false, unifiedManagementView = false, value, onChange, productType, snapshot, onlineMutexContext }) => {
   const [activeChannelId, setActiveChannelId] = useState<ThirdPartyChannelId>(channelIds[0]);
   const [inheritBasic, setInheritBasic] = useState<Record<string, boolean>>({});
   const [values, setValues] = useState<Record<string, Record<string, string | boolean | string[]>>>({});
@@ -257,12 +260,18 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, select
           </div>
         )}
 
-        {(isOnlineChannelForm || isTakeout) && <div className="grid gap-x-6 gap-y-2 bg-[#F7F8FA] px-4 py-3 text-xs leading-5 text-[#667085] md:grid-cols-2">
+        {(isOnlineChannelForm || isTakeout) && <div role="note" aria-label={`${activeChannel.name}继承商品信息`} className="grid gap-x-6 gap-y-2 bg-[#F7F8FA] px-4 py-3 text-xs leading-5 text-[#667085] md:grid-cols-2">
           <p><strong className="font-semibold text-[#4E5969]">商品信息：</strong>名称、图片、规格、SKU 与售价</p>
-          <p><strong className="font-semibold text-[#4E5969]">售卖设置：</strong>{isDouyinChannelForm ? '包装费、当前渠道已启用的做法，以及下方设置的售卖时间' : isTakeout ? '已启用的做法与加料选择规则' : '售卖时间、做法与加料选择规则'}</p>
-          <p className="md:col-span-2"><strong className="font-semibold text-[#4E5969]">商品加料：</strong>{isDouyinChannelForm ? '当前渠道已启用的加料及下方的分组选择数量；加料售价和抖音类目在“抖音在线点加料”维护。' : '使用当前商品已关联且在本渠道启用的加料。'}</p>
+          <p><strong className="font-semibold text-[#4E5969]">售卖设置：</strong>{isDouyinChannelForm ? '包装费、当前渠道已启用的做法，以及下方设置的售卖时间' : isMeituanDineChannelForm ? '商品已设置的售卖时间、当前渠道已启用的做法及选择规则' : isTakeout ? '已启用的做法与加料选择规则' : '售卖时间、做法与加料选择规则'}</p>
+          <p className="md:col-span-2"><strong className="font-semibold text-[#4E5969]">商品加料：</strong>{isDouyinChannelForm ? '当前渠道已启用的加料及下方的分组选择数量；加料售价和抖音类目在“抖音在线点加料”维护。' : isMeituanDineChannelForm ? '当前渠道已启用的加料、加料售价及选择数量规则' : '使用当前商品已关联且在本渠道启用的加料。'}</p>
         </div>}
 
+        {isMeituanDineChannelForm && <WebMeituanOnlineMutex value={channelValues.onlineMutexPairs} context={onlineMutexContext} scope={location === 'template' ? 'template' : location === 'store' ? 'store' : 'channel'} onChange={pairs => {
+          const before = Array.isArray(channelValues.onlineMutexPairs) ? channelValues.onlineMutexPairs : [];
+          const entry = JSON.stringify({ at: new Date().toISOString(), actor: '当前账号', before, after: pairs });
+          const next = { ...savedValues, [activeId]: { ...channelValues, onlineMutexPairs: pairs, onlineMutexHistory: [...(Array.isArray(channelValues.onlineMutexHistory) ? channelValues.onlineMutexHistory : []), entry] } };
+          setValues(next); onChange?.(next);
+        }} />}
         {activeId === 'jd' && <WebJdCategoryBrandFields values={channelValues} onChange={(patch) => { const next = { ...savedValues, [activeId]: { ...channelValues, ...patch } }; setValues(next); onChange?.(next); }} />}
         {fields.length > 0 ? (
           <div>
@@ -317,11 +326,7 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, select
             })}
             </div>
           </div>
-        ) : isMeituanDineChannelForm ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-sm text-[#667085]">
-            <Check size={16} className="text-[#008F4C]" />暂无其他渠道专属属性需要维护
-          </div>
-        ) : activeId !== 'jd' ? (
+        ) : isMeituanDineChannelForm ? null : activeId !== 'jd' ? (
           <div className="border border-dashed border-gray-300 bg-gray-50 px-5 py-8 text-center">
             <div className="text-sm font-bold text-gray-700">暂无其他设置</div>
             <div className="mt-1 text-xs text-gray-500">当前渠道仅需维护上方的名称、价格和图片。</div>

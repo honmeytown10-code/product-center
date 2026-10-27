@@ -43,6 +43,7 @@ import { WebAttributeMutexRuleEditor } from './web/WebAttributeMutexRuleEditor';
 import { WebCategorySelectModal, WebImportModal, WebThirdPartyImportRecordsModal } from './web/WebModals';
 import { BadgeOptionConfig, DEFAULT_BADGE_OPTIONS, DEFAULT_GROUPED_TAG_OPTIONS, GroupedTagFieldId, GroupedTagGroup, WebProductForm } from './web/WebProductForm';
 import { WebProductDetail } from './web/WebProductDetail';
+import { createMeituanMutexDemoProduct, getMeituanMutexDemoKey } from './web/meituanOnlineMutexDemo';
 import { WebRecipeManager } from './web/WebRecipeManager'; 
 import { WebIngredientLibraryManager } from './web/WebIngredientLibraryManager';
 import { WebNutritionManager } from './web/WebNutritionManager';
@@ -194,6 +195,7 @@ type CreationContext = {
   channelAttributeIds?: ThirdPartyChannelId[];
   channelProductKey?: string;
   initialSection?: 'sales-scope' | 'third_party';
+  templateContext?: { id: string; name: string };
   storeContext?: {
     storeId: string;
     storeName: string;
@@ -531,7 +533,17 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
     channelAttributeIds?: ThirdPartyChannelId[];
   } | null>(null);
   const [detailContext, setDetailContext] = useState<any>(null); // New detail context
-  const [creationContext, setCreationContext] = useState<CreationContext | null>(null); // Triggers Form Page
+  const [creationContext, setCreationContext] = useState<CreationContext | null>(() => {
+    if (new URLSearchParams(window.location.search).get('preview') !== 'meituan-online-mutex') return null;
+    const product = createMeituanMutexDemoProduct();
+    const scope = new URLSearchParams(window.location.search).get('mutexScope');
+    return { type: 'standard', category: INITIAL_WEB_CATEGORIES.find(category => category.id === 'w_cat_s1')!, mode: 'edit', product,
+      formScope: scope === 'store' ? 'store' : 'channel', initialSection: 'third_party', channelAttributeIds: ['meituan_dine'], channelProductKey: 'demo-meituan-online-mutex',
+      ...(scope === 'template' ? { templateContext: { id: 'demo-meituan-template', name: '在线点渠道模板' } } : {}),
+      ...(scope === 'store' ? { scope: 'store', storeContext: { storeId: 'store-1', storeName: '槐店王婆·合肥政务店', currentChannelIds: ['meituan_dine'], activeChannelId: 'meituan_dine' } } : {}),
+      channelContext: { catalogId: 'demo-meituan-online-mutex', catalogName: '美团在线点商品库', channelIds: ['meituan_dine'], channelNames: ['美团在线点'], masterName: product.name, skuId: product.skuCode },
+    };
+  });
   const resumeStoreAddition = (context: StoreAdditionContext, newProductId?: string) => {
     setProductPublishPreset({ ...context, source: newProductId && !experience?.unified ? 'master' : context.source,
       productIds: [...new Set([...context.productIds, ...(newProductId ? [newProductId] : [])])],
@@ -1098,6 +1110,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                   groupMealContext={!!creationContext.groupMeal}
                   storeAdditionFlow={!!creationContext.storeAddition}
                   initialSection={creationContext.initialSection}
+                  templateContext={creationContext.templateContext}
                   initialPublishStoreIds={creationContext.storeReturn?.storeId ? [creationContext.storeReturn.storeId] : undefined}
                   onOpenStoreProducts={() => { setCreationContext(null); setStoreProductManagePreset({ keyword: creationContext.product?.name || '' }); setActiveMenu('store_product_list'); }}
                   onOpenSyncRecords={() => { setCreationContext(null); setProductSyncInitialTab('qimai-records'); setActiveMenu(experience ? 'product_records' : 'product_sync'); }}
@@ -1138,6 +1151,10 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                        : []
                    )}
                    onProductSaved={(draft, action, saveOptions) => {
+                     if (new URLSearchParams(window.location.search).get('preview') === 'meituan-online-mutex' && draft.id === 'demo-meituan-latte') {
+                       localStorage.setItem(getMeituanMutexDemoKey(), JSON.stringify(draft));
+                       return;
+                     }
                      const blindError = blindBagStructureError(draft);
                      if (blindError) throw new Error(blindError);
                      if (saveOptions?.intent === 'publish') {

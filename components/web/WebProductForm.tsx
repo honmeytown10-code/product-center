@@ -21,6 +21,7 @@ const conciseFieldLabel = (label: string) => label.replace(/^是否(?:为)?/, ''
 import { WebThirdPartyChannelFields, getDouyinSettingsError, normalizeDouyinChannelValues, resolveChannelFieldValues, resolveDouyinSalePeriod, resolveSelectedSalesChannelIds } from './WebThirdPartyChannelFields';
 import { WebTakeoutSyncPreview } from './WebTakeoutSyncPreview';
 import { isTakeoutChannel, type TakeoutSnapshot } from '../../takeoutSync';
+import { onlineMutexSettingsError, type OnlineMutexContext, type OnlineMutexOption } from '../../meituanOnlineMutex';
 import { PRODUCT_SALES_SCOPE_STORES, ProductSalesScope, WebProductSalesScope, getProductStoreRecords, fromStoreChannel } from './WebProductSalesScope';
 import type { StoreProductRecord } from './WebStoreProductList';
 import { WebProductPublishRules, DEFAULT_PUBLISH_OVERWRITE_FIELDS } from './WebProductPublishRules';
@@ -1099,7 +1100,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     useEffect(() => () => { publishQueryGeneration.current += 1; }, []);
     const publishSubmitLock = useRef(false);
     const [publishFields, setPublishFields] = useState<string[]>(blindBagContext ? BLIND_BAG_PUBLISH_FIELDS.filter(field => field !== '库存') : SAVE_PUBLISH_FIELDS);
-    const [blindBagSaveError, setBlindBagSaveError] = useState('');
+    const [productSaveError, setProductSaveError] = useState('');
     const [publishScope, setPublishScope] = useState<ProductSalesScope>({ channelIds: [], storeIds: [] });
     const [savedPublishScope, setSavedPublishScope] = useState<ProductSalesScope>({ channelIds: [], storeIds: [] });
     const [withdrawalAction, setWithdrawalAction] = useState<'keep' | 'off_shelf'>('keep');
@@ -1310,7 +1311,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [showMethodPickerModal, setShowMethodPickerModal] = useState(false);
     const [showAddonPickerModal, setShowAddonPickerModal] = useState(false);
     const [showSpecPickerModal, setShowSpecPickerModal] = useState(false);
-    const [disabledChannelSpecValues, setDisabledChannelSpecValues] = useState<string[]>(['12寸']);
+    const [disabledChannelSpecValues, setDisabledChannelSpecValues] = useState<string[]>(() => initialProduct?.formData?.takeoutFormState?.disabledChannelSpecValues || ['12寸']);
     const [draftDisabledChannelSpecValues, setDraftDisabledChannelSpecValues] = useState<string[]>([]);
     const [showChannelSpecValueModal, setShowChannelSpecValueModal] = useState(false);
     const [pendingChannelSpecValueToggle, setPendingChannelSpecValueToggle] = useState<PendingChannelSpecValueToggle | null>(null);
@@ -1983,11 +1984,40 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         addonItems: addonConfigRows.filter(row => row.addonStatus === 'on').map(row => ({ id: row.id, name: row.addonName, groupName: row.groupName, price: row.addonSpecPrice || row.addonPrice })),
     };
     const resolvedChannelValues = { ...channelSpecificValues, ...resolveChannelFieldValues(activeThirdPartyChannelAttributeIds, channelSpecificValues) };
+    const onlineMutexOptions: OnlineMutexOption[] = [
+        ...(specDisplayMode === 'multi' ? Object.entries(selectedSpecValuesByGroup as SpecSelectionMap).flatMap(([groupId, values]) => values
+            .filter(name => !(isChannelForm || isStoreForm) || !disabledChannelSpecValues.includes(name))
+            .map(name => ({ id: `spec:${JSON.stringify([groupId, name])}`, name, groupId: `spec:${groupId}`, groupName: SPEC_LIBRARY.find(group => group.id === groupId)?.name || '规格', source: 'spec' as const }))) : []),
+        ...takeoutSnapshot.methods.map(item => ({ id: `method:${item.id || JSON.stringify([item.groupName, item.name])}`, name: item.name, groupId: `method:${item.groupName || '做法'}`, groupName: item.groupName || '做法', source: 'method' as const })),
+        ...(takeoutSnapshot.addonItems || []).map(item => ({ id: `addon:${item.id}`, name: item.name, groupId: `addon:${item.groupName}`, groupName: item.groupName, source: 'addon' as const })),
+    ];
+    const onlineMutexSkus = visibleSpecRows.filter(row => row.s_spec_sale_status !== 'off' && (!(isChannelForm || isStoreForm) || !row.s_spec_name.split(/\s*\/\s*/).some(name => disabledChannelSpecValues.includes(name))))
+        .map(row => ({ id: row.id, name: row.s_spec_name, optionIds: onlineMutexOptions.filter(option => option.source === 'spec' && row.s_spec_name.split(/\s*\/\s*/).includes(option.name)).map(option => option.id) }));
+    const onlineMutexContext: OnlineMutexContext = {
+        options: onlineMutexOptions,
+        skus: onlineMutexSkus,
+        defaultIds: onlineMutexOptions.filter(option => option.source === 'spec'
+            ? (onlineMutexSkus.find(sku => sku.name === attrDefaultSelections.spec)?.optionIds || []).includes(option.id)
+            : [attrDefaultSelections[option.groupId]].flat().includes(option.name)).map(option => option.id),
+        mandatoryIds: addonConfigRows.filter(row => row.addonStatus === 'on' && addonGroupRules[row.groupName]?.mode === 'fixed' && Number(row.fixedQuantity) > 0).map(row => `addon:${row.id}`),
+        addonRequirements: (addonScope === 'total' ? [{ label: '全部加料', rule: addonTotalRule, rows: addonConfigRows, distinct: false }]
+            : Object.entries(addonGroupRules as Record<string, AddonGroupRule>).filter(([, rule]) => rule.mode !== 'fixed').map(([name, rule]) => ({ label: name, rule, rows: addonConfigRows.filter(row => row.groupName === name), distinct: rule.countMetric === 'distinct' })))
+            .filter(({ rule }) => rule.ruleMode !== 'unlimited')
+            .map(({ label, rule, rows, distinct }) => {
+                const minimum = Math.max(0, Number(rule.ruleMode === 'required' ? rule.required : rule.min) || 0);
+                return { label, minimum, items: rows.filter(row => row.addonStatus === 'on').map(row => ({ id: `addon:${row.id}`, capacity: distinct ? 1 : String(row.addonLimit || '').trim() && Number.isFinite(Number(row.addonLimit)) ? Math.max(0, Number(row.addonLimit)) : minimum })) };
+            }),
+    };
     const enabledChannelAddonItems = takeoutSnapshot.addonItems.map(({ groupName, name }) => ({ groupName, name }));
-    const channelSettingsError = (isChannelForm || isUnifiedForm) && activeThirdPartyChannelAttributeIds.length > 0
-        ? selectedSalesChannelIds.length === 0 ? '请选择至少一个售卖渠道' : selectedSalesChannelIds.includes('douyin') ? getDouyinSettingsError(resolvedChannelValues, enabledChannelAddonItems) : ''
+    const channelSettingsError = (isChannelForm || isUnifiedForm || isStoreForm) && activeThirdPartyChannelAttributeIds.length > 0
+        ? selectedSalesChannelIds.length === 0 ? '请选择至少一个售卖渠道'
+            : (selectedSalesChannelIds.includes('douyin') ? getDouyinSettingsError(resolvedChannelValues, enabledChannelAddonItems) : '')
+                || (selectedSalesChannelIds.includes('meituan_dine') ? onlineMutexSettingsError(resolvedChannelValues.meituan_dine?.onlineMutexPairs, onlineMutexContext) : '')
         : '';
-    const takeoutFormState = { specDisplayMode, selectedSpecValuesByGroup, specConfigRows: specRowsForSave, methodConfigRows, addonConfigRows, comboGroupCards, addonScope, addonTotalRule, addonGroupRules, prepEnabled, prepScope, splitByStockState, uniformPrepRule, uniformStockRules, specPrepRules, attrPanelOrder, attrDefaultSelections, attrGroupSortEnabled, attrRecommendedSelections };
+    const onlineMutexBaseline = useRef(JSON.stringify(initialProduct?.formData?.channelSpecificValues?.meituan_dine?.onlineMutexPairs));
+    const onlineMutexDirty = useRef(false);
+    onlineMutexDirty.current = JSON.stringify(channelSpecificValues.meituan_dine?.onlineMutexPairs) !== onlineMutexBaseline.current;
+    const takeoutFormState = { specDisplayMode, disabledChannelSpecValues, selectedSpecValuesByGroup, specConfigRows: specRowsForSave, methodConfigRows, addonConfigRows, comboGroupCards, addonScope, addonTotalRule, addonGroupRules, prepEnabled, prepScope, splitByStockState, uniformPrepRule, uniformStockRules, specPrepRules, attrPanelOrder, attrDefaultSelections, attrGroupSortEnabled, attrRecommendedSelections };
     const recoverySnapshot = JSON.stringify({ version: 1, categoryId: currentCategory.id, product: {
         id: savedProductId, ...(blindBagContext ? { skuCode: blindBagSkuId.current } : {}), name: isUnifiedForm ? masterProductName : String(dynamicFormData.p_name || ''),
         price: Number(visibleSpecRows[0]?.s_spec_price || dynamicFormData.s_price || 0), image: String(dynamicFormData.p_img || ''),
@@ -2016,20 +2046,20 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         return () => { window.removeEventListener('pagehide', onExit); document.removeEventListener('visibilitychange', onExit); persistRecovery(); };
     }, [recoveryKey, mode, isStoreForm, pageView]);
     const closeForm = () => {
-        if (blindBagContext && latestRecovery.current !== recoveryBaseline.current && !window.confirm('盲袋商品有未保存的修改，确定放弃修改并离开吗？')) return;
+        if ((blindBagContext && latestRecovery.current !== recoveryBaseline.current || onlineMutexDirty.current) && !window.confirm('商品有未保存的修改，确定放弃修改并离开吗？')) return;
         recoveryDiscarded.current = true; clearProductFormRecovery(recoveryKey); onClose();
     };
     useEffect(() => {
-        if (!blindBagContext) return;
+        if (pageView !== 'form') return;
         const guard = (event: MouseEvent) => {
-            if ((event.target as HTMLElement).closest('.console-sidebar button') && latestRecovery.current !== recoveryBaseline.current && !window.confirm('盲袋商品有未保存的修改，确定放弃修改并离开吗？')) {
+            if ((event.target as HTMLElement).closest('.console-sidebar button') && (blindBagContext && latestRecovery.current !== recoveryBaseline.current || onlineMutexDirty.current) && !window.confirm('商品有未保存的修改，确定放弃修改并离开吗？')) {
                 event.preventDefault(); event.stopPropagation();
             }
         };
-        const unload = (event: BeforeUnloadEvent) => { if (latestRecovery.current !== recoveryBaseline.current) { event.preventDefault(); event.returnValue = ''; } };
+        const unload = (event: BeforeUnloadEvent) => { if (blindBagContext && latestRecovery.current !== recoveryBaseline.current || onlineMutexDirty.current) { event.preventDefault(); event.returnValue = ''; } };
         document.addEventListener('click', guard, true); window.addEventListener('beforeunload', unload);
         return () => { document.removeEventListener('click', guard, true); window.removeEventListener('beforeunload', unload); };
-    }, [blindBagContext]);
+    }, [blindBagContext, pageView]);
     const productImages = useMemo<string[]>(() => {
         const gallery = Array.isArray(dynamicFormData.p_img_gallery)
             ? dynamicFormData.p_img_gallery.filter((item: unknown): item is string => typeof item === 'string' && item.trim() !== '')
@@ -2757,13 +2787,15 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         try {
             if (blindBagContext) savedProduct = normalizeBlindBagDraft(savedProduct, options.intent, initialProduct, currentCategory.standardFields);
             onProductSaved?.(savedProduct, nextSuccessMode, { ...options, ...(options.intent !== 'draft' && removedChannelIds.length ? { withdrawnChannelIds: removedChannelIds, withdrawalAction } : {}) });
-            setBlindBagSaveError('');
+            setProductSaveError('');
         } catch (error) {
-            if (!blindBagContext) throw error;
-            setBlindBagSaveError(error instanceof Error ? error.message : '保存失败，请重试；当前输入仍保留。');
+            if (!blindBagContext && !selectedSalesChannelIds.includes('meituan_dine')) throw error;
+            setProductSaveError(error instanceof Error ? error.message : '保存失败，请重试；当前输入仍保留。');
             return false;
         }
         recoveryBaseline.current = latestRecovery.current;
+        onlineMutexBaseline.current = JSON.stringify(savedChannelFields.meituan_dine?.onlineMutexPairs);
+        onlineMutexDirty.current = false;
         clearProductFormRecovery(recoveryKey);
         setSavedIntent(options.intent);
         if (options.publishScope) setSavedPublishScope(options.publishScope);
@@ -10087,7 +10119,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 </div>
             </div>
 
-            {blindBagSaveError && <div role="alert" className="shrink-0 bg-[#FFF4F2] px-5 py-3 text-sm text-[#B42318]">{blindBagSaveError}</div>}
+            {productSaveError && <div role="alert" className="shrink-0 bg-[#FFF4F2] px-5 py-3 text-sm text-[#B42318]">{productSaveError}</div>}
             {pageView === 'form' && (recovered || recoveryStorageFailed) && <div role="status" className="shrink-0 bg-[#F1FBF6] px-5 py-2 text-xs text-[#087443]">{recoveryStorageFailed ? '浏览器暂时无法缓存表单，请使用“保存为草稿”保留已填资料。' : '已恢复上次意外退出时填写的资料。手动取消或返回将清除缓存，不影响已保存的草稿。'}</div>}
             <div className="relative flex-1 flex overflow-hidden min-w-0">
                 {pageView === 'form' && !isMasterForm && isPreviewPanelOpen && (
@@ -10488,7 +10520,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                         {isUnifiedForm && unifiedManagementView && <WebProductSalesScope value={salesScope} channels={(channelContext?.channelIds || []).filter(id => id !== 'meituan_pinhaofan')} onChange={setSalesScope} showErrors={saveAttempted} showStores={false} disabledChannelIds={isComboProduct ? ['meituan_dine'] : []}>
                             {!!onlineOrderingChannelIds.length && <p role="note" className="mt-3 text-xs leading-5 text-[#667085]">在线点渠道仅在此维护商品资料。保存不自动提交平台，“保存并下发”不包含抖音在线点、美团在线点；请保存后前往“在线点商品”完成商品及加料同步、审核和门店下发。</p>}
-                            {activeThirdPartyChannelAttributeIds.length > 0 && <WebThirdPartyChannelFields channelIds={activeThirdPartyChannelAttributeIds} selectedSalesChannelIds={selectedSalesChannelIds} showSalesChannelSelector={false} addonItems={enabledChannelAddonItems} validationError={saveAttempted ? channelSettingsError : ''} unifiedManagementView location="channel" title="渠道专属属性" embedded compact value={channelSpecificValues} onChange={setChannelSpecificValues} productType={type} snapshot={takeoutSnapshot} />}
+                            {activeThirdPartyChannelAttributeIds.length > 0 && <WebThirdPartyChannelFields channelIds={activeThirdPartyChannelAttributeIds} selectedSalesChannelIds={selectedSalesChannelIds} showSalesChannelSelector={false} addonItems={enabledChannelAddonItems} validationError={saveAttempted ? channelSettingsError : ''} unifiedManagementView location="channel" title="渠道专属属性" embedded compact value={channelSpecificValues} onChange={setChannelSpecificValues} productType={type} snapshot={takeoutSnapshot} onlineMutexContext={onlineMutexContext} />}
                         </WebProductSalesScope>}
                         {!(isUnifiedForm && unifiedManagementView) && activeThirdPartyChannelAttributeIds.length > 0 && (
                             <div id="third_party" className="scroll-mt-[190px] bg-white">
@@ -10506,6 +10538,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     onChange={setChannelSpecificValues}
                                     productType={type}
                                     snapshot={takeoutSnapshot}
+                                    onlineMutexContext={onlineMutexContext}
                                 />
                             </div>
                         )}

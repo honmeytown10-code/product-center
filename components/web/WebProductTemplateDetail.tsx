@@ -140,7 +140,7 @@ export const WebProductTemplateDetail: React.FC<Props> = ({
       channelContext={{ catalogName: sourceLabel, channelIds: template.channels, channelNames: template.channels.map(id => ALL_OMNICHANNEL_CHANNELS.find(channel => channel.id === id)?.name || id), masterName: products.find(product => product.id === editingProduct.id)?.name || editingProduct.name, skuId: editingProduct.skuCode }}
       commonFieldConfigs={commonFieldConfigs}
       channelEditableFieldIds={channelEditableFieldIds}
-      thirdPartyChannelAttributeIds={catalogChannelIds}
+      thirdPartyChannelAttributeIds={catalogChannelIds.filter(id => template.channels.includes(id))}
       onClose={closeProductEditor}
       onProductSaved={draft => {
         onTemplateProductSaved?.(`${template.id}:${editingProduct.id}`, { ...editingProduct, ...draft });

@@ -1,5 +1,14 @@
 import type { LocalMethod } from './types';
 
+/** 后端权限编号由产品补充；原型仅接收已解析的权限结果。 */
+export const PRODUCT_METHOD_TOGGLE_PERMISSION = {
+  name: '商品级做法启用/禁用',
+  permissionId: '',
+  deniedMessage: '暂无此字段变更权限，请联系管理员',
+} as const;
+
+export const STORE_METHOD_DISABLED_MESSAGE = '该做法已在门店禁用，无法启用';
+
 /** App 原型的门店商品经营状态，不写入公共做法定义或 PC 商品数据。 */
 export interface ProductMethodConfig {
   groupId: string;
@@ -10,7 +19,38 @@ export interface ProductMethodConfig {
   valuePrices?: Record<string, string>;
 }
 
-/** 门店不可售值沿用生产展示口径：不进入商品做法配置或选择列表。 */
+export function methodToggleBlockReason(library: LocalMethod[], groupId: string, valueId: string, canToggle: boolean, nextEnabled = true): string {
+  if (!canToggle) return PRODUCT_METHOD_TOGGLE_PERMISSION.deniedMessage;
+  const value = library.find(group => group.id === groupId)?.values.find(item => item.id === valueId);
+  return nextEnabled && value?.status === 'inactive' ? STORE_METHOD_DISABLED_MESSAGE : '';
+}
+
+/** 新增关联的默认启用和删除关联不属于独立的启停操作。 */
+export function methodAvailabilityChanged(previous: ProductMethodConfig[], next: ProductMethodConfig[]): boolean {
+  return next.some(group => {
+    const old = previous.find(item => item.groupId === group.groupId);
+    return group.valueIds.some(id => {
+      const wasDisabled = old?.disabledValueIds.includes(id) ?? false;
+      return wasDisabled !== group.disabledValueIds.includes(id);
+    });
+  });
+}
+
+export function enablesStoreDisabledMethod(previous: ProductMethodConfig[], next: ProductMethodConfig[], library: LocalMethod[]): boolean {
+  return next.some(group => group.valueIds.some(id => {
+    if (group.disabledValueIds.includes(id)) return false;
+    const old = previous.find(item => item.groupId === group.groupId);
+    const wasEnabled = old?.valueIds.includes(id) && !old.disabledValueIds.includes(id);
+    return !wasEnabled && library.find(item => item.id === group.groupId)?.values.some(value => value.id === id && value.status === 'inactive');
+  }));
+}
+
+/** 已关联列表保留所有做法，门店状态与商品级状态独立展示。 */
+export function associatedMethodConfig(config: ProductMethodConfig[], library: LocalMethod[]): ProductMethodConfig[] {
+  return config.map(group => ({ ...group, valueIds: group.valueIds.filter(id => library.find(item => item.id === group.groupId)?.values.some(value => value.id === id)) })).filter(group => group.valueIds.length > 0);
+}
+
+/** 新增选择器仍只提供门店可售值，不因过滤解除已有隐藏关联。 */
 export function visibleMethodConfig(config: ProductMethodConfig[], library: LocalMethod[]): ProductMethodConfig[] {
   return config.map(group => ({ ...group, valueIds: group.valueIds.filter(id => library.find(item => item.id === group.groupId)?.values.some(value => value.id === id && value.status !== 'inactive')) })).filter(group => group.valueIds.length > 0);
 }
@@ -54,11 +94,10 @@ export function methodConfigError(config: ProductMethodConfig[], library: LocalM
 }
 
 export function methodConfigSummary(config: ProductMethodConfig[], library: LocalMethod[]): string {
-  const visible = visibleMethodConfig(config, library);
+  const visible = associatedMethodConfig(config, library);
   if (!visible.length) return '设置做法';
   const values = visible.flatMap(group => {
-    const definition = library.find(item => item.id === group.groupId);
-    return group.valueIds.map(id => ({ enabled: !group.disabledValueIds.includes(id) && definition?.values.some(value => value.id === id && value.status !== 'inactive') }));
+    return group.valueIds.map(id => ({ enabled: !group.disabledValueIds.includes(id) }));
   });
   const disabled = values.filter(value => !value.enabled).length;
   return disabled ? `${visible.length} 组 · ${disabled} 项已禁用` : `${visible.length} 组 · ${values.length} 项`;

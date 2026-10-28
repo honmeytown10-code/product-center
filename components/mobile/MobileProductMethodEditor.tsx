@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, MinusCircle, Plus, Trash2 } from 'lucide-react';
 import type { LocalMethod } from './types';
-import { methodConfigError, ProductMethodConfig, visibleMethodConfig } from './productMethodState';
+import { associatedMethodConfig, enablesStoreDisabledMethod, methodAvailabilityChanged, methodConfigError, methodToggleBlockReason, PRODUCT_METHOD_TOGGLE_PERMISSION, STORE_METHOD_DISABLED_MESSAGE, ProductMethodConfig, visibleMethodConfig } from './productMethodState';
 import { MobileProductMethodSelector } from './MobileProductMethodSelector';
 
 export function MethodDiscardDialog({ onCancel, onDiscard, description, title = '放弃本次修改？', confirmText = '放弃修改' }: { onCancel: () => void; onDiscard: () => void; description: string; title?: string; confirmText?: string }) {
@@ -22,7 +22,7 @@ export function MethodDiscardDialog({ onCancel, onDiscard, description, title = 
   </dialog>;
 }
 
-export function MobileProductMethodEditor({ productName, storeName, config, library, onBack, onConfirm, mode = 'edit' }: {
+export function MobileProductMethodEditor({ productName, storeName, config, library, onBack, onConfirm, mode = 'edit', canToggleMethods = true }: {
   productName: string;
   storeName: string;
   config: ProductMethodConfig[];
@@ -30,6 +30,7 @@ export function MobileProductMethodEditor({ productName, storeName, config, libr
   onBack: () => void;
   onConfirm: (next: ProductMethodConfig[], library: LocalMethod[]) => void;
   mode?: 'create' | 'edit';
+  canToggleMethods?: boolean;
 }) {
   const [draft, setDraft] = useState<ProductMethodConfig[]>(() => structuredClone(config));
   const [definitions, setDefinitions] = useState(() => structuredClone(library));
@@ -37,9 +38,19 @@ export function MobileProductMethodEditor({ productName, storeName, config, libr
   const [removal, setRemoval] = useState<{ groupId: string; valueId?: string; name: string } | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ message: string; attempt: number } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  const showToast = (message: string) => setToast(previous => ({ message, attempt: (previous?.attempt ?? 0) + 1 }));
   const changed = JSON.stringify(draft) !== JSON.stringify(config) || JSON.stringify(definitions) !== JSON.stringify(library);
-  const visible = visibleMethodConfig(draft, definitions);
+  const visible = associatedMethodConfig(draft, definitions);
   const toggle = (groupId: string, valueId: string) => {
+    const nextEnabled = draft.find(group => group.groupId === groupId)?.disabledValueIds.includes(valueId) ?? false;
+    const message = methodToggleBlockReason(library, groupId, valueId, canToggleMethods, nextEnabled);
+    if (message) { showToast(message); return; }
     setDraft(previous => previous.map(group => group.groupId !== groupId ? group : {
       ...group,
       disabledValueIds: group.disabledValueIds.includes(valueId) ? group.disabledValueIds.filter(id => id !== valueId) : [...group.disabledValueIds, valueId],
@@ -47,6 +58,11 @@ export function MobileProductMethodEditor({ productName, storeName, config, libr
     setError('');
   };
   const confirm = () => {
+    if (!canToggleMethods && methodAvailabilityChanged(config, draft)) {
+      showToast(PRODUCT_METHOD_TOGGLE_PERMISSION.deniedMessage);
+      return;
+    }
+    if (enablesStoreDisabledMethod(config, draft, library)) { showToast(STORE_METHOD_DISABLED_MESSAGE); return; }
     const message = methodConfigError(draft, definitions);
     if (message) { setError(message); return; }
     onConfirm(draft, definitions);
@@ -74,14 +90,15 @@ export function MobileProductMethodEditor({ productName, storeName, config, libr
             </div>
             <div className="flex items-center gap-2 px-3 pb-1 pt-3 text-[11px] text-gray-600"><span className="min-w-0 flex-1">做法名称</span><span className="w-[70px] shrink-0 text-center">加价（元）</span>{mode === 'edit' && <span className="w-10 shrink-0 text-center">启用</span>}<span className="w-7 shrink-0" /></div>
             {values.map(value => {
+              const storeDisabled = library.find(item => item.id === group.groupId)?.values.find(item => item.id === value.id)?.status === 'inactive';
               const enabled = !group.disabledValueIds.includes(value.id);
               return <div key={value.id} className="flex min-h-[64px] items-center gap-2 border-b border-gray-100 px-3 py-2 last:border-0">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="break-words text-sm font-medium">{value.name}</span>{group.defaultValueId === value.id && <span className="text-xs text-gray-600">默认</span>}</div>
-                  {mode === 'edit' && !enabled && <p className="mt-1 text-[11px] text-gray-600">已禁用</p>}
+                  {mode === 'edit' && storeDisabled && <p className="mt-1 text-[11px] text-gray-500">门店已禁用</p>}
                 </div>
                 <input aria-label={`${definition.name} ${value.name} 加价`} inputMode="decimal" placeholder="0" value={group.valuePrices?.[value.id] ?? ''} onChange={event => { const price = event.target.value; setDraft(previous => previous.map(item => item.groupId !== group.groupId ? item : { ...item, valuePrices: { ...item.valuePrices, [value.id]: price } })); setError(''); }} className="h-10 w-[70px] shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-2 text-right text-sm tabular-nums outline-green-700 placeholder:text-gray-500" />
-                {mode === 'edit' && <button type="button" role="switch" aria-label={`${definition.name} ${value.name}`} aria-checked={enabled} onClick={() => toggle(group.groupId, value.id)} className="relative h-11 w-10 shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700">
+                {mode === 'edit' && <button type="button" role="switch" aria-label={`${definition.name} ${value.name}`} aria-checked={enabled} aria-disabled={(storeDisabled && !enabled) || !canToggleMethods || undefined} onClick={() => toggle(group.groupId, value.id)} className={`relative h-11 w-10 shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700 ${!canToggleMethods ? 'opacity-50' : ''}`}>
                   <span aria-hidden="true" className={`absolute inset-x-0 top-1/2 h-6 -translate-y-1/2 rounded-full transition-colors motion-reduce:transition-none ${enabled ? 'bg-[#00C06B]' : 'bg-gray-300'}`} />
                   <span aria-hidden="true" className={`absolute top-1/2 h-[18px] w-[18px] -translate-y-1/2 rounded-full bg-white shadow-sm transition-[left] motion-reduce:transition-none ${enabled ? 'left-[19px]' : 'left-[3px]'}`} />
                 </button>}
@@ -98,6 +115,7 @@ export function MobileProductMethodEditor({ productName, storeName, config, libr
       <p className="mb-2 text-center text-xs leading-5 text-gray-600">保存后返回，保存商品后生效</p>
       <div className="flex gap-3"><button onClick={() => setSelecting(true)} className="h-12 flex-1 rounded-xl border border-gray-200 bg-white text-sm font-bold">新增做法</button><button onClick={confirm} className="h-12 flex-1 rounded-xl bg-[#00C06B] text-sm font-bold text-gray-950 active:bg-[#00A35B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700">保存</button></div>
     </footer>
+    {toast && <div key={toast.attempt} role="status" aria-live="polite" className="pointer-events-none absolute inset-x-4 bottom-36 z-[210] rounded-xl bg-gray-900 px-4 py-3 text-center text-xs leading-5 text-white shadow-lg">{toast.message}</div>}
     {leaving && <MethodDiscardDialog onCancel={() => setLeaving(false)} onDiscard={onBack} description="尚未确认的做法修改不会回填商品表单。" />}
     {removal && <MethodDiscardDialog title={`移除“${removal.name}”？`} confirmText="移除" onCancel={() => setRemoval(null)} onDiscard={() => {
       setDraft(previous => previous.flatMap(group => {

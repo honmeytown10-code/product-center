@@ -5,6 +5,7 @@ import {
   Check, CheckSquare, Settings2, Trash, CheckCircle2, Circle, Search, Minus
 } from 'lucide-react';
 import { LocalSpec } from './types';
+import { MobileGroupAddButton } from './MobileGroupAddButton';
 
 const INITIAL_LOCAL_SPECS: LocalSpec[] = [
   { id: 's1', name: '容量', source: 'brand', values: ['中杯', '大杯', '超大杯'] },
@@ -188,14 +189,7 @@ export const MobileSpecManager: React.FC<Props> = ({ onBack }) => {
             <Settings2 size={24} className="mb-0.5"/>
             <span className="text-[10px]">规格组管理</span>
           </button>
-          <button 
-            disabled={isHQ}
-            onClick={() => setValueModal({ show: true, index: -1, text: '' })}
-            className={`flex-1 py-2 bg-[#1F2129] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform flex flex-col items-center justify-center ${isHQ ? 'opacity-30 cursor-not-allowed grayscale' : ''}`}
-          >
-            <Plus size={24} className="mb-0.5"/>
-            <span className="text-[10px]">{isHQ ? '总部禁用新增' : '新增规格值'}</span>
-          </button>
+          <MobileGroupAddButton blocked={isHQ} label="新增规格值" blockedLabel="总部规格不可新增" itemName="规格值" onAdd={() => setValueModal({ show: true, index: -1, text: '' })} />
         </div>
       )}
 

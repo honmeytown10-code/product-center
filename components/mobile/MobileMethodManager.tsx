@@ -6,6 +6,7 @@ import {
 import { LocalMethod, LocalMethodValue } from './types';
 import { Product } from '../../types';
 import { MobileMethodGroupManagerPage } from './MobileMethodGroupManagerPage';
+import { MobileGroupAddButton } from './MobileGroupAddButton';
 
 export const INITIAL_LOCAL_METHODS: LocalMethod[] = [
   {
@@ -289,14 +290,7 @@ export const MobileMethodManager: React.FC<Props> = ({ onBack, products, methods
                   <Settings2 size={24} className="mb-0.5"/>
                   <span className="text-[10px]">做法分组管理</span>
               </button>
-              <button 
-                disabled={activeGroup.source === 'brand'}
-                onClick={() => setMethodModal({ show: true, type: 'create' })}
-                className={`flex-1 py-2 bg-[#1F2129] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform flex flex-col items-center justify-center ${activeGroup.source === 'brand' ? 'opacity-30 cursor-not-allowed grayscale' : ''}`}
-              >
-                  <Plus size={24} className="mb-0.5"/>
-                  <span className="text-[10px]">{activeGroup.source === 'brand' ? '总部禁用新增' : '新增做法'}</span>
-              </button>
+              <MobileGroupAddButton blocked={isCurrentGroupHQ} label="新增做法" blockedLabel="总部做法不可新增" itemName="做法" onAdd={() => setMethodModal({ show: true, type: 'create' })} />
           </div>
       )}
 

@@ -41,6 +41,7 @@ interface Props {
   packageFeeLevel?: 'product' | 'spec';
   methodConfiguration?: ProductMethodConfig[];
   methodLibrary?: LocalMethod[];
+  canToggleMethods?: boolean;
   storeName?: string;
   onSaveMethods?: (config: ProductMethodConfig[]) => void;
   onSaveMethodLibrary?: (library: LocalMethod[]) => void;
@@ -61,6 +62,7 @@ export const MobileProductEditor: React.FC<Props> = ({
   packageFeeLevel = 'product',
   methodConfiguration = [],
   methodLibrary = [],
+  canToggleMethods = true,
   storeName,
   onSaveMethods,
   onSaveMethodLibrary,
@@ -173,6 +175,7 @@ export const MobileProductEditor: React.FC<Props> = ({
         lockStockEdit
         packageFeeLevel={packageFeeLevel}
         methodLibrary={methodLibrary}
+        canToggleMethods={canToggleMethods}
         storeName={storeName}
         channelSelectorHelperText="渠道开启后商品将在门店上架售卖，关闭后商品将从渠道移除。"
         onBeforeChannelToggle={guardChannelClose}

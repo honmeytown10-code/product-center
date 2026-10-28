@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, ChevronLeft, Circle, Edit2, ImageIcon, Lock, Plus, Search, Settings2, Tags, Trash2, X } from 'lucide-react';
 import { MobileLabelGroup, MobileLabelItem, StoreDataSource, VisualStyleType } from './productMeta';
+import { MobileGroupAddButton } from './MobileGroupAddButton';
 
 interface Props {
   onBack: () => void;
@@ -237,14 +238,7 @@ export const MobileLabelManager: React.FC<Props> = ({ onBack, groups, onChange }
             <Settings2 size={22} className="mb-0.5" />
             <span className="text-[10px]">标签组管理</span>
           </button>
-          <button
-            disabled={isBrandGroup}
-            onClick={() => activeGroup && setEditor({ mode: 'label_create', groupId: activeGroup.id, name: '', styleType: 'text', backgroundColor: '#EAF8EF', textColor: '#00A35B', imageName: '' })}
-            className={`flex-1 py-2 bg-[#1F2129] text-white font-bold rounded-xl shadow-lg flex flex-col items-center justify-center ${isBrandGroup ? 'opacity-30' : ''}`}
-          >
-            <Plus size={24} className="mb-0.5" />
-            <span className="text-[10px]">{isBrandGroup ? '总部禁用新增' : '新增标签'}</span>
-          </button>
+          <MobileGroupAddButton blocked={isBrandGroup} label="新增标签" blockedLabel="总部分组不可新增" itemName="标签" onAdd={() => activeGroup && setEditor({ mode: 'label_create', groupId: activeGroup.id, name: '', styleType: 'text', backgroundColor: '#EAF8EF', textColor: '#00A35B', imageName: '' })} />
         </div>
       )}
 

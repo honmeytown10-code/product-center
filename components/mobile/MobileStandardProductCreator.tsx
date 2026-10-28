@@ -10,7 +10,7 @@ import { MobileProductAttributeSorter } from './MobileProductAttributeSorter';
 import { MobileProductChannelSelector } from './MobileProductChannelSelector';
 import { LocalMethod, LocalSpec } from './types';
 import { MobileProductMethodEditor, MethodDiscardDialog } from './MobileProductMethodEditor';
-import { methodConfigError, methodConfigSummary, ProductMethodConfig } from './productMethodState';
+import { enablesStoreDisabledMethod, methodAvailabilityChanged, methodConfigError, methodConfigSummary, PRODUCT_METHOD_TOGGLE_PERMISSION, STORE_METHOD_DISABLED_MESSAGE, ProductMethodConfig } from './productMethodState';
 import { MobileBadgeItem, MobileLabelGroup, MobileStallOption, VisualStyleType, DEFAULT_STORE_STALLS } from './productMeta';
 import { MobileStallSelector } from './MobileStallSelector';
 import { MobilePackagingEditor, hasPackaging, packagingError, packagingSummary } from './MobilePackagingEditor';
@@ -33,6 +33,7 @@ interface Props {
   saveMode?: 'default' | 'ai_confirm';
   onSaveDraft?: (data: { name: string; basePrice: string; category: string }) => void;
   methodLibrary?: LocalMethod[];
+  canToggleMethods?: boolean;
   storeName?: string;
   onPrimaryAction?: (data: {
     name: string;
@@ -156,6 +157,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   onBeforeChannelToggle,
   packageFeeLevel = 'product',
   methodLibrary = [],
+  canToggleMethods = true,
   storeName = '当前门店',
 }: Props) => {
   const [activeTab, setActiveTab] = useState<TabType>('basic');
@@ -338,6 +340,16 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
   };
 
   const handleSubmit = (continueAdding = false) => {
+    if (mode === 'edit' && !canToggleMethods && methodAvailabilityChanged(initialData?.methodConfiguration ?? [], formData.methodConfiguration)) {
+      setSaveError(PRODUCT_METHOD_TOGGLE_PERMISSION.deniedMessage);
+      setShowMethodEditor(true);
+      return;
+    }
+    if (mode === 'edit' && enablesStoreDisabledMethod(initialData?.methodConfiguration ?? [], formData.methodConfiguration, methodLibrary)) {
+      setSaveError(STORE_METHOD_DISABLED_MESSAGE);
+      setShowMethodEditor(true);
+      return;
+    }
     const methodError = methodConfigError(formData.methodConfiguration, formData.methodDefinitions);
     if (methodError) {
       setSaveError(methodError);
@@ -930,6 +942,7 @@ export const MobileStandardProductCreator: React.FC<Props> = ({
         config={formData.methodConfiguration}
         library={formData.methodDefinitions}
         mode={mode}
+        canToggleMethods={canToggleMethods}
         onBack={() => setShowMethodEditor(false)}
         onConfirm={(next, definitions) => {
           setFormData(previous => ({ ...previous, methodConfiguration: next, methodDefinitions: definitions }));

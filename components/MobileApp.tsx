@@ -69,7 +69,11 @@ export const MobileApp: React.FC = () => {
   
   const previewParams = new URLSearchParams(window.location.search);
   const previewProduct = previewParams.get('screen') === 'product-edit' ? products.find(item => item.id === previewParams.get('productId')) : undefined;
-  const [currentScreen, setCurrentScreen] = useState<Screen>(previewProduct ? 'product_edit' : 'dashboard');
+  const previewScreens: Record<string, Screen> = {
+    'product-tools': 'product_tools', 'spec-list': 'spec_list', 'method-list': 'method_list',
+    'label-list': 'label_list', 'category-list': 'category_list', 'badge-list': 'badge_list',
+  };
+  const [currentScreen, setCurrentScreen] = useState<Screen>(previewProduct ? 'product_edit' : previewScreens[previewParams.get('screen') ?? ''] ?? 'dashboard');
   const [activeOrg, setActiveOrg] = useState<OrgNode>(ORG_TREE[0].children![0].children![0]); 
   const [showOrgSelector, setShowOrgSelector] = useState(false);
   const [returnScreen, setReturnScreen] = useState<Screen>('dashboard');
@@ -416,6 +420,7 @@ export const MobileApp: React.FC = () => {
               <MobileProductEditor
                 product={editingProduct?.product}
                 activeChannel={editingProduct?.activeChannel}
+                canToggleMethods={previewParams.get('methodPermission') !== 'denied'}
                 storeName={activeOrg.name}
                 methodLibrary={methodLibrary}
                 methodConfiguration={methodConfigurations[`${methodScope}:${editingProduct?.product?.id}`] ?? demoProductMethods(editingProduct?.product?.id)}

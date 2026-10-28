@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Plus, Search, X } from 'lucide-react';
 import type { LocalMethod } from './types';
 import { mergeMethodSelection, ProductMethodConfig, visibleMethodConfig } from './productMethodState';
+import { MobileGroupAddButton } from './MobileGroupAddButton';
 
 export function MobileProductMethodSelector({ config, library, onBack, onConfirm }: {
   config: ProductMethodConfig[];
@@ -57,7 +58,7 @@ export function MobileProductMethodSelector({ config, library, onBack, onConfirm
           <div className="flex min-h-11 items-center justify-between gap-2 border-b border-gray-100"><h3 className="min-w-0 break-words text-xs font-bold">{displayedGroup.name}（{values.length}）</h3><label className="flex min-h-11 shrink-0 items-center gap-1 text-xs text-gray-600">全选<input aria-label={`全选${displayedGroup.name}`} type="checkbox" checked={values.length > 0 && values.every(value => selected[displayedGroup.id]?.includes(value.id))} disabled={!values.length} onChange={event => { const checked = event.target.checked; setSelected(previous => ({ ...previous, [displayedGroup.id]: checked ? [...new Set([...(previous[displayedGroup.id] ?? []), ...values.map(value => value.id)])] : (previous[displayedGroup.id] ?? []).filter(id => !values.some(value => value.id === id)) })); }} className="h-4 w-4 accent-[#00C06B]" /></label></div>
           {values.map(value => <label key={value.id} className="flex min-h-12 items-center justify-between gap-2 border-b border-gray-100 py-2 text-sm"><span className="min-w-0 break-words">{value.name}</span><input aria-label={`选择${displayedGroup.name} ${value.name}`} type="checkbox" checked={selected[displayedGroup.id]?.includes(value.id) ?? false} onChange={() => toggle(displayedGroup.id, value.id)} className="h-4 w-4 shrink-0 accent-[#00C06B]" /></label>)}
           {!values.length && <p className="py-8 text-center text-xs text-gray-600">{query ? '未找到匹配的做法' : '暂无可添加的做法值'}</p>}
-          {displayedGroup.source === 'store' ? <button onClick={() => { setCreation('value'); setName(''); setError(''); }} className="flex min-h-11 items-center gap-1 text-xs font-medium text-green-700"><Plus size={15} />新增做法值</button> : <p className="mt-3 text-[11px] leading-5 text-gray-500">品牌做法值由品牌端维护</p>}
+          <MobileGroupAddButton compact blocked={displayedGroup.source === 'brand'} label="新增做法值" blockedLabel="总部做法不可新增" itemName="做法值" onAdd={() => { setCreation('value'); setName(''); setError(''); }} />
         </> : <div className="py-10 text-center text-xs leading-6 text-gray-600">{query ? '未找到匹配的做法' : '暂无做法分组'}</div>}
       </div>
     </div>

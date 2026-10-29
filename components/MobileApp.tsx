@@ -31,9 +31,10 @@ import {
 } from './mobile/MobileBatchComponents';
 import { MobileLabelManager } from './mobile/MobileLabelManager';
 import { MobileBadgeManager } from './mobile/MobileBadgeManager';
+import { MobileMappingAlertFlow } from './mobile/MobileMappingAlertFlow';
 import { cloneBadges, cloneLabelGroups, DEFAULT_STORE_BADGES, DEFAULT_STORE_LABEL_GROUPS, MobileBadgeItem, MobileLabelGroup } from './mobile/productMeta';
 
-type Screen = 'dashboard' | 'product_tools' | 'brand_product_tools' | 'product_list' | 'product_create' | 'product_edit' | 'category_list' | 'addon_list' | 'addon_type_list' | 'method_list' | 'spec_list' | 'combo_list' | 'label_list' | 'badge_list' | 'batch_operation_select' | 'batch_config' | 'product_sort' | 'category_sort';
+type Screen = 'dashboard' | 'mapping_alerts' | 'product_tools' | 'brand_product_tools' | 'product_list' | 'product_create' | 'product_edit' | 'category_list' | 'addon_list' | 'addon_type_list' | 'method_list' | 'spec_list' | 'combo_list' | 'label_list' | 'badge_list' | 'batch_operation_select' | 'batch_config' | 'product_sort' | 'category_sort';
 type OrgType = 'brand' | 'region' | 'store';
 
 interface OrgNode {
@@ -236,6 +237,14 @@ export const MobileApp: React.FC = () => {
              <div className="flex items-center space-x-3 text-gray-600">
                 <button className="p-2 bg-gray-50 rounded-full hover:bg-gray-100"><Search size={18}/></button>
                 <button className="p-2 bg-gray-50 rounded-full hover:bg-gray-100"><ScanLine size={18}/></button>
+                <button
+                  onClick={() => navigateTo('mapping_alerts')}
+                  className="relative p-2 bg-gray-50 rounded-full hover:bg-gray-100"
+                  aria-label="打开告警中心，12 条商品告警"
+                >
+                  <Bell size={18}/>
+                  <span className="absolute -right-1 -top-1 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-white">12</span>
+                </button>
              </div>
           </div>
 
@@ -345,6 +354,8 @@ export const MobileApp: React.FC = () => {
 
   const renderContent = () => {
       switch (currentScreen) {
+          case 'mapping_alerts':
+            return <MobileMappingAlertFlow onBack={() => setCurrentScreen('dashboard')} />;
           case 'product_tools':
             return <MobileProductTools onBack={() => setCurrentScreen('dashboard')} onNavigate={(screen) => navigateTo(screen as Screen, 'product_tools')} />;
           case 'brand_product_tools':

@@ -30,7 +30,7 @@ export const PRIVATE_CHANNELS: Array<OmnichannelChannel & { id: PrivateChannelId
 export const THIRD_PARTY_CHANNELS: Array<OmnichannelChannel & { id: ThirdPartyChannelId }> = [
   { id: 'meituan', name: '美团外卖', shortName: '美团外卖', type: 'third_party', platformProductScope: 'store_only', supportsServiceProviderBilling: true },
   { id: 'taobao', name: '淘宝闪购', shortName: '淘宝闪购', type: 'third_party', platformProductScope: 'store_only', supportsServiceProviderBilling: true },
-  { id: 'jd', name: '京东外卖', shortName: '京东外卖', type: 'third_party', platformProductScope: 'store_only' },
+  { id: 'jd', name: '京东秒送', shortName: '京东秒送', type: 'third_party', platformProductScope: 'store_only' },
   { id: 'douyin', name: '抖音在线点', shortName: '抖音在线点', type: 'third_party', platformProductScope: 'brand_and_store', requiresBrandReview: true },
   { id: 'meituan_dine', name: '美团在线点', shortName: '美团在线点', type: 'third_party', platformProductScope: 'brand_and_store' },
   { id: 'meituan_pinhaofan', name: '美团拼好饭', shortName: '美团拼好饭', type: 'third_party', platformProductScope: 'store_only' },

@@ -168,7 +168,7 @@ const STORE_CHANNEL_LABELS: Record<string, string> = {
     meituan_dine: '美团-在线点',
     meituan_tuangou: '美团-团购',
     taobao: '淘宝闪购',
-    jd: '京东外卖',
+    jd: '京东秒送',
     eleme: '饿了么',
     douyin_dine: '抖音在线点',
 };

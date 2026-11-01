@@ -4,7 +4,7 @@ import { isTakeoutChannel, takeoutOperationPlan } from './takeoutSync';
 export type DeleteTarget = { id: string; productId: string; name: string; storeId: string; storeName: string; channel: string; type: string };
 export type DeleteFacts = { references: string[]; referencesVerified: boolean; authorized: boolean; actionAllowed: boolean; mappingOwned: boolean; managed: boolean; pendingWrite: boolean };
 export type DeletePolicy = 'qimai_only' | 'qimai_and_platform';
-export const deletionChannelName = (id: string) => ({ meituan: '美团外卖', taobao: '淘宝闪购', jd: '京东外卖', pos: 'POS', mini_dine: '小程序堂食', mini_take: '小程序外卖', meituan_dine: '美团在线点', douyin_dine: '抖音在线点', eleme: '淘宝闪购' }[id] || id);
+export const deletionChannelName = (id: string) => ({ meituan: '美团外卖', taobao: '淘宝闪购', jd: '京东秒送', pos: 'POS', mini_dine: '小程序堂食', mini_take: '小程序外卖', meituan_dine: '美团在线点', douyin_dine: '抖音在线点', eleme: '淘宝闪购' }[id] || id);
 export const normalizeDeletionChannel = (id: string) => id === 'eleme' ? 'taobao' : id;
 export function removeDeletedTargets<T extends { id: string; channels: string[] }>(records: T[], targets: DeleteTarget[]): T[] {
   const ids = new Set(targets.map(t => t.id));
@@ -18,7 +18,7 @@ export function checkStoreDeletion(target: DeleteTarget, policy: DeletePolicy, f
   if (facts.references.length) errors.push(`仍被引用：${facts.references.join('、')}。请先处理关联，不会自动拆解套餐或删除共享对象。`);
   if (facts.pendingWrite) errors.push('同一对象还有未完成的发布或经营任务，请取消或等待任务完成后再检查。');
   if (policy === 'qimai_and_platform') {
-    if (!isTakeoutChannel(normalizeDeletionChannel(target.channel))) errors.push('本次同步删除只支持美团外卖、淘宝闪购、京东外卖。');
+    if (!isTakeoutChannel(normalizeDeletionChannel(target.channel))) errors.push('本次同步删除只支持美团外卖、淘宝闪购、京东秒送。');
     if (!facts.managed) errors.push('平台资料由平台维护，请先在平台处理，不从企迈删除平台对象。');
     if (!facts.authorized) errors.push('平台授权失效或门店未绑定，请恢复连接后重新检查。');
     if (!facts.mappingOwned) errors.push('没有已核验的企迈管理映射，不能按名称匹配删除平台商品。');

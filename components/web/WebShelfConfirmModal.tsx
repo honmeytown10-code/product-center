@@ -57,7 +57,7 @@ const CHANNEL_META: Record<ShelfChannelId, {
     icon: <ShoppingBag size={16} strokeWidth={2.2} />,
     activeClass: 'bg-[#FF7A18] text-white',
   },
-  jd: { label: '京东外卖', icon: <ShoppingBag size={16} />, activeClass: 'bg-[#FEE4E2] text-[#D92D20]' },
+  jd: { label: '京东秒送', icon: <ShoppingBag size={16} />, activeClass: 'bg-[#FEE4E2] text-[#D92D20]' },
   eleme: {
     label: '饿了么',
     icon: <span className="text-[12px] font-black leading-none">e</span>,

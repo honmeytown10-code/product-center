@@ -77,7 +77,7 @@ const getRelationScopeText = (rule: ScopeRule) => rule.relationProductScope === 
   ? `指定 ${rule.productNames.length} 个商品`
   : '全部关联商品';
 
-const CHANNELS = ['POS', '小程序堂食', '小程序外卖', '美团外卖', '淘宝闪购', '京东外卖', '抖音在线点'];
+const CHANNELS = ['POS', '小程序堂食', '小程序外卖', '美团外卖', '淘宝闪购', '京东秒送', '抖音在线点'];
 const STORE_OPTIONS = [
   { id: 'store-001', name: '南山万象店', code: 'SZ001', organization: '深圳直营区', region: '华南', type: '直营店' },
   { id: 'store-002', name: '福田卓悦店', code: 'SZ002', organization: '深圳直营区', region: '华南', type: '直营店' },
@@ -762,8 +762,8 @@ export const WebSalesScopeManager: React.FC = () => {
                 <div className="space-y-5"><section><div className="mb-2 flex items-center justify-between"><h3 className="text-[14px] font-semibold text-[#1D2129]">适用门店 <span className="text-[#D92D20]">*</span></h3><span className="text-[12px] text-[#667085]">区域、组织和门店类型仅用于选择器筛选</span></div><button type="button" onClick={openStoreSelector} className="flex h-11 w-full items-center justify-between rounded-md border border-[#DDE2E8] px-3 text-[13px]"><span>{draftStores.length ? `已选择 ${draftStores.length} 家门店` : '请选择门店'}</span><span className="font-medium text-[#008F4C]">选择门店</span></button><div className="mt-2 flex flex-wrap gap-2">{draftStores.slice(0, 8).map(store => <span key={store} className="rounded bg-[#F2F4F7] px-2 py-1 text-[12px] text-[#4E5969]">{store}</span>)}{draftStores.length > 8 && <span className="py-1 text-[12px] text-[#667085]">另 {draftStores.length - 8} 家</span>}</div></section><section className="border-t border-[#EEF0F3] pt-5"><h3 className="mb-2 text-[14px] font-semibold text-[#1D2129]">适用渠道 <span className="text-[#D92D20]">*</span></h3><div className="grid grid-cols-3 gap-2">{CHANNELS.map(channel => <label key={channel} className={`flex cursor-pointer items-center rounded-md border px-3 py-2.5 text-[13px] ${draftChannels.includes(channel) ? 'border-[#9ADFC0] bg-[#F3FBF7] text-[#008F4C]' : 'border-[#E3E7EC] text-[#4E5969]'}`}><input type="checkbox" checked={draftChannels.includes(channel)} onChange={() => toggleSelection(channel, draftChannels, setDraftChannels)} className="mr-2 accent-[#00B460]" />{channel}</label>)}</div></section></div>
               )}
 
-              {editorStep === 3 && draftChannels.some(channel => ['美团外卖', '淘宝闪购', '京东外卖'].includes(channel)) && <section aria-label="外卖规则执行说明" className="mb-4 border-b border-[#E3E7EC] pb-4 text-xs leading-6 text-[#667085]">
-                {draftChannels.includes('京东外卖') && <p><span className="font-medium text-[#344054]">京东外卖：</span>{draftObjectType === 'addon' ? '按独立小料状态执行，不删除关联关系；共享小料需核验所有引用。' : draftObjectType === 'method' ? '只同步不加价做法；不能等价表达的选择规则需先确认。' : '按完整 SKU 映射计算；上下架不修改库存。'}门店建品与分类能力检测通过后才执行平台任务。</p>}
+              {editorStep === 3 && draftChannels.some(channel => ['美团外卖', '淘宝闪购', '京东秒送'].includes(channel)) && <section aria-label="外卖规则执行说明" className="mb-4 border-b border-[#E3E7EC] pb-4 text-xs leading-6 text-[#667085]">
+                {draftChannels.includes('京东秒送') && <p><span className="font-medium text-[#344054]">京东秒送：</span>{draftObjectType === 'addon' ? '按独立小料状态执行，不删除关联关系；共享小料需核验所有引用。' : draftObjectType === 'method' ? '只同步不加价做法；不能等价表达的选择规则需先确认。' : '按完整 SKU 映射计算；上下架不修改库存。'}门店建品与分类能力检测通过后才执行平台任务。</p>}
                 {draftChannels.includes('美团外卖') && <p><span className="font-medium text-[#344054]">美团外卖：</span>{draftObjectType === 'addon' ? '加料可选范围参与商品资料预检，不执行独立小料上下架，也不通过删除或沽清替代。' : draftObjectType === 'method' ? '做法范围随商品做法资料转换；存在加价、默认或互斥关系时需校验完整结构。' : '按完整 SKU 组合计算范围；上下架与库存分别执行。'}</p>}
                 {draftChannels.includes('淘宝闪购') && <p><span className="font-medium text-[#344054]">淘宝闪购：</span>{draftObjectType === 'sku' ? '按平台规格映射执行；多层规格不能自动合并为一层。' : '做法 / 加料选项启停需开通 L2 接口权限；无权限时保留企迈规则并提示平台任务不能执行。'}</p>}
               </section>}

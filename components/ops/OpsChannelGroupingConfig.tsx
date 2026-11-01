@@ -11,7 +11,7 @@ const ALL_CHANNELS = [
   { id: 'mini_take', label: '小程序外卖' },
   { id: 'meituan', label: '美团外卖' },
   { id: 'taobao', label: '淘宝闪购' },
-  { id: 'jingdong', label: '京东外卖' },
+  { id: 'jingdong', label: '京东秒送' },
 ];
 
 interface Props {

@@ -69,7 +69,7 @@ const CHANNEL_DEFS: Record<ChannelId, {
   inactiveClass: string;
   icon: React.ReactNode;
 }> = {
-  jd: { label: '京东外卖', shortLabel: '京', activeClass: 'bg-[#FEE4E2] text-[#D92D20]', inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]', icon: <ShoppingBag size={16} /> },
+  jd: { label: '京东秒送', shortLabel: '京', activeClass: 'bg-[#FEE4E2] text-[#D92D20]', inactiveClass: 'bg-[#F3F4F6] text-[#BDBDBD]', icon: <ShoppingBag size={16} /> },
   mini_dine: {
     label: '小程序-堂食',
     shortLabel: '堂',
@@ -128,7 +128,7 @@ const DEFAULT_CHANNELS = [
   { id: 'meituan_dine', label: '美团在线点' },
   { id: 'douyin', label: '抖音在线点' },
   { id: 'taobao', label: '淘宝闪购' },
-  { id: 'jd', label: '京东外卖' },
+  { id: 'jd', label: '京东秒送' },
   { id: 'pos', label: 'POS' },
 ] as const;
 

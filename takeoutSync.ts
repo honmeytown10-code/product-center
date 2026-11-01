@@ -101,7 +101,7 @@ export function checkTakeoutProduct(product: Input, channel: TakeoutChannel): Ta
     const step = Number(fields[`packingStep:${sku.id}`] ?? 1);
     if (!Number.isInteger(step) || step < 1) add(`${sku.name || 'SKU'}餐盒费`, '计费步长需为大于 0 的整数。');
     if (channel === 'taobao' && step !== 1) add(`${sku.name || 'SKU'}餐盒费`, '淘宝闪购规格包装费没有已确认的阶梯计费映射，请改为每份计费或完成接口验证。');
-    if (sku.autoRestock) add(`${sku.name || 'SKU'}自动补足`, `${channel === 'jd' ? '京东外卖' : channel === 'taobao' ? '淘宝闪购' : '美团外卖普通 SKU'}自动补足执行方式待确认，不会用“置满库存”替代；美团小料自动补足另按小料接口处理。`);
+    if (sku.autoRestock) add(`${sku.name || 'SKU'}自动补足`, `${channel === 'jd' ? '京东秒送' : channel === 'taobao' ? '淘宝闪购' : '美团外卖普通 SKU'}自动补足执行方式待确认，不会用“置满库存”替代；美团小料自动补足另按小料接口处理。`);
   });
   return issues;
 }
@@ -185,7 +185,7 @@ export function createTakeoutStoreBatch(product: Input & { id: string; storeId: 
   if (!channels.length) return undefined;
   const id = `STORE-${Date.now()}-${++nextTakeoutBatchId}`;
   const now = new Date().toLocaleString('sv-SE', { hour12: false });
-  const label = (channel: TakeoutChannel) => channel === 'meituan' ? '美团外卖' : channel === 'jd' ? '京东外卖' : '淘宝闪购';
+  const label = (channel: TakeoutChannel) => channel === 'meituan' ? '美团外卖' : channel === 'jd' ? '京东秒送' : '淘宝闪购';
   const details: NonNullable<PublishBatch['details']> = channels.flatMap(channel => {
     const validation = operation === 'structure' ? checkTakeoutProduct(product, channel) : operation === 'price' ? checkTakeoutProduct(product, channel).filter(issue => issue.field === '商品结构' || issue.field.endsWith('售价')) : [];
     const readiness = channel === 'jd' ? checkJdStoreReadiness(product.formData?.jdStoreReadiness) : [];

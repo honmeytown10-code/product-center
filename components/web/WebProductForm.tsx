@@ -1976,7 +1976,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         ? specConfigRows.map(row => ({ ...row, ...Object.fromEntries(PACKAGING_FIELDS.map(field => [field.key, specConfigRows[0][field.key]])) })) : specConfigRows;
     const takeoutSnapshot: TakeoutSnapshot = {
         specGroupCount: specDisplayMode === 'single' ? 0 : Object.keys(selectedSpecValuesByGroup).length,
-        skus: visibleSpecRows.map(row => ({ id: row.id, name: row.s_spec_name, price: row.s_spec_channel_price || row.s_spec_price, stock: row.s_spec_initial_stock, maxStock: row.s_spec_max_stock, autoRestock: row.s_spec_auto_restock, packagingFee: row.s_spec_take_pack_fee || row.s_spec_store_pack_fee, inventoryMode: row.s_spec_inventory_mode, amount: row.s_spec_amount, amountUnit: row.s_spec_amount_unit })),
+        skus: visibleSpecRows.map(row => ({ id: row.id, name: row.s_spec_name, price: row.s_spec_channel_price || row.s_spec_price, stock: row.s_spec_initial_stock, maxStock: row.s_spec_max_stock, autoRestock: row.s_spec_auto_restock, packagingFee: (packageFeeSetting === 'product' ? specConfigRows[0]?.s_spec_take_pack_fee : row.s_spec_take_pack_fee) ?? '', inventoryMode: row.s_spec_inventory_mode, amount: row.s_spec_amount, amountUnit: row.s_spec_amount_unit })),
         methods: methodConfigRows.filter(row => row.m_method_sync !== false).map(row => ({ id: row.id, name: row.m_method_name, price: row.m_method_markup, groupName: row.groupName })),
         addonCount: addonConfigRows.filter(row => row.addonStatus === 'on').length,
         comboGroupCount: comboGroupCards.filter(group => group.channelEnabled !== false).length,
@@ -10520,7 +10520,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                         {isUnifiedForm && unifiedManagementView && <WebProductSalesScope value={salesScope} channels={(channelContext?.channelIds || []).filter(id => id !== 'meituan_pinhaofan')} onChange={setSalesScope} showErrors={saveAttempted} showStores={false} disabledChannelIds={isComboProduct ? ['meituan_dine'] : []}>
                             {!!onlineOrderingChannelIds.length && <p role="note" className="mt-3 text-xs leading-5 text-[#667085]">在线点渠道仅在此维护商品资料。保存不自动提交平台，“保存并下发”不包含抖音在线点、美团在线点；请保存后前往“在线点商品”完成商品及加料同步、审核和门店下发。</p>}
-                            {activeThirdPartyChannelAttributeIds.length > 0 && <WebThirdPartyChannelFields channelIds={activeThirdPartyChannelAttributeIds} selectedSalesChannelIds={selectedSalesChannelIds} showSalesChannelSelector={false} addonItems={enabledChannelAddonItems} validationError={saveAttempted ? channelSettingsError : ''} unifiedManagementView location="channel" title="渠道专属属性" embedded compact value={channelSpecificValues} onChange={setChannelSpecificValues} productType={type} snapshot={takeoutSnapshot} onlineMutexContext={onlineMutexContext} />}
+                            {activeThirdPartyChannelAttributeIds.length > 0 && <WebThirdPartyChannelFields channelIds={activeThirdPartyChannelAttributeIds} selectedSalesChannelIds={selectedSalesChannelIds} showSalesChannelSelector={false} addonItems={enabledChannelAddonItems} validationError={saveAttempted ? channelSettingsError : ''} unifiedManagementView location="channel" title="渠道专属属性" embedded compact value={channelSpecificValues} onChange={setChannelSpecificValues} productType={type} snapshot={takeoutSnapshot} packagingFeeMode={packageFeeSetting} onPackagingFeeChange={(skuId, amount) => setSpecConfigRows(prev => prev.map(row => packageFeeSetting === 'product' || row.id === skuId ? { ...row, s_spec_take_pack_fee: amount } : row))} onlineMutexContext={onlineMutexContext} />}
                         </WebProductSalesScope>}
                         {!(isUnifiedForm && unifiedManagementView) && activeThirdPartyChannelAttributeIds.length > 0 && (
                             <div id="third_party" className="scroll-mt-[190px] bg-white">
@@ -10537,7 +10537,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                     value={channelSpecificValues}
                                     onChange={setChannelSpecificValues}
                                     productType={type}
-                                    snapshot={takeoutSnapshot}
+                                    snapshot={takeoutSnapshot} packagingFeeMode={packageFeeSetting} onPackagingFeeChange={(skuId, amount) => setSpecConfigRows(prev => prev.map(row => packageFeeSetting === 'product' || row.id === skuId ? { ...row, s_spec_take_pack_fee: amount } : row))}
                                     onlineMutexContext={onlineMutexContext}
                                 />
                             </div>

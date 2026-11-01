@@ -8,7 +8,7 @@ const PRIMARY = 'var(--colorPrimary, #00b460)';
 const button = 'inline-flex min-h-8 items-center justify-center gap-1.5 rounded border border-[#DDE3E8] bg-white px-3 text-sm text-[#344054] hover:bg-[#F7F8FA] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00B460] disabled:cursor-not-allowed disabled:opacity-50';
 
 // Production mapping: QmListTable + el-dialog + object tree. Transport routing remains hidden.
-function MutexDialog({ title, onClose, children, footer, wide = false }: {
+export function MutexDialog({ title, onClose, children, footer, wide = false }: {
   title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode; wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null), closeRef = useRef(onClose);

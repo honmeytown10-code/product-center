@@ -83,7 +83,12 @@ export const checkChannelRequiredFields = (channel: ThirdPartyChannelId, data: R
   return (CHANNEL_FIELDS[channel] || []).filter(field => field.required && (values[field.id] == null || String(values[field.id]).trim() === ''))
     .map(field => ({ field: field.label, message: `请补充${field.label}。` }));
 };
-export const resolveChannelFieldValues = (channelIds: ThirdPartyChannelId[], values: ThirdPartyFieldValues) => Object.fromEntries(channelIds.map(id => [id, { ...CHANNEL_INITIAL_VALUES[id], ...values[id] }]));
+export const resolveChannelFieldValues = (channelIds: ThirdPartyChannelId[], values: ThirdPartyFieldValues) => Object.fromEntries(channelIds.map(id => {
+  const fields = { ...CHANNEL_INITIAL_VALUES[id], ...values[id] };
+  // The platform always receives one portion; discard legacy prototype step overrides on save.
+  if (id === 'taobao') Object.keys(fields).filter(key => key.startsWith('packingStep:')).forEach(key => { fields[key] = '1'; });
+  return [id, fields];
+}));
 
 export type ChannelAddonItem = { groupName: string; name: string };
 const ONLINE_CHANNEL_IDS: ThirdPartyChannelId[] = ['douyin', 'meituan_dine'];
@@ -164,10 +169,12 @@ type Props = {
   onChange?: (value: ThirdPartyFieldValues) => void;
   productType?: string;
   snapshot?: TakeoutSnapshot;
+  onPackagingFeeChange?: (skuId: string, amount: string) => void;
+  packagingFeeMode?: 'product' | 'spec';
   onlineMutexContext?: OnlineMutexContext;
 };
 
-export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, selectedSalesChannelIds, onSelectedSalesChannelIdsChange, showSalesChannelSelector = true, addonItems = [], validationError, location, title, compact = false, embedded = false, unifiedManagementView = false, value, onChange, productType, snapshot, onlineMutexContext }) => {
+export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, selectedSalesChannelIds, onSelectedSalesChannelIdsChange, showSalesChannelSelector = true, addonItems = [], validationError, location, title, compact = false, embedded = false, unifiedManagementView = false, value, onChange, productType, snapshot, onlineMutexContext, onPackagingFeeChange, packagingFeeMode = 'spec' }) => {
   const [activeChannelId, setActiveChannelId] = useState<ThirdPartyChannelId>(channelIds[0]);
   const [inheritBasic, setInheritBasic] = useState<Record<string, boolean>>({});
   const [values, setValues] = useState<Record<string, Record<string, string | boolean | string[]>>>({});
@@ -279,7 +286,7 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, select
             {fields.map(field => {
               const value = channelValues[field.id];
               return (
-                <div key={field.id} className={field.type === 'checkbox' || field.id === 'attributeMutex' ? 'md:col-span-2' : ''}>
+                <div key={field.id} className={(field.type === 'checkbox' && !isTakeout) || field.id === 'attributeMutex' ? 'md:col-span-2' : ''}>
                   <label htmlFor={`platform-field-${activeId}-${field.id}`} className="mb-2 block text-sm font-semibold text-[#4E5969]">
                     {field.required && <span className="mr-1 text-red-500">*</span>}{field.label}
                   </label>
@@ -359,7 +366,18 @@ export const WebThirdPartyChannelFields: React.FC<Props> = ({ channelIds, select
               })()}
             </div>}
 
-        {isTakeout && activeId !== 'jd' && snapshot && snapshot.skus.length > 0 && <section className="border-t border-[#E5E6EB] pt-4"><h4 className="mb-3 text-sm font-semibold text-[#4E5969]">餐盒费计费方式</h4><div className="space-y-2">{snapshot.skus.map(sku => <div key={sku.id} className="flex flex-wrap items-center gap-3 text-sm"><span className="w-40 break-words text-[#4E5969]">{sku.name || '单规格'}</span><span className="text-[#667085]">¥{sku.packagingFee || '0'} / 每</span><input aria-label={`${activeChannel.name}${sku.name || '单规格'}餐盒费计费步长`} type="number" min="1" step="1" value={String(channelValues[`packingStep:${sku.id}`] ?? '1')} onChange={event => updateValue(`packingStep:${sku.id}`, event.target.value)} className="h-9 w-20 rounded border border-[#DDE2E8] px-2" /><span className="text-[#667085]">份</span></div>)}</div><p className="mt-2 text-xs leading-5 text-[#667085]">餐盒费金额在商品结构中维护。</p></section>}
+        {isTakeout && activeId !== 'jd' && snapshot && snapshot.skus.length > 0 && <section className="border-t border-[#E5E6EB] pt-4">
+          <h4 className="mb-3 text-sm font-medium text-[#4E5969]">餐盒费计费方式</h4>
+          <div className="space-y-3">{snapshot.skus.map(sku => <div key={sku.id} className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="w-40 break-words text-[#4E5969]">{sku.name || '单规格'}</span>
+            <label className="flex h-9 items-center gap-2 rounded border border-[#DDE2E8] px-2"><span className="text-[#667085]">¥</span><input aria-label={`${activeChannel.name}${sku.name || '单规格'}餐盒费金额`} type="number" min="0" step="0.01" readOnly={!onPackagingFeeChange} value={sku.packagingFee} placeholder="0.00" onChange={event => onPackagingFeeChange?.(sku.id, event.target.value)} className="w-24 outline-none" /></label>
+            <span className="text-[#667085]">/ 每</span>
+            {activeId === 'meituan' ? <input aria-label={`${activeChannel.name}${sku.name || '单规格'}餐盒费计费步长`} type="number" min="1" step="1" value={String(channelValues[`packingStep:${sku.id}`] ?? '1')} onChange={event => updateValue(`packingStep:${sku.id}`, event.target.value)} className="h-9 w-20 rounded border border-[#DDE2E8] px-2" /> : <span>1</span>}
+            <span className="text-[#667085]">份</span>
+          </div>)}</div>
+          <p className="mt-3 text-xs leading-5 text-[#667085]">{activeId === 'taobao' ? '淘宝闪购接口暂不支持同步餐盒费数量，默认按 1 份进行同步处理。' : '美团外卖支持自定义计费份数，请填写大于 0 的整数。'}金额支持 0 及最多两位小数。</p>
+          <p className="mt-1 text-xs leading-5 text-[#667085]">餐盒费金额与“包装设置”的外卖配送包装费共用，修改后同步更新使用该金额的渠道。{packagingFeeMode === 'product' ? '当前按商品设置金额，各规格共用。' : '当前按规格分别设置金额。'}</p>
+        </section>}
       </div>}
     </div>
   );

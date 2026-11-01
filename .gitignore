@@ -27,3 +27,7 @@ exports
 
 # Documentation (local only)
 docs/
+
+# Local task prototype browser and verification artifacts
+/.browser-profile/
+/task-review/

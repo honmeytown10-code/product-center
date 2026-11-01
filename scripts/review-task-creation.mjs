@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const root = new URL('../', import.meta.url);
+await fs.mkdir(new URL('task-review/', root), { recursive: true });
+const pages = await (await fetch('http://127.0.0.1:9258/json/list')).json();
+const target = pages.find(page => page.type === 'page' && page.url.startsWith('http://127.0.0.1:')); 
+const socket = new WebSocket(target.webSocketDebuggerUrl);
+await new Promise(resolve => socket.addEventListener('open', resolve, { once: true }));
+let seq = 0; const pending = new Map(); const errors = [];
+socket.addEventListener('message', event => { const message = JSON.parse(event.data); if (pending.has(message.id)) { const p = pending.get(message.id); pending.delete(message.id); message.error ? p.reject(message.error) : p.resolve(message.result); } if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails); });
+const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })); });
+const ev = async expression => { const response = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); assert(!response.exceptionDetails, JSON.stringify(response.exceptionDetails)); return response.result.value; };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+await call('Runtime.enable');
+
+await call('Page.navigate',{url:'http://127.0.0.1:5219/?menu=product_sync'});await wait(6000);
+await ev(`[...document.querySelectorAll('button')].find(b=>b.innerText.includes('发布商品至门店')).click()`);await wait(200);
+await ev(`(()=>{const keep=['POS'];for(const label of document.querySelectorAll('label')){const input=label.querySelector('input[type=checkbox]');if(input&&['POS','小程序堂食','小程序外卖','美团外卖','淘宝闪购','京东外卖','抖音在线点','美团在线点','美团拼好饭'].includes(label.innerText.trim())&&input.checked!==keep.includes(label.innerText.trim()))input.click();}})()`);await wait(180);
+await ev(`[...document.querySelectorAll('button')].find(b=>b.innerText.trim()==='下一步').click()`);await wait(180);
+await ev(`(()=>{const input=document.querySelector('.task-remark textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'验收备注'+ '中'.repeat(101));input.dispatchEvent(new Event('input',{bubbles:true}));})()`);await wait(200);
+assert.equal(await ev("Array.from(document.querySelector('.task-remark textarea').value).length"),100);
+await ev(`[...document.querySelectorAll('.task-timing label')].find(l=>l.innerText==='手动执行').click()`);
+await ev(`(()=>{const input=document.querySelector('tbody input[type=checkbox]');if(!input.checked)input.click();})()`);await wait(150);
+await ev(`[...document.querySelectorAll('button')].find(b=>b.innerText.trim()==='保存任务').click()`);await wait(350);
+const saved=await ev(`JSON.parse(localStorage.getItem(Object.keys(localStorage).find(key=>key.startsWith('product-tasks-demo-v1:')&&!key.endsWith(':source'))))`);
+const created=saved.find(batch=>batch.id.startsWith('PB')&&batch.remark?.startsWith('验收备注'));
+assert(created,'manual task persisted');assert.equal(created.status,'pending');assert.equal(Array.from(created.remark).length,100);assert(created.tasks.length>=1);assert(created.tasks.every(task=>task.status==='pending'&&!task.startedAt));assert(created.configuration.fields.length>0);
+console.log(JSON.stringify({taskId:created.id,remarkLength:100,subtasks:created.tasks.length,status:created.status}));
+console.log(await ev('document.body.innerText.slice(-500)'));
+const result=await call('Page.captureScreenshot',{format:'png'});await fs.writeFile(new URL('task-review/creation-success.png',root),Buffer.from(result.data,'base64'));
+socket.close();

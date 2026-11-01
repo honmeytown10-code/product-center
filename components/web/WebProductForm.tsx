@@ -1,3 +1,7 @@
+import { pendingTask, nowText } from './taskModel';
+import { saveTask } from './taskRepository';
+import type { PublishBatch } from './WebPublishRecords';
+import { WebTaskRemark } from './WebTaskFields';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { clearProductFormRecovery } from './productFormRecovery';
@@ -46,7 +50,7 @@ export type ProductSaveDraft = {
     formData?: Record<string, any>;
 };
 
-export type ProductSaveOptions = { intent: 'draft' | 'save' | 'publish'; overwriteFields?: string[]; publishScope?: ProductSalesScope; withdrawnChannelIds?: OmnichannelChannelId[]; withdrawalAction?: 'keep' | 'off_shelf' };
+export type ProductSaveOptions = { taskRemark?: string; intent: 'draft' | 'save' | 'publish'; overwriteFields?: string[]; publishScope?: ProductSalesScope; withdrawnChannelIds?: OmnichannelChannelId[]; withdrawalAction?: 'keep' | 'off_shelf' };
 const SAVE_PUBLISH_FIELDS = DEFAULT_PUBLISH_OVERWRITE_FIELDS;
 
 export interface WebProductFormProps {
@@ -1093,6 +1097,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
     const [savedIntent, setSavedIntent] = useState<ProductSaveOptions['intent']>('save');
     const [savedWithdrawal, setSavedWithdrawal] = useState(false);
     const [confirmPublish, setConfirmPublish] = useState(false);
+    const [taskRemark, setTaskRemark] = useState('');
     const [publishSubmitting, setPublishSubmitting] = useState(false);
     const [publishStoreQuery, setPublishStoreQuery] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [sellingStoreCount, setSellingStoreCount] = useState(0);
@@ -9031,7 +9036,8 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
         '其他属性',
     ]);
     const [taskExecutionMode, setTaskExecutionMode] = useState<TaskExecutionMode>('immediate');
-    const [scheduledExecutionText, setScheduledExecutionText] = useState('今晚21:00-早上10:30');
+    const [scheduledExecutionText, setScheduledExecutionText] = useState('');
+    const [taskSaveError, setTaskSaveError] = useState('');
     const [confirmingTask, setConfirmingTask] = useState<TaskFlowView | null>(null);
     const templateHistoryRecords = [latestTemplateTask, ...DEFAULT_TEMPLATE_HISTORY_RECORDS]
         .filter((item): item is TemplateTaskRecord => !!item)
@@ -9329,11 +9335,21 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                 </div>
                             </div>
                         </div>
+                        <div className="px-6"><WebTaskRemark value={taskRemark} onChange={setTaskRemark} />{taskSaveError && <p role="alert" className="text-sm text-red-600">{taskSaveError}</p>}</div>
                         <div className="flex justify-end gap-3 px-6 pb-6">
                             <button type="button" onClick={() => setConfirmingTask(null)} className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50">取消</button>
                             <button
                                 type="button"
                                 onClick={() => {
+                                    const execution = task === 'template' || taskExecutionMode === 'immediate' ? 'now' : taskExecutionMode;
+                                    if (execution === 'scheduled' && (!scheduledExecutionText || !Number.isFinite(Date.parse(scheduledExecutionText)) || Date.parse(scheduledExecutionText) <= Date.now())) { setTaskSaveError('请选择晚于当前时间的执行时间。'); return; }
+                                    const id = 'FORM-' + Date.now(); const at = nowText();
+                                    const productId = savedProductForChannelAction?.id || initialProduct?.id || 'current-product';
+                                    const chosen = task === 'template' ? taskProducts.slice(0, 1) : taskProducts.filter(product => selectedSyncProductIds.includes(product.id));
+                                    const taskChannels = task === 'template' ? ['商品下发模板'] : ['企迈门店渠道'];
+                                    const targetNames = task === 'template' ? selectedTemplateNames : storeGroups.flatMap(group => group.stores).filter(store => selectedStoreIds.includes(store.id)).map(store => store.name).join('、');
+                                    const taskBatch: PublishBatch = { id, title: task === 'template' ? '更新商品下发模板' : '商品下发', action: task === 'template' ? '更新模板商品资料' : '发布商品至门店', sourceType: '商品库', sourceName: '当前商品库', snapshot: '', channels: taskChannels, storeScope: targetNames, storeCount: task === 'template' ? 0 : selectedStoreIds.length, productCount: chosen.length, skuCount: currentSpecRows.length, createdAt: at, creator: '当前用户', remark: taskRemark.trim(), executionMode: execution, scheduledAt: execution === 'scheduled' ? scheduledExecutionText : undefined, status: 'running', tasks: [{ id: id + '-qimai', type: 'qimai', target: targetNames, channels: taskChannels, status: 'waiting', progress: 0, productCount: chosen.length, skuCount: currentSpecRows.length, storeCount: task === 'template' ? 0 : selectedStoreIds.length, successCount: 0, failedCount: 0, waitingCount: chosen.length, startedAt: at }], configuration: { operation: 'sync', source: { type: 'master', name: '当前商品库' }, products: chosen.map(product => ({ id: product.id === 'current-product' ? productId : product.id, name: product.name, skus: [] })), fields: selectedOverrideFields, overrides: {}, settings: [{ label: task === 'template' ? '目标模板' : '目标门店', value: targetNames }] }, details: chosen.map((product, index) => ({ id: id + '-' + index, taskId: id + '-qimai', taskType: 'qimai', productId: product.id === 'current-product' ? productId : product.id, productName: product.name, skuId: '', skuName: '', storeId: '', storeName: targetNames, channel: taskChannels[0], action: task === 'template' ? '更新模板商品资料' : '下发门店商品', fields: selectedOverrideFields, status: 'waiting', finishedAt: '' })) };
+                                    try { saveTask(activeBrandId, pendingTask(taskBatch)); setTaskSaveError(''); } catch (error) { setTaskSaveError(error instanceof Error ? error.message : '任务保存失败，配置已保留'); return; }
                                     setConfirmingTask(null);
                                     if (task === 'template') {
                                         setLatestTemplateTask({
@@ -9413,7 +9429,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         </div>
                         {taskExecutionMode === 'scheduled' && (
                             <div className="max-w-[320px]">
-                                <input className="q-form-input" value={scheduledExecutionText} onChange={e => setScheduledExecutionText(e.target.value)} />
+                                <input type="datetime-local" aria-label="商品任务执行时间" className="q-form-input" value={scheduledExecutionText} onChange={e => setScheduledExecutionText(e.target.value)} />
                             </div>
                         )}
                         <div className="text-sm text-[#FF4D4F]">高峰期进行商品同步等待时间可能较久，请尽量在非高峰期进行（定时）下发，即：晚上21:00-早上10:30</div>
@@ -10937,6 +10953,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {publishStoreQuery === 'loading' && <p role="status" className="mt-3 flex items-center gap-2 text-xs text-[#667085]"><LoaderCircle size={14} className="animate-spin" />正在查询商品在售门店…</p>}
                         {publishStoreQuery === 'success' && <p role="status" className="mt-3 text-xs text-[#667085]">{sellingStoreCount ? `已回显当前在售的 ${sellingStoreCount} 家门店，可调整本次下发范围。` : '当前所选渠道暂无在售门店，请选择本次下发门店。'}</p>}
                         {publishStoreQuery === 'error' && <p role="alert" className="mt-3 text-xs text-[#CB2634]">在售门店查询失败，未自动选择任何门店。<button type="button" onClick={beginPublish} className="ml-2 text-[#008F4C] underline">重新查询</button></p>}
+                        <WebTaskRemark value={taskRemark} onChange={setTaskRemark} />
                         {!!publishChannelIds.length && <div className="mt-5 border-t border-[#E5E6EB] pt-5"><WebProductPublishRules value={publishFields} onChange={setPublishFields} disabled={publishSubmitting} compact allowedFields={blindBagContext ? BLIND_BAG_PUBLISH_FIELDS : undefined} /></div>}
                     </div>
                     <footer className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-[#E5E6EB] px-6 py-4">
@@ -10944,7 +10961,7 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         {!publishChannelIds.length && !!onlineOrderingChannelIds.length ? <>
                             <button type="button" onClick={() => { if (commitProductSave() !== false) setConfirmPublish(false); }} className="console-secondary-button">仅保存</button>
                             {onOpenOnlineAudit && <button type="button" onClick={saveAndOpenOnlineOrdering} aria-label="保存并前往在线点商品" className="console-primary-button">保存并前往</button>}
-                        </> : <button type="button" disabled={publishSubmitting || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length} onClick={() => { if (publishSubmitLock.current || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length) return; publishSubmitLock.current = true; setPublishSubmitting(true); try { if (commitProductSave(true, { intent: 'publish', overwriteFields: publishFields, publishScope: { ...publishScope, channelIds: [...publishChannelIds] } }) !== false) setConfirmPublish(false); } finally { setPublishSubmitting(false); publishSubmitLock.current = false; } }} className="console-primary-button">{publishSubmitting ? '提交中…' : '保存并下发'}</button>}
+                        </> : <button type="button" disabled={publishSubmitting || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length} onClick={() => { if (publishSubmitLock.current || publishStoreQuery === 'loading' || publishStoreQuery === 'error' || !publishScope.storeIds.length || !publishChannelIds.length) return; publishSubmitLock.current = true; setPublishSubmitting(true); try { if (commitProductSave(true, { intent: 'publish', taskRemark: taskRemark.trim(), overwriteFields: publishFields, publishScope: { ...publishScope, channelIds: [...publishChannelIds] } }) !== false) setConfirmPublish(false); } finally { setPublishSubmitting(false); publishSubmitLock.current = false; } }} className="console-primary-button">{publishSubmitting ? '提交中…' : '保存并下发'}</button>}
                     </footer>
                 </div>
             </div>}

@@ -1,3 +1,5 @@
+import { registerTaskSource, resolveTaskSource, saveTask, useLocalTaskScheduler } from './web/taskRepository';
+import { productValues } from './web/taskModel';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
@@ -562,6 +564,17 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   const updateStoreRecords = (updater: (records: StoreProductRecord[]) => StoreProductRecord[]) => setDirectStoreProductsByBrand(current => ({ ...current, [activeBrandId]: updater(current[activeBrandId] || demoStoreProducts) }));
   const [directSyncBatchesByBrand, setDirectSyncBatchesByBrand] = useState<Record<string, PublishBatch[]>>({});
   const directSyncBatches = directSyncBatchesByBrand[activeBrandId] || [];
+  const persistedTaskVersions = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const [brandId, tasks] of Object.entries(directSyncBatchesByBrand) as Array<[string, PublishBatch[]]>) {
+      for (const batch of tasks) {
+        const version = JSON.stringify(batch);
+        if (persistedTaskVersions.current[brandId + batch.id] === version) continue;
+        try { saveTask(brandId, batch); persistedTaskVersions.current[brandId + batch.id] = version; }
+        catch { /* Task creation surfaces save failures in the task flow. */ }
+      }
+    }
+  }, [directSyncBatchesByBrand]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState<Array<{ brandId: string; productId: string; channelIds: string[]; batch: PublishBatch }>>([]);
   useEffect(() => {
     const job = pendingWithdrawals[0];
@@ -634,7 +647,23 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
     return () => window.clearTimeout(timer);
   }, [pendingDirectJobs]);
   const [storeFormOverrides, setStoreFormOverrides] = useState<Record<string, any>>({});
+  useLocalTaskScheduler(activeBrandId);
+  registerTaskSource(activeBrandId, (batch, id) => {
+    const config = batch.configuration;
+    const master = products.find(product => product.id === id);
+    if (!master) return undefined;
+    if (config?.source.type === 'channel_catalog' && config.source.id) {
+      const override = channelProductOverrides[config.source.id + ':' + id];
+      return productValues({ ...master, ...override, formData: { ...(master as any).formData, ...override?.formData } });
+    }
+    if (config?.source.type === 'store' && config.source.id) {
+      const record = directStoreProducts.find(record => record.baseProductId === id && record.storeId === config.source.id);
+      return record ? productValues({ ...master, ...record }) : undefined;
+    }
+    return productValues(master);
+  });
   const handleProductToolTask = (batch: PublishBatch) => {
+    saveTask(activeBrandId, batch);
     setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [batch, ...(current[activeBrandId] || []).filter(item => item.id !== batch.id)] }));
     if (batch.action !== '发布商品至门店' || batch.tasks.find(task => task.type === 'qimai')?.status !== 'success') return;
     const aliases: Record<string, string> = { mini_program_dine_in: 'mini_dine', mini_program_delivery: 'mini_take', douyin: 'douyin_dine' };
@@ -1284,6 +1313,8 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
                                return [{ ...detail, id: `${batchId}-qimai-${storeId}-${channelId}`, taskType: 'qimai' as const, action: action === 'create' ? '创建企迈门店商品' : '更新企迈门店商品', status: 'success' as const, finishedAt: createdAt }, ...(managedPlatformChannels.includes(channelId) ? [{ ...detail, id: `${batchId}-platform-${storeId}-${channelId}`, taskType: 'platform' as const, action: isTakeoutChannel(channelId) ? takeoutOperationPlan(channelId, 'structure') : '同步平台门店商品', status: takeoutFailures[channelId] ? 'failed' as const : 'waiting' as const, finishedAt: takeoutFailures[channelId] ? createdAt : '等待平台执行', ...(takeoutFailures[channelId] ? { error: takeoutFailures[channelId] } : {}) }] : [])];
                              })),
                            };
+                           batch.remark = saveOptions.taskRemark || ''; batch.executionMode = 'now';
+                           batch.configuration = { operation: 'sync', source: { type: 'master', name: batch.sourceName }, products: [{ id: productId, name: draft.name, skus: [{ id: String(draft.skuId || productId), name: '当前规格' }] }], fields: saveOptions.overwriteFields || [], overrides: {}, settings: [{ label: '相同商品处理', value: '合并到门店商品' }] };
                            const pendingBatch: PublishBatch = {
                              ...batch, status: 'running',
                              tasks: batch.tasks.filter(task => task.type === 'qimai').map(task => ({ ...task, status: 'running', progress: 0, successCount: 0, waitingCount: records.length, finishedAt: undefined })),

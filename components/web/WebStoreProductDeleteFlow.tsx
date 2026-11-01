@@ -1,3 +1,6 @@
+import { WebTaskRemark } from './WebTaskFields';
+import { saveTask } from './taskRepository';
+import { useProducts } from '../../context';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { WebStoreScopeSelector } from './WebStoreScopeSelector';
@@ -11,6 +14,9 @@ export const WebStoreProductDeleteFlow = ({ products, managedChannels, initialCh
   products: Source[]; managedChannels: string[]; initialChannel?: string; inline?: boolean;
   onClose: () => void; onSubmit?: (batch: PublishBatch) => void; onLocalRemove?: (targets: DeleteTarget[]) => void;
 }) => {
+  const { activeBrandId } = useProducts();
+  const [taskRemark, setTaskRemark] = useState('');
+  const [saveError, setSaveError] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(1);
   const [store, setStore] = useState('all');
@@ -52,6 +58,9 @@ export const WebStoreProductDeleteFlow = ({ products, managedChannels, initialCh
     if (!checked || !confirmed || !selected.length || issues.length) return;
     const states = Object.fromEntries(selected.map((t, i) => [t.id, policy === 'qimai_only' || outcome === 'success' ? 'success' : outcome === 'partial' ? i === 0 ? 'success' : i === 1 ? 'failed' : 'waiting' : outcome])) as Record<string, 'success' | 'waiting' | 'failed'>;
     const batch = createStoreDeletionBatch(selected, policy, states);
+    batch.remark = taskRemark.trim(); batch.executionMode = 'now';
+    batch.configuration = { operation: 'delete', source: { type: 'store', name: batch.sourceName }, products: [...new Map(selected.map(target => [target.productId, { id: target.productId, name: target.name, skus: [] }])).values()], fields: [], overrides: {}, settings: [{ label: '删除范围', value: policy === 'qimai_only' ? '仅移除企迈门店渠道商品' : '同时删除对应平台商品' }, { label: '恢复方式', value: '无法一键撤销，恢复售卖需重新建品；保留操作记录' }] };
+    try { saveTask(activeBrandId, batch); } catch (error) { setSaveError(error instanceof Error ? error.message : '任务保存失败，请重试'); return; }
     onSubmit?.(batch);
     onLocalRemove?.(selected.filter(t => states[t.id] === 'success'));
     setResult({ success: selected.filter(t => states[t.id] === 'success').length, failed: selected.filter(t => states[t.id] === 'failed').length, waiting: selected.filter(t => states[t.id] === 'waiting').length, batch: batch.id });
@@ -72,6 +81,8 @@ export const WebStoreProductDeleteFlow = ({ products, managedChannels, initialCh
         {checked && <div role="status" className="mb-4 space-y-2 text-sm">{issues.length ? issues.map((issue, i) => <p key={i} className="text-[#B42318]">{issue.target.storeName} · {deletionChannelName(issue.target.channel)} · {issue.target.name}：{issue.message}</p>) : <p className="text-[#008F4C]">演示检查通过，无引用冲突。不会连带删除共享子品或加料。</p>}</div>}
         {policy === 'qimai_and_platform' && <label className="mb-4 block text-xs text-[#667085]">演示平台执行结果 <select aria-label="演示删除执行结果" value={outcome} onChange={e => { setOutcome(e.target.value as typeof outcome); setConfirmed(false); }} className={`${control} ml-2`}><option value="waiting">平台处理中 / 等待回查</option><option value="partial">部分成功</option><option value="failed">平台失败</option><option value="success">回查确认已删除</option></select></label>}
         <div className="flex items-start gap-2 rounded bg-[#FFFAEB] p-3 text-xs leading-5 text-[#7A2E0E]"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><p>删除立即进入任务处理，不能一键撤销。仅影响选中的门店渠道；不删除主档、渠道库、模板、共享子品/加料和历史订单。失败或等待的对象仍保留，超时先回查再重试；恢复售卖需重新建品。</p></div>
+        <WebTaskRemark value={taskRemark} onChange={setTaskRemark} />
+        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
         <label className="mt-4 flex items-start gap-2 text-sm text-[#4E5969]"><input type="checkbox" checked={confirmed} disabled={!checked || !!issues.length} onChange={e => setConfirmed(e.target.checked)} className="mt-1" /><span>{policy === 'qimai_only' ? '我已确认移除范围，并了解平台商品仍保留及接单映射风险。' : '我已确认平台删除范围、无法一键撤销及重新建品方式。'}</span></label>
       </>}
       </>}

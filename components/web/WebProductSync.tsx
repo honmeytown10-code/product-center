@@ -1,3 +1,6 @@
+import { WebTaskRemark, WebTaskTiming } from './WebTaskFields';
+import { pendingTask, productValues, aggregateStatus, type ExecutionMode } from './taskModel';
+import { saveTask, resolveTaskSource } from './taskRepository';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Search, ChevronRight, CheckCircle2, ChevronDown,
@@ -318,7 +321,10 @@ export const WebProductSync: React.FC<{
     const [publishValidationMessage, setPublishValidationMessage] = useState('');
     const [overwriteFields, setOverwriteFields] = useState<string[]>(() => getPublishOverwriteDefaults(activeBrandId));
     useEffect(() => { setOverwriteFields(getPublishOverwriteDefaults(activeBrandId)); }, [activeBrandId]);
-    const [executionTime, setExecutionTime] = useState<'now' | 'scheduled'>('now');
+    const [executionTime, setExecutionTime] = useState<ExecutionMode>('now');
+    const [taskRemark, setTaskRemark] = useState('');
+    const [taskSubmitting, setTaskSubmitting] = useState(false);
+    const submitGuard = useRef(false);
     const [scheduledAt, setScheduledAt] = useState('');
     const [productSelectorMode, setProductSelectorMode] = useState<'sync' | 'batch' | null>(null);
     const [pendingSelectorProductIds, setPendingSelectorProductIds] = useState<string[]>([]);
@@ -332,6 +338,7 @@ export const WebProductSync: React.FC<{
     const [selectedCategoryName, setSelectedCategoryName] = useState<string>('all');
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+    const initialProductValues = useRef(JSON.parse(JSON.stringify(products)));
     const sourceCatalogId = operationMode === 'sync' ? selectedChannelGroupIds[0] : selectedTargetChannelGroupIds[0];
     const readingCatalog = operationMode === 'sync' ? syncSource === 'channel_catalog' : batchSource === 'channel_catalog';
     const readingTemplate = operationMode === 'sync' ? syncSource === 'template' : batchSource === 'template';
@@ -450,7 +457,7 @@ export const WebProductSync: React.FC<{
         }
         const createdAt = new Date().toLocaleString('sv-SE', { hour12: false });
         const batchId = `PB${Date.now()}`;
-        const isScheduled = executionTime === 'scheduled';
+        const isScheduled = executionTime !== 'now';
         const fieldNames = operationMode === 'sync' ? overwriteFields.filter(field => !hasBlindBagSelection || BLIND_BAG_PUBLISH_FIELDS.includes(field)) : batchChangeMode === 'unified' ? ['上下架'] : selectedBatchFields;
         const scopeNames = selectedTargetScopes.map(scope => ({ master: unifiedManagementView ? '商品库' : '商品主档', template: '商品下发模板', channel_catalog: '渠道商品库', store: '门店商品' })[scope]);
         const source = operationMode === 'sync' ? syncSource : batchSource;
@@ -506,7 +513,7 @@ export const WebProductSync: React.FC<{
         }
         const activePlatformChannels = platformChannels.filter(channelId => details.some(detail => detail.channel === getOmnichannelChannel(channelId).name));
         const takeoutOperation = operationMode === 'sync' ? 'structure' : batchChangeMode === 'unified' ? 'shelf' : fieldNames.every(field => ['售价'].includes(field)) ? 'price' : 'structure';
-        const platformDetails = !isScheduled ? details.filter(detail => activePlatformChannels.some(id => getOmnichannelChannel(id).name === detail.channel)).map(detail => {
+        const platformDetails = details.filter(detail => activePlatformChannels.some(id => getOmnichannelChannel(id).name === detail.channel)).map(detail => {
             const comboUnsupported = detail.channel === getOmnichannelChannel('meituan_dine').name && chosenProducts.find(product => product.id === detail.productId)?.type === '套餐商品';
             const takeoutChannel = activePlatformChannels.find(id => isTakeoutChannel(id) && getOmnichannelChannel(id).name === detail.channel);
             const master = sourceProducts?.find(product => product.id === detail.productId);
@@ -517,23 +524,43 @@ export const WebProductSync: React.FC<{
             const readiness = takeoutChannel === 'jd' ? checkJdStoreReadiness(input.formData?.jdStoreReadiness) : [];
             const failure = comboUnsupported ? '美团在线点暂不支持同步套餐商品；企迈门店商品已保留。' : [...issues, ...readiness].map(issue => `${issue.field}：${issue.message}`).join('；');
             return { ...detail, id: `${detail.id}-platform`, taskType: 'platform' as const, action: takeoutChannel && isTakeoutChannel(takeoutChannel) ? takeoutOperationPlan(takeoutChannel, takeoutOperation) : '同步平台门店商品', status: failure ? 'failed' as const : 'waiting' as const, finishedAt: failure ? createdAt : '等待平台执行（演示）', ...(failure ? { error: failure } : {}) };
-        }) : [];
-        onSubmitTask?.({
+        });
+        const taskBatch: PublishBatch = {
             id: batchId, recordType: 'store_publish', title: `${operationMode === 'sync' ? '商品下发' : '批量修改'} · ${sourceName}`, action: operationMode === 'sync' ? '发布商品至门店' : '批量修改商品资料',
             sourceType: sourceName, sourceName, snapshot: `${isScheduled ? `定时执行 ${scheduledAt.replace('T', ' ')}；` : ''}${operationMode === 'sync' ? '同款覆盖' : '修改字段'}：${fieldNames.join('、')}`,
             channels: targetsStore ? channelNames : ['品牌资料'], storeScope: targetsStore ? stores.map(store => store.name).join('、') : scopeNames.join('、'), storeCount: targetsStore ? stores.length : 0,
             productCount: new Set(details.map(detail => detail.productId)).size, skuCount: new Set(details.map(detail => detail.skuId)).size, status: isScheduled ? 'running' : 'success', createdAt, creator: '当前用户',
             fieldSnapshots: fieldNames.map(name => ({ name, mode: operationMode === 'sync' ? '覆盖' : '修改', before: '执行前目标值（演示）', after: operationMode === 'sync' ? comboOnly ? '套餐来源资料；已有子商品不覆盖，缺少时新增' : '本次来源资料（含套餐子商品）' : batchChangeMode === 'unified' ? unifiedShelfStatus === 'on' ? '上架' : '下架' : chosenProducts.map(product => `${product.name}：${String(batchDraftValues[product.id]?.[name] ?? getBatchFieldValue(product, name))}`).join('；') })),
             tasks: [{ id: `QM-${batchId}`, type: 'qimai', target: targetsStore ? '企迈门店商品' : scopeNames.join('、'), channels: targetsStore ? channelNames : ['品牌资料'], status: isScheduled ? 'waiting' : 'success', progress: isScheduled ? 0 : 100, productCount: chosenProducts.length, skuCount, storeCount: targetsStore ? stores.length : 0, successCount: isScheduled ? 0 : details.length, failedCount: 0, waitingCount: isScheduled ? details.length : 0, startedAt: createdAt, finishedAt: isScheduled ? undefined : createdAt },
-                ...(!isScheduled ? activePlatformChannels.map(channelId => {
+                ...(activePlatformChannels.map(channelId => {
                     const rows = platformDetails.filter(detail => detail.channel === getOmnichannelChannel(channelId).name);
                     const failedCount = rows.filter(detail => detail.status === 'failed').length;
                     return { id: `PL-${batchId}-${channelId}`, type: 'platform' as const, target: `${getOmnichannelChannel(channelId).name}门店商品`, channels: [getOmnichannelChannel(channelId).name], status: failedCount === rows.length ? 'failed' as const : 'waiting' as const, progress: failedCount === rows.length ? 100 : 0, productCount: new Set(rows.map(detail => detail.productId)).size, skuCount: new Set(rows.map(detail => detail.skuId)).size, storeCount: new Set(rows.map(detail => detail.storeId)).size, successCount: 0, failedCount, waitingCount: rows.length - failedCount, startedAt: createdAt, ...(failedCount ? { error: rows.find(row => row.error)?.error } : {}), waitingReason: isTakeoutChannel(channelId) ? takeoutOperationPlan(channelId, takeoutOperation) : ['douyin', 'meituan_dine'].includes(channelId) ? '等待在线点品牌商品可用；抖音需审核通过' : '等待平台执行' };
-                }) : [])],
+                }))],
             details: [...details, ...platformDetails],
-        });
-        setPublishValidationMessage('');
-        setStep(3);
+        };
+        const overrides = Object.fromEntries(chosenProducts.map(product => {
+            if (operationMode !== 'sync') return [product.id, batchChangeMode === 'unified' ? { 上下架: unifiedShelfStatus === 'on' ? '上架' : '下架' } : Object.fromEntries(Object.entries(batchDraftValues[product.id] || {}).filter(([field]) => fieldNames.includes(field)))];
+            const initial = initialProductValues.current.find((item: EditableProduct) => item.id === product.id);
+            const diff: Record<string, unknown> = {};
+            if (initial && JSON.stringify(product.specs) !== JSON.stringify(initial.specs)) diff['售价'] = Object.fromEntries(product.specs.map(spec => [spec.id, spec.price]));
+            if (initial && product.price !== initial.price && !diff['售价']) diff['售价'] = product.price;
+            if (initial && JSON.stringify(product.categories) !== JSON.stringify(initial.categories)) diff['前台分类'] = product.categories;
+            if (initial && JSON.stringify(product.timeSale) !== JSON.stringify(initial.timeSale)) diff['售卖时间'] = product.timeSale;
+            if (initial && product.salesMode !== initial.salesMode) diff['售卖方式'] = product.salesMode;
+            return [product.id, diff];
+        }));
+        taskBatch.remark = taskRemark.trim(); taskBatch.executionMode = executionTime;
+        taskBatch.scheduledAt = executionTime === 'scheduled' ? scheduledAt : undefined;
+        taskBatch.configuration = { operation: operationMode === 'sync' ? 'sync' : 'batch', source: { type: source, id: source === 'channel_catalog' ? sourceCatalogId : source === 'template' ? sourceTemplateId : undefined, name: sourceName }, products: chosenProducts.map(product => ({ id: product.id, name: product.name, skus: product.specs.map(spec => ({ id: spec.id, name: spec.name })) })), fields: fieldNames, overrides, settings: [{ label: '处理方式', value: operationMode === 'sync' ? comboOnly ? '仅下发套餐；已有子商品不覆盖' : '合并到门店商品' : batchChangeMode === 'unified' ? '统一设置上下架' : '按商品修改所选属性' }, { label: '目标范围', value: targetsStore ? stores.map(store => store.name).join('、') : scopeNames.join('、') }] };
+        if (executionTime === 'now') {
+          taskBatch.status = aggregateStatus(taskBatch.tasks);
+          taskBatch.executedAt = createdAt;
+          taskBatch.details = taskBatch.details?.map(row => ({ ...row, executedValues: { ...(resolveTaskSource(activeBrandId, taskBatch, row.productId) || {}), ...(overrides[row.productId] || {}) } }));
+        }
+        const savedTask = pendingTask(taskBatch); saveTask(activeBrandId, savedTask);
+        onSubmitTask?.(savedTask);
+        setPublishValidationMessage(''); setStep(3);
     };
 
     const categoryList = useMemo(() => {
@@ -1673,17 +1700,8 @@ export const WebProductSync: React.FC<{
                         ...(operationMode === 'sync' ? miniProgramMainImageMissingProducts.map(product => ({ channel: '小程序', name: product.name, field: '商品主图', message: '请上传小程序售卖所需的商品主图。' })) : []),
                     ]} />
 
-                    <div className="flex items-center mb-8">
-                        <span className="w-24 text-gray-500 text-sm">同步时间</span>
-                        <div className="flex space-x-6 text-sm">
-                            <label className="flex items-center text-gray-400 cursor-not-allowed"><input type="radio" disabled className="mr-2"/> 手动执行</label>
-                            <label className="flex items-center text-[#00C06B] font-bold cursor-pointer"><input type="radio" checked={executionTime === 'now'} onChange={() => setExecutionTime('now')} name="syncTime" className="mr-2 text-[#00C06B] focus:ring-[#00C06B]"/> 立即执行</label>
-                            <label className="flex items-center text-gray-600 cursor-pointer"><input type="radio" checked={executionTime === 'scheduled'} onChange={() => setExecutionTime('scheduled')} name="syncTime" className="mr-2"/> 定时执行</label>
-                        </div>
-                        <span className="ml-4 text-xs text-red-500">高峰期进行商品同步等待时间可能较久，请尽量在非高峰期进行（定时）下发</span>
-                    </div>
-                    {executionTime === 'scheduled' && <label className="mb-6 flex items-center gap-4 text-sm text-gray-600"><span className="w-20">执行时间</span><input aria-label="定时执行时间" type="datetime-local" value={scheduledAt} onChange={event => setScheduledAt(event.target.value)} className="h-9 rounded-md border border-gray-200 px-3" /></label>}
-
+                    <WebTaskTiming mode={executionTime} onModeChange={setExecutionTime} at={scheduledAt} onAtChange={setScheduledAt} />
+                    <WebTaskRemark value={taskRemark} onChange={setTaskRemark} />
                     {operationMode === 'sync' && <>
                     <h3 className="font-bold text-gray-800 mb-4 text-base">选择门店</h3>
                     {renderStoreSelector()}
@@ -1708,12 +1726,15 @@ export const WebProductSync: React.FC<{
                             setPublishValidationMessage(`所选渠道包含小程序，${names}${suffix}缺少商品主图，请补充后再发布。`);
                             return;
                         }
-                        submitTask();
+                        if (submitGuard.current) return;
+                        submitGuard.current = true; setTaskSubmitting(true);
+                        try { submitTask(); } catch (error) { setPublishValidationMessage(error instanceof Error ? error.message : '任务保存失败，配置已保留，请重试。'); }
+                        finally { submitGuard.current = false; setTaskSubmitting(false); }
                     }}
-                    disabled={batchRangeInvalid || operationMode === 'sync' && !selectedStoreIds.length}
+                    disabled={taskSubmitting || batchRangeInvalid || operationMode === 'sync' && !selectedStoreIds.length}
                     className="px-6 py-2 bg-[#00C06B] text-white rounded font-bold hover:bg-[#00A35B] transition-colors shadow-md disabled:bg-gray-300"
                 >
-                    {operationMode === 'sync' ? '提交并同步' : '提交修改'}
+                    {taskSubmitting ? '保存中…' : executionTime === 'now' ? operationMode === 'sync' ? '提交并同步' : '提交修改' : '保存任务'}
                 </button>
             </div>
         </div>

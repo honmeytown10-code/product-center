@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { createExtendedTask } from '../components/web/extendedTasks.ts';
+const base = { subjects: [{ id:'archived-id',name:'归档前名称',values:{处理动作:'删除门店商品'} }], stores:[{id:'s',name:'门店'}], channels:['POS'] };
+const archive=createExtendedTask({...base,kind:'archive'});
+assert.equal(archive.configuration.operation,'delete');
+assert.equal(archive.details[0].productName,'归档前名称');
+assert.equal(archive.details[0].productId,'archived-id');
+assert.equal(archive.details[0].status,'success');
+assert.equal(createExtendedTask({...base,kind:'discontinue'}).configuration.operation,'off_shelf');
+const sort=createExtendedTask({...base,kind:'category_sort',mode:'manual'});
+assert.equal(sort.status,'pending');assert.equal(sort.tasks[0].successCount,0);assert.equal(sort.tasks[0].startedAt,'');
+assert.throws(()=>createExtendedTask({...base,kind:'category_sort',mode:'scheduled',at:'2020-01-01'}));
+assert.throws(()=>createExtendedTask({...base,kind:'addon_sync',subjects:[]}));
+assert.throws(()=>createExtendedTask({...base,kind:'addon_sync',stores:[]}));
+const split=createExtendedTask({...base,kind:'archive',channels:['美团外卖'],targets:[{storeId:'s',storeName:'门店',channel:'美团外卖',productId:'archived-id',type:'qimai'},{storeId:'s',storeName:'门店',channel:'美团外卖',productId:'archived-id',type:'platform'}]});
+assert.equal(split.tasks.length,2);assert.equal(split.tasks[1].status,'waiting');assert.notEqual(split.details[0].taskId,split.details[1].taskId);
+console.log('Extended task behavior: passed.');

@@ -1,3 +1,4 @@
+import { currentDomainValue, createExtendedTask } from './extendedTasks';
 import { useEffect, useState } from 'react';
 import type { PublishBatch } from './WebPublishRecords';
 import { executeLocalTask, pendingTask, type FieldValues } from './taskModel';
@@ -6,7 +7,7 @@ const key = (brand: string) => `product-tasks-demo-v1:${brand}`;
 const event = 'product-tasks-changed';
 const resolvers = new Map<string, (batch: PublishBatch, id: string) => FieldValues | undefined>();
 export const registerTaskSource = (brand: string, resolver: (batch: PublishBatch, id: string) => FieldValues | undefined) => { resolvers.set(brand, resolver); };
-export const resolveTaskSource = (brand: string, batch: PublishBatch, id: string) => batch.configuration?.demoSource ? readDemoSource(brand)[id] : resolvers.get(brand)?.(batch, id);
+export const resolveTaskSource = (brand: string, batch: PublishBatch, id: string) => batch.configuration?.extension ? currentDomainValue(brand, batch.configuration.extension.kind, id) : batch.configuration?.demoSource ? readDemoSource(brand)[id] : resolvers.get(brand)?.(batch, id);
 
 // Local demonstration scheduling only. Timers catch up on the next page load;
 // production requires a server-side scheduler and permission/version revalidation.
@@ -92,5 +93,16 @@ export function demonstrationTasks(): PublishBatch[] {
     }))));
     return batch;
   };
-  return [make('DEMO-SYNC-001', 'sync', '周末上新；生椰拿铁按活动价 18 元下发', 'scheduled'), make('DEMO-BATCH-002', 'batch', '华东试点价格调整，保留其他属性', 'manual'), make('DEMO-COPY-003', 'copy', '杭州新店开业，复制静安店商品配置', 'now'), make('DEMO-DELETE-004', 'delete', '下市商品清理，核对平台删除结果', 'now')];
+  return [...extendedDemonstrations(), make('DEMO-SYNC-001', 'sync', '周末上新；生椰拿铁按活动价 18 元下发', 'scheduled'), make('DEMO-BATCH-002', 'batch', '华东试点价格调整，保留其他属性', 'manual'), make('DEMO-COPY-003', 'copy', '杭州新店开业，复制静安店商品配置', 'now'), make('DEMO-DELETE-004', 'delete', '下市商品清理，核对平台删除结果', 'now')];
+}
+
+function extendedDemonstrations(): PublishBatch[] {
+  return (['discontinue', 'archive', 'category_sort', 'addon_sync'] as const).map(kind => {
+    const subjects = kind === 'category_sort' ? [{ id: 'category-coffee', name: '现磨咖啡', values: { 分类路径: '饮品 / 现磨咖啡', 分类排序: 1 } }, { id: 'category-tea', name: '鲜奶茶', values: { 分类路径: '饮品 / 鲜奶茶', 分类排序: 2 } }] : kind === 'addon_sync' ? [{ id: 'addon-pearl', name: '珍珠', values: { 加料类型: '饮品加料', 售价: 2, 启用状态: '启用', 排序: 1 } }] : [{ id: 'demo-latte', name: '生椰拿铁', values: kind === 'archive' ? { 处理动作: '删除门店商品' } : { 上下架: '下架' } }];
+    const batch = createExtendedTask({ kind, subjects, stores: [{ id: 'demo-store-0', name: '上海静安店' }, { id: 'demo-store-1', name: '杭州滨江店' }], channels: ['POS', '小程序堂食'], remark: '演示：核对任务来源、处理范围和专属明细' });
+    const originalId = batch.id, stableId = `DEMO-EXT-${kind}`;
+    batch.id = stableId; batch.tasks = batch.tasks.map(task => ({ ...task, id: task.id.replace(originalId, stableId) })); batch.details = batch.details?.map(row => ({ ...row, id: row.id.replace(originalId, stableId), taskId: row.taskId?.replace(originalId, stableId) }));
+    batch.createdAt = '2026-11-03 09:00:00';
+    return batch;
+  });
 }

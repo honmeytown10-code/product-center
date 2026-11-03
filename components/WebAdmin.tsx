@@ -1,3 +1,4 @@
+import { createExtendedTask } from './web/extendedTasks';
 import { registerTaskSource, resolveTaskSource, saveTask, useLocalTaskScheduler } from './web/taskRepository';
 import { productValues } from './web/taskModel';
 
@@ -712,6 +713,13 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
               if (targets.some(target => !currentProductsRef.current.some(product => product.id === target.id))) throw new Error('商品已变更，请关闭弹窗后刷新列表再操作。');
               if (experience?.unified) {
                 const removedRecords = directStoreProducts.filter(record => ids.has(record.baseProductId));
+                if (removedRecords.length) {
+                  const stores: Array<{ id: string; name: string }> = [...new Map<string, { id: string; name: string }>(removedRecords.map(row => [row.storeId, { id: row.storeId, name: row.storeName }])).values()];
+                  const task = createExtendedTask({ kind: action === 'archive' ? 'archive' : 'discontinue', subjects: targets.filter(p => removedRecords.some(r => r.baseProductId === p.id)).map(p => ({ id: p.id, name: p.name, values: action === 'archive' ? { 处理动作: '删除门店商品' } : { 上下架: '下架' } })), stores,
+                    channels: [...new Set<string>(removedRecords.flatMap(r => r.channels))], targets: removedRecords.flatMap(r => r.channels.flatMap(channel => [{ storeId: r.storeId, storeName: r.storeName, channel, productId: r.baseProductId, type: 'qimai' as const }])) });
+                  saveTask(activeBrandId, task);
+                  setDirectSyncBatchesByBrand(current => ({ ...current, [activeBrandId]: [task, ...(current[activeBrandId] || [])] }));
+                }
                 updateStoreRecords(records => action === 'archive'
                   ? records.filter(record => !ids.has(record.baseProductId))
                   : records.map(record => ids.has(record.baseProductId) ? { ...record, status: 'off_shelf', lastSync: '刚刚' } : record));

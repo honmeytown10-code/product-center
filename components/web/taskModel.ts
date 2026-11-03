@@ -1,7 +1,7 @@
 import type { PublishBatch, PublishTask, TaskExecutionDetail } from './WebPublishRecords';
 
 export type ExecutionMode = 'now' | 'manual' | 'scheduled';
-export type TaskOperation = 'sync' | 'batch' | 'copy' | 'delete' | 'other';
+export type TaskOperation = 'sync' | 'batch' | 'copy' | 'delete' | 'off_shelf' | 'category_sort' | 'addon_sync' | 'other';
 export type FieldValues = Record<string, unknown>;
 export type TaskConfiguration = {
   operation: TaskOperation;
@@ -11,14 +11,15 @@ export type TaskConfiguration = {
   overrides: Record<string, FieldValues>;
   settings?: Array<{ label: string; value: string }>;
   demoSource?: boolean;
+  extension?: { kind: import('./extendedTasks').ExtendedKind; subjects: import('./extendedTasks').TaskSubject[] };
 };
 
 export const modeLabel = { now: '立即执行', manual: '手动执行', scheduled: '定时执行' };
-export const operationLabel = { sync: '商品同步', batch: '批量修改', copy: '商品复制', delete: '商品删除', other: '商品任务' };
+export const operationLabel = { sync: '商品同步', batch: '批量修改', copy: '商品复制', delete: '商品删除', off_shelf: '下架门店商品', category_sort: '同步分类排序', addon_sync: '同步加料', other: '商品任务' };
 export const displayValue = (value: unknown): string => value === undefined || value === null ? '--' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 export const characterCount = (value: string) => Array.from(value).length;
 export const nowText = () => new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai', hour12: false });
-export const operationOf = (batch: PublishBatch): TaskOperation => batch.configuration?.operation || (/删除/.test(batch.action) ? 'delete' : /复制/.test(batch.action) ? 'copy' : /修改|更新.*属性/.test(batch.action) ? 'batch' : /发布|同步|更新渠道/.test(batch.action) ? 'sync' : 'other');
+export const operationOf = (batch: PublishBatch): TaskOperation => batch.configuration?.operation || (/下架/.test(batch.action) ? 'off_shelf' : /分类排序/.test(batch.action) ? 'category_sort' : /同步加料/.test(batch.action) ? 'addon_sync' : /删除/.test(batch.action) ? 'delete' : /复制/.test(batch.action) ? 'copy' : /修改|更新.*属性/.test(batch.action) ? 'batch' : /发布|同步|更新渠道/.test(batch.action) ? 'sync' : 'other');
 export const aggregateStatus = (tasks: PublishTask[]): PublishBatch['status'] => {
   if (tasks.every(task => task.status === 'pending')) return 'pending';
   if (tasks.some(task => task.status === 'running' || task.status === 'waiting' || task.status === 'pending')) return tasks.some(task => task.status === 'failed') ? 'partial' : 'running';

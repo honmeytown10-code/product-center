@@ -1,3 +1,5 @@
+import { WebDomainTaskDialog, rememberDomainSource } from './WebDomainTaskDialog';
+import { useProducts } from '../../context';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Layers3, ChefHat, Tags, Tag, Grid2X2, Search, Filter, ListFilter, Heart, Blend, ChevronRight, ChevronDown, Plus, X, Eye, EyeOff, Lock, Braces, FolderTree } from 'lucide-react';
@@ -674,6 +676,10 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
   const [activeLabelTab, setActiveLabelTab] = useState<LabelTab>(scope === 'master' ? 'stats' : 'desc');
   const [keyword, setKeyword] = useState('');
   const [addonGroups, setAddonGroups] = useState<AddonGroup[]>(ADDON_GROUPS);
+  const { activeBrandId } = useProducts();
+  const [showStoreAddonSync, setShowStoreAddonSync] = useState(false);
+  const taskAddons = addonGroups.flatMap(group => group.children || []).filter(item => item.productName).map(item => ({ id: item.id, name: item.productName, values: { 加料类型: item.typeName, 售价: item.initialPrice, 启用状态: item.enabled ? '启用' : '停用', 排序: item.sort } }));
+  useEffect(() => { rememberDomainSource(activeBrandId, 'addon_sync', taskAddons); }, [activeBrandId, addonGroups]);
   const [addonForms, setAddonForms] = useState<Record<string, AddonFormData>>({ 'addon-pearl': DEMO_ADDON_FORM, 'addon-coconut': { ...DEMO_ADDON_FORM, name: '椰果', unpackedScope: 'linked', excludedProductIds: [] } });
   const [addonEditor, setAddonEditor] = useState<{ mode: 'create' | 'edit'; id?: string; initialValue: AddonFormData } | null>(() => {
     const query = new URLSearchParams(window.location.search);
@@ -1565,6 +1571,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                   ) : (
                     <>
                       <button onClick={() => setAddonEditor({ mode: 'create', initialValue: { ...DEFAULT_ADDON_FORM, excludedProductIds: [] } })} className="rounded-lg bg-[#00C06B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">创建加料</button>
+                      <button onClick={() => setShowStoreAddonSync(true)} className="task-button">同步加料至门店</button>
                       <button onClick={() => showActionNotice('发布加料类型将进入发布中心，不会在当前页直接下发')} className="rounded-lg border border-[#00C06B] bg-white px-4 py-2.5 text-sm font-bold text-[#008F4C] hover:bg-[#F3FCF7]">发布加料类型</button>
                     </>
                   )}
@@ -1796,6 +1803,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
               </div>
             </div>
           )}
+          {showStoreAddonSync && <WebDomainTaskDialog kind="addon_sync" subjects={taskAddons} onClose={() => setShowStoreAddonSync(false)} onSaved={() => { setShowStoreAddonSync(false); showActionNotice('任务已保存，可在同步任务查看加料同步详情'); }} />}
           {showDouyinAddonSyncDialog && (
             <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 p-6" role="dialog" aria-modal="true" aria-label="同步抖音在线点加料品">
               <div className="w-[660px] overflow-hidden rounded-lg bg-white shadow-2xl">

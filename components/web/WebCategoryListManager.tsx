@@ -1,4 +1,6 @@
-﻿﻿﻿﻿﻿﻿import React, { useMemo, useState } from 'react';
+import { WebDomainTaskDialog, rememberDomainSource } from './WebDomainTaskDialog';
+import { useProducts } from '../../context';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, GripVertical, Info, ListFilter, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 
 type DisplayCategory = {
@@ -600,6 +602,9 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
   const [activeTab, setActiveTab] = useState<'backend' | 'frontend'>('frontend');
   const resolvedTab = scope === 'all' ? activeTab : scope;
   const [categories, setCategories] = useState<DisplayCategory[]>(MOCK_DATA);
+  const { activeBrandId } = useProducts();
+  const taskCategories = categories.flatMap(c => [c, ...(c.children || [])].map(row => ({ id: row.id, name: row.name, values: { 分类路径: row.parentId ? `${c.name} / ${row.name}` : row.name, 分类排序: row.sort } })));
+  useEffect(() => { rememberDomainSource(activeBrandId, 'category_sort', taskCategories); }, [activeBrandId, categories]);
   const [backendCategories, setBackendCategories] = useState<BackendCategory[]>(MOCK_BACKEND_DATA);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['1']));
   const [backendExpandedIds, setBackendExpandedIds] = useState<Set<string>>(new Set(['backend-1', 'backend-2']));
@@ -1974,16 +1979,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
           onConfirm={saveSortDraft}
         />
       )}
-      {showSortSyncModal && (
-        <SortSyncModal
-          title="同步分类排序"
-          description="修改的分类排序会更新至全部模板、全部门店，更新时间："
-          mode={sortSyncMode}
-          onChangeMode={setSortSyncMode}
-          onCancel={() => setShowSortSyncModal(false)}
-          onConfirm={handleConfirmSortSync}
-        />
-      )}
+      {showSortSyncModal && <WebDomainTaskDialog kind="category_sort" subjects={taskCategories} onClose={() => setShowSortSyncModal(false)} onSaved={() => { setShowSortSyncModal(false); setShowSortModal(false); setOperationNotice('任务已保存，可在商品批量管理的同步任务中查看'); }} />}
       {showCategoryDispatchModal && (
         <SortSyncModal
           title="下发至门店"

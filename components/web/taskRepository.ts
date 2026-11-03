@@ -76,21 +76,22 @@ export function demonstrationTasks(): PublishBatch[] {
     }));
     const batch: PublishBatch = {
       id, title: names[operation], action: { sync: '发布商品至门店', batch: '批量修改商品资料', copy: '门店商品复制', delete: '删除门店商品' }[operation],
-      sourceType: operation === 'copy' || operation === 'delete' ? '门店商品' : '渠道商品库', sourceName: operation === 'copy' ? '上海静安店' : '品牌默认商品库',
+      sourceType: operation === 'copy' || operation === 'delete' ? '门店商品' : '渠道商品库', sourceName: operation === 'copy' ? '上海静安店' : operation === 'delete' ? '选定门店渠道商品' : '品牌默认商品库',
       snapshot: '本地演示样例', channels: ['POS', '小程序堂食', ...(tasks.length > 1 ? ['美团外卖', '淘宝闪购'] : [])],
-      storeScope: demoStores.join('、'), storeCount: 2, productCount: 2, skuCount: 2, status: mode !== 'now' ? 'pending' : operation === 'delete' ? 'partial' : 'success',
+      storeScope: (operation === 'copy' ? ['杭州滨江店'] : demoStores).join('、'), storeCount: operation === 'copy' ? 1 : 2, productCount: 2, skuCount: 2, status: mode !== 'now' ? 'pending' : operation === 'delete' ? 'partial' : 'success',
       createdAt: '2026-10-30 09:00:00', creator: '企迈静静', executionMode: mode,
       scheduledAt: mode === 'scheduled' ? new Date(Date.now() + 86400000).toLocaleDateString('sv-SE') + 'T06:00' : undefined, remark, tasks,
-      configuration: { operation, source: { type: 'demo', name: operation === 'copy' ? '上海静安店' : '品牌默认商品库' }, products: demoProducts, fields, demoSource: true,
+      configuration: { operation, source: { type: 'demo', name: operation === 'copy' ? '上海静安店' : operation === 'delete' ? '选定门店渠道商品' : '品牌默认商品库' }, products: demoProducts, fields, demoSource: true,
         overrides: operation === 'sync' ? { 'demo-latte': { 售价: 18 } } : operation === 'batch' ? { 'demo-latte': { 售价: 19, 商品排序: 0 }, 'demo-tea': { 售价: 16, 商品排序: 1 } } : {},
-        settings: operation === 'copy' ? [{ label: '来源门店', value: '上海静安店' }, { label: '目标门店', value: '杭州滨江店' }] : operation === 'delete' ? [{ label: '删除范围', value: '企迈及对应平台商品' }, { label: '恢复方式', value: '无法一键撤销，恢复售卖需重新建品；保留历史记录' }] : [{ label: '相同商品', value: '合并到门店商品' }],
+        settings: operation === 'copy' ? [{ label: '来源门店', value: '上海静安店' }, { label: '目标门店', value: '杭州滨江店' }] : operation === 'delete' ? [{ label: '删除范围', value: '企迈及对应平台商品' }, { label: '恢复方式', value: '无法一键撤销，恢复售卖需重新建品；保留历史记录' }] : operation === 'batch' ? [{ label: '修改方式', value: '按商品设置售价与商品排序' }, { label: '处理范围', value: '仅修改本次明确设置的属性' }] : [{ label: '相同商品', value: '合并到门店商品' }],
       },
     };
-    batch.details = tasks.flatMap(task => demoStores.flatMap((storeName, storeIndex) => demoProducts.map(product => ({
-      id: `${task.id}-${storeIndex}-${product.id}`, taskId: task.id, taskType: task.type, productName: product.name, productId: product.id,
-      skuName: product.skus[0].name, skuId: product.skus[0].id, storeName, storeId: `demo-store-${storeIndex}`, channel: task.channels[0],
+    batch.details = batch.tasks.flatMap(task => demoStores.flatMap((storeName, storeIndex) => operation === 'copy' && storeName !== '杭州滨江店' ? [] : task.channels.flatMap(channel => demoProducts.map(product => ({
+      id: `${task.id}-${storeIndex}-${channel}-${product.id}`, taskId: task.id, taskType: task.type, productName: product.name, productId: product.id,
+      skuName: product.skus[0].name, skuId: product.skus[0].id, storeName, storeId: `demo-store-${storeIndex}`, channel,
       action: batch.action, fields, status: task.status, finishedAt: task.finishedAt || '', error: task.error,
-    }))));
+    })))));
+    batch.tasks = batch.tasks.map(task => { const rows = batch.details!.filter(row => row.taskId === task.id); return { ...task, storeCount: new Set(rows.map(row => row.storeId)).size, successCount: rows.filter(row => row.status === 'success').length, failedCount: rows.filter(row => row.status === 'failed').length }; });
     return batch;
   };
   return [...extendedDemonstrations(), make('DEMO-SYNC-001', 'sync', '周末上新；生椰拿铁按活动价 18 元下发', 'scheduled'), make('DEMO-BATCH-002', 'batch', '华东试点价格调整，保留其他属性', 'manual'), make('DEMO-COPY-003', 'copy', '杭州新店开业，复制静安店商品配置', 'now'), make('DEMO-DELETE-004', 'delete', '下市商品清理，核对平台删除结果', 'now')];

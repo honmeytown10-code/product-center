@@ -8,6 +8,13 @@ export const currentDomainValue = (brand: string, kind: string, id: string) => (
 
 export type ExtendedKind = 'discontinue' | 'archive' | 'category_sort' | 'addon_sync';
 export const extendedNames = { discontinue: '下架门店商品', archive: '删除门店商品', category_sort: '同步分类排序至门店', addon_sync: '同步加料至门店' };
+// Data provenance and creation trigger are different concepts.
+export const extendedTaskMetadata = (kind: ExtendedKind) => ({
+  discontinue: { sourceType: '商品库', sourceName: '商品库', trigger: '商品库商品停售后自动触发' },
+  archive: { sourceType: '归档前记录', sourceName: '归档前商品库记录', trigger: '商品库商品归档后自动触发' },
+  category_sort: { sourceType: '前台分类', sourceName: '品牌前台分类', trigger: '用户提交分类排序同步' },
+  addon_sync: { sourceType: '品牌加料', sourceName: '品牌加料资料', trigger: '用户提交加料同步' },
+})[kind];
 export function createExtendedTask(input: {
   kind: ExtendedKind; subjects: TaskSubject[]; stores: Array<{ id: string; name: string }>;
   channels: string[]; remark?: string; mode?: ExecutionMode; at?: string;
@@ -17,7 +24,7 @@ export function createExtendedTask(input: {
   if (input.mode === 'scheduled' && (!input.at || Date.parse(input.at) <= Date.now())) throw new Error('请选择晚于当前时间的执行时间。');
   const { kind, subjects } = input, title = extendedNames[kind], at = nowText(), id = `EXT-${kind}-${Date.now()}`;
   const pending = input.mode === 'manual' || input.mode === 'scheduled';
-  const trigger = kind === 'discontinue' ? '商品库商品停售' : kind === 'archive' ? '商品库商品归档' : '用户主动同步';
+  const { sourceType, sourceName, trigger } = extendedTaskMetadata(kind);
   const fields = [...new Set(subjects.flatMap(s => Object.keys(s.values)))];
   const targets = input.targets || input.stores.flatMap(store => input.channels.flatMap(channel => subjects.map(s => ({ storeId: store.id, storeName: store.name, channel, productId: s.id, type: 'qimai' as const }))));
   const groups = [...new Set(targets.map(t => t.type === 'platform' ? `platform:${t.channel}` : 'qimai'))];
@@ -31,13 +38,13 @@ export function createExtendedTask(input: {
       startedAt: pending ? '' : at, finishedAt: !pending && group === 'qimai' ? at : undefined,
       waitingReason: group !== 'qimai' ? '等待平台确认，企迈侧结果独立保留' : undefined };
   });
-  return { id, title, action: title, sourceType: kind === 'category_sort' ? '前台分类' : kind === 'addon_sync' ? '品牌加料' : '商品库', sourceName: trigger,
+  return { id, title, action: title, sourceType, sourceName,
     snapshot: trigger, storeScope: input.stores.map(s => s.name).join('、'), storeCount: input.stores.length, channels: input.channels,
     productCount: subjects.length, skuCount: 0, creator: '当前用户', createdAt: at, executionMode: input.mode || 'now', scheduledAt: input.at, remark: input.remark || '',
     status: pending ? 'pending' : tasks.some(t => t.status === 'waiting') ? 'running' : 'success', tasks,
-    configuration: { operation: kind === 'discontinue' ? 'off_shelf' : kind === 'archive' ? 'delete' : kind, source: { type: kind, name: trigger },
+    configuration: { operation: kind === 'discontinue' ? 'off_shelf' : kind === 'archive' ? 'delete' : kind, source: { type: kind, name: sourceName },
       products: subjects.map(s => ({ id: s.id, name: s.name, skus: [] })), fields, overrides: {},
-      extension: { kind, subjects }, settings: [{ label: '触发来源', value: trigger },
+      extension: { kind, subjects }, settings: [{ label: '触发方式', value: trigger },
         { label: '处理范围', value: kind === 'category_sort' ? '全部模板、全部门店的分类排序；不修改分类归属及商品排序' : kind === 'addon_sync' ? '仅同步已选加料资料，不修改商品关联加料和购买规则' : kind === 'archive' ? '删除已有门店商品；不重新读取已归档商品作为来源' : '仅下架已有门店商品，保留商品资料及关联' },
         ...(kind === 'archive' ? [{ label: '恢复方式', value: '不自动恢复，重新售卖需重新建品或下发；保留历史记录' }] : [])] },
     details: targets.map((row, index) => { const task = tasks.find(t => t.type === (row.type || 'qimai') && t.channels.includes(row.channel))!;

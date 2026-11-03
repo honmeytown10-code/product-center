@@ -158,3 +158,6 @@
 
 .task-store-filter { display:flex; align-items:center; gap:8px; color:#788593; font-size:12px; }
 .task-store-filter > div > button { height:34px; }
+
+.task-single-name { padding-left:23px; }
+.task-single-outcome { margin-top:4px; }

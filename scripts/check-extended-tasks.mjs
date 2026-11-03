@@ -15,3 +15,13 @@ assert.throws(()=>createExtendedTask({...base,kind:'addon_sync',stores:[]}));
 const split=createExtendedTask({...base,kind:'archive',channels:['美团外卖'],targets:[{storeId:'s',storeName:'门店',channel:'美团外卖',productId:'archived-id',type:'qimai'},{storeId:'s',storeName:'门店',channel:'美团外卖',productId:'archived-id',type:'platform'}]});
 assert.equal(split.tasks.length,2);assert.equal(split.tasks[1].status,'waiting');assert.notEqual(split.details[0].taskId,split.details[1].taskId);
 console.log('Extended task behavior: passed.');
+
+for (const [kind, source] of Object.entries({discontinue:'商品库',archive:'归档前商品库记录',category_sort:'品牌前台分类',addon_sync:'品牌加料资料'})) {
+ const task=createExtendedTask({...base,kind});
+ assert.equal(task.sourceName,source);
+ assert.equal(task.configuration.source.name,source);
+ const trigger=task.configuration.settings.find(s=>s.label==='触发方式');
+ assert.ok(trigger);assert.notEqual(trigger.value,source);
+ assert.ok(!task.configuration.settings.some(s=>s.label==='触发来源'));
+}
+console.log('Task provenance and creation trigger: passed.');

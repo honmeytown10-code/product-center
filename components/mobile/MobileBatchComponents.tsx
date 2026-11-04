@@ -28,34 +28,10 @@ type BatchPriceEditorData = {
   specPrices: Record<string, Record<number, string>>;
 };
 
-export type BatchNameEditorData = {
-  mode: 'individual' | 'uniform';
-  uniformMethod: 'overwrite' | 'replace' | 'affix';
-  overwriteName: string;
-  findText: string;
-  replaceText: string;
-  affixPosition: 'prefix' | 'suffix';
-  affixText: string;
-  individualNames: Record<string, string>;
-};
-
-const PRODUCT_NAME_MAX_LENGTH = 70;
-
-export const applyBatchProductName = (
-  currentName: string,
-  productId: string,
-  data?: BatchNameEditorData,
-) => {
-  if (!data) return currentName;
-  if (data.mode === 'individual') return data.individualNames[productId] ?? currentName;
-  if (data.uniformMethod === 'overwrite') return data.overwriteName;
-  if (data.uniformMethod === 'replace') {
-    return data.findText ? currentName.split(data.findText).join(data.replaceText) : currentName;
-  }
-  return data.affixPosition === 'prefix'
-    ? `${data.affixText}${currentName}`
-    : `${currentName}${data.affixText}`;
-};
+export { applyBatchProductName } from './batchProductPatch';
+export type { BatchNameEditorData } from './batchProductPatch';
+import { applyBatchProductName, PRODUCT_NAME_MAX_LENGTH } from './batchProductPatch';
+import type { BatchNameEditorData } from './batchProductPatch';
 
 const isBatchNameEditValid = (products: Product[], data?: BatchNameEditorData) => {
   if (!data || products.length === 0) return false;
@@ -920,19 +896,19 @@ export const BatchConfigStep = ({
     products, 
     onBack, 
     onConfirm, 
-    isShelvesUnited 
+    isShelvesUnited, previewReady = false
 }: { 
     actionType: BatchActionType, 
     selectedIds: Set<string>, 
     products: Product[], 
     onBack: () => void, 
     onConfirm: (data: any) => void,
-    isShelvesUnited: boolean
+    isShelvesUnited: boolean; previewReady?: boolean;
 }) => {
-    const [batchEditFields, setBatchEditFields] = React.useState<string[]>([]);
-    const [configuredEditFields, setConfiguredEditFields] = React.useState<string[]>([]);
-    const [batchFormData, setBatchFormData] = React.useState<Record<string, any>>({});
-    const [batchTargetChannels, setBatchTargetChannels] = React.useState<ChannelType[]>(['all']);
+    const [batchEditFields, setBatchEditFields] = React.useState<string[]>(previewReady ? ['s_price'] : []);
+    const [configuredEditFields, setConfiguredEditFields] = React.useState<string[]>(previewReady ? ['s_price'] : []);
+    const [batchFormData, setBatchFormData] = React.useState<Record<string, any>>(previewReady ? { s_price: { mode: 'uniform', uniformMethod: 'adjust', adjustType: 'increase', adjustAmount: '2', fixedPrice: '', specPrices: {} } } : {});
+    const [batchTargetChannels, setBatchTargetChannels] = React.useState<ChannelType[]>(actionType === 'edit_attr' ? ['mini', 'meituan', 'taobao', 'pos'] : ['all']);
     const [showTimeSalesEditor, setShowTimeSalesEditor] = React.useState(false);
     const [showPriceEditor, setShowPriceEditor] = React.useState(false);
     const [showCategoryEditor, setShowCategoryEditor] = React.useState(false);
@@ -1062,7 +1038,7 @@ export const BatchConfigStep = ({
         }
     };
 
-    const handleApply = () => {
+    const submitBatch = () => {
         onConfirm({
             action: actionType,
             fields: batchEditFields,
@@ -1070,6 +1046,8 @@ export const BatchConfigStep = ({
             channels: isSoldOutMode ? soldOutConfig.channels : (isDeleteMode ? deleteTargetChannels : batchTargetChannels)
         });
     };
+
+    const handleApply = submitBatch;
 
     const updateSoldOutConfig = (patch: Partial<BatchSoldOutConfig>) => {
         setSoldOutConfig(prev => ({ ...prev, ...patch }));
@@ -1362,6 +1340,8 @@ export const BatchConfigStep = ({
         });
     };
 
+    const noAttributeChannels = isAttributeMode && batchTargetChannels.filter(channel => channel !== 'all').length === 0;
+    const invalidSelection = isAttributeMode && (selectedIds.size === 0 || selectedIds.size > 100);
     const hasInvalidNameEdit = batchEditFields.includes('p_name')
         && !isBatchNameEditValid(selectedProducts, batchFormData.p_name as BatchNameEditorData | undefined);
     const hasUnconfiguredEditField = isAttributeMode
@@ -1379,6 +1359,7 @@ export const BatchConfigStep = ({
             </div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4">
+
                 {isAttributeMode && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                         <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -1498,7 +1479,7 @@ export const BatchConfigStep = ({
                     <div className="flex justify-between items-center mb-3">
                         <h4 className="text-sm font-black text-[#1F2129] flex items-center">
                             <Package size={16} className="mr-2 text-gray-400"/> 
-                            已选商品 ({selectedIds.size})
+                            已选商品 ({selectedIds.size}{isAttributeMode ? '/100' : ''})
                         </h4>
                     </div>
                     <div className="flex space-x-3 overflow-x-auto no-scrollbar pb-1">
@@ -1519,6 +1500,7 @@ export const BatchConfigStep = ({
                   onClick={handleApply}
                   disabled={
                     (isAttributeMode && batchEditFields.length === 0)
+                    || noAttributeChannels || invalidSelection
                     || hasUnconfiguredEditField
                     || hasInvalidNameEdit
                     || (isSoldOutMode && soldOutConfig.channels.length === 0)
@@ -1526,7 +1508,7 @@ export const BatchConfigStep = ({
                   }
                   className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center
                       ${actionType === 'delete' ? 'bg-red-500 shadow-red-200' : 'bg-[#00C06B] shadow-green-100'}
-                      ${((isAttributeMode && batchEditFields.length === 0) || hasUnconfiguredEditField || hasInvalidNameEdit || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
+                      ${(noAttributeChannels || invalidSelection || (isAttributeMode && batchEditFields.length === 0) || hasUnconfiguredEditField || hasInvalidNameEdit || (isSoldOutMode && soldOutConfig.channels.length === 0) || (isDeleteMode && deleteTargetChannels.length === 0)) ? 'opacity-50 cursor-not-allowed bg-gray-400 shadow-none' : ''}
                   `}
                 >
                     {actionType === 'delete' ? (
@@ -1536,6 +1518,7 @@ export const BatchConfigStep = ({
                     )}
                 </button>
             </div>
+
 
             {showTimeSalesEditor && (
                 <TimeSalesBatchEditor

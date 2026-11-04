@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ScanLine, ChevronDown, CheckCircle2, 
   ShoppingBag, Plus, Layers, Database, Tag, Scale, Box, Edit3, Store, ChevronLeft,
@@ -19,14 +19,14 @@ import { MobileProductTools } from './mobile/MobileProductTools';
 import { MobileBrandProductTools } from './mobile/MobileBrandProductTools';
 import { MobileProductSorter } from './mobile/MobileProductSorter';
 import { MobileCategorySorter } from './mobile/MobileCategorySorter';
+import { MobileBatchEditProgress } from './mobile/MobileBatchEditProgress';
+import { BATCH_PRODUCT_LIMIT, BatchTask, createBatchTask } from './mobile/batchEditTask';
 import { ChannelSortOrders, saveChannelOrder } from './mobile/MobileSortChannelSheet';
 import { MobileProductEditor } from './mobile/MobileProductEditor';
 import {
-  applyBatchProductName,
   BatchActionMenu,
   BatchActionType,
   BatchConfigStep,
-  BatchNameEditorData,
   BatchOperationSelect,
   BatchStep,
 } from './mobile/MobileBatchComponents';
@@ -72,6 +72,7 @@ export const MobileApp: React.FC = () => {
   const previewParams = new URLSearchParams(window.location.search);
   const previewProduct = previewParams.get('screen') === 'product-edit' ? products.find(item => item.id === previewParams.get('productId')) : undefined;
   const previewScreens: Record<string, Screen> = {
+    'batch-config': 'batch_config', 'batch-select': 'product_list', 'batch-tools': 'batch_operation_select',
     'product-sort': 'product_sort', 'category-sort': 'category_sort', 'product-list': 'product_list',
     'product-tools': 'product_tools', 'spec-list': 'spec_list', 'method-list': 'method_list',
     'label-list': 'label_list', 'category-list': 'category_list', 'badge-list': 'badge_list',
@@ -97,11 +98,41 @@ export const MobileApp: React.FC = () => {
   const [storeBadges, setStoreBadges] = useState<MobileBadgeItem[]>(() => cloneBadges(DEFAULT_STORE_BADGES));
 
   // Batch Mode State (Shared between List and Batch Screens)
-  const [isBatchMode, setIsBatchMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [batchActionType, setBatchActionType] = useState<BatchActionType>(null);
+  const demoCount = Math.min(101, Math.max(0, Number(previewParams.get('demoProducts')) || 0));
+  const batchProducts = useMemo(() => demoCount && products.length ? Array.from({ length: demoCount }, (_, index) => {
+    const original = products[index % products.length];
+    return { ...original, id: `batch-demo-${index + 1}`, name: `${original.name} ${String(index + 1).padStart(3, '0')}`, skuCode: `DEMO${index + 1}` };
+  }) : products, [products, demoCount]);
+  const isBatchPreview = ['batch-config', 'batch-select'].includes(previewParams.get('screen') ?? '');
+  const [isBatchMode, setIsBatchMode] = useState(isBatchPreview);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(previewParams.get('screen') === 'batch-config' ? batchProducts.slice(0, 100).map(product => product.id) : []));
+  const [batchActionType, setBatchActionType] = useState<BatchActionType>(isBatchPreview ? 'edit_attr' : null);
   const [batchStep, setBatchStep] = useState<BatchStep>('selection'); // used for menu flow inside list
   const [isAdvancedBatchFlow, setIsAdvancedBatchFlow] = useState(false); // used to determine if we are in the multi-step flow
+
+  const batchScope = `${methodScope}${demoCount ? ':demo' : ''}`;
+  const [batchTask, setBatchTask] = useState<BatchTask | null>(null);
+  const [showBatchProgress, setShowBatchProgress] = useState(false);
+  const submissionLock = useRef(false);
+  const finishBatch = (success = false) => {
+    submissionLock.current = false;
+    setShowBatchProgress(false); setBatchTask(null);
+    setIsBatchMode(false); setSelectedIds(new Set()); setBatchActionType(null); setIsAdvancedBatchFlow(false);
+    setCurrentScreen('batch_operation_select');
+    if (success) setMethodNotice('商品批量修改成功');
+  };
+  const enforceLimit = !batchActionType || batchActionType === 'edit_attr';
+  const toggleBatchSelection = (id: string) => {
+    if (enforceLimit && !selectedIds.has(id) && selectedIds.size >= BATCH_PRODUCT_LIMIT) {
+      setMethodNotice('每次最多选择 100 个商品'); return;
+    }
+    setSelectedIds(previous => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+  const selectAllBatch = () => {
+    const eligible = enforceLimit ? batchProducts.slice(0, BATCH_PRODUCT_LIMIT) : batchProducts;
+    setSelectedIds(new Set(eligible.map(product => product.id)));
+    if (enforceLimit && batchProducts.length > BATCH_PRODUCT_LIMIT) setMethodNotice('已选择前 100 个商品，每次最多选择 100 个');
+  };
 
   const currentConfig = brandConfigs[activeBrandId] || brandConfigs['b_1'];
   const isStockShared = currentConfig?.features.stock_shared ?? true;
@@ -117,99 +148,12 @@ export const MobileApp: React.FC = () => {
 
   const handleBatchConfirm = (batchData: any) => {
       if (batchData.action === 'edit_attr') {
-          (Array.from(selectedIds) as string[]).forEach(id => {
-              const product = products.find(item => item.id === id);
-              if (!product) return;
-
-              const updates: any = {};
-
-              if (batchData.fields?.includes('p_name')) {
-                  const nameData = batchData.data?.p_name as BatchNameEditorData | undefined;
-                  const nextName = applyBatchProductName(product.name, product.id, nameData);
-                  if (nextName.trim() && nextName !== product.name) {
-                      updates.name = nextName;
-                  }
-              }
-
-              if (batchData.fields?.includes('s_price')) {
-                  const priceData = batchData.data?.s_price;
-                  if (priceData?.mode === 'uniform') {
-                      const isFixedMode = priceData?.uniformMethod === 'fixed';
-                      const fixedPrice = Number(priceData?.fixedPrice);
-                      const nextFixedPrice = Number.isFinite(fixedPrice) ? fixedPrice : 0;
-                      const adjustAmount = Number(priceData?.adjustAmount);
-                      const delta = Number.isFinite(adjustAmount) ? adjustAmount : 0;
-                      const factor = priceData?.adjustType === 'decrease' ? -1 : 1;
-
-                      if (product.isMultiSpec && product.specs && product.specs.length > 0) {
-                          const nextSpecs = product.specs.map(spec => ({
-                              ...spec,
-                              price: isFixedMode ? nextFixedPrice : (spec.price ?? product.price) + factor * delta,
-                          }));
-                          const validPrices = nextSpecs
-                              .map(spec => spec.price)
-                              .filter((price): price is number => typeof price === 'number' && Number.isFinite(price));
-
-                          updates.specs = nextSpecs;
-                          if (validPrices.length > 0) {
-                              updates.price = Math.min(...validPrices);
-                          }
-                      } else if (isFixedMode) {
-                          updates.price = nextFixedPrice;
-                      } else if (delta || priceData?.adjustAmount === '0' || priceData?.adjustAmount === '0.00') {
-                          updates.price = product.price + factor * delta;
-                      }
-                  } else if (product.isMultiSpec && product.specs && product.specs.length > 0) {
-                      const specPriceMap = priceData?.specPrices?.[id];
-                      if (specPriceMap) {
-                          const nextSpecs = product.specs.map((spec, index) => {
-                              const nextPrice = Number(specPriceMap[index]);
-                              return {
-                                  ...spec,
-                                  price: Number.isFinite(nextPrice) && specPriceMap[index] !== '' ? nextPrice : (spec.price ?? product.price),
-                              };
-                          });
-                          const validPrices = nextSpecs
-                              .map(spec => spec.price)
-                              .filter((price): price is number => typeof price === 'number' && Number.isFinite(price));
-
-                          updates.specs = nextSpecs;
-                          if (validPrices.length > 0) {
-                              updates.price = Math.min(...validPrices);
-                          }
-                      }
-                  } else {
-                      const nextPriceValue = priceData?.specPrices?.[id]?.[0];
-                      const nextPrice = Number(nextPriceValue);
-                      if (Number.isFinite(nextPrice)) {
-                          updates.price = nextPrice;
-                      }
-                  }
-              }
-
-              if (batchData.fields?.includes('st_time')) {
-                  const timeSaleData = batchData.data?.st_time;
-                  if (timeSaleData?.mode === 'always') {
-                      updates.timeSales = null;
-                  } else if (timeSaleData?.config) {
-                      updates.timeSales = timeSaleData.config;
-                  }
-              }
-
-              batchData.fields?.forEach((field: string) => {
-                  if (['p_name', 's_price', 'st_time'].includes(field)) return;
-                  if (batchData.data?.[field] !== undefined) {
-                      if (field === 'p_cat' && Array.isArray(batchData.data[field])) {
-                          updates.category = batchData.data[field].join('、');
-                      } else {
-                          updates[field] = batchData.data[field];
-                      }
-                  }
-              });
-
-              updateProduct(id, updates);
-          });
-          alert(`已批量修改 ${selectedIds.size} 个商品的属性`);
+          if (submissionLock.current) return;
+          try {
+            const task = createBatchTask(batchProducts.filter(product => selectedIds.has(product.id)), batchData, batchScope, activeOrg.name);
+            submissionLock.current = true; setBatchTask(task); setShowBatchProgress(true);
+          } catch (error) { setMethodNotice(error instanceof Error ? error.message : '请检查修改内容'); }
+          return;
       } else {
           alert(`批量${batchData.action}操作模拟完成`);
       }
@@ -368,14 +312,14 @@ export const MobileApp: React.FC = () => {
             return (
                 <>
                     <MobileProductList 
-                        products={products}
+                        products={batchProducts}
                         sortOrders={currentSortOrders.products}
                         categorySortOrders={currentSortOrders.categories}
                         isBatchMode={isBatchMode}
                         selectedIds={selectedIds}
                         batchActionType={batchActionType}
-                        onToggleSelection={(id) => setSelectedIds(prev => { const n = new Set(prev); if(n.has(id)) n.delete(id); else n.add(id); return n; })}
-                        onSelectAll={() => setSelectedIds(new Set(products.map(p => p.id)))}
+                        onToggleSelection={toggleBatchSelection}
+                        onSelectAll={selectAllBatch}
                         onBack={() => { setCurrentScreen(returnScreen); setIsBatchMode(false); }}
                         onNavigate={(target) => {
                             if (target === 'category_list') setCurrentScreen('category_list');
@@ -385,6 +329,7 @@ export const MobileApp: React.FC = () => {
                             if (target === 'batch_next') setCurrentScreen('batch_config'); // Optimization: Direct jump to config
                             if (target === 'product_sort') setCurrentScreen('product_sort'); // New sorting entry
                         }}
+                        selectionLimit={enforceLimit ? BATCH_PRODUCT_LIMIT : undefined}
                         onBatchModeToggle={setIsBatchMode}
                         activeOrgType={activeOrg.type}
                         toggleShelfStatus={toggleShelfStatus}
@@ -500,7 +445,8 @@ export const MobileApp: React.FC = () => {
                 <BatchConfigStep 
                     actionType={batchActionType}
                     selectedIds={selectedIds}
-                    products={products}
+                    products={batchProducts}
+                    previewReady={isBatchPreview}
                     onBack={() => setCurrentScreen('product_list')}
                     onConfirm={handleBatchConfirm}
                     isShelvesUnited={isShelvesUnited}
@@ -515,6 +461,7 @@ export const MobileApp: React.FC = () => {
     <div className="mobile-app-shell w-full h-full min-h-0 overflow-hidden bg-[#F5F6FA] flex flex-col font-sans text-gray-800 relative no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Content Render */}
       {renderContent()}
+      {showBatchProgress && batchTask && <MobileBatchEditProgress task={batchTask} scenario={previewParams.get('outcome') ?? 'mixed'} onChange={setBatchTask} onSuccess={() => finishBatch(true)} onClose={() => finishBatch(false)} />}
       {methodNotice && <div role="status" className="pointer-events-none absolute inset-x-4 top-16 z-[200] rounded-xl bg-gray-900 px-4 py-3 text-center text-xs leading-5 text-white">{methodNotice}</div>}
 
       {/* Org Selector Modal */}

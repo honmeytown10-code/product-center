@@ -13,6 +13,7 @@ interface Props {
   sortOrders?: ChannelSortOrders;
   categorySortOrders?: ChannelSortOrders;
   isBatchMode: boolean;
+  selectionLimit?: number;
   selectedIds: Set<string>;
   batchActionType?: BatchActionType;
   onToggleSelection: (id: string) => void;
@@ -78,7 +79,7 @@ const SpecInventoryModal = ({ product, onClose }: { product: Product, onClose: (
 };
 
 export const MobileProductList: React.FC<Props> = ({ 
-    products, sortOrders = {}, categorySortOrders = {}, isBatchMode, selectedIds, batchActionType, onToggleSelection, onSelectAll,
+    products, sortOrders = {}, categorySortOrders = {}, isBatchMode, selectionLimit, selectedIds, batchActionType, onToggleSelection, onSelectAll,
     onBack, onNavigate, onBatchModeToggle, activeOrgType,
     toggleShelfStatus, onUpdateProduct, onEditProduct, isStockShared, isShelvesUnited
 }) => {
@@ -314,7 +315,7 @@ export const MobileProductList: React.FC<Props> = ({
                 isBatchMode ? (
                     <div className="absolute bottom-0 left-0 w-full bg-white border-t border-gray-200 p-4 pb-8 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-10">
                         <div className="flex justify-between items-center mb-4">
-                            <div className="text-xs font-bold text-gray-500">已选 {selectedIds.size} 项</div>
+                            <div className="text-xs font-bold text-gray-500">已选 {selectedIds.size}{selectionLimit ? ` / ${selectionLimit}` : ''} 个商品</div>
                             <button onClick={onSelectAll} className="text-xs font-bold text-[#00C06B]">全选</button>
                         </div>
                         <div className="flex gap-4">

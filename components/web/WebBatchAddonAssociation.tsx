@@ -1,3 +1,4 @@
+import { WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -495,7 +496,7 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void; onContinue
           </div>
 
           {scope === 'single' && (
-            <label className="mb-4 flex items-center gap-3 text-sm text-gray-700">正在配置的商品<select aria-label="分别配置关联加料的商品" value={editingProductId} onChange={event => switchProduct(event.target.value)} className="h-9 rounded border border-gray-200 px-3"><option value="">请选择已选商品</option>{selectedProducts.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+            <label className="mb-4 flex items-center gap-3 text-sm text-gray-700">正在配置的商品<WebQuerySelect aria-label="分别配置关联加料的商品" value={editingProductId} onValueChange={value => switchProduct(value)} className="h-9 rounded border border-gray-200 px-3"><option value="">请选择已选商品</option>{selectedProducts.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</WebQuerySelect></label>
           )}
 
           <div className="grid min-h-[420px] min-w-[760px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px] border border-gray-200">
@@ -527,8 +528,8 @@ export const WebBatchAddonAssociation: React.FC<{ onBack: () => void; onContinue
             <section className="min-w-0 border-r border-gray-200 p-4">
               <h4 className="mb-3 text-sm font-bold">选择需要修改的商品</h4>
               <div className="relative mb-3">
-                <Search size={15} className="absolute left-3 top-3 text-gray-400" />
-                <input value={productKeyword} onChange={event => setProductKeyword(event.target.value)} placeholder="搜索商品名称或ID" className="h-10 w-full border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" />
+
+                <WebQueryInput showIcon value={productKeyword} onValueChange={value => setProductKeyword(value)} placeholder="搜索商品名称或ID" className="h-10 w-full border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" />
               </div>
               <div className="mb-2 flex items-center justify-between text-xs text-gray-500"><span>已选 <b className="text-[#00A85A]">{selectedProductIds.length}</b> 个商品</span><button type="button" onClick={() => setSelectedProductIds(selectedProductIds.length === productOptions.length ? [] : productOptions.map(item => item.id))} className="text-[#00A85A]">{selectedProductIds.length === productOptions.length ? '取消全选' : '选择全部'}</button></div>
               <div className="max-h-[440px] overflow-y-auto border border-gray-200">

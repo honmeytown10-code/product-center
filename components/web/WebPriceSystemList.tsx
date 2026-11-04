@@ -1,3 +1,4 @@
+import { WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, Clock3, Copy, MoreHorizontal, Search, Store, X } from 'lucide-react';
 
@@ -80,19 +81,19 @@ export const WebPriceSystemList: React.FC = () => {
             <FilterInput value={systemName} onChange={setSystemName} placeholder="策略名称" />
             <FilterInput value={storeKeyword} onChange={setStoreKeyword} placeholder="机构/门店名称" />
             <label className="relative">
-              <select value={channel} onChange={event => setChannel(event.target.value as '' | PriceChannel)} className={`h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460] ${channel ? 'text-[#344054]' : 'text-[#98A2B3]'}`}>
+              <WebQuerySelect value={channel} onValueChange={value => setChannel(value as '' | PriceChannel)} className={`h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460] ${channel ? 'text-[#344054]' : 'text-[#98A2B3]'}`}>
                 <option value="">生效渠道：请选择</option>
                 <option value="mini">小程序-堂食</option>
                 <option value="takeout">小程序-外卖</option>
                 <option value="pos">POS</option>
-              </select>
-              <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              </WebQuerySelect>
+
             </label>
             <label className="relative">
-              <select value={status} onChange={event => setStatus(event.target.value as '' | PriceStatus)} className={`h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460] ${status ? 'text-[#344054]' : 'text-[#98A2B3]'}`}>
+              <WebQuerySelect value={status} onValueChange={value => setStatus(value as '' | PriceStatus)} className={`h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460] ${status ? 'text-[#344054]' : 'text-[#98A2B3]'}`}>
                 <option value="">启用状态：请选择</option><option value="enabled">启用中</option><option value="disabled">禁用中</option>
-              </select>
-              <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              </WebQuerySelect>
+
             </label>
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={resetFilters} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969] hover:bg-[#F7F8FA]">重置</button>
@@ -139,7 +140,7 @@ export const WebPriceSystemList: React.FC = () => {
   );
 };
 
-const FilterInput = ({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) => <label className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" /></label>;
+const FilterInput = ({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) => <label className="relative"><WebQueryInput showIcon value={value} onValueChange={value => onChange(value)} placeholder={placeholder} className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" /></label>;
 
 const PriceStrategyModal = ({ mode, record, onClose, onSave }: { mode: 'create' | 'edit'; record?: PriceSystemRecord; onClose: () => void; onSave: (record: PriceSystemRecord) => void }) => {
   const [name, setName] = useState(record?.name || '');

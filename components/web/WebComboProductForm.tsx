@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useState } from 'react';
 import { 
   ArrowLeft, FileText, Scale, Sliders, Settings, 
@@ -932,11 +933,11 @@ const ProductSelectorModal = ({ onClose, onConfirm, products }: { onClose: () =>
                 </div>
                 
                 <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                    <input 
+                    <WebQueryInput
                         className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm outline-none focus:border-[#00C06B]"
                         placeholder="搜索商品名称..."
                         value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
+                        onValueChange={value => setSearchTerm(value)}
                         autoFocus
                     />
                 </div>

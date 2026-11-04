@@ -1,3 +1,4 @@
+import { WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -529,38 +530,38 @@ export const WebSalesScopeManager: React.FC = () => {
         <div className="shrink-0 border-b border-[#EDEDED] px-4 py-3">
           <div className="grid grid-cols-2 gap-3 2xl:grid-cols-[minmax(240px,1fr)_180px_180px]">
             <label className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-              <input
+
+              <WebQueryInput showIcon
                 value={keyword}
-                onChange={event => setKeyword(event.target.value)}
+                onValueChange={value => setKeyword(value)}
                 placeholder="搜索规则、商品、做法或加料"
                 className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]"
               />
             </label>
             <label className="relative">
-              <select
+              <WebQuerySelect
                 value={objectFilter}
-                onChange={event => setObjectFilter(event.target.value as 'all' | ScopeObjectType)}
+                onValueChange={value => setObjectFilter(value as 'all' | ScopeObjectType)}
                 className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460]"
               >
                 <option value="all">对象类型：全部</option>
                 <option value="sku">商品 / 规格</option>
                 <option value="method">商品做法</option>
                 <option value="addon">商品加料</option>
-              </select>
-              <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              </WebQuerySelect>
+
             </label>
             <label className="relative">
-              <select
+              <WebQuerySelect
                 value={statusFilter}
-                onChange={event => setStatusFilter(event.target.value as 'all' | ScopeStatus)}
+                onValueChange={value => setStatusFilter(value as 'all' | ScopeStatus)}
                 className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460]"
               >
                 <option value="all">规则状态：全部</option>
                 <option value="enabled">已启用</option>
                 <option value="disabled">已停用</option>
-              </select>
-              <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              </WebQuerySelect>
+
             </label>
           </div>
           <div className="mt-3 flex justify-end">
@@ -812,8 +813,8 @@ export const WebSalesScopeManager: React.FC = () => {
             </div>
             <div className="shrink-0 border-b border-[#E5E7EB] bg-[#F7F8FA] p-4">
               <label className="relative block w-[360px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-                <input value={productSelectorKeyword} onChange={event => setProductSelectorKeyword(event.target.value)} placeholder="搜索商品名称或商品 ID" className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" />
+
+                <WebQueryInput showIcon value={productSelectorKeyword} onValueChange={value => setProductSelectorKeyword(value)} placeholder="搜索商品名称或商品 ID" className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" />
               </label>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -844,11 +845,11 @@ export const WebSalesScopeManager: React.FC = () => {
             </div>
             <div className="grid shrink-0 grid-cols-[minmax(260px,1fr)_190px_150px] gap-3 border-b border-[#E5E7EB] bg-[#F7F8FA] p-4">
               <label className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-                <input value={storeSelectorKeyword} onChange={event => setStoreSelectorKeyword(event.target.value)} placeholder="搜索门店名称、编码、区域" className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" />
+
+                <WebQueryInput showIcon value={storeSelectorKeyword} onValueChange={value => setStoreSelectorKeyword(value)} placeholder="搜索门店名称、编码、区域" className="h-9 w-full rounded-md border border-[#DDE2E8] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" />
               </label>
-              <label className="relative"><select value={storeOrganizationFilter} onChange={event => setStoreOrganizationFilter(event.target.value)} className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]"><option value="all">所属组织：全部</option>{STORE_ORGANIZATIONS.map(value => <option key={value} value={value}>{value}</option>)}</select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /></label>
-              <label className="relative"><select value={storeTypeFilter} onChange={event => setStoreTypeFilter(event.target.value)} className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]"><option value="all">门店类型：全部</option>{STORE_TYPES.map(value => <option key={value} value={value}>{value}</option>)}</select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /></label>
+              <label className="relative"><WebQuerySelect value={storeOrganizationFilter} onValueChange={value => setStoreOrganizationFilter(value)} className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]"><option value="all">所属组织：全部</option>{STORE_ORGANIZATIONS.map(value => <option key={value} value={value}>{value}</option>)}</WebQuerySelect></label>
+              <label className="relative"><WebQuerySelect value={storeTypeFilter} onValueChange={value => setStoreTypeFilter(value)} className="h-9 w-full appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]"><option value="all">门店类型：全部</option>{STORE_TYPES.map(value => <option key={value} value={value}>{value}</option>)}</WebQuerySelect></label>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="overflow-hidden rounded-md border border-[#E3E7EC]">

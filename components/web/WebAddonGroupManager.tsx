@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useState } from 'react';
 import {
   X, HelpCircle, CheckCircle2, Search, Coffee, ArrowUp, ArrowDown, AlertTriangle
@@ -190,8 +191,8 @@ export const WebAddonGroupManager: React.FC<{ onBack?: () => void }> = ({ onBack
                   <div className="flex justify-between items-center mb-4">
                      <h4 className="font-bold text-sm text-[#333]">选择实体加料</h4>
                      <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-2 text-[#999]"/>
-                        <input value={addonKeyword} onChange={event => setAddonKeyword(event.target.value)} className="pl-8 pr-3 py-1.5 border border-[#E8E8E8] rounded text-xs w-48 focus:border-[#00C06B] focus:outline-none" placeholder="搜索加料名称"/>
+
+                        <WebQueryInput showIcon value={addonKeyword} onValueChange={value => setAddonKeyword(value)} className="pl-8 pr-3 py-1.5 border border-[#E8E8E8] rounded text-xs w-48 focus:border-[#00C06B] focus:outline-none" placeholder="搜索加料名称"/>
                      </div>
                   </div>
                   

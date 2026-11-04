@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Building2, Check, ChevronDown, Search, Store, Tag, X } from 'lucide-react';
@@ -21,6 +22,7 @@ type Props = {
   placement?: 'above' | 'below';
   selectionMode?: 'multiple' | 'single';
   disabled?: boolean;
+  emptyLabel?: string;
 };
 
 const tabs: Array<{ id: ScopeTab; label: string; icon: React.ElementType }> = [
@@ -42,6 +44,7 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
   placement = 'below',
   selectionMode = 'multiple',
   disabled = false,
+  emptyLabel = '请选择门店',
 }) => {
   const single = selectionMode === 'single';
   const rootRef = useRef<HTMLDivElement>(null);
@@ -115,7 +118,7 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
         className={`flex h-8 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00B460] disabled:cursor-not-allowed disabled:opacity-40 ${open ? 'border-[#00B460]' : 'border-[#C9CDD4]'}`}
       >
         <span className={value.length ? 'truncate text-[#1D2129]' : 'truncate text-[#98A2B3]'}>
-          {value.length ? single ? stores.find(store => store.id === value[0])?.name || '请选择门店' : `已选 ${value.length} 家门店` : '请选择门店'}
+          {value.length ? single ? stores.find(store => store.id === value[0])?.name || '请选择门店' : `已选 ${value.length} 家门店` : emptyLabel}
         </span>
         <ChevronDown size={14} className={`ml-2 shrink-0 text-[#86909C] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -140,8 +143,8 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
 
           <div className="p-3">
             <label className="flex h-9 items-center rounded-md border border-[#C9CDD4] bg-white px-3 focus-within:border-[#00B460]">
-              <Search size={14} className="mr-2 shrink-0 text-[#86909C]" />
-              <input
+
+              <WebQueryInput embedded showIcon
                 autoFocus={single}
                 aria-label={tab === 'store' ? '搜索门店' : tab === 'organization' ? '搜索机构' : '搜索标签'}
                 onKeyDown={event => {
@@ -151,7 +154,7 @@ export const WebStoreScopeSelector: React.FC<Props> = ({
                   }
                 }}
                 value={keyword}
-                onChange={event => setKeyword(event.target.value)}
+                onValueChange={value => setKeyword(value)}
                 placeholder={tab === 'store' ? '门店名称 / 编码 / ID' : tab === 'organization' ? '搜索机构' : '搜索标签'}
                 className="min-w-0 flex-1 bg-transparent text-[12px] outline-none"
               />

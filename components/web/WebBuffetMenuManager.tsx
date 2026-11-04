@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -824,25 +825,25 @@ export const WebBuffetMenuManager: React.FC = () => {
   const renderList = () => (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F6FA] p-3">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-white">
-        <div className="flex flex-wrap items-center gap-3 border-b border-[#EAECF0] px-4 py-3">
+        <WebQueryBar className="flex flex-wrap items-center gap-3 border-b border-[#EAECF0] px-4 py-3">
           <div className="relative min-w-[260px] flex-1 max-w-[360px]">
-            <Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" />
-            <input value={keyword} onChange={event => setKeyword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedStoreFilter(storeFilter); } }} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索菜单名称、编号或餐标" />
+
+            <WebQueryInput showIcon value={keyword} onValueChange={value => setKeyword(value)} onKeyDown={event => { if (event.key === 'Enter') { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedStoreFilter(storeFilter); } }} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索菜单名称、编号或餐标" />
           </div>
-          <select value={storeFilter} onChange={event => setStoreFilter(event.target.value)} className="h-9 w-[170px] rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
+          <WebQuerySelect value={storeFilter} onValueChange={value => setStoreFilter(value)} className="h-9 w-[170px] rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
             <option value="all">全部适用门店</option>
             {STORES.map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
-          </select>
-          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | MenuStatus)} className="h-9 w-[130px] rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
+          </WebQuerySelect>
+          <WebQuerySelect value={statusFilter} onValueChange={value => setStatusFilter(value as 'all' | MenuStatus)} className="h-9 w-[130px] rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] outline-none focus:border-[#00B460]">
             <option value="all">全部状态</option>
             <option value="enabled">已启用</option>
             <option value="disabled">已停用</option>
-          </select>
+          </WebQuerySelect>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={() => { setKeyword(''); setStatusFilter('all'); setStoreFilter('all'); setAppliedKeyword(''); setAppliedStatusFilter('all'); setAppliedStoreFilter('all'); }} className="h-9 rounded border border-[#D0D5DD] px-4 text-[13px] text-[#344054] hover:bg-[#F9FAFB]">重置</button>
             <button type="button" onClick={() => { setAppliedKeyword(keyword); setAppliedStatusFilter(statusFilter); setAppliedStoreFilter(storeFilter); }} className="h-9 rounded bg-[#00B460] px-5 text-[13px] font-medium text-white hover:bg-[#009F56]">查询</button>
           </div>
-        </div>
+        </WebQueryBar>
         <div className="flex items-center justify-end gap-2 border-b border-[#EAECF0] px-4 py-3">
           <button type="button" onClick={openSortModal} className="flex h-8 items-center gap-2 rounded border border-[#D0D5DD] px-3 text-[13px] text-[#344054] hover:bg-[#F9FAFB]"><ListOrdered size={15} />排序管理</button>
           <button type="button" onClick={() => openEditor()} className="flex h-8 items-center gap-2 rounded bg-[#00B460] px-4 text-[13px] font-medium text-white hover:bg-[#009F56]"><Plus size={16} />创建自助餐菜单</button>
@@ -1076,7 +1077,7 @@ export const WebBuffetMenuManager: React.FC = () => {
 
       {ticketSelectorOpen && (
         <SelectionModal title="选择自助餐标" selectedCount={pendingTicketIds.length} width="w-[760px]" onClose={() => setTicketSelectorOpen(false)} onConfirm={() => { setDraftTicketIds(pendingTicketIds); setTicketSelectorOpen(false); }}>
-          <div className="flex items-center justify-between gap-4 border-b border-[#EAECF0] p-4"><div className="relative w-[380px]"><Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" /><input value={selectorKeyword} onChange={event => setSelectorKeyword(event.target.value)} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索餐标名称、编码或前台分类" /></div><button type="button" onClick={openCreateTicket} className="flex h-9 shrink-0 items-center gap-1.5 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Plus size={15} />新增自助餐标</button></div>
+          <WebQueryBar className="flex items-center justify-between gap-4 border-b border-[#EAECF0] p-4"><div className="relative w-[380px]"><WebQueryInput showIcon value={selectorKeyword} onValueChange={value => setSelectorKeyword(value)} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索餐标名称、编码或前台分类" /></div><button type="button" onClick={openCreateTicket} className="flex h-9 shrink-0 items-center gap-1.5 rounded border border-[#A6E3C6] px-3 text-[13px] font-medium text-[#008F4C] hover:bg-[#F0FBF6]"><Plus size={15} />新增自助餐标</button></WebQueryBar>
           <div className="min-h-[360px] divide-y divide-[#EAECF0]">
             {filteredSelectorTickets.map(ticket => { const selected = pendingTicketIds.includes(ticket.id); return <label key={ticket.id} className={`flex cursor-pointer items-center gap-4 px-5 py-4 ${selected ? 'bg-[#F5FCF8]' : 'hover:bg-[#F9FAFB]'}`}><input type="checkbox" checked={selected} onChange={() => setPendingTicketIds(ids => selected ? ids.filter(id => id !== ticket.id) : [...ids, ticket.id])} className="h-4 w-4 accent-[#00B460]" /><span className="flex h-10 w-10 items-center justify-center rounded bg-[#E8F8F0] text-[#008F4C]"><Ticket size={18} /></span><span className="min-w-0 flex-1"><span className="block font-medium text-[#1D2939]">{ticket.name}</span><span className="mt-1 block text-[12px] text-[#98A2B3]">{ticket.code} · {ticket.frontendCategory} · {ticket.requiresDeposit ? '收取押金' : '不收押金'}</span></span><span className="w-[88px] shrink-0 text-right"><span className="block text-[13px] text-[#344054]">{ticket.applicablePeople} 人</span><span className="mt-1 block text-[11px] text-[#98A2B3]">适用人数</span></span><span className="w-[100px] shrink-0 text-right"><span className="block text-[13px] text-[#344054]">¥{ticket.price.toFixed(2)}</span><span className="mt-1 block text-[11px] text-[#98A2B3]">售价</span></span></label>; })}
           </div>
@@ -1125,7 +1126,7 @@ export const WebBuffetMenuManager: React.FC = () => {
         <SelectionModal title="选择适用门店" selectedCount={pendingStoreIds.length} onClose={() => setStoreSelectorOpen(false)} onConfirm={() => { setDraftStoreIds(pendingStoreIds); setStoreSelectorOpen(false); }}>
           <div className="grid min-h-[500px] grid-cols-[1fr_280px]">
             <div className="border-r border-[#EAECF0]">
-              <div className="border-b border-[#EAECF0] p-4"><div className="relative"><Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" /><input value={selectorKeyword} onChange={event => setSelectorKeyword(event.target.value)} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索门店名称、编码、区域或组织" /></div></div>
+              <div className="border-b border-[#EAECF0] p-4"><div className="relative"><WebQueryInput showIcon value={selectorKeyword} onValueChange={value => setSelectorKeyword(value)} className="h-9 w-full rounded border border-[#D0D5DD] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" placeholder="搜索门店名称、编码、区域或组织" /></div></div>
               <div className="max-h-[470px] overflow-auto p-3">{storeGroups.map(group => { const groupStores = filteredSelectorStores.filter(store => store.organization === group); const allSelected = groupStores.every(store => pendingStoreIds.includes(store.id)); return <div key={group} className="mb-3 overflow-hidden rounded border border-[#EAECF0]"><label className="flex cursor-pointer items-center gap-3 bg-[#F9FAFB] px-3 py-2.5 font-medium text-[#344054]"><input type="checkbox" checked={allSelected} onChange={() => setPendingStoreIds(ids => allSelected ? ids.filter(id => !groupStores.some(store => store.id === id)) : Array.from(new Set([...ids, ...groupStores.map(store => store.id)])))} className="h-4 w-4 accent-[#00B460]" />{group}<span className="text-[12px] font-normal text-[#98A2B3]">{groupStores.length} 家</span></label>{groupStores.map(store => { const selected = pendingStoreIds.includes(store.id); return <label key={store.id} className={`flex cursor-pointer items-center gap-3 border-t border-[#EAECF0] px-4 py-3 ${selected ? 'bg-[#F5FCF8]' : 'hover:bg-[#FCFCFD]'}`}><input type="checkbox" checked={selected} onChange={() => setPendingStoreIds(ids => selected ? ids.filter(id => id !== store.id) : [...ids, store.id])} className="h-4 w-4 accent-[#00B460]" /><span className="flex-1"><span className="block text-[13px] text-[#344054]">{store.name}</span><span className="text-[12px] text-[#98A2B3]">{store.code} · {store.region}</span></span></label>; })}</div>; })}</div>
             </div>
             <div className="bg-[#FCFCFD] p-4"><div className="mb-3 flex items-center justify-between"><span className="text-[13px] font-semibold text-[#344054]">已选门店</span>{pendingStoreIds.length > 0 && <button type="button" onClick={() => setPendingStoreIds([])} className="text-[12px] text-[#667085]">清空</button>}</div><div className="space-y-2">{pendingStoreIds.length ? pendingStoreIds.map(id => <div key={id} className="flex items-center justify-between rounded border border-[#EAECF0] bg-white px-3 py-2 text-[12px] text-[#475467]"><span className="truncate">{getStore(id)?.name}</span><button type="button" onClick={() => setPendingStoreIds(ids => ids.filter(storeId => storeId !== id))} aria-label={`移除${getStore(id)?.name}`}><X size={14} /></button></div>) : <div className="pt-16 text-center text-[12px] text-[#98A2B3]">尚未选择门店</div>}</div></div>

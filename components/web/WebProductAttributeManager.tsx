@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import { WebDomainTaskDialog, rememberDomainSource } from './WebDomainTaskDialog';
 import { useProducts } from '../../context';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -1532,23 +1533,23 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                 </div>
               )}
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
+                <WebQueryBar className="flex flex-wrap items-center gap-3">
+                  <WebQueryInput
                     value={keyword}
-                    onChange={e => setKeyword(e.target.value)}
+                    onValueChange={value => setKeyword(value)}
                     placeholder={placeholderMap[activeTab]}
                     className="h-[38px] w-[220px] rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm text-[#333] outline-none focus:border-[#00C06B]"
                   />
                   <div className="flex items-center gap-2 text-sm text-[#666]">
                     <span>{scope === 'channel' ? '同步状态' : '是否启用'}</span>
                     <span>=</span>
-                    <select value={scope === 'channel' ? douyinAddonStatusFilter : undefined} onChange={event => scope === 'channel' && setDouyinAddonStatusFilter(event.target.value as 'all' | DouyinAddonStatus)} className="h-[38px] w-[120px] rounded-lg border border-[#E8E8E8] bg-white px-3 outline-none focus:border-[#00C06B]">
+                    <WebQuerySelect value={scope === 'channel' ? douyinAddonStatusFilter : undefined} onValueChange={value => scope === 'channel' && setDouyinAddonStatusFilter(value as 'all' | DouyinAddonStatus)} className="h-[38px] w-[120px] rounded-lg border border-[#E8E8E8] bg-white px-3 outline-none focus:border-[#00C06B]">
                       {scope === 'channel' ? <><option value="all">全部状态</option><option value="not_synced">待同步</option><option value="syncing">同步中</option><option value="synced">已同步</option><option value="failed">同步失败</option></> : <><option>启售</option><option>停用</option></>}
-                    </select>
+                    </WebQuerySelect>
                   </div>
                   <button onClick={() => showActionNotice('加料列表已按当前条件刷新')} className="rounded-lg bg-[#00C06B] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#00A35B]">查询</button>
                   <button onClick={() => { setKeyword(''); setDouyinAddonStatusFilter('all'); }} className="rounded-lg border border-[#E8E8E8] px-5 py-2.5 text-sm text-[#666] hover:bg-[#FAFAFA]">重置</button>
-                </div>
+                </WebQueryBar>
                 <div className="flex items-center gap-3">
                   <button onClick={() => showActionNotice('加料类型排序管理已打开；拖动能力需接入真实排序接口')} className="rounded-lg border border-[#E8E8E8] px-4 py-2.5 text-sm text-[#666] hover:bg-[#FAFAFA]">排序管理</button>
                   {scope === 'channel' ? (
@@ -1615,12 +1616,12 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
             </div>
           ) : (
           <div className="flex items-center justify-between gap-4 border-b border-[#E8E8E8] px-6 py-4">
-            <div className="flex items-center gap-3">
+            <WebQueryBar className="flex items-center gap-3">
               <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" />
-                <input
+
+                <WebQueryInput showIcon
                   value={keyword}
-                  onChange={e => setKeyword(e.target.value)}
+                  onValueChange={value => setKeyword(value)}
                   placeholder={placeholderMap[activeTab]}
                   className="h-[38px] w-[180px] rounded-lg border border-[#E8E8E8] bg-white pl-9 pr-3 text-sm text-[#333] outline-none focus:border-[#00C06B]"
                 />
@@ -1629,7 +1630,7 @@ export const WebProductAttributeManager: React.FC<WebProductAttributeManagerProp
                 <Filter size={14} className="mr-1.5 text-[#999]" />
                 筛选
               </button>
-            </div>
+            </WebQueryBar>
 
             <div className="flex items-center gap-3">
               <button onClick={() => showActionNotice('列表字段显示设置已按默认方案展示')} className="inline-flex items-center rounded-lg border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm font-medium text-[#666] hover:border-[#00C06B] hover:text-[#00C06B]">
@@ -2407,10 +2408,10 @@ const SpecColumnPanel = ({
   return (
     <div className="absolute right-0 top-12 z-40 w-[420px] rounded-2xl border border-[#E8E8E8] bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
       <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-        <input
+
+        <WebQueryInput showIcon
           value={keyword}
-          onChange={e => onChangeKeyword(e.target.value)}
+          onValueChange={value => onChangeKeyword(value)}
           placeholder="搜索"
           className="h-10 w-full rounded-lg border border-[#E8E8E8] pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]"
         />

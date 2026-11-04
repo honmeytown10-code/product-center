@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Blend, ChefHat, Lock, Plus, Search, X } from 'lucide-react';
 import { WebStoreAddonList } from './WebStoreAddonList';
@@ -218,12 +219,12 @@ export const WebStoreAttributeManager: React.FC<{
           <div className="text-xs leading-6 text-[#666]">
             描述标签会展示在商品名称下方，可用于口味、食材、卖点说明。总部下发的标签组和标签门店仅可选择，不可编辑或删除。
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <WebQueryBar className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-              <input
+
+              <WebQueryInput showIcon
                 value={keyword}
-                onChange={e => setKeyword(e.target.value)}
+                onValueChange={value => setKeyword(value)}
                 placeholder="搜索标签分组/标签"
                 className="h-[38px] w-[260px] rounded-lg border border-[#E8E8E8] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]"
               />
@@ -235,7 +236,7 @@ export const WebStoreAttributeManager: React.FC<{
               <Plus size={14} className="mr-1.5" />
               新建标签分组
             </button>
-          </div>
+          </WebQueryBar>
         </div>
 
         <div className="overflow-auto">
@@ -364,12 +365,12 @@ export const WebStoreAttributeManager: React.FC<{
           <div className="text-xs leading-6 text-[#666]">
             商品角标会展示在商品图片区域，创建商品时会默认带入角标有效期，并支持在表单内二次修改。
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <WebQueryBar className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-              <input
+
+              <WebQueryInput showIcon
                 value={keyword}
-                onChange={e => setKeyword(e.target.value)}
+                onValueChange={value => setKeyword(value)}
                 placeholder="搜索角标名称"
                 className="h-[38px] w-[260px] rounded-lg border border-[#E8E8E8] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]"
               />
@@ -381,7 +382,7 @@ export const WebStoreAttributeManager: React.FC<{
               <Plus size={14} className="mr-1.5" />
               新增角标
             </button>
-          </div>
+          </WebQueryBar>
         </div>
 
         <div className="overflow-auto">

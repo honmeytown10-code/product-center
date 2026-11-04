@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -366,21 +367,21 @@ export const WebTakeoutMenuSync: React.FC = () => {
       </div>
 
       <div className="px-7 pb-7">
-        <div className="mb-4 flex items-center justify-between">
+        <WebQueryBar className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-gray-800">批量同步记录</h3>
             <button onClick={handleRefreshRecords} className="inline-flex items-center gap-1 text-xs text-[#00A85A]"><RefreshCw size={13} />刷新</button>
           </div>
           <div className="relative">
-            <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
-            <input
+
+            <WebQueryInput showIcon
               value={recordKeyword}
-              onChange={event => setRecordKeyword(event.target.value)}
+              onValueChange={value => setRecordKeyword(value)}
               placeholder="搜索任务ID或同步内容"
               className="h-9 w-[260px] border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]"
             />
           </div>
-        </div>
+        </WebQueryBar>
         <div className="overflow-hidden border border-gray-200">
           <table className="w-full table-fixed text-left text-sm">
             <thead className="bg-[#F5F6F8] text-gray-600">
@@ -651,16 +652,16 @@ export const WebTakeoutMenuSync: React.FC = () => {
 
           <div className="grid grid-cols-[1fr_330px] overflow-hidden flex-1">
             <div className="flex min-w-0 flex-col border-r border-gray-100">
-              <div className={`flex items-end border-b border-gray-100 px-5 pt-4 ${isMultiChannel ? 'justify-end' : 'justify-between'}`}>
+              <WebQueryBar className={`flex items-end border-b border-gray-100 px-5 pt-4 ${isMultiChannel ? 'justify-end' : 'justify-between'}`}>
                 {!isMultiChannel && <div className="flex gap-6">
                   <button onClick={() => setStoreTab('eligible')} className={`border-b-2 pb-3 text-sm ${storeTab === 'eligible' ? 'border-[#00C06B] font-bold text-[#00A85A]' : 'border-transparent text-gray-500'}`}>可选择门店 {eligibleStores.length}</button>
                   <button onClick={() => setStoreTab('partial')} className={`border-b-2 pb-3 text-sm ${storeTab === 'partial' ? 'border-orange-400 font-bold text-orange-600' : 'border-transparent text-gray-500'}`}>授权不完整 {partialStores.length}</button>
                 </div>}
                 <div className="relative mb-2.5">
-                  <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
-                  <input value={storeKeyword} onChange={event => setStoreKeyword(event.target.value)} placeholder="搜索门店名称或区域" className="h-9 w-[240px] border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" />
+
+                  <WebQueryInput showIcon value={storeKeyword} onValueChange={value => setStoreKeyword(value)} placeholder="搜索门店名称或区域" className="h-9 w-[240px] border border-gray-200 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" />
                 </div>
-              </div>
+              </WebQueryBar>
 
               <div className="flex-1 overflow-auto">
                 <table className="w-full table-fixed text-left text-sm">

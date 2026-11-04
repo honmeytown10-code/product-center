@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import type { StoreScopeOption } from './WebStoreScopeSelector';
@@ -25,7 +26,7 @@ export const WebStoreScopePanel: React.FC<{ stores: StoreScopeOption[]; value: s
   const clearFilters = () => { setKeyword(''); setTag(''); setOrganization(''); setIdText(''); };
   return <section aria-label="选择下发门店" className="min-w-0 rounded-lg border border-[#E5E6EB] bg-white">
     <div className="flex flex-wrap items-center gap-3 p-4">
-      <label className="relative min-w-[220px] flex-1"><Search size={16} className="absolute left-3 top-2.5 text-[#86909C]" /><input aria-label="搜索门店名称、编码或ID" value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="门店名称 / 编码 / ID" className="h-9 w-full rounded-md border border-[#E5E6EB] pl-9 pr-3 text-sm outline-none focus:border-[#008647]" /></label>
+      <label className="relative min-w-[220px] flex-1"><WebQueryInput showIcon aria-label="搜索门店名称、编码或ID" value={keyword} onValueChange={value => setKeyword(value)} placeholder="门店名称 / 编码 / ID" className="h-9 w-full rounded-md border border-[#E5E6EB] pl-9 pr-3 text-sm outline-none focus:border-[#008647]" /></label>
       <select aria-label="门店标签" value={tag} onChange={event => setTag(event.target.value)} className="h-9 w-36 rounded-md border border-[#E5E6EB] px-3 text-sm text-[#4E5969]"><option value="">全部门店标签</option>{tags.map(item => <option key={item}>{item}</option>)}</select>
       <button type="button" aria-expanded={idFilterOpen} aria-controls="publish-store-id-filter" onClick={() => setIdFilterOpen(!idFilterOpen)} className={`h-9 rounded-md border px-3 text-sm ${ids.length ? 'border-[#008647] text-[#008647]' : 'border-[#E5E6EB] text-[#4E5969]'}`}>门店编码 / ID 筛选{ids.length ? ` · ${ids.length}` : ''}</button>
     </div>

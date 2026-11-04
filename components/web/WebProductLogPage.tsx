@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryDateRange, WebQueryInput, WebQueryMore, WebQuerySchemes, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
@@ -2262,7 +2263,7 @@ const FilterField: React.FC<{ label: string; children: React.ReactNode; classNam
 );
 
 const TextInput: React.FC<{ value: string; onChange: (value: string) => void; placeholder: string }> = ({ value, onChange, placeholder }) => (
-  <input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className={inputClassName} />
+  <WebQueryInput value={value} onValueChange={value => onChange(value)} placeholder={placeholder} className={inputClassName} />
 );
 
 const SelectInput: React.FC<{
@@ -2270,20 +2271,13 @@ const SelectInput: React.FC<{
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
 }> = ({ value, onChange, options }) => (
-  <select value={value} onChange={event => onChange(event.target.value)} className={inputClassName}>
+  <WebQuerySelect value={value} onValueChange={value => onChange(value)} className={inputClassName}>
     {options.map(option => (
       <option key={`${option.value}-${option.label}`} value={option.value}>
         {option.label}
       </option>
     ))}
-  </select>
-);
-
-const DateInput: React.FC<{ value: string; onChange: (value: string) => void }> = ({ value, onChange }) => (
-  <div className="relative">
-    <CalendarDays size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-    <input type="date" value={value} onChange={event => onChange(event.target.value)} className={`${inputClassName} pl-9`} />
-  </div>
+  </WebQuerySelect>
 );
 
 const OperationBadge: React.FC<{ value: string }> = ({ value }) => {
@@ -2454,36 +2448,13 @@ export const WebProductLogPage: React.FC = () => {
   );
 
   const renderToolbar = (config: LogTypeConfig) => (
-    <div className="rounded-2xl border border-[#E7ECF1] bg-[#FAFBFD] p-4 shadow-[0_6px_20px_rgba(15,23,42,0.04)]">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <FilterField label="操作时间" className="xl:col-span-2">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <DateInput value={draftFilters.startDate} onChange={value => updateDraftFilter('startDate', value)} />
-            <span className="text-[#98A2B3]">至</span>
-            <DateInput value={draftFilters.endDate} onChange={value => updateDraftFilter('endDate', value)} />
-          </div>
-        </FilterField>
-        {config.filterDefs.map(filter => (
-          <FilterField key={filter.key} label={filter.label} className={filter.span}>
-            {filter.type === 'select' ? (
-              <SelectInput value={draftFilters[filter.key]} onChange={value => updateDraftFilter(filter.key, value)} options={filter.options || []} />
-            ) : (
-              <TextInput value={draftFilters[filter.key]} onChange={value => updateDraftFilter(filter.key, value)} placeholder={filter.placeholder || ''} />
-            )}
-          </FilterField>
-        ))}
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button onClick={applyFilters} className="inline-flex h-10 items-center whitespace-nowrap rounded-lg bg-[#00C06B] px-4 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-[#00AF62]">
-          <Search size={14} className="mr-1.5" />
-          查询
-        </button>
-        <button onClick={resetFilters} className="inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[13px] font-medium text-[#00C06B] transition-all hover:text-[#00AF62]">
-          <RotateCcw size={14} className="mr-1.5" />
-          清空筛选条件
-        </button>
-      </div>
-    </div>
+    <WebQueryBar className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E7ECF1] bg-white p-4" onSearch={applyFilters}>
+      <WebQueryDateRange label="操作时间" value={[draftFilters.startDate,draftFilters.endDate]} onChange={([start,end])=>setDraftFilters(prev=>({...prev,startDate:start,endDate:end}))}/>
+      {config.filterDefs.slice(0,1).map(filter=>filter.type==='select'?<WebQuerySelect embedded key={filter.key} aria-label={filter.label} value={draftFilters[filter.key]} onValueChange={value=>updateDraftFilter(filter.key,value)} className="w-[180px]">{(filter.options||[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</WebQuerySelect>:<WebQueryInput embedded key={filter.key} aria-label={filter.label} prefix={filter.label} value={draftFilters[filter.key]} onValueChange={value=>updateDraftFilter(filter.key,value)} placeholder={filter.placeholder||'请输入'} className="w-[280px]"/>)}
+      {config.filterDefs.length>1&&<WebQueryMore activeCount={config.filterDefs.slice(1).filter(filter=>draftFilters[filter.key]&&draftFilters[filter.key]!=='all').length} onApply={applyFilters} onReset={resetFilters}>{config.filterDefs.slice(1).map(filter=><label key={filter.key}>{filter.label}{filter.type==='select'?<WebQuerySelect aria-label={filter.label} value={draftFilters[filter.key]} onValueChange={value=>updateDraftFilter(filter.key,value)}>{(filter.options||[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</WebQuerySelect>:<WebQueryInput aria-label={filter.label} value={draftFilters[filter.key]} onValueChange={value=>updateDraftFilter(filter.key,value)} placeholder={filter.placeholder||'请输入'} showIcon={false}/>}</label>)}</WebQueryMore>}
+      <WebQuerySchemes scope={'product-logs:'+config.id} value={draftFilters} onApply={saved=>{setDraftFilters(saved);setAppliedFilters(saved);setCurrentPage(1);}}/>
+      <div className="ml-auto flex gap-2"><button type="button" onClick={resetFilters} className="cq-button">重置</button><button type="button" onClick={applyFilters} className="cq-button primary">查询</button></div>
+    </WebQueryBar>
   );
 
   const renderTable = (config: LogTypeConfig) => {

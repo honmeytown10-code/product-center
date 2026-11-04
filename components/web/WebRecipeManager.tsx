@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import { 
   Search, Plus, CheckCircle2, ChevronLeft, Settings, 
@@ -321,13 +322,13 @@ const RecipeList = ({ onViewDetail, onNavigate, onOpenBaseSettings, onOpenPolici
     <div className="console-recipe-list relative m-4 flex flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-sm">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-[#E8E8E8] bg-white p-4">
-        <div className="flex space-x-3">
+        <WebQueryBar className="flex space-x-3">
           <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" />
-            <input value={nameKeyword} onChange={event => setNameKeyword(event.target.value)} className="w-52 rounded-lg border border-[#E8E8E8] py-2 pl-9 pr-3 text-sm focus:border-[#00C06B] focus:outline-none" placeholder="搜索商品名称" />
+
+            <WebQueryInput showIcon value={nameKeyword} onValueChange={value => setNameKeyword(value)} className="w-52 rounded-lg border border-[#E8E8E8] py-2 pl-9 pr-3 text-sm focus:border-[#00C06B] focus:outline-none" placeholder="搜索商品名称" />
           </div>
-          <input value={idKeyword} onChange={event => setIdKeyword(event.target.value)} className="w-48 rounded-lg border border-[#E8E8E8] px-3 py-2 text-sm focus:border-[#00C06B] focus:outline-none" placeholder="商品ID" />
-        </div>
+          <WebQueryInput showIcon={false} value={idKeyword} onValueChange={value => setIdKeyword(value)} className="w-48 rounded-lg border border-[#E8E8E8] px-3 py-2 text-sm focus:border-[#00C06B] focus:outline-none" placeholder="商品ID" />
+        </WebQueryBar>
         <div className="relative flex space-x-2">
           <button type="button" onClick={() => setShowBulkImport(true)} className="flex items-center rounded-lg border border-[#D9DEE7] bg-white px-4 py-2 text-sm font-medium text-[#4E5969] hover:border-[#8BD7AE] hover:text-[#008F4C]">
             <Upload size={15} className="mr-1.5" />导入配方
@@ -1074,7 +1075,7 @@ const PolicyProductManager = ({ policy, onBack, onConfigProduct }: { policy: any
        </div>
        {message && <div className="flex items-center justify-between border-b border-[#CBEFDC] bg-[#F1FFF7] px-6 py-2 text-sm text-[#087A49]"><span>{message}</span><button type="button" onClick={() => setMessage('')} className="rounded p-1 hover:bg-white/70" aria-label="关闭提示"><X size={14} /></button></div>}
        <div className="min-h-0 flex-1 p-4"><div className="flex h-full flex-col overflow-hidden rounded-lg border border-[#E8E8E8] bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-[#E8E8E8] px-4 py-3"><div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="搜索商品名称、商品ID" className="w-64 rounded-lg border border-[#E8E8E8] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" /></div><div className="flex items-center gap-2 text-xs text-[#667085]"><Info size={14} className="text-[#2E90FA]" />加入策略后生成独立快照，不再跟随总部默认配方更新</div></div>
+          <div className="flex items-center justify-between border-b border-[#E8E8E8] px-4 py-3"><div className="relative"><WebQueryInput showIcon value={keyword} onValueChange={value => setKeyword(value)} placeholder="搜索商品名称、商品ID" className="w-64 rounded-lg border border-[#E8E8E8] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" /></div><div className="flex items-center gap-2 text-xs text-[#667085]"><Info size={14} className="text-[#2E90FA]" />加入策略后生成独立快照，不再跟随总部默认配方更新</div></div>
           <div className="min-h-0 flex-1 overflow-auto"><table className="w-full table-fixed text-left text-sm"><thead className="sticky top-0 z-10 bg-[#F7F8FA] text-[#555]"><tr><th className="w-[320px] border-b border-[#E8E8E8] px-5 py-3 font-bold">商品</th><th className="border-b border-[#E8E8E8] px-5 py-3 font-bold">独立快照</th><th className="w-40 border-b border-[#E8E8E8] px-5 py-3 font-bold">配置进度</th><th className="w-44 border-b border-[#E8E8E8] px-5 py-3 font-bold">快照生成时间</th><th className="w-40 border-b border-[#E8E8E8] px-5 py-3 text-right font-bold">操作</th></tr></thead><tbody>{filteredProducts.map(product => <tr key={product.id} className="border-b border-[#F2F2F2] hover:bg-[#FAFCFB]"><td className="px-5 py-4"><div className="font-medium text-[#333]">{product.name}</div><div className="mt-1 text-xs text-[#999]">商品ID：{product.id} · {product.category}</div></td><td className="px-5 py-4"><span className="inline-flex items-center text-[#00A35B]"><CheckCircle2 size={14} className="mr-1.5" />已生成，独立于总部默认配方</span></td><td className="px-5 py-4"><div className="text-[#555]">{product.configured}/{product.total} 组合</div><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#EDEDED]"><div className="h-full bg-[#00C06B]" style={{ width: `${product.total ? Math.round(product.configured / product.total * 100) : 0}%` }} /></div></td><td className="px-5 py-4 text-[#666]">{product.snapshotTime}</td><td className="px-5 py-4 text-right"><button type="button" onClick={() => onConfigProduct(product)} className="mr-4 text-[#00A35B] hover:underline">配置配方</button><button type="button" onClick={() => setRemoveTarget(product)} className="text-[#666] hover:text-[#D92D20]">移除</button></td></tr>)}{filteredProducts.length === 0 && <tr><td colSpan={5} className="py-16 text-center"><div className="text-sm text-[#999]">{keyword ? '未找到符合条件的商品' : '当前策略暂未添加商品'}</div><button type="button" onClick={() => keyword ? setKeyword('') : setShowProductSelector(true)} className="mt-2 text-sm text-[#00A35B]">{keyword ? '清空搜索条件' : '添加商品并生成配方快照'}</button></td></tr>}</tbody></table></div>
           <div className="flex h-12 items-center justify-end border-t border-[#E8E8E8] px-5 text-xs text-[#666]">共 {filteredProducts.length} 条</div>
        </div></div>

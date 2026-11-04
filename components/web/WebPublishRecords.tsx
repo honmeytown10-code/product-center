@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import { WebTaskRecords } from './WebTaskRecords';
 import type { ExecutionMode, TaskConfiguration, FieldValues } from './taskModel';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -685,15 +686,15 @@ const TaskRecordDetailPage: React.FC<{
         </section>
 
         <section className="mt-4 overflow-hidden rounded-lg border border-[#E3E6EA] bg-white">
-          <div className="flex flex-wrap items-center gap-3 border-b border-[#E8E8E8] p-4">
+          <WebQueryBar className="flex flex-wrap items-center gap-3 border-b border-[#E8E8E8] p-4">
             <div className="mr-auto">
               <h3 className="text-sm font-bold text-[#1D2129]">执行明细</h3>
               <div className="mt-1 text-xs text-[#86909C]">按{batch.recordType === 'douyin_addon' ? '加料品' : '商品 / SKU'} × {task.storeCount > 0 ? '门店 × ' : ''}渠道记录本次执行结果</div>
             </div>
-            <div className="relative"><Search size={15} className="absolute left-3 top-2.5 text-[#999]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} className="h-9 w-64 rounded border border-[#D9DDE3] pl-9 pr-3 text-sm outline-none focus:border-[#00B460]" placeholder="搜索商品、SKU 或门店" /></div>
-            <select value={detailChannel} onChange={event => setDetailChannel(event.target.value)} className="h-9 w-36 rounded border border-[#D9DDE3] bg-white px-3 text-sm text-[#555]"><option value="all">全部渠道</option>{channels.map(channel => <option key={channel} value={channel}>{channel}</option>)}</select>
-            <select value={detailStatus} onChange={event => setDetailStatus(event.target.value as 'all' | TaskStatus)} className="h-9 w-32 rounded border border-[#D9DDE3] bg-white px-3 text-sm text-[#555]"><option value="all">全部结果</option><option value="success">成功</option><option value="failed">失败</option><option value="waiting">等待中</option><option value="running">执行中</option></select>
-          </div>
+            <div className="relative"><WebQueryInput showIcon value={keyword} onValueChange={value => setKeyword(value)} className="h-9 w-64 rounded border border-[#D9DDE3] pl-9 pr-3 text-sm outline-none focus:border-[#00B460]" placeholder="搜索商品、SKU 或门店" /></div>
+            <WebQuerySelect value={detailChannel} onValueChange={value => setDetailChannel(value)} className="h-9 w-36 rounded border border-[#D9DDE3] bg-white px-3 text-sm text-[#555]"><option value="all">全部渠道</option>{channels.map(channel => <option key={channel} value={channel}>{channel}</option>)}</WebQuerySelect>
+            <WebQuerySelect value={detailStatus} onValueChange={value => setDetailStatus(value as 'all' | TaskStatus)} className="h-9 w-32 rounded border border-[#D9DDE3] bg-white px-3 text-sm text-[#555]"><option value="all">全部结果</option><option value="success">成功</option><option value="failed">失败</option><option value="waiting">等待中</option><option value="running">执行中</option></WebQuerySelect>
+          </WebQueryBar>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
               <thead className="h-11 bg-[#F5F6F8] text-[#667085]"><tr><th className="w-[210px] px-4 font-medium">{batch.recordType === 'douyin_addon' ? '加料品' : '商品 / SKU'}</th><th className="w-[180px] px-4 font-medium">门店</th><th className="w-[135px] px-4 font-medium">渠道</th><th className="w-[150px] px-4 font-medium">执行动作</th><th className="px-4 font-medium">修改 / 覆盖字段</th><th className="w-[190px] px-4 font-medium">执行结果</th><th className="w-[145px] px-4 font-medium">完成时间</th></tr></thead>

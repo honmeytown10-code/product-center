@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, GripVertical, Inbox, Search, Trash2, X } from 'lucide-react';
 import type { OnlineMutexOption, OnlineMutexRule } from '../../meituanOnlineMutex';
@@ -39,7 +40,7 @@ export function WebMutexRuleBuilder({ rule, options, label, disabled, onChange, 
   return <div className="relative grid grid-cols-3 gap-4" aria-label="互斥属性分组">
     <div className="flex h-[400px] min-w-0 flex-col overflow-hidden rounded border border-[#DDE3E8] bg-white">
       <div className="border-b border-[#E5E6EB] px-3 py-3"><h4 className="text-sm font-medium text-[#344054]">规格 / 做法 / 加料</h4><div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#86909C]"><span>点击添加到</span><div className="inline-flex overflow-hidden rounded border border-[#DDE3E8]">{(['left', 'right'] as const).map(side => <button type="button" key={side} disabled={disabled} aria-pressed={target === side} onClick={() => setTarget(side)} className={`px-2 py-1 ${target === side ? 'bg-[#EAF8F1] text-[#008F4C]' : 'text-[#667085]'}`}>属性组{groupNumber(side)}</button>)}</div></div></div>
-      <div className="flex items-center gap-2 border-b border-[#E5E6EB] px-3"><Search size={14} className="shrink-0 text-[#86909C]" /><input disabled={disabled} aria-label="搜索互斥属性" placeholder="搜索属性" value={query} onChange={event => setQuery(event.target.value)} className="h-9 min-w-0 flex-1 text-xs outline-none" /></div>
+      <div className="flex items-center gap-2 border-b border-[#E5E6EB] px-3"><WebQueryInput showIcon disabled={disabled} aria-label="搜索互斥属性" placeholder="搜索属性" value={query} onValueChange={value => setQuery(value)} className="h-9 min-w-0 flex-1 text-xs outline-none" /></div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2 no-scrollbar" tabIndex={0} role="tree" aria-label="当前商品属性">
         {!visible.length && <p className="px-2 py-8 text-center text-xs text-[#86909C]">{query ? '没有匹配的属性' : '暂无可选属性'}</p>}
         {(['spec', 'method', 'addon'] as const).map(source => {

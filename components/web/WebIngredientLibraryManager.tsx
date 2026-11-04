@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import {
   Search,
@@ -311,22 +312,22 @@ export const WebIngredientLibraryManager: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-between gap-4 border-b border-[#F2F2F2] px-6 py-4">
-          <div className="flex items-center gap-3">
+          <WebQueryBar className="flex items-center gap-3">
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" />
-              <input
+
+              <WebQueryInput showIcon
                 value={keyword}
-                onChange={e => setKeyword(e.target.value)}
+                onValueChange={value => setKeyword(value)}
                 placeholder="搜索"
                 className="w-[220px] rounded-lg border border-[#E5E7EB] bg-white py-2 pl-9 pr-3 text-sm text-[#333] outline-none transition-colors focus:border-[#00C06B]"
               />
             </div>
             {activeTab === 'material' && (
-              <select value={imageStatusFilter} onChange={event => setImageStatusFilter(event.target.value as 'all' | '已上传' | '待上传')} className="h-[38px] rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm text-[#666] outline-none focus:border-[#00C06B]">
+              <WebQuerySelect value={imageStatusFilter} onValueChange={value => setImageStatusFilter(value as 'all' | '已上传' | '待上传')} className="h-[38px] rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm text-[#666] outline-none focus:border-[#00C06B]">
                 <option value="all">图片状态 全部</option><option value="已上传">已上传</option><option value="待上传">待上传</option>
-              </select>
+              </WebQuerySelect>
             )}
-          </div>
+          </WebQueryBar>
 
           <div className="flex items-center gap-3">
             {activeTab === 'ingredient' ? (

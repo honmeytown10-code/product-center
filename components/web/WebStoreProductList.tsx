@@ -1,3 +1,8 @@
+import { matchesQueryKeyword } from './queryKeyword';
+import { WebStoreScopeSelector } from './WebStoreScopeSelector';
+import { PRODUCT_SALES_SCOPE_STORES } from './WebProductSalesScope';
+import { EMPTY_STORE_PRODUCT_QUERY, matchesStoreProductQuery } from './storeProductQuery';
+import { WebQuerySearch, WebQueryBar, WebQueryInput, WebQueryMore, WebQuerySchemes, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { WebStoreProductDeleteFlow } from './WebStoreProductDeleteFlow';
@@ -485,6 +490,10 @@ export const WebStoreProductList: React.FC<{
   const [activeTabId, setActiveTabId] = useState('all');
   const [activeCategoryId, setActiveCategoryId] = useState('all');
   const [activeStoreId, setActiveStoreId] = useState(managePreset?.storeId || 'all');
+  const [manageDraft, setManageDraft] = useState(EMPTY_STORE_PRODUCT_QUERY);
+  const [manageFilters, setManageFilters] = useState(EMPTY_STORE_PRODUCT_QUERY);
+  const resetManageFilters = () => { setManageDraft(EMPTY_STORE_PRODUCT_QUERY); setManageFilters(EMPTY_STORE_PRODUCT_QUERY); setManageKeyword(''); setManageSearchType('all'); setActiveStoreId('all'); setActiveTabId('all'); setActiveCategoryId('all'); };
+  const [manageSearchType, setManageSearchType] = useState('all');
   const [manageKeyword, setManageKeyword] = useState(managePreset?.keyword || '');
   const [coverageKeyword, setCoverageKeyword] = useState('');
   const [coverageCategoryId, setCoverageCategoryId] = useState('all');
@@ -534,12 +543,9 @@ export const WebStoreProductList: React.FC<{
       const categoryName = MOCK_CATEGORIES.find(c => c.id === activeCategoryId)?.name;
       filtered = filtered.filter(p => p.category.includes(categoryName || ''));
     }
-    const normalizedKeyword = manageKeyword.trim().toLowerCase();
-    if (normalizedKeyword) {
-      filtered = filtered.filter(p => `${p.name} ${p.baseProductId} ${p.category}`.toLowerCase().includes(normalizedKeyword));
-    }
-    return filtered;
-  }, [storeProducts, activeStoreId, activeTabId, activeCategoryId, manageKeyword]);
+    filtered = filtered.filter(p => matchesQueryKeyword(manageKeyword, manageSearchType, {name:p.name,id:p.baseProductId,category:p.category}));
+    return filtered.filter(product => matchesStoreProductQuery(product, manageFilters));
+  }, [storeProducts, activeStoreId, activeTabId, activeCategoryId, manageKeyword, manageSearchType, manageFilters]);
 
   const coverageSourceRows = useMemo(() => {
     const normalizedKeyword = coverageKeyword.trim().toLowerCase();
@@ -827,45 +833,26 @@ export const WebStoreProductList: React.FC<{
     <div className="pc-page flex min-w-0 flex-1 overflow-hidden bg-[#F0F2F5] p-3 font-sans">
       {renderNotification()}
       <div className="pc-surface flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        <div className="p-5 border-b border-[#E8E8E8] bg-white space-y-4 shrink-0 z-20">
-          <div className="flex flex-wrap gap-3 items-center">
-            <FilterStoreSelect label="机构门店" options={STORE_OPTIONS} value={activeStoreId} onChange={setActiveStoreId} />
-            <FilterInput label="商品ID" placeholder="请输入" />
-            <FilterInput label="SKUID" placeholder="请输入" />
-            <FilterSelect label="商品类型" placeholder="请选择" />
-            <FilterSelect label="售卖状态" placeholder="全部" canClear />
-            <FilterSelect label="库存状态" placeholder="请选择" canClear />
-            <button onClick={() => setNotification({ type: 'info', message: '当前页面已展示全部可用筛选条件' })} className="h-[34px] px-3 border border-dashed border-[#AAA] text-[#666] rounded hover:border-[#00C06B] hover:text-[#00C06B] transition-colors text-xs flex items-center bg-white">
-              <Plus size={14} className="mr-1" /> 添加筛选
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center gap-4">
-
-            <div className="flex items-center flex-wrap gap-3">
-              <button onClick={() => setNotification({ type: 'success', message: '门店商品快捷筛选已保存' })} className="flex items-center text-xs text-[#666] border border-[#E8E8E8] px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
-                <FileUp size={14} className="mr-1.5" /> 保存快捷筛选选项
-              </button>
-              {enableGrouping && (
-                <div className="flex items-center px-3 py-1.5 bg-orange-50 text-orange-600 rounded text-xs font-bold border border-orange-100">
-                  <Layers size={12} className="mr-1.5" />
-                  已开启渠道分组联动
-                </div>
-              )}
-            </div>
-            <div className="flex space-x-3">
-              <button onClick={() => { setActiveStoreId('all'); setManageKeyword(''); setActiveTabId('all'); setActiveCategoryId('all'); }} className="px-6 py-1.5 border border-[#E8E8E8] text-[#333] rounded text-xs hover:bg-gray-50 transition-colors">重置</button>
-              <button onClick={() => setNotification({ type: 'success', message: `已查询到 ${filteredProducts.length} 个门店商品` })} className="px-6 py-1.5 bg-[#00C06B] text-white rounded text-xs font-bold hover:bg-[#00A35B] shadow-sm transition-colors">查询</button>
-            </div>
-          </div>
+        <div className="shrink-0 border-b border-[#E8E8E8] bg-white px-5 py-4">
+          <WebQueryBar className="flex flex-wrap items-center gap-2" onSearch={()=>setManageFilters(manageDraft)}>
+            <WebQuerySearch searchType={manageSearchType} onSearchTypeChange={setManageSearchType} searchOptions={[{value:'all',label:'全部'},{value:'name',label:'商品名称'},{value:'id',label:'商品ID'}]} aria-label="搜索门店商品" value={manageKeyword} onValueChange={setManageKeyword} placeholder="商品名称 / 商品ID" className="w-[290px]"/>
+            <WebStoreScopeSelector stores={PRODUCT_SALES_SCOPE_STORES.filter(store=>STORE_OPTIONS.some(option=>option.id===store.id))} selectionMode="single" emptyLabel="全部门店" value={activeStoreId==='all'?[]:[activeStoreId]} onChange={ids=>setActiveStoreId(ids[0]||'all')} widthClassName="w-[190px]"/>
+            <WebQueryMore activeCount={Object.values(manageDraft).filter(value=>value && value!=='all').length} onApply={()=>setManageFilters(manageDraft)} onReset={resetManageFilters}>
+              <label>商品ID<WebQueryInput aria-label="门店商品ID筛选" value={manageDraft.productId} onValueChange={value=>setManageDraft(prev=>({...prev,productId:value}))} placeholder="请输入商品ID" showIcon={false}/></label>
+              <label>SKUID<WebQueryInput aria-label="门店SKUID筛选" value={manageDraft.skuId} onValueChange={value=>setManageDraft(prev=>({...prev,skuId:value}))} placeholder="请输入SKUID" showIcon={false}/></label>
+              <label>商品类型<WebQuerySelect value={manageDraft.productType} aria-label="门店商品类型筛选" onValueChange={value=>setManageDraft(prev=>({...prev,productType:value}))}><option value="all">全部商品类型</option><option value="Standard">标准商品</option><option value="Combo">套餐商品</option></WebQuerySelect></label>
+              <label>售卖状态<WebQuerySelect value={manageDraft.shelfStatus} aria-label="门店售卖状态筛选" onValueChange={value=>setManageDraft(prev=>({...prev,shelfStatus:value}))}><option value="all">全部售卖状态</option><option value="on_shelf">已上架</option><option value="off_shelf">已下架</option></WebQuerySelect></label>
+              <label>库存状态<WebQuerySelect value={manageDraft.stockStatus} aria-label="门店库存状态筛选" onValueChange={value=>setManageDraft(prev=>({...prev,stockStatus:value}))}><option value="all">全部库存状态</option><option value="normal">正常</option><option value="low">库存不足</option><option value="empty">已售罄</option></WebQuerySelect></label>
+            </WebQueryMore>
+            <WebQuerySchemes scope="store-products" value={{...manageDraft,storeId:activeStoreId,keyword:manageKeyword,searchType:manageSearchType}} onApply={({storeId,keyword,searchType:field,...saved})=>{setManageSearchType(field || 'all');setActiveStoreId(storeId);setManageKeyword(keyword);setManageDraft(saved);setManageFilters(saved);}}/>
+            <div className="ml-auto flex gap-2"><button type="button" className="cq-button" onClick={resetManageFilters}>重置</button><button type="button" className="cq-button primary" onClick={()=>setManageFilters(manageDraft)}>查询</button></div>
+          </WebQueryBar>
+          {enableGrouping && <p className="mt-2 text-xs text-[#909399]">已开启渠道分组联动</p>}
         </div>
 
         <div className={`px-5 py-3 ${expandedChannelNavigation ? 'grid grid-cols-[1fr_auto] gap-y-2' : 'flex justify-between'} items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-x-4`}>
           <div className={expandedChannelNavigation ? 'contents' : 'flex items-center space-x-4 min-w-0'}>
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-2.5 text-[#999]" />
-              <input value={manageKeyword} onChange={e => setManageKeyword(e.target.value)} className="pl-9 pr-4 py-1.5 border border-[#E8E8E8] rounded w-56 text-sm focus:border-[#00C06B] focus:outline-none transition-colors" placeholder="搜索商品名称/ID" />
-            </div>
+            <span className="text-xs text-[#909399]">共 {filteredProducts.length} 个门店商品</span>
 
             <div className={`console-segmented-tabs ${expandedChannelNavigation ? 'order-last col-span-2 flex flex-wrap items-center gap-1' : 'flex items-center space-x-1 overflow-x-auto max-w-[550px] no-scrollbar'}`}>
               {tabs.map(tab => (
@@ -1300,42 +1287,6 @@ export const WebStoreProductList: React.FC<{
   return mode === 'coverage' ? renderCoveragePage() : renderManagePage();
 };
 
-const FilterInput = ({ label, placeholder }: { label: string; placeholder: string }) => (
-  <div className="flex items-center border border-[#E8E8E8] rounded h-[34px] px-3 bg-white hover:border-[#00C06B] transition-colors w-[200px]">
-    <span className="text-xs text-[#666] mr-2 whitespace-nowrap">{label}:</span>
-    <input className="flex-1 text-xs outline-none min-w-0" placeholder={placeholder} />
-  </div>
-);
-
-const FilterSelect = ({ label, placeholder, canClear }: { label: string; placeholder: string; canClear?: boolean }) => (
-  <div className="flex items-center border border-[#E8E8E8] rounded h-[34px] px-3 bg-white hover:border-[#00C06B] transition-colors cursor-pointer w-[200px] group">
-    <span className="text-xs text-[#666] mr-2 whitespace-nowrap">{label}:</span>
-    <span className={`flex-1 text-xs truncate ${placeholder === '全部商品' ? 'text-[#333]' : 'text-[#999] group-hover:text-[#666]'}`}>{placeholder}</span>
-    {canClear && placeholder !== '请选择' ? <X size={12} className="text-[#999] hover:text-red-500" /> : <ChevronDown size={12} className="text-[#999] group-hover:text-[#00C06B]" />}
-  </div>
-);
-
-const FilterStoreSelect = ({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { id: string; name: string }[];
-  value: string;
-  onChange: (value: string) => void;
-}) => (
-  <div className="flex items-center border border-[#E8E8E8] rounded h-[34px] px-3 bg-white transition-colors w-[220px]">
-    <span className="text-xs text-[#666] mr-2 whitespace-nowrap">{label}:</span>
-    <select value={value} onChange={e => onChange(e.target.value)} className="flex-1 text-xs bg-transparent outline-none text-[#333]">
-      {options.map(option => (
-        <option key={option.id} value={option.id}>{option.name}</option>
-      ))}
-    </select>
-  </div>
-);
-
 const FilterInputControlled = ({
   label,
   placeholder,
@@ -1351,7 +1302,7 @@ const FilterInputControlled = ({
 }) => (
   <div className={`flex items-center border border-[#E8E8E8] rounded h-[34px] px-3 bg-white transition-colors ${widthClass || 'w-[240px]'}`}>
     <span className="text-xs text-[#666] mr-2 whitespace-nowrap">{label}:</span>
-    <input value={value} onChange={e => onChange(e.target.value)} className="flex-1 text-xs bg-transparent outline-none text-[#333] min-w-0" placeholder={placeholder} />
+    <WebQueryInput embedded value={value} onValueChange={value => onChange(value)} className="flex-1 text-xs bg-transparent outline-none text-[#333] min-w-0" placeholder={placeholder} />
   </div>
 );
 
@@ -1370,11 +1321,11 @@ const FilterNativeSelect = ({
 }) => (
   <div className={`flex items-center border border-[#E8E8E8] rounded h-[34px] px-3 bg-white transition-colors ${widthClass || 'w-[220px]'}`}>
     <span className="text-xs text-[#666] mr-2 whitespace-nowrap">{label}:</span>
-    <select value={value} onChange={e => onChange(e.target.value)} className="flex-1 text-xs bg-transparent outline-none text-[#333]">
+    <WebQuerySelect embedded value={value} onValueChange={value => onChange(value)} className="flex-1 text-xs bg-transparent outline-none text-[#333]">
       {options.map(option => (
         <option key={option.value} value={option.value}>{option.label}</option>
       ))}
-    </select>
+    </WebQuerySelect>
   </div>
 );
 

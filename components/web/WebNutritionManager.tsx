@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import {
   Search,
@@ -286,26 +287,26 @@ export const WebNutritionManager: React.FC<{ onNavigate?: (path: string) => void
     <div className="pc-page flex-1 bg-[#F5F6FA] p-3">
       <div className="pc-surface flex h-full flex-col overflow-hidden bg-white">
         <div className="flex items-center justify-between gap-4 border-b border-[#EDEDED] px-6 py-4">
-          <div className="flex items-center gap-3">
+          <WebQueryBar className="flex items-center gap-3">
             <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" />
-              <input
+
+              <WebQueryInput showIcon
                 value={keyword}
-                onChange={e => setKeyword(e.target.value)}
+                onValueChange={value => setKeyword(value)}
                 placeholder="搜索商品名称、ID"
                 className="w-[220px] rounded-lg border border-[#E5E7EB] bg-white py-2 pl-9 pr-3 text-sm text-[#333] outline-none transition-colors focus:border-[#00C06B]"
               />
             </div>
-            <select
+            <WebQuerySelect
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as 'all' | 'configured' | 'unconfigured')}
+              onValueChange={value => setStatusFilter(value as 'all' | 'configured' | 'unconfigured')}
               className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#00C06B]"
             >
               <option value="all">规格状态 全部</option>
               <option value="configured">规格状态 已配置</option>
               <option value="unconfigured">规格状态 未配置</option>
-            </select>
-          </div>
+            </WebQuerySelect>
+          </WebQueryBar>
 
           <div className="flex items-center gap-3">
             <button

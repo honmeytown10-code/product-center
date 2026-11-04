@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
@@ -161,19 +162,19 @@ export const WebProductSelectorDialog: React.FC<Props> = ({
           <div className="grid grid-cols-3 gap-3">
             <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">商品名称</span>
-              <input value={draftFilters.name} onChange={event => setDraftFilters(prev => ({ ...prev, name: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品名称" />
+              <WebQueryInput embedded value={draftFilters.name} onValueChange={value => setDraftFilters(prev => ({ ...prev, name: value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品名称" />
             </label>
             <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">商品 ID</span>
-              <input value={draftFilters.productId} onChange={event => setDraftFilters(prev => ({ ...prev, productId: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品 ID" />
+              <WebQueryInput embedded value={draftFilters.productId} onValueChange={value => setDraftFilters(prev => ({ ...prev, productId: value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品 ID" />
             </label>
             {showSkuFields && <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">SKUID</span>
-              <input value={draftFilters.skuCode} onChange={event => setDraftFilters(prev => ({ ...prev, skuCode: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入 SKUID" />
+              <WebQueryInput embedded value={draftFilters.skuCode} onValueChange={value => setDraftFilters(prev => ({ ...prev, skuCode: value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入 SKUID" />
             </label>}
             <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">商品标识</span>
-              <input value={draftFilters.productCode} onChange={event => setDraftFilters(prev => ({ ...prev, productCode: event.target.value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品标识" />
+              <WebQueryInput embedded value={draftFilters.productCode} onValueChange={value => setDraftFilters(prev => ({ ...prev, productCode: value }))} className="min-w-0 flex-1 outline-none" placeholder="请输入商品标识" />
             </label>
             <label className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
               <span className="mr-3 shrink-0 text-[#4E5969]">前台分类</span>

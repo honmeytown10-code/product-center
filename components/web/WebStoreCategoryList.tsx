@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search, ChevronDown, ArrowUpDown, ChevronLeft,
@@ -168,9 +169,9 @@ const FilterInput = ({
 }) => (
   <div className="flex items-center">
     <span className="text-xs text-[#666] mr-2 shrink-0">{label}</span>
-    <input
+    <WebQueryInput
       value={value}
-      onChange={e => onChange(e.target.value)}
+      onValueChange={value => onChange(value)}
       className="w-[170px] h-[34px] px-3 border border-[#E8E8E8] rounded text-sm focus:border-[#00C06B] focus:outline-none transition-colors"
       placeholder={placeholder}
     />
@@ -844,14 +845,14 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
         </div>
 
         {currentStore ? <><div className="px-5 py-4 flex justify-between items-center border-b border-[#E8E8E8] bg-white shrink-0 z-10 gap-4">
-          <div className="flex items-center space-x-4 min-w-0">
+          <WebQueryBar className="flex items-center space-x-4 min-w-0">
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-2.5 text-[#999]" />
-              <input
+
+              <WebQueryInput showIcon
                 className="h-[34px] pl-9 pr-4 border border-[#E8E8E8] rounded w-56 text-sm focus:border-[#00C06B] focus:outline-none transition-colors"
                 placeholder="搜索分类名称/标识"
                 value={categoryName}
-                onChange={e => setCategoryName(e.target.value)}
+                onValueChange={value => setCategoryName(value)}
               />
             </div>
 
@@ -867,7 +868,7 @@ export const WebStoreCategoryList: React.FC<{ onCancelEntry?: () => void }> = ({
                 </button>
               ))}
             </div>
-          </div>
+          </WebQueryBar>
 
           <div className="flex items-center space-x-3 shrink-0">
             <button

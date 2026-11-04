@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import { pendingTask, nowText } from './taskModel';
 import { saveTask } from './taskRepository';
 import type { PublishBatch } from './WebPublishRecords';
@@ -7953,9 +7954,9 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                                         <label key={key} className="flex h-10 items-center border border-[#E5E6EB] bg-white px-3 text-[13px]">
                                             <span className="mr-3 shrink-0 text-[#4E5969]">{label}</span>
                                             <span className="mr-3 text-[#C9CDD4]">=</span>
-                                            <input
+                                            <WebQueryInput embedded
                                                 value={comboOptionalProductDraftFilters[key]}
-                                                onChange={event => setComboOptionalProductDraftFilters(current => ({ ...current, [key]: event.target.value }))}
+                                                onValueChange={value => setComboOptionalProductDraftFilters(current => ({ ...current, [key]: value }))}
                                                 className="min-w-0 flex-1 outline-none"
                                                 placeholder={placeholder}
                                             />
@@ -9205,14 +9206,14 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 </div>
                 <div className="p-5 space-y-4">
                     <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_220px_220px]">
-                        <input className="q-form-input" placeholder="请输入门店名称/编码/ID" value={storeKeyword} onChange={e => setStoreKeyword(e.target.value)} />
-                        <select className="q-form-select" value={storeTagFilter} onChange={e => setStoreTagFilter(e.target.value)}>
+                        <WebQueryInput className="q-form-input" placeholder="请输入门店名称/编码/ID" value={storeKeyword} onValueChange={value => setStoreKeyword(value)} />
+                        <WebQuerySelect className="q-form-select" value={storeTagFilter} onValueChange={value => setStoreTagFilter(value)}>
                             <option value="">请选择门店标签</option>
                             {Array.from(new Set(storeGroups.flatMap(group => group.stores.map(store => store.tag)))).map(tag => (
                                 <option key={tag} value={tag}>{tag}</option>
                             ))}
-                        </select>
-                        <input className="q-form-input" placeholder="门店编码 / 门店ID 筛选" value={storeCodeFilter} onChange={e => setStoreCodeFilter(e.target.value)} />
+                        </WebQuerySelect>
+                        <WebQueryInput className="q-form-input" placeholder="门店编码 / 门店ID 筛选" value={storeCodeFilter} onValueChange={value => setStoreCodeFilter(value)} />
                     </div>
                     <div className="grid grid-cols-1 overflow-hidden rounded-2xl border border-gray-200 xl:grid-cols-[260px_minmax(0,1fr)]">
                         <div className="border-r border-gray-200 bg-[#FAFAFA] p-3 space-y-2">
@@ -9592,27 +9593,27 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                         </div>
                         <div className="border-b border-gray-100 bg-[#FAFAFA] px-6 py-5">
                             <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_280px]">
-                                <input className="q-form-input" placeholder="请输入模板名称" value={templateKeyword} onChange={e => setTemplateKeyword(e.target.value)} />
-                                <input className="q-form-input" placeholder="请输入模板描述" value={templateDescKeyword} onChange={e => setTemplateDescKeyword(e.target.value)} />
-                                <select className="q-form-select" value={templateChannelFilter} onChange={e => setTemplateChannelFilter(e.target.value)}>
+                                <WebQueryInput className="q-form-input" placeholder="请输入模板名称" value={templateKeyword} onValueChange={value => setTemplateKeyword(value)} />
+                                <WebQueryInput className="q-form-input" placeholder="请输入模板描述" value={templateDescKeyword} onValueChange={value => setTemplateDescKeyword(value)} />
+                                <WebQuerySelect className="q-form-select" value={templateChannelFilter} onValueChange={value => setTemplateChannelFilter(value)}>
                                     <option value="">请选择售卖渠道</option>
                                     <option value="小程序">小程序</option>
                                     <option value="POS">POS</option>
                                     <option value="外卖">外卖</option>
-                                </select>
+                                </WebQuerySelect>
                             </div>
                             <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-[280px_280px_auto]">
-                                <select className="q-form-select" value={templateSaleTypeFilter} onChange={e => setTemplateSaleTypeFilter(e.target.value)}>
+                                <WebQuerySelect className="q-form-select" value={templateSaleTypeFilter} onValueChange={value => setTemplateSaleTypeFilter(value)}>
                                     <option value="">请选择售卖类型</option>
                                     <option value="堂食">堂食</option>
                                     <option value="外卖">外卖</option>
-                                </select>
-                                <select className="q-form-select" value={templateGroupFilter} onChange={e => setTemplateGroupFilter(e.target.value)}>
+                                </WebQuerySelect>
+                                <WebQuerySelect className="q-form-select" value={templateGroupFilter} onValueChange={value => setTemplateGroupFilter(value)}>
                                     <option value="">请选择或输入模板分组</option>
                                     {Array.from(new Set(templateOptions.map(item => item.group))).map(group => (
                                         <option key={group} value={group}>{group}</option>
                                     ))}
-                                </select>
+                                </WebQuerySelect>
                                 <div className="flex gap-3">
                                     <span className="inline-flex items-center px-3 text-xs text-gray-400">筛选条件实时生效</span>
                                     <button
@@ -9876,19 +9877,19 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_240px_auto]">
                     <div>
                         <div className="mb-2 text-sm font-bold text-[#1F2129]">操作类型</div>
-                        <select className="q-form-select" value={templateHistoryTypeFilter} onChange={e => setTemplateHistoryTypeFilter(e.target.value as 'all' | TemplateTaskType)}>
+                        <WebQuerySelect className="q-form-select" value={templateHistoryTypeFilter} onValueChange={value => setTemplateHistoryTypeFilter(value as 'all' | TemplateTaskType)}>
                             <option value="all">全部</option>
                             <option value="添加商品">添加商品</option>
                             <option value="更新商品">更新商品</option>
-                        </select>
+                        </WebQuerySelect>
                     </div>
                     <div>
                         <div className="mb-2 text-sm font-bold text-[#1F2129]">执行状态</div>
-                        <select className="q-form-select" value={templateHistoryStatusFilter} onChange={e => setTemplateHistoryStatusFilter(e.target.value as 'all' | TemplateTaskStatus)}>
+                        <WebQuerySelect className="q-form-select" value={templateHistoryStatusFilter} onValueChange={value => setTemplateHistoryStatusFilter(value as 'all' | TemplateTaskStatus)}>
                             <option value="all">全部</option>
                             <option value="processing">处理中</option>
                             <option value="completed">处理完成</option>
-                        </select>
+                        </WebQuerySelect>
                     </div>
                     <div className="flex items-end gap-3">
                         <span className="inline-flex items-center pb-2 text-xs text-gray-400">筛选条件实时生效</span>
@@ -10688,13 +10689,13 @@ export const WebProductForm: React.FC<WebProductFormProps> = ({
 
                         <div className="min-h-0 flex-1 overflow-auto p-6">
                             <div className="grid grid-cols-4 gap-3 rounded-lg bg-[#F7F8FA] p-4">
-                                <input className="q-form-input bg-white" value={taxCategoryFilters.name} onChange={e => setTaxCategoryFilters(current => ({ ...current, name: e.target.value }))} placeholder="请输入税收分类名称" />
-                                <input className="q-form-input bg-white" value={taxCategoryFilters.code} onChange={e => setTaxCategoryFilters(current => ({ ...current, code: e.target.value }))} placeholder="请输入税收分类编码" />
-                                <input className="q-form-input bg-white" value={taxCategoryFilters.rate} onChange={e => setTaxCategoryFilters(current => ({ ...current, rate: e.target.value }))} placeholder="请输入税率" />
-                                <div className="flex items-center gap-2">
-                                    <input className="q-form-input min-w-0 flex-1 bg-white" value={taxCategoryFilters.remark} onChange={e => setTaxCategoryFilters(current => ({ ...current, remark: e.target.value }))} placeholder="请输入备注" />
+                                <WebQueryInput className="q-form-input bg-white" value={taxCategoryFilters.name} onValueChange={value => setTaxCategoryFilters(current => ({ ...current, name: value }))} placeholder="请输入税收分类名称" />
+                                <WebQueryInput className="q-form-input bg-white" value={taxCategoryFilters.code} onValueChange={value => setTaxCategoryFilters(current => ({ ...current, code: value }))} placeholder="请输入税收分类编码" />
+                                <WebQueryInput className="q-form-input bg-white" value={taxCategoryFilters.rate} onValueChange={value => setTaxCategoryFilters(current => ({ ...current, rate: value }))} placeholder="请输入税率" />
+                                <WebQueryBar className="flex items-center gap-2">
+                                    <WebQueryInput className="q-form-input min-w-0 flex-1 bg-white" value={taxCategoryFilters.remark} onValueChange={value => setTaxCategoryFilters(current => ({ ...current, remark: value }))} placeholder="请输入备注" />
                                     <button type="button" onClick={() => setTaxCategoryFilters({ name: '', code: '', rate: '', remark: '' })} className="shrink-0 text-sm font-medium text-[#00A35B]">清空</button>
-                                </div>
+                                </WebQueryBar>
                             </div>
 
                             <div className="mt-5 overflow-hidden rounded-lg border border-[#E5E7EB]">

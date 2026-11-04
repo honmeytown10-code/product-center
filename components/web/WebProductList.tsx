@@ -1,3 +1,5 @@
+import { matchesQueryKeyword } from './queryKeyword';
+import { WebQuerySearch, WebQueryBar, WebQueryInput, WebQueryMore, WebQuerySchemes, WebQuerySelect } from './WebQueryControls';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -113,6 +115,7 @@ export const WebProductList: React.FC<{
   const { products, categories, addProduct, updateProduct, deleteProduct, toggleShelfStatus } = useProducts();
   const [activeTab, setActiveTab] = useState<ProductTab>(initialTab);
   const [batchDialog, setBatchDialog] = useState<'price' | 'template' | 'enable' | null>(null);
+  const [searchType, setSearchType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportDropdown, setShowImportDropdown] = useState(false);
   const [showToolbarMoreDropdown, setShowToolbarMoreDropdown] = useState(false);
@@ -153,9 +156,9 @@ export const WebProductList: React.FC<{
     if (appliedFilters.backendCategory !== 'all' && product.category !== appliedFilters.backendCategory) return false;
     if (appliedFilters.frontendCategory !== 'all' && getFrontendCategoryName(product) !== appliedFilters.frontendCategory) return false;
     if (appliedFilters.productType !== 'all' && (product.type === 'combo' ? 'combo' : 'standard') !== appliedFilters.productType) return false;
-    if (searchQuery && !product.name.toLowerCase().includes(searchQuery.toLowerCase()) && !product.skuCode.includes(searchQuery) && !product.id.includes(searchQuery)) return false;
+    if (!matchesQueryKeyword(searchQuery, searchType, {name:product.name,id:product.id,sku:product.skuCode})) return false;
     return true;
-  }), [activeTab, appliedFilters, products, searchQuery]);
+  }), [activeTab, appliedFilters, products, searchQuery, searchType]);
 
   const backendQuickCategories = useMemo(() => {
     const names = Array.from(new Set([...categories.map(item => item.name), ...categorySourceProducts.map(item => item.category).filter(Boolean)]));
@@ -216,6 +219,7 @@ export const WebProductList: React.FC<{
     setDraftFilters(DEFAULT_FILTERS);
     setAppliedFilters(DEFAULT_FILTERS);
     setSelectedQuickCategory(null);
+    setSearchType('all');
     setSearchQuery('');
   };
 
@@ -318,94 +322,20 @@ export const WebProductList: React.FC<{
         </div>
       </div>
 
-      <div className="console-library-filters shrink-0 space-y-3 bg-white px-4 py-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex h-[36px] w-[200px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
-            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">商品ID:</span>
-            <input
-              className="w-full flex-1 text-sm outline-none"
-              placeholder="请输入"
-              value={draftFilters.productId}
-              onChange={e => setDraftFilters(prev => ({ ...prev, productId: e.target.value }))}
-            />
-          </div>
-          <div className="flex h-[36px] w-[200px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
-            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">SKUID:</span>
-            <input
-              className="w-full flex-1 text-sm outline-none"
-              placeholder="请输入"
-              value={draftFilters.skuId}
-              onChange={e => setDraftFilters(prev => ({ ...prev, skuId: e.target.value }))}
-            />
-          </div>
-          <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
-            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">前台分类:</span>
-            <select className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none" value={draftFilters.frontendCategory} onChange={e => setDraftFilters(prev => ({ ...prev, frontendCategory: e.target.value }))}>
-              <option value="all">全部</option>
-              {allFrontendCategories.map(name => <option key={name} value={name}>{name}</option>)}
-            </select>
-            {draftFilters.frontendCategory !== 'all' ? <X size={14} className="ml-1 cursor-pointer text-gray-400 hover:text-red-500" onClick={() => setDraftFilters(prev => ({ ...prev, frontendCategory: 'all' }))} /> : <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />}
-          </div>
-          <div className="group flex h-[36px] w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
-            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">后台分类:</span>
-            <select
-              className="w-full flex-1 cursor-pointer bg-transparent text-sm text-[#333] outline-none"
-              value={draftFilters.backendCategory}
-              onChange={e => setDraftFilters(prev => ({ ...prev, backendCategory: e.target.value }))}
-            >
-              <option value="all">全部</option>
-              {backendQuickCategories.map(item => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            {draftFilters.backendCategory !== 'all' ? (
-              <X
-                size={14}
-                className="ml-1 cursor-pointer text-gray-400 hover:text-red-500"
-                onClick={() => setDraftFilters(prev => ({ ...prev, backendCategory: 'all' }))}
-              />
-            ) : (
-              <ChevronDown size={14} className="text-gray-400 group-hover:text-[#00C06B]" />
-            )}
-          </div>
-          <div className="flex h-[36px] w-[240px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 transition-colors hover:border-[#00C06B]">
-            <span className="mr-2 whitespace-nowrap text-xs text-gray-500">商品类型:</span>
-            <select
-              className="w-full flex-1 cursor-pointer bg-transparent text-sm outline-none"
-              value={draftFilters.productType}
-              onChange={e => setDraftFilters(prev => ({ ...prev, productType: e.target.value }))}
-            >
-              <option value="all">全部</option>
-              <option value="standard">标准商品</option>
-              <option value="combo">套餐商品</option>
-            </select>
-            {draftFilters.productType !== 'all' && (
-              <X size={14} className="ml-1 cursor-pointer text-gray-400 hover:text-red-500" onClick={() => setDraftFilters(prev => ({ ...prev, productType: 'all' }))} />
-            )}
-          </div>
-
-          <button onClick={() => showNotice('当前页面已展示全部可用筛选条件')} className="flex h-[36px] items-center rounded-md border border-[#E8E8E8] bg-white px-4 text-[13px] text-[#666] transition-all hover:border-[#00C06B] hover:bg-gray-50 hover:text-[#00C06B]">
-            <Plus size={14} className="mr-1" /> 添加筛选
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <button onClick={() => showNotice('快捷筛选已保存')} className="flex items-center rounded-md border border-[#E8E8E8] bg-white px-4 py-1.5 text-[13px] text-[#333] transition-all hover:bg-gray-50">
-              <Box size={14} className="mr-2 text-gray-400" /> 保存快捷筛选项
-            </button>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button onClick={handleResetFilters} className="h-[36px] rounded-md border border-[#E8E8E8] bg-white px-5 text-[13px] text-[#333] transition-colors hover:bg-gray-50 hover:text-[#00C06B]">
-              重置
-            </button>
-            <button onClick={handleApplyFilters} className="h-[36px] rounded-md bg-[#00C06B] px-6 text-[13px] font-bold text-white transition-all hover:bg-[#00A35B] active:scale-95">
-              查询
-            </button>
-          </div>
-        </div>
+      <div className="console-library-filters shrink-0 bg-white px-4 py-3">
+        <WebQueryBar className="flex items-center gap-2" onSearch={handleApplyFilters}>
+          <WebQuerySearch searchType={searchType} onSearchTypeChange={setSearchType} searchOptions={[{value:'all',label:'全部'},{value:'name',label:'商品名称'},{value:'id',label:'商品ID'},{value:'sku',label:'SKUID'}]} aria-label="搜索商品" value={searchQuery} onValueChange={setSearchQuery} placeholder="商品名称 / 商品ID / SKUID" className="w-[310px]" />
+          <WebQuerySelect aria-label="前台分类筛选" value={draftFilters.frontendCategory} onValueChange={value => setDraftFilters(prev => ({ ...prev, frontendCategory: value }))} className="w-[170px]"><option value="all">全部前台分类</option>{allFrontendCategories.map(name => <option key={name} value={name}>{name}</option>)}</WebQuerySelect>
+          <WebQueryMore activeCount={[draftFilters.productId, draftFilters.skuId, draftFilters.backendCategory === 'all' ? '' : draftFilters.backendCategory, draftFilters.productType === 'all' ? '' : draftFilters.productType].filter(Boolean).length} onApply={handleApplyFilters} onReset={handleResetFilters}>
+            <label>商品ID<WebQueryInput aria-label="商品ID筛选" value={draftFilters.productId} onValueChange={value => setDraftFilters(prev => ({ ...prev, productId: value }))} placeholder="请输入商品ID" showIcon={false} /></label>
+            <label>SKUID<WebQueryInput aria-label="SKUID筛选" value={draftFilters.skuId} onValueChange={value => setDraftFilters(prev => ({ ...prev, skuId: value }))} placeholder="请输入SKUID" showIcon={false} /></label>
+            <label>后台分类<WebQuerySelect aria-label="后台分类筛选" value={draftFilters.backendCategory} onValueChange={value => setDraftFilters(prev => ({ ...prev, backendCategory: value }))}><option value="all">全部后台分类</option>{Array.from(new Set([...categories.map(item=>item.name),...products.map(item=>item.category)])).filter(Boolean).map(name=><option key={name} value={name}>{name}</option>)}</WebQuerySelect></label>
+            <label>商品类型<WebQuerySelect aria-label="商品类型筛选" value={draftFilters.productType} onValueChange={value => setDraftFilters(prev => ({ ...prev, productType: value }))}><option value="all">全部商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option></WebQuerySelect></label>
+          </WebQueryMore>
+          <WebQuerySchemes scope="product-library" value={{ ...draftFilters, keyword: searchQuery, searchType }} onApply={({keyword,searchType:field,...saved}) => { setSearchType(field || 'all'); setSearchQuery(keyword); setDraftFilters(saved); setAppliedFilters(saved); setSelectedProductIds([]); }} />
+          <div className="ml-auto flex items-center gap-2"><button type="button" className="cq-button" onClick={handleResetFilters}>重置</button><button type="button" className="cq-button primary" onClick={handleApplyFilters}>查询</button></div>
+        </WebQueryBar>
+        {[appliedFilters.productId,appliedFilters.skuId,appliedFilters.backendCategory === 'all' ? '' : appliedFilters.backendCategory,appliedFilters.productType === 'all' ? '' : appliedFilters.productType].some(Boolean) && <div className="cq-applied-tags" aria-label="已应用筛选">{Object.entries(appliedFilters).filter(([,value])=>value && value!=='all').map(([key,value])=><button type="button" key={key} onClick={()=>{const next={...appliedFilters,[key]:key==='productId'||key==='skuId'?'':'all'};setDraftFilters(next);setAppliedFilters(next);}}><span>{{productId:'商品ID',skuId:'SKUID',frontendCategory:'前台分类',backendCategory:'后台分类',productType:'商品类型'}[key]}：{value==='standard'?'标准商品':value==='combo'?'套餐商品':value}</span><X size={12}/></button>)}</div>}
       </div>
 
       <div className="console-library-results flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-2">
@@ -460,15 +390,7 @@ export const WebProductList: React.FC<{
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="group relative">
-                  <Search size={14} className="absolute left-3 top-2.5 text-gray-400 transition-colors group-hover:text-[#00C06B]" />
-                  <input
-                    className="h-[36px] w-[240px] rounded-md border border-[#E8E8E8] bg-white pl-9 pr-4 text-[13px] transition-colors focus:border-[#00C06B] focus:outline-none"
-                    placeholder="搜索商品名称、商品ID、SKUID"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
-                </div>
+                <span className="text-[12px] text-[#909399]">共 {filteredProducts.length} 个商品</span>
               </div>
               <div className="flex items-center space-x-3">
                 <div className="relative">
@@ -812,7 +734,7 @@ const ProductScopeDrawer: React.FC<{ product: Product; records: StoreProductReco
       <div className="flex-1 overflow-auto p-5">
         <h3 className="mb-3 text-sm font-semibold">商品库销售渠道</h3><div className="mb-6 flex flex-wrap gap-2">{scope?.channelIds?.length ? scope.channelIds.map(id => <span key={id} className="rounded bg-[#F2F3F5] px-3 py-1 text-[13px] text-[#4E5969]">{getOmnichannelChannel(id).name}</span>) : <span className="text-sm text-[#667085]">尚未设置</span>}</div>
         <h3 className="mb-2 text-sm font-semibold">已有门店商品 · {new Set(records.map(record => record.storeId)).size} 家门店</h3><p className="mb-4 text-[13px] leading-6 text-[#667085]">按当前门店商品展示，包含已下架商品。手动下发、删除和下架的结果会在此更新。</p>
-        {records.length ? <><input aria-label="搜索门店商品" placeholder="搜索门店名称、编码或渠道" value={keyword} onChange={event => setKeyword(event.target.value)} className="mb-3 h-9 w-full rounded border border-[#D9DDE3] px-3 text-sm focus:border-[#00B460] focus:outline-none" /><table className="w-full text-left text-sm"><thead className="bg-[#F7F8FA] text-[#667085]"><tr><th className="p-3 font-medium">门店</th><th className="p-3 font-medium">渠道</th><th className="p-3 font-medium">状态</th></tr></thead><tbody>{rows.map(row => <tr key={row.id + row.channel} className="border-b border-[#F0F1F2]"><td className="p-3">{row.storeName}<small className="block text-[#667085]">{row.storeId}</small></td><td className="p-3">{getOmnichannelChannel(fromStoreChannel(row.channel)).name}</td><td className="p-3"><span className={row.status === 'on_shelf' ? 'text-[#008F4C]' : 'text-[#667085]'}>{row.status === 'on_shelf' ? '已上架' : '已下架'}</span><small className="block text-[#667085]">库存 {row.stockCount ?? '—'}</small></td></tr>)}{!rows.length && <tr><td colSpan={3} className="p-8 text-center text-[#667085]">未找到符合条件的门店商品</td></tr>}</tbody></table></> : <div className="py-12 text-center"><Package size={28} className="mx-auto mb-4 text-[#667085]" /><h3 className="text-sm font-semibold">暂无门店商品</h3><p className="mt-2 text-[13px] text-[#667085]">下发任务完成后，此处展示生成的门店商品。</p></div>}
+        {records.length ? <><WebQueryInput aria-label="搜索门店商品" placeholder="搜索门店名称、编码或渠道" value={keyword} onValueChange={value => setKeyword(value)} className="mb-3 h-9 w-full rounded border border-[#D9DDE3] px-3 text-sm focus:border-[#00B460] focus:outline-none" /><table className="w-full text-left text-sm"><thead className="bg-[#F7F8FA] text-[#667085]"><tr><th className="p-3 font-medium">门店</th><th className="p-3 font-medium">渠道</th><th className="p-3 font-medium">状态</th></tr></thead><tbody>{rows.map(row => <tr key={row.id + row.channel} className="border-b border-[#F0F1F2]"><td className="p-3">{row.storeName}<small className="block text-[#667085]">{row.storeId}</small></td><td className="p-3">{getOmnichannelChannel(fromStoreChannel(row.channel)).name}</td><td className="p-3"><span className={row.status === 'on_shelf' ? 'text-[#008F4C]' : 'text-[#667085]'}>{row.status === 'on_shelf' ? '已上架' : '已下架'}</span><small className="block text-[#667085]">库存 {row.stockCount ?? '—'}</small></td></tr>)}{!rows.length && <tr><td colSpan={3} className="p-8 text-center text-[#667085]">未找到符合条件的门店商品</td></tr>}</tbody></table></> : <div className="py-12 text-center"><Package size={28} className="mx-auto mb-4 text-[#667085]" /><h3 className="text-sm font-semibold">暂无门店商品</h3><p className="mt-2 text-[13px] text-[#667085]">下发任务完成后，此处展示生成的门店商品。</p></div>}
         <p className="mt-5 text-xs leading-5 text-[#667085]">门店在每次下发时选择；任务执行进度请查看同步任务。</p>
       </div><footer className="flex justify-end gap-3 border-t border-[#E5E6EB] p-4"><button type="button" className="h-9 rounded border border-[#D9DDE3] px-4 text-sm text-[#4E5969] hover:bg-[#F7F8FA]" onClick={onClose}>关闭</button><button type="button" className="h-9 rounded bg-[#00B460] px-4 text-sm font-medium text-white hover:bg-[#009F55]" onClick={onEdit}>编辑商品</button></footer>
     </div></div>, document.body);

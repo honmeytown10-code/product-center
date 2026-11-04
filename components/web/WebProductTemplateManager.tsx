@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -260,11 +261,11 @@ export const WebProductTemplateManager: React.FC<{ onNavigate?: (path: string) =
         {message && <div className="flex shrink-0 items-center justify-between border-b border-[#CBEFDC] bg-[#F1FFF7] px-4 py-2 text-sm text-[#087A49]"><span>{message}</span><button type="button" onClick={() => setMessage('')} className="rounded p-1 hover:bg-white/70" aria-label="关闭提示"><X size={14} /></button></div>}
 
         <div className="flex shrink-0 items-center justify-between border-b border-[#EDEDED] px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="搜索模板名称、描述、ID" className="w-64 rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" /></div>
-            <select value={channelFilter} onChange={event => setChannelFilter(event.target.value as typeof channelFilter)} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#555] outline-none focus:border-[#00C06B]"><option value="all">全部渠道</option>{ALL_OMNICHANNEL_CHANNELS.map(channel => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</select>
+          <WebQueryBar className="flex items-center gap-3">
+            <div className="relative"><WebQueryInput showIcon value={keyword} onValueChange={value => setKeyword(value)} placeholder="搜索模板名称、描述、ID" className="w-64 rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]" /></div>
+            <WebQuerySelect value={channelFilter} onValueChange={value => setChannelFilter(value as typeof channelFilter)} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#555] outline-none focus:border-[#00C06B]"><option value="all">全部渠道</option>{ALL_OMNICHANNEL_CHANNELS.map(channel => <option key={channel.id} value={channel.id}>{channel.name}</option>)}</WebQuerySelect>
             {(keyword || channelFilter !== 'all' || statusFilter !== 'all') && <button type="button" onClick={() => { setKeyword(''); setChannelFilter('all'); setStatusFilter('all'); }} className="text-sm text-[#00A35B]">清空筛选</button>}
-          </div>
+          </WebQueryBar>
           <div className="flex items-center gap-3"><button type="button" onClick={() => { setImportFile(''); setShowImport(true); }} className="inline-flex items-center rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm text-[#555] hover:bg-[#FAFAFA]"><Upload size={15} className="mr-1.5" />导入</button><button type="button" onClick={exportTemplates} className="inline-flex items-center rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm text-[#555] hover:bg-[#FAFAFA]"><Download size={15} className="mr-1.5" />导出</button></div>
         </div>
 

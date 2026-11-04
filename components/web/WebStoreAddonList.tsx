@@ -1,3 +1,4 @@
+import { WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Minus, ChevronDown, MoreHorizontal, FileUp, X, AlertTriangle,
@@ -208,7 +209,7 @@ const MOCK_STORE_ADDONS: StoreAddonRecord[] = [
 const FilterInput = ({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (value: string) => void }) => (
   <div className="flex items-center">
     <span className="text-xs text-[#666] mr-2 shrink-0">{label}</span>
-    <input value={value} onChange={event => onChange(event.target.value)} className="w-[170px] h-[34px] px-3 border border-[#E8E8E8] rounded text-sm focus:border-[#00C06B] focus:outline-none transition-colors" placeholder={placeholder} />
+    <WebQueryInput value={value} onValueChange={value => onChange(value)} className="w-[170px] h-[34px] px-3 border border-[#E8E8E8] rounded text-sm focus:border-[#00C06B] focus:outline-none transition-colors" placeholder={placeholder} />
   </div>
 );
 
@@ -226,16 +227,16 @@ const FilterNativeSelect = ({
   <div className="flex items-center">
     <span className="text-xs text-[#666] mr-2 shrink-0">{label}</span>
     <div className="relative">
-      <select
+      <WebQuerySelect
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onValueChange={value => onChange(value)}
         className="appearance-none w-[170px] h-[34px] pl-3 pr-8 border border-[#E8E8E8] rounded text-sm bg-white focus:border-[#00C06B] focus:outline-none transition-colors"
       >
         {options.map(option => (
           <option key={option.id} value={option.id}>{option.name}</option>
         ))}
-      </select>
-      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" />
+      </WebQuerySelect>
+
     </div>
   </div>
 );
@@ -244,10 +245,10 @@ const FilterSelect = ({ label, value, onChange, options }: { label: string; valu
   <div className="flex items-center">
     <span className="text-xs text-[#666] mr-2 shrink-0">{label}</span>
     <div className="relative">
-      <select value={value} onChange={event => onChange(event.target.value)} className="h-[34px] w-[150px] appearance-none rounded border border-[#E8E8E8] bg-white px-3 pr-8 text-sm text-[#333] outline-none hover:border-[#00C06B]">
+      <WebQuerySelect value={value} onValueChange={value => onChange(value)} className="h-[34px] w-[150px] appearance-none rounded border border-[#E8E8E8] bg-white px-3 pr-8 text-sm text-[#333] outline-none hover:border-[#00C06B]">
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-      <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#999]" />
+      </WebQuerySelect>
+
     </div>
   </div>
 );

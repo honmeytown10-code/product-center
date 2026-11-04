@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -625,10 +626,10 @@ export const WebImportModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
               <div className="flex items-center justify-between">
                 <div className="text-sm font-bold text-[#344054]">选择门店</div>
                 <div className="relative w-[260px]">
-                  <Search size={15} className="absolute left-3 top-2.5 text-[#98A2B3]" />
-                  <input
+
+                  <WebQueryInput showIcon
                     value={storeKeyword}
-                    onChange={event => setStoreKeyword(event.target.value)}
+                    onValueChange={value => setStoreKeyword(value)}
                     className="h-9 w-full rounded-lg border border-[#D8E0E8] pl-8 pr-3 text-sm outline-none focus:border-[#00C06B]"
                     placeholder="搜索门店"
                   />

@@ -1,3 +1,5 @@
+import { matchesQueryKeyword } from './queryKeyword';
+import { WebQuerySearch, WebQueryBar, WebQueryInput, WebQueryMore, WebQuerySchemes, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -280,6 +282,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
       ? initialGroupId || ''
       : availableGroups[0]?.id || ''
   );
+  const [searchType, setSearchType] = useState('all');
   const [quickSearch, setQuickSearch] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS);
@@ -429,10 +432,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   const visibleProducts = effectiveProducts
     .filter(product => (
       activeProductIds.includes(product.id)
-      && (!quickSearch.trim()
-        || product.name.toLowerCase().includes(quickSearch.trim().toLowerCase())
-        || product.id.includes(quickSearch.trim())
-        || product.skuCode.includes(quickSearch.trim()))
+      && matchesQueryKeyword(quickSearch, searchType, {name:product.name,id:product.id,sku:product.skuCode})
       && (!appliedFilters.productId.trim() || product.id.includes(appliedFilters.productId.trim()))
       && (!appliedFilters.skuId.trim() || product.skuCode.includes(appliedFilters.skuId.trim()))
       && (appliedFilters.frontendCategory === 'all' || getFrontendCategoryName(product) === appliedFilters.frontendCategory)
@@ -644,6 +644,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   };
 
   const resetFilters = () => {
+    setSearchType('all');
     setQuickSearch('');
     setDraftFilters(DEFAULT_FILTERS);
     setAppliedFilters(DEFAULT_FILTERS);
@@ -900,62 +901,23 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 bg-[#FAFBFC] px-4 py-3">
-            <label className="flex h-9 w-[190px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 focus-within:border-[#00C06B]">
-              <span className="mr-2 shrink-0 text-xs text-gray-500">商品ID:</span>
-              <input
-                value={draftFilters.productId}
-                onChange={event => setDraftFilters(prev => ({ ...prev, productId: event.target.value }))}
-                className="min-w-0 flex-1 text-sm outline-none"
-                placeholder="请输入"
-              />
-            </label>
-            <label className="flex h-9 w-[190px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 focus-within:border-[#00C06B]">
-              <span className="mr-2 shrink-0 text-xs text-gray-500">SKUID:</span>
-              <input
-                value={draftFilters.skuId}
-                onChange={event => setDraftFilters(prev => ({ ...prev, skuId: event.target.value }))}
-                className="min-w-0 flex-1 text-sm outline-none"
-                placeholder="请输入"
-              />
-            </label>
-            <label className="flex h-9 w-[220px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 focus-within:border-[#00C06B]">
-              <span className="mr-2 shrink-0 text-xs text-gray-500">前台分类:</span>
-              <select
-                value={draftFilters.frontendCategory}
-                onChange={event => setDraftFilters(prev => ({ ...prev, frontendCategory: event.target.value }))}
-                className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm outline-none"
-              >
-                <option value="all">全部</option>
-                {frontendCategories.map(category => <option key={category} value={category}>{category}</option>)}
-              </select>
-            </label>
-            <label className="flex h-9 w-[200px] items-center rounded-md border border-[#E8E8E8] bg-white px-3 focus-within:border-[#00C06B]">
-              <span className="mr-2 shrink-0 text-xs text-gray-500">商品类型:</span>
-              <select
-                value={draftFilters.productType}
-                onChange={event => setDraftFilters(prev => ({ ...prev, productType: event.target.value }))}
-                className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm outline-none"
-              >
-                <option value="all">全部</option>
-                <option value="standard">标准商品</option>
-                <option value="combo">套餐商品</option>
-              </select>
-            </label>
-            <div className="ml-auto flex items-center gap-2">
-              <button type="button" onClick={resetFilters} className="console-secondary-button">重置</button>
-              <button type="button" onClick={() => setAppliedFilters(draftFilters)} className="console-primary-button">查询</button>
-            </div>
-          </div>
+          <WebQueryBar className="flex flex-wrap items-center gap-2 bg-white px-4 py-3" onSearch={() => setAppliedFilters(draftFilters)}>
+            <WebQuerySearch searchType={searchType} onSearchTypeChange={setSearchType} searchOptions={[{value:'all',label:'全部'},{value:'name',label:'商品名称'},{value:'id',label:'商品ID'},{value:'sku',label:'SKUID'}]} aria-label="搜索渠道商品" value={quickSearch} onValueChange={setQuickSearch} placeholder="商品名称 / 商品ID / SKUID" className="w-[310px]" />
+            <WebQuerySelect aria-label="前台分类筛选" value={draftFilters.frontendCategory} onValueChange={value=>setDraftFilters(prev=>({...prev,frontendCategory:value}))} className="w-[170px]"><option value="all">全部前台分类</option>{frontendCategories.map(category=><option key={category} value={category}>{category}</option>)}</WebQuerySelect>
+            <WebQueryMore activeCount={[draftFilters.productId,draftFilters.skuId,draftFilters.productType==='all'?'':draftFilters.productType].filter(Boolean).length} onApply={()=>setAppliedFilters(draftFilters)} onReset={resetFilters}>
+              <label>商品ID<WebQueryInput aria-label="渠道商品ID筛选" value={draftFilters.productId} onValueChange={value=>setDraftFilters(prev=>({...prev,productId:value}))} placeholder="请输入商品ID" showIcon={false}/></label>
+              <label>SKUID<WebQueryInput aria-label="渠道SKUID筛选" value={draftFilters.skuId} onValueChange={value=>setDraftFilters(prev=>({...prev,skuId:value}))} placeholder="请输入SKUID" showIcon={false}/></label>
+              <label>商品类型<WebQuerySelect aria-label="渠道商品类型筛选" value={draftFilters.productType} onValueChange={value=>setDraftFilters(prev=>({...prev,productType:value}))}><option value="all">全部商品类型</option><option value="standard">标准商品</option><option value="combo">套餐商品</option></WebQuerySelect></label>
+            </WebQueryMore>
+            <WebQuerySchemes scope={'channel-library:'+activeGroup.id} value={{...draftFilters,keyword:quickSearch,searchType}} onApply={({keyword,searchType:field,...saved})=>{setSearchType(field || 'all');setQuickSearch(keyword);setDraftFilters(saved);setAppliedFilters(saved);setSelectedProductIds([]);}}/>
+            <div className="ml-auto flex items-center gap-2"><button type="button" onClick={resetFilters} className="cq-button">重置</button><button type="button" onClick={()=>setAppliedFilters(draftFilters)} className="cq-button primary">查询</button></div>
+          </WebQueryBar>
         </section>
 
         <section className="console-panel flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#E8E8E8] px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-9 w-[300px] min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 focus-within:border-[#00C06B]">
-                <Search size={15} className="mr-2 text-gray-400" />
-                <input value={quickSearch} onChange={event => setQuickSearch(event.target.value)} className="w-full text-sm outline-none" placeholder="搜索商品名称、商品ID、SKUID" />
-              </div>
+              <span className="text-[12px] text-[#909399]">渠道商品</span>
               {selectedProductIds.length > 0 && (
                 <div className="flex shrink-0 items-center gap-2 text-xs text-[#4E5969]">
                   <span>已选 <b className="text-[#008F53]">{selectedProductIds.length}</b> 个</span>

@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, MoreHorizontal, Plus, Search, X } from 'lucide-react';
 import { WebProductSelectorDialog, type SelectableProduct } from './WebProductSelectorDialog';
@@ -142,19 +143,19 @@ export const WebRequiredProductPolicyList: React.FC<{
       {toast && <div className="absolute left-1/2 top-4 z-[110] -translate-x-1/2 rounded-md bg-[#1D2129] px-4 py-2 text-[13px] text-white shadow-lg">{toast}</div>}
       <div className="console-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E9EDF2] px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2">
+          <WebQueryBar className="flex min-w-0 items-center gap-2">
             <label className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-              <input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="请输入方案名称" className="h-9 w-[280px] rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" />
+
+              <WebQueryInput showIcon value={keyword} onValueChange={value => setKeyword(value)} placeholder="请输入方案名称" className="h-9 w-[280px] rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" />
             </label>
             <label className="relative">
-              <select value={status} onChange={event => setStatus(event.target.value as typeof status)} className="h-9 w-36 appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]">
+              <WebQuerySelect value={status} onValueChange={value => setStatus(value as typeof status)} className="h-9 w-36 appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px]">
                 <option value="all">状态：全部</option><option value="enabled">启用</option><option value="disabled">禁用</option>
-              </select>
-              <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              </WebQuerySelect>
+
             </label>
             <button onClick={reset} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px]">重置</button>
-          </div>
+          </WebQueryBar>
           <div className="flex shrink-0 gap-2">
             <button onClick={openExceptionSettings} className="h-9 rounded-md border border-[#DDE2E8] px-4 text-[13px] text-[#4E5969]">特例设置</button>
             <button onClick={onCreatePolicy} className="inline-flex h-9 items-center rounded-md bg-[#00B460] px-4 text-[13px] font-medium text-white"><Plus size={15} className="mr-1.5" />新增必选商品</button>

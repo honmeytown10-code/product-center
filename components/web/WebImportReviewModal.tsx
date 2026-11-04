@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -304,8 +305,8 @@ const ProductPreviewTable = ({ data }: { data: AnalysisResult }) => {
             </h4>
             <div className="flex items-center space-x-3">
                 <div className="relative">
-                    <Search size={14} className="absolute left-3 top-2 text-gray-400"/>
-                    <input value={keyword} onChange={event => setKeyword(event.target.value)} className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white outline-none focus:border-gray-400 w-48" placeholder="搜索商品..."/>
+
+                    <WebQueryInput showIcon value={keyword} onValueChange={value => setKeyword(value)} className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white outline-none focus:border-gray-400 w-48" placeholder="搜索商品..."/>
                 </div>
                 <span className="text-xs text-gray-400">仅展示部分字段</span>
             </div>

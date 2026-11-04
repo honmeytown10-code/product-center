@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import { WebDomainTaskDialog, rememberDomainSource } from './WebDomainTaskDialog';
 import { useProducts } from '../../context';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -1887,7 +1888,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
               <button onClick={handleSearchFrontendCategories} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-[#00A35B]">搜索</button>
               <button onClick={handleResetFrontendCategories} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475] transition-colors hover:bg-gray-50">重置</button>
             </div>
-            <div className="relative flex space-x-3">
+            <WebQueryBar className="relative flex space-x-3">
               <button
                 onClick={() => setShowColumnPanel(prev => !prev)}
                 className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50"
@@ -1900,10 +1901,10 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
               {showColumnPanel && (
                 <div className="absolute right-0 top-12 z-40 w-[320px] rounded-2xl border border-[#E8E8E8] bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
                   <div className="relative mb-4">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-                    <input
+
+                    <WebQueryInput showIcon
                       value={columnKeyword}
-                      onChange={e => setColumnKeyword(e.target.value)}
+                      onValueChange={value => setColumnKeyword(value)}
                       placeholder="搜索"
                       className="h-10 w-full rounded-lg border border-[#E8E8E8] pl-9 pr-3 text-sm outline-none focus:border-[#00C06B]"
                     />
@@ -1934,7 +1935,7 @@ export const WebCategoryListManager: React.FC<WebCategoryListManagerProps> = ({ 
                   </div>
                 </div>
               )}
-            </div>
+            </WebQueryBar>
           </div>
 
           <div className="flex-1 overflow-auto">
@@ -2455,19 +2456,19 @@ const LinkProductsModal = ({
         </div>
         <div className="px-8 py-6">
           <div className="mb-5 rounded-xl bg-[#F8FAFB] px-4 py-4">
-            <div className="flex items-center gap-3">
+            <WebQueryBar className="flex items-center gap-3">
               <div className="flex h-10 items-center rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm text-[#333]">商品名称</div>
               <div className="relative flex-1">
-                <input
+                <WebQueryInput
                   value={keyword}
-                  onChange={e => setKeyword(e.target.value)}
+                  onValueChange={value => setKeyword(value)}
                   placeholder="请输入商品名称"
                   className="h-10 w-full rounded-lg border border-[#E8E8E8] bg-white px-3 text-sm outline-none focus:border-[#00C06B]"
                 />
               </div>
               <button type="button" onClick={() => setKeyword(current => current.trim())} className="rounded-lg bg-[#00C06B] px-5 py-2 text-sm font-bold text-white">查询</button>
               <button onClick={() => setKeyword('')} className="rounded-lg border border-[#D9DDE7] bg-white px-5 py-2 text-sm font-bold text-[#5B6475]">重置</button>
-            </div>
+            </WebQueryBar>
           </div>
           <div className="overflow-hidden rounded-xl border border-[#EEF1F5]">
             <div className="grid grid-cols-[52px_minmax(0,1.4fr)_140px_220px_120px] bg-[#F8FAFB] px-4 py-3 text-sm font-bold text-[#5B6475]">
@@ -3033,13 +3034,13 @@ const StoreCategoryAssociationDrawer = ({
             <span>影响门店 <strong className="ml-1 text-[#1F2129]">{impact.storeCount}</strong> 家</span>
             <span>商品关联 <strong className="ml-1 text-[#D97706]">{impact.storeProductRelationCount}</strong> 条</span>
           </div>
-          <div className="flex items-center gap-3">
+          <WebQueryBar className="flex items-center gap-3">
             <div className="relative w-[410px]">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
-              <input
+
+              <WebQueryInput showIcon
                 value={keyword}
-                onChange={event => {
-                  setKeyword(event.target.value);
+                onValueChange={value => {
+                  setKeyword(value);
                   setPage(1);
                 }}
                 placeholder="搜索门店名称/编码、商品名称/ID"
@@ -3047,20 +3048,20 @@ const StoreCategoryAssociationDrawer = ({
               />
             </div>
             <div className="relative w-[210px]">
-              <select
+              <WebQuerySelect
                 value={channelName}
-                onChange={event => {
-                  setChannelName(event.target.value);
+                onValueChange={value => {
+                  setChannelName(value);
                   setPage(1);
                 }}
                 className="h-10 w-full appearance-none rounded-md border border-[#D9DDE7] bg-white px-3 pr-9 text-sm text-[#4E5969] outline-none focus:border-[#00C06B]"
               >
                 <option value="">全部渠道</option>
                 {channelOptions.map(option => <option key={option} value={option}>{option}</option>)}
-              </select>
-              <ChevronDown size={17} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+              </WebQuerySelect>
+
             </div>
-          </div>
+          </WebQueryBar>
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto px-7 py-5">

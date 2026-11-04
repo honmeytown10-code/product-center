@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, Check, RotateCcw, Search, ShieldOff, X } from 'lucide-react';
 
@@ -57,15 +58,15 @@ export const WebMappingExemptionManager: React.FC<Props> = ({ channelName, rows,
           </div>
         </div>
 
-        <div className="flex items-center gap-3 border-b border-[#E5E6EB] px-6 py-3">
+        <WebQueryBar className="flex items-center gap-3 border-b border-[#E5E6EB] px-6 py-3">
           <div className="flex rounded-md bg-[#F2F3F5] p-0.5">
             <button type="button" onClick={() => { setMode('list'); setSelectedIds([]); }} className={`h-8 rounded px-3 text-[12px] ${mode === 'list' ? 'bg-white font-semibold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>已免绑定 {currentRows.length}</button>
             <button type="button" onClick={() => { setMode('add'); setSelectedIds([]); }} className={`h-8 rounded px-3 text-[12px] ${mode === 'add' ? 'bg-white font-semibold text-[#00A35B] shadow-sm' : 'text-[#667085]'}`}>添加商品</button>
           </div>
           <label className="ml-auto flex h-9 w-[320px] items-center rounded-md border border-[#C9CDD4] bg-white px-3">
-            <Search size={15} className="mr-2 text-[#86909C]" /><input value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="搜索平台商品名称、商品 ID、SKU 码" className="min-w-0 flex-1 text-[12px] outline-none" />
+            <WebQueryInput embedded showIcon value={keyword} onValueChange={value => setKeyword(value)} placeholder="搜索平台商品名称、商品 ID、SKU 码" className="min-w-0 flex-1 text-[12px] outline-none" />
           </label>
-        </div>
+        </WebQueryBar>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="overflow-x-auto rounded-md border border-[#E5E6EB]">

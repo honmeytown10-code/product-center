@@ -1,3 +1,4 @@
+import { WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useState } from 'react';
 import { LoaderCircle, PackageOpen, Plus, Search, Send } from 'lucide-react';
 import type { Product } from '../../types';
@@ -70,20 +71,20 @@ export const WebBlindBagProducts: React.FC<{
         <form onSubmit={event => { event.preventDefault(); setSearch(keyword.trim()); }} className="flex shrink-0 flex-wrap items-center gap-3 px-5 py-4" data-testid="blind-bag-filters">
           <div className={`${filter} w-[340px]`}>
             <label htmlFor="blind-list-search" className="mr-2 shrink-0 text-xs text-[#667085]">商品查询：</label>
-            <Search size={14} className="mr-2 shrink-0 text-[#86909C]" />
-            <input id="blind-list-search" aria-label="搜索商品名称、商品ID、SKU编码" value={keyword} onChange={event => setKeyword(event.target.value)} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" placeholder="名称、商品ID、SKU编码" />
+
+            <WebQueryInput embedded showIcon id="blind-list-search" aria-label="搜索商品名称、商品ID、SKU编码" value={keyword} onValueChange={value => setKeyword(value)} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" placeholder="名称、商品ID、SKU编码" />
           </div>
           <div className={`${filter} w-[190px]`}>
             <label htmlFor="blind-list-status" className="mr-2 shrink-0 text-xs text-[#667085]">商品状态：</label>
-            <select id="blind-list-status" value={status} onChange={event => setStatus(event.target.value)} className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] outline-none">
+            <WebQuerySelect embedded id="blind-list-status" value={status} onValueChange={value => setStatus(value)} className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] outline-none">
               <option value="all">全部状态</option><option value="on_shelf">已启用</option><option value="off_shelf">已停用</option><option value="draft">草稿</option>
-            </select>
+            </WebQuerySelect>
           </div>
           <div className={`${filter} w-[220px]`}>
             <label htmlFor="blind-list-channel" className="mr-2 shrink-0 text-xs text-[#667085]">销售渠道：</label>
-            <select id="blind-list-channel" value={channel} onChange={event => setChannel(event.target.value)} className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] outline-none">
+            <WebQuerySelect embedded id="blind-list-channel" value={channel} onValueChange={value => setChannel(value)} className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] outline-none">
               <option value="all">全部渠道</option><option value="mini_program_dine_in">小程序堂食</option><option value="mini_program_delivery">小程序外卖</option>
-            </select>
+            </WebQuerySelect>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <button type="button" className={button} onClick={() => { setKeyword(''); setSearch(''); setStatus('all'); setChannel('all'); }}>重置</button>

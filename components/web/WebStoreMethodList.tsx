@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Store, X } from 'lucide-react';
@@ -52,13 +53,13 @@ export const WebStoreMethodList: React.FC = () => {
   };
   const toggle = (id: string) => setSelection(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
   return <div className="flex h-full min-h-0 flex-col bg-[#F5F6FA] text-[#1D2129]">
-    <div className="flex flex-wrap items-center gap-3 border-b border-[#E5E6EB] bg-white px-5 py-4">
+    <WebQueryBar className="flex flex-wrap items-center gap-3 border-b border-[#E5E6EB] bg-white px-5 py-4">
       <div className="flex items-center gap-2 text-sm"><span>机构门店</span><WebStoreScopeSelector stores={PRODUCT_SALES_SCOPE_STORES} value={storeId ? [storeId] : []} onChange={ids => { setStoreId(ids[0] || ''); setGroup('全部'); setStatus('all'); setKeyword(''); setQuery(''); setResult(''); setAction(null); }} selectionMode="single" widthClassName="w-[220px]" /></div>
-      <label className="relative"><Search size={15} className="absolute left-3 top-2.5 text-[#667085]" /><input aria-label="搜索门店做法" value={keyword} placeholder="搜索做法名称、选项或编码" onChange={event => setKeyword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') setQuery(keyword); }} className="h-9 w-[260px] rounded border border-[#D9DDE3] pl-9 pr-3 text-sm" /></label>
-      <select aria-label="做法分组" value={group} onChange={event => setGroup(event.target.value)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3 text-sm"><option value="全部">全部做法</option>{groups.map(name => <option key={name}>{name}</option>)}</select>
-      <select aria-label="做法状态" value={status} onChange={event => setStatus(event.target.value)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3 text-sm"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已禁用</option></select>
+      <label className="relative"><WebQueryInput showIcon aria-label="搜索门店做法" value={keyword} placeholder="搜索做法名称、选项或编码" onValueChange={value => setKeyword(value)} onKeyDown={event => { if (event.key === 'Enter') setQuery(keyword); }} className="h-9 w-[260px] rounded border border-[#D9DDE3] pl-9 pr-3 text-sm" /></label>
+      <WebQuerySelect aria-label="做法分组" value={group} onValueChange={value => setGroup(value)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3 text-sm"><option value="全部">全部做法</option>{groups.map(name => <option key={name}>{name}</option>)}</WebQuerySelect>
+      <WebQuerySelect aria-label="做法状态" value={status} onValueChange={value => setStatus(value)} className="h-9 rounded border border-[#D9DDE3] bg-white px-3 text-sm"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已禁用</option></WebQuerySelect>
       <button type="button" disabled={!store} className={primary} onClick={() => setQuery(keyword)}>查询</button><button type="button" className={secondary} onClick={() => { setKeyword(''); setQuery(''); setGroup('全部'); setStatus('all'); }}>重置</button>
-    </div>
+    </WebQueryBar>
     <div className="flex min-h-0 flex-1 flex-col p-4">
       {result && <div role="status" className="mb-3 flex items-center justify-between rounded bg-[#EAF8F2] px-4 py-3 text-sm text-[#008F4C]">{result}<button aria-label="关闭操作结果" onClick={() => setResult('')}><X size={16} /></button></div>}
       {!store ? <div className="flex flex-1 flex-col items-center justify-center rounded-lg bg-white p-8 text-center"><Store size={28} className="mb-4 text-[#667085]" /><h2 className="text-base font-semibold">选择要管理的门店</h2><p className="mt-3 text-sm text-[#667085]">请在上方选择门店，查看和管理该门店的做法。</p></div> : <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#E5E6EB] bg-white">

@@ -1,3 +1,4 @@
+import { WebQueryInput } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, Check, ChevronLeft, Plus, Search, X, CircleDot } from 'lucide-react';
 import type { AttributeMutexRuleRecord } from './WebAttributeMutexRuleList';
@@ -197,7 +198,7 @@ export const WebAttributeMutexRuleEditor: React.FC<{
                   </button>
                   指定商品不适用
                 </label>
-              </div>{applyScope !== 'all' && <div className="w-[620px] rounded-lg border border-[#E8E8E8] p-4"><div className="relative mb-3"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" /><input value={scopeKeyword} onChange={e => setScopeKeyword(e.target.value)} placeholder="搜索商品名称" className="h-9 w-full rounded-md border border-[#DDE2E8] pl-9 pr-3 text-sm" /></div><div className="grid grid-cols-2 gap-2">{availableProducts.map(product => <button key={product} onClick={() => setSelectedProducts(current => current.includes(product) ? current.filter(item => item !== product) : [...current, product])} className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${selectedProducts.includes(product) ? 'border-[#00B460] bg-[#F3FCF7]' : 'border-[#E8E8E8]'}`}><span>{product}</span>{selectedProducts.includes(product) && <Check size={15} className="text-[#00B460]" />}</button>)}</div><div className="mt-3 text-xs text-[#667085]">已选择 {selectedProducts.length} 个商品</div></div>}</div>
+              </div>{applyScope !== 'all' && <div className="w-[620px] rounded-lg border border-[#E8E8E8] p-4"><div className="relative mb-3"><WebQueryInput showIcon value={scopeKeyword} onValueChange={value => setScopeKeyword(value)} placeholder="搜索商品名称" className="h-9 w-full rounded-md border border-[#DDE2E8] pl-9 pr-3 text-sm" /></div><div className="grid grid-cols-2 gap-2">{availableProducts.map(product => <button key={product} onClick={() => setSelectedProducts(current => current.includes(product) ? current.filter(item => item !== product) : [...current, product])} className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${selectedProducts.includes(product) ? 'border-[#00B460] bg-[#F3FCF7]' : 'border-[#E8E8E8]'}`}><span>{product}</span>{selectedProducts.includes(product) && <Check size={15} className="text-[#00B460]" />}</button>)}</div><div className="mt-3 text-xs text-[#667085]">已选择 {selectedProducts.length} 个商品</div></div>}</div>
             </EditorRow>
             {message && <div className={`ml-[120px] flex items-center text-sm ${message.includes('已保存') ? 'text-[#008F4C]' : 'text-[#D92D20]'}`}><AlertCircle size={15} className="mr-1.5" />{message}</div>}
           </div>

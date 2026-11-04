@@ -1,3 +1,4 @@
+import { WebQueryBar, WebQueryInput } from './WebQueryControls';
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, FileText, Utensils, LayoutGrid, Plus, Trash2, Settings, GripVertical, Info, Sparkles, ChevronDown, ChevronUp, X, Search, ImageIcon, Clock3 } from 'lucide-react';
 import { Category } from '../../types';
@@ -185,6 +186,9 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
         groupIndex?: number;
     }>({ isOpen: false });
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+    const [candidateKeyword, setCandidateKeyword] = useState('');
+    const [candidateSearch, setCandidateSearch] = useState('');
+    const visibleCandidates = MOCK_PRODUCTS.filter(product => product.name.toLowerCase().includes(candidateSearch.trim().toLowerCase()));
 
     // 拖拽相关状态
     const [draggedGroupIdx, setDraggedGroupIdx] = useState<number | null>(null);
@@ -1038,7 +1042,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                     <span className="text-sm text-gray-500 whitespace-nowrap">分组名称:</span>
                                     <input type="text" placeholder="请输入分组名称" className="w-full border border-gray-200 rounded px-3 py-1.5 text-sm outline-none focus:border-[#00C06B]"/>
                                 </div>
-                                <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-bold hover:bg-[#00A35B] transition-colors">筛选</button>
+                                <button type="button" onClick={()=>setCandidateSearch(candidateKeyword)} className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-bold hover:bg-[#00A35B] transition-colors">筛选</button>
                             </div>
                             
                             <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -1048,6 +1052,7 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                     <div className="col-span-1">创建时间</div>
                                 </div>
                                 <div className="max-h-[300px] overflow-y-auto">
+                                    {!visibleCandidates.length && <div className="py-8 text-center text-sm text-gray-400">没有匹配的商品，请调整搜索条件</div>}
                                     {MOCK_FREE_TEMPLATES.map(t => (
                                         <div 
                                             key={t.id} 
@@ -1351,10 +1356,10 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                             <button onClick={() => setProductModalConfig({ isOpen: false })} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
                         </div>
                         <div className="p-6">
-                            <div className="flex space-x-3 mb-6">
-                                <input type="text" placeholder="搜索商品名称" className="flex-1 border border-gray-200 rounded px-3 py-1.5 text-sm outline-none focus:border-[#00C06B]"/>
-                                <button className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-bold hover:bg-[#00A35B] transition-colors">搜索</button>
-                            </div>
+                            <WebQueryBar className="flex space-x-3 mb-6" onSearch={()=>setCandidateSearch(candidateKeyword)}>
+                                <WebQueryInput value={candidateKeyword} onValueChange={value=>{setCandidateKeyword(value);if(!value)setCandidateSearch('');}} type="text" placeholder="搜索商品名称" className="flex-1 border border-gray-200 rounded px-3 py-1.5 text-sm outline-none focus:border-[#00C06B]"/>
+                                <button type="button" onClick={()=>setCandidateSearch(candidateKeyword)} className="px-4 py-1.5 bg-[#00C06B] text-white rounded text-sm font-bold hover:bg-[#00A35B] transition-colors">搜索</button>
+                            </WebQueryBar>
                             
                             <div className="border border-gray-200 rounded-xl overflow-hidden">
                                 <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500">
@@ -1362,12 +1367,12 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                         <input 
                                             type="checkbox" 
                                             className="w-3.5 h-3.5 accent-[#00C06B]"
-                                            checked={selectedProductIds.length === MOCK_PRODUCTS.length && MOCK_PRODUCTS.length > 0}
+                                            checked={visibleCandidates.length > 0 && visibleCandidates.every(product=>selectedProductIds.includes(product.id))}
                                             onChange={(e) => {
                                                 if (e.target.checked) {
-                                                    setSelectedProductIds(MOCK_PRODUCTS.map(p => p.id));
+                                                    setSelectedProductIds([...new Set([...selectedProductIds,...visibleCandidates.map(p=>p.id)])]);
                                                 } else {
-                                                    setSelectedProductIds([]);
+                                                    setSelectedProductIds(ids=>ids.filter(id=>!visibleCandidates.some(product=>product.id===id)));
                                                 }
                                             }}
                                         />
@@ -1377,7 +1382,8 @@ export const WebComboProductFormV2: React.FC<Props> = ({ category, onClose }) =>
                                     <div className="col-span-3">价格</div>
                                 </div>
                                 <div className="max-h-[300px] overflow-y-auto">
-                                    {MOCK_PRODUCTS.map(p => (
+                                    {!visibleCandidates.length && <div className="py-8 text-center text-sm text-gray-400">没有匹配的商品，请调整搜索条件</div>}
+                                    {visibleCandidates.map(p => (
                                         <div key={p.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-50 text-sm items-center hover:bg-[#00C06B]/5 transition-colors">
                                             <div className="col-span-1 text-center">
                                                 <input 

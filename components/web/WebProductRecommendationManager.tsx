@@ -1,3 +1,4 @@
+import { WebQueryInput, WebQuerySelect } from './WebQueryControls';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -673,11 +674,11 @@ const ModalFrame = ({ width, title, subtitle, onClose, children, footer, footerA
 );
 
 const SearchInput = ({ value, onChange, placeholder, width = 'w-[300px]' }: { value: string; onChange: (value: string) => void; placeholder: string; width?: string }) => (
-  <label className={`relative block ${width}`}><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /><input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className="h-9 w-full rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" /></label>
+  <label className={`relative block ${width}`}><WebQueryInput showIcon value={value} onValueChange={value => onChange(value)} placeholder={placeholder} className="h-9 w-full rounded-md border border-[#DDE2E8] pl-9 pr-3 text-[13px] outline-none focus:border-[#00B460]" /></label>
 );
 
 const CompactSelect = ({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: Array<[string, string]> }) => (
-  <label className="relative"><select value={value} onChange={event => onChange(event.target.value)} className="h-9 w-36 appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460]">{options.map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}</select><ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" /></label>
+  <label className="relative"><WebQuerySelect value={value} onValueChange={value => onChange(value)} className="h-9 w-36 appearance-none rounded-md border border-[#DDE2E8] bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#00B460]">{options.map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}</WebQuerySelect></label>
 );
 
 const StatusSwitch = ({ enabled, onClick, label }: { enabled: boolean; onClick: () => void; label: string }) => (

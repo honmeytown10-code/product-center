@@ -7,6 +7,7 @@ import { INITIAL_CATEGORIES } from '../../types';
 import { applySortOrder, ChannelSortOrders } from './MobileSortChannelSheet';
 import { BatchActionType } from './MobileBatchComponents';
 import { MobilePriceEditor } from './MobilePriceEditor';
+import { visibleSelectionState } from './batchProductSelection';
 
 interface Props {
   products: Product[];
@@ -17,7 +18,7 @@ interface Props {
   selectedIds: Set<string>;
   batchActionType?: BatchActionType;
   onToggleSelection: (id: string) => void;
-  onSelectAll: () => void;
+  onSelectAll: (visibleIds: string[], clear: boolean) => void;
   onBack: () => void;
   onNavigate: (screen: string) => void;
   onBatchModeToggle: (enabled: boolean) => void;
@@ -123,6 +124,9 @@ export const MobileProductList: React.FC<Props> = ({
         });
     }, [products, sortOrders, selectedCategory, searchQuery, activeChannel, filterType, productTypeFilter]);
 
+    const visibleProductIds = displayProducts.map(product => product.id);
+    const selection = visibleSelectionState(selectedIds, visibleProductIds, selectionLimit);
+
     // --- Helpers ---
     const getProductChannelStatus = (productId: string, channel: ChannelType, globalStatus: string) => {
         if (channel === 'all') return globalStatus;
@@ -184,7 +188,7 @@ export const MobileProductList: React.FC<Props> = ({
                 <div className="w-22 bg-[#F8FAFB] overflow-y-auto no-scrollbar pb-20 border-r border-gray-100 shrink-0">
                     {['全部', ...applySortOrder(CATEGORIES.filter(name => name !== '全部'), (categorySortOrders[activeChannel] ?? []).map(id => INITIAL_CATEGORIES.find(category => category.id === id)?.name ?? id), name => name)].map(cat => (<div key={cat} onClick={() => setSelectedCategory(cat)} className={`px-2 py-4 text-[11px] text-center font-bold border-l-4 transition-all relative ${selectedCategory === cat ? 'bg-white text-[#00C06B] border-[#00C06B]' : 'text-gray-500 border-transparent hover:bg-gray-100'}`}>{cat}</div>))}
                 </div>
-                <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-24 space-y-3 bg-gray-50">
+                <div className={`flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 bg-gray-50 ${isBatchMode ? 'pb-44' : 'pb-24'}`}>
                     {displayProducts.map(product => {
                         const isSelected = selectedIds.has(product.id);
                         let statusLabel = ''; let statusColor = ''; let isOffShelf = false; let showPartial = false; let hideBadge = false;
@@ -235,7 +239,7 @@ export const MobileProductList: React.FC<Props> = ({
                                 } else if (onEditProduct) {
                                     onEditProduct(product, activeChannel);
                                 }
-                            }} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'} ${isOffShelf ? 'opacity-75 grayscale-[0.5]' : ''} ${!isBatchMode ? 'cursor-pointer active:scale-[0.98]' : ''}`}>
+                            }} className={`flex flex-col bg-white p-3 rounded-xl border transition-all relative overflow-hidden shadow-sm ${isBatchMode && isSelected ? 'border-[#00C06B] ring-1 ring-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100'} ${isOffShelf && !isBatchMode ? 'opacity-75 grayscale-[0.5]' : ''} ${!isBatchMode ? 'cursor-pointer active:scale-[0.98]' : ''}`}>
                                 <div className="flex">
                                     <div className="w-20 h-20 rounded-lg bg-gray-100 shrink-0 mr-3 relative overflow-hidden">
                                         <img src={product.image} className="w-full h-full object-cover" alt={product.name}/>
@@ -249,7 +253,7 @@ export const MobileProductList: React.FC<Props> = ({
                                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                                         <div>
                                             <div className="flex justify-between items-start">
-                                                <h4 className={`text-sm font-bold line-clamp-1 flex-1 ${isOffShelf ? 'text-gray-500' : 'text-gray-800'}`}>{product.name}</h4>
+                                                <h4 className={`text-sm font-bold line-clamp-1 flex-1 ${isBatchMode ? 'pr-6' : ''} ${isOffShelf ? 'text-gray-500' : 'text-gray-800'}`}>{product.name}</h4>
                                                 {!isBatchMode && (
                                                     <div className="flex items-center text-gray-300 ml-2">
                                                         <ChevronRight size={16} />
@@ -262,7 +266,7 @@ export const MobileProductList: React.FC<Props> = ({
                                                 {isMultiSpec && <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded text-[9px] font-bold ml-1">多规格</span>}
                                             </div>
                                         </div>
-                                        {activeChannel === 'all' && (<div className="flex items-center gap-1.5 mt-2" onClick={(e) => { e.stopPropagation(); setShelfManageItem(product); }}>{ALL_CHANNELS_DEF.filter(c => c.id !== 'all').map(ch => { const status = getProductChannelStatus(product.id, ch.id, product.status); const isOn = status === 'on_shelf'; const isUnmapped = status === 'unmapped'; return (<div key={ch.id} className={`flex items-center justify-center w-6 h-6 rounded-full border transition-all ${isUnmapped ? 'bg-gray-50 border-gray-300 border-dashed text-gray-400' : isOn ? `${ch.id === 'pos' ? 'bg-blue-50 border-blue-100 text-blue-600' : ch.id === 'mini' ? 'bg-green-50 border-green-100 text-green-600' : ch.id === 'meituan' ? 'bg-yellow-50 border-yellow-100 text-yellow-600' : 'bg-orange-50 border-orange-100 text-orange-600'}` : 'bg-gray-100 border-gray-200 text-gray-400 grayscale'}`}>{isUnmapped ? <Link2Off size={10}/> : <span className="scale-75">{ch.icon}</span>}</div>); })}</div>)}
+                                        {activeChannel === 'all' && (<div className="flex items-center gap-1.5 mt-2" onClick={(e) => { e.stopPropagation(); if (isBatchMode) onToggleSelection(product.id); else setShelfManageItem(product); }}>{ALL_CHANNELS_DEF.filter(c => c.id !== 'all').map(ch => { const status = getProductChannelStatus(product.id, ch.id, product.status); const isOn = status === 'on_shelf'; const isUnmapped = status === 'unmapped'; return (<div key={ch.id} className={`flex items-center justify-center w-6 h-6 rounded-full border transition-all ${isUnmapped ? 'bg-gray-50 border-gray-300 border-dashed text-gray-400' : isOn ? `${ch.id === 'pos' ? 'bg-blue-50 border-blue-100 text-blue-600' : ch.id === 'mini' ? 'bg-green-50 border-green-100 text-green-600' : ch.id === 'meituan' ? 'bg-yellow-50 border-yellow-100 text-yellow-600' : 'bg-orange-50 border-orange-100 text-orange-600'}` : 'bg-gray-100 border-gray-200 text-gray-400 grayscale'}`}>{isUnmapped ? <Link2Off size={10}/> : <span className="scale-75">{ch.icon}</span>}</div>); })}</div>)}
                                         <div className="flex items-center justify-between mt-auto pt-1">
                                             <div className={`font-mono text-base font-black ${isOffShelf ? 'text-gray-400' : 'text-[#1F2129]'}`}>
                                                 <span className="text-xs mr-0.5">¥</span>
@@ -272,10 +276,10 @@ export const MobileProductList: React.FC<Props> = ({
                                             {/* 根据渠道视图和规格类型显示库存 */}
                                             {activeChannel === 'all' ? (
                                                 !isStockShared ? (
-                                                    <button onClick={(e) => { e.stopPropagation(); setStockManageItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">多渠道库存 <ChevronRight size={10} className="ml-0.5"/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); if (isBatchMode) onToggleSelection(product.id); else setStockManageItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">多渠道库存 <ChevronRight size={10} className="ml-0.5"/></button>
                                                 ) : (
                                                     isMultiSpec ? (
-                                                        <button onClick={(e) => { e.stopPropagation(); setSpecInventoryItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">查看规格库存 <ChevronRight size={10} className="ml-0.5"/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); if (isBatchMode) onToggleSelection(product.id); else setSpecInventoryItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">查看规格库存 <ChevronRight size={10} className="ml-0.5"/></button>
                                                     ) : (
                                                         <div className={`flex items-center px-2 py-1 rounded text-[10px] font-bold border ${isSoldOut ? 'bg-red-50 text-red-500 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                                                             {isSoldOut ? '已售罄' : (isUnlimitedStock ? '无限库存' : `库存 ${product.stock}`)}
@@ -284,7 +288,7 @@ export const MobileProductList: React.FC<Props> = ({
                                                 )
                                             ) : (
                                                 isMultiSpec ? (
-                                                    <button onClick={(e) => { e.stopPropagation(); setSpecInventoryItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">查看规格库存 <ChevronRight size={10} className="ml-0.5"/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); if (isBatchMode) onToggleSelection(product.id); else setSpecInventoryItem(product); }} className="flex items-center bg-gray-100 px-2 py-1 rounded text-[10px] font-bold text-gray-600 active:bg-gray-200">查看规格库存 <ChevronRight size={10} className="ml-0.5"/></button>
                                                 ) : (
                                                     isSoldOut ? (
                                                         <div className="flex items-center bg-red-50 px-2 py-1 rounded text-[10px] font-bold text-red-500 border border-red-100">已售罄</div>
@@ -295,11 +299,11 @@ export const MobileProductList: React.FC<Props> = ({
                                             )}
                                         </div>
                                     </div>
-                                    {isBatchMode && (<div className="absolute top-3 right-3 z-10">{isSelected ? <CheckCircle2 className="text-[#00C06B]" size={20} fill="white"/> : <Circle className="text-gray-300" size={20}/>}</div>)}
+                                    {isBatchMode && (<button type="button" role="checkbox" aria-label={`选择${product.name}`} aria-checked={isSelected} onClick={event => { event.stopPropagation(); onToggleSelection(product.id); }} className="absolute top-1 right-1 z-10 flex h-9 w-9 items-center justify-center">{isSelected ? <CheckCircle2 className="text-[#00C06B]" size={20} fill="white"/> : <Circle className="text-gray-300" size={20}/>}</button>)}
                                 </div>
                                 {!isBatchMode && activeOrgType === 'store' && (
                                     <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-gray-50">
-                                        {activeChannel === 'all' ? (<button onClick={(e) => { e.stopPropagation(); setShelfManageItem(product); }} className={`flex-1 py-1.5 rounded-lg text-xs font-bold active:bg-opacity-80 transition-colors ${isShelvesUnited ? (!isOffShelf ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-600') : 'bg-gray-100 text-gray-600'}`}>{isShelvesUnited ? (!isOffShelf ? '下架' : '上架') : '上下架管理'}</button>) : (<button onClick={(e) => { e.stopPropagation(); toggleShelfStatus(product.id); }} className={`flex-1 py-1.5 rounded-lg text-xs font-bold active:bg-opacity-80 transition-colors ${!isOffShelf ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-600'}`}>{!isOffShelf ? '下架' : '上架'}</button>)}
+                                        {activeChannel === 'all' ? (<button onClick={(e) => { e.stopPropagation(); if (isBatchMode) onToggleSelection(product.id); else setShelfManageItem(product); }} className={`flex-1 py-1.5 rounded-lg text-xs font-bold active:bg-opacity-80 transition-colors ${isShelvesUnited ? (!isOffShelf ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-600') : 'bg-gray-100 text-gray-600'}`}>{isShelvesUnited ? (!isOffShelf ? '下架' : '上架') : '上下架管理'}</button>) : (<button onClick={(e) => { e.stopPropagation(); toggleShelfStatus(product.id); }} className={`flex-1 py-1.5 rounded-lg text-xs font-bold active:bg-opacity-80 transition-colors ${!isOffShelf ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-600'}`}>{!isOffShelf ? '下架' : '上架'}</button>)}
                                         <button onClick={(e) => { e.stopPropagation(); handleEditOpen('price', product); }} className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded-lg text-xs font-bold active:bg-gray-200">改价</button>
                                         <button onClick={(e) => { e.stopPropagation(); handleEditOpen('stock', product); }} className="flex-1 bg-[#00C06B] text-white py-1.5 rounded-lg text-xs font-bold active:bg-[#00A35B] shadow-sm shadow-green-100">沽清</button>
                                     </div>
@@ -315,8 +319,19 @@ export const MobileProductList: React.FC<Props> = ({
                 isBatchMode ? (
                     <div className="absolute bottom-0 left-0 w-full bg-white border-t border-gray-200 p-4 pb-8 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-10">
                         <div className="flex justify-between items-center mb-4">
-                            <div className="text-xs font-bold text-gray-500">已选 {selectedIds.size}{selectionLimit ? ` / ${selectionLimit}` : ''} 个商品</div>
-                            <button onClick={onSelectAll} className="text-xs font-bold text-[#00C06B]">全选</button>
+                            <div className="min-w-0">
+                                <div className="text-xs font-bold text-gray-600">已选 {selectedIds.size} 个商品{selectionLimit ? <span className="ml-2 font-normal text-gray-400">最多 {selectionLimit} 个</span> : null}</div>
+                                <div role="status" className="mt-1 text-[11px] text-gray-400">当前列表 {selection.total} 个{selection.allSelected ? '，已全选' : selection.atLimit ? '，已达选择上限' : ''}</div>
+                            </div>
+                            <button
+                                disabled={!selection.total}
+                                aria-label={selection.clear ? (selection.allSelected ? '取消全选当前列表商品' : '取消当前列表已选商品') : '全选当前列表商品'}
+                                onClick={() => onSelectAll(visibleProductIds, selection.clear)}
+                                className="flex min-h-10 shrink-0 items-center gap-1.5 pl-3 text-xs font-bold text-[#00C06B] disabled:text-gray-300"
+                            >
+                                {selection.clear ? <CheckCircle2 size={17} /> : <Circle size={17} />}
+                                {selection.clear ? (selection.allSelected ? '取消全选' : '取消选择') : '全选'}
+                            </button>
                         </div>
                         <div className="flex gap-4">
                             <button 

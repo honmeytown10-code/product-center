@@ -20,6 +20,7 @@ import { MobileBrandProductTools } from './mobile/MobileBrandProductTools';
 import { MobileProductSorter } from './mobile/MobileProductSorter';
 import { MobileCategorySorter } from './mobile/MobileCategorySorter';
 import { MobileBatchEditProgress } from './mobile/MobileBatchEditProgress';
+import { toggleVisibleProducts } from './mobile/batchProductSelection';
 import { BATCH_PRODUCT_LIMIT, BatchTask, createBatchTask } from './mobile/batchEditTask';
 import { ChannelSortOrders, saveChannelOrder } from './mobile/MobileSortChannelSheet';
 import { MobileProductEditor } from './mobile/MobileProductEditor';
@@ -128,10 +129,10 @@ export const MobileApp: React.FC = () => {
     }
     setSelectedIds(previous => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
-  const selectAllBatch = () => {
-    const eligible = enforceLimit ? batchProducts.slice(0, BATCH_PRODUCT_LIMIT) : batchProducts;
-    setSelectedIds(new Set(eligible.map(product => product.id)));
-    if (enforceLimit && batchProducts.length > BATCH_PRODUCT_LIMIT) setMethodNotice('已选择前 100 个商品，每次最多选择 100 个');
+  const selectAllBatch = (visibleIds: string[], clear: boolean) => {
+    const result = toggleVisibleProducts(selectedIds, visibleIds, clear, enforceLimit ? BATCH_PRODUCT_LIMIT : undefined);
+    setSelectedIds(result.selected);
+    if (result.limited) setMethodNotice('每次最多选择 100 个商品，已保留其他分类的选择');
   };
 
   const currentConfig = brandConfigs[activeBrandId] || brandConfigs['b_1'];

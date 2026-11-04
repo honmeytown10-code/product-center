@@ -1,15 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  ChevronLeft, ArrowUp, ArrowDown, GripVertical, Info, 
-  Package, Search, LayoutGrid, CheckCircle2, ChevronDown, Check, Smartphone, Store, ShoppingBag, Printer
+  ChevronLeft, ArrowUp, ArrowDown, GripVertical,
+  Package, Search, LayoutGrid, ChevronDown, Check, Smartphone, Store, ShoppingBag, Printer
 } from 'lucide-react';
 import { Product, CATEGORIES } from '../../types';
 import { ChannelType } from './types';
+import { applySortOrder, ChannelSortOrders, MobileSortChannelSheet, SortChannel } from './MobileSortChannelSheet';
 
 interface Props {
   products: Product[];
   onBack: () => void;
-  onSave: (sortedProducts: Product[]) => void;
+  onSave: (sortedProducts: Product[], channels: SortChannel[]) => void;
+  orders?: ChannelSortOrders;
   onNavigate: (target: string) => void;
 }
 
@@ -21,11 +23,15 @@ const ALL_CHANNELS_DEF: { id: ChannelType; label: string; icon: React.ReactNode;
   { id: 'pos', label: 'POS收银', icon: <Printer size={14}/>, color: 'text-blue-600' },
 ];
 
-export const MobileProductSorter: React.FC<Props> = ({ products, onBack, onSave, onNavigate }) => {
+export const MobileProductSorter: React.FC<Props> = ({ products, onBack, onSave, onNavigate, orders = {} }) => {
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[1] || '全部');
-  const [localProducts, setLocalProducts] = useState<Product[]>(products);
+  const [drafts, setDrafts] = useState<Partial<Record<ChannelType, Product[]>>>({});
   const [activeChannel, setActiveChannel] = useState<ChannelType>('all');
   const [showChannelSheet, setShowChannelSheet] = useState(false);
+  const [showSaveChannels, setShowSaveChannels] = useState(false);
+  const localProducts = drafts[activeChannel] ?? applySortOrder<Product>(products, orders[activeChannel], product => product.id);
+  const setLocalProducts = (next: Product[]) => setDrafts(previous => ({ ...previous, [activeChannel]: next }));
+  const save = (channels: SortChannel[]) => { onSave(localProducts, channels); onBack(); };
   
   const displayProducts = useMemo(() => {
     return localProducts.filter(p => {
@@ -91,15 +97,6 @@ export const MobileProductSorter: React.FC<Props> = ({ products, onBack, onSave,
 
         {/* Product List */}
         <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 pb-24 bg-gray-50">
-          <div className="px-1 py-1 mb-2">
-            <div className="bg-blue-50/50 rounded-xl p-3 flex items-start border border-blue-100/50">
-              <Info size={12} className="text-blue-500 mr-2 mt-0.5 shrink-0" />
-              <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
-                通过上下箭头调整该分类下商品展示顺序。
-              </p>
-            </div>
-          </div>
-
           {displayProducts.length > 0 ? (
             displayProducts.map((p, idx) => (
               <div key={p.id} className="bg-white p-3 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm active:shadow-md transition-all group">
@@ -117,14 +114,14 @@ export const MobileProductSorter: React.FC<Props> = ({ products, onBack, onSave,
 
                 <div className="flex items-center space-x-1 ml-2">
                   <button 
-                    onClick={() => moveProduct(idx, 'up')} 
+                    aria-label={`上移${p.name}`} onClick={() => moveProduct(idx, 'up')}
                     disabled={idx === 0}
                     className={`p-1.5 rounded-lg transition-colors ${idx === 0 ? 'text-gray-100 cursor-not-allowed' : 'text-gray-400 bg-gray-50 hover:bg-gray-100 hover:text-black active:scale-90'}`}
                   >
                     <ArrowUp size={14} />
                   </button>
                   <button 
-                    onClick={() => moveProduct(idx, 'down')} 
+                    aria-label={`下移${p.name}`} onClick={() => moveProduct(idx, 'down')}
                     disabled={idx === displayProducts.length - 1}
                     className={`p-1.5 rounded-lg transition-colors ${idx === displayProducts.length - 1 ? 'text-gray-100 cursor-not-allowed' : 'text-gray-400 bg-gray-50 hover:bg-gray-100 hover:text-black active:scale-90'}`}
                   >
@@ -154,13 +151,14 @@ export const MobileProductSorter: React.FC<Props> = ({ products, onBack, onSave,
           分类排序
         </button>
         <button 
-          onClick={() => { onSave(localProducts); onBack(); }}
+          onClick={() => activeChannel === 'all' ? setShowSaveChannels(true) : save([activeChannel])}
           className="flex-1 h-[52px] bg-[#1F2129] text-white rounded-2xl text-[15px] font-black shadow-lg active:scale-[0.98] transition-all flex items-center justify-center"
         >
           保存排序
         </button>
       </div>
 
+      {showSaveChannels && <MobileSortChannelSheet kind="商品" onClose={() => setShowSaveChannels(false)} onConfirm={save} />}
       {/* Channel Sheet */}
       {showChannelSheet && (
         <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in">

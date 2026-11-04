@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, X, ArrowUp, ArrowDown, GripVertical, List, C
 import { LocalCategory, ChannelType } from './types';
 import { LayoutGrid, Smartphone, Store, ShoppingBag, Printer } from 'lucide-react';
 import { MobileCategoryEditor } from './MobileCategoryEditor';
+import { ChannelSortOrders, MobileSortChannelSheet, saveChannelOrder, SortChannel } from './MobileSortChannelSheet';
 
 const INITIAL_LOCAL_CATEGORIES: LocalCategory[] = [
   { id: 'c1', name: '现制饮品', source: 'brand', channels: ['all', 'mini', 'pos', 'meituan'], count: 12 },
@@ -34,13 +35,25 @@ export const MobileCategoryManager: React.FC<Props> = ({ onBack }) => {
   // Updated editor state
   const [editingCat, setEditingCat] = useState<{ type: 'create' | 'edit', item?: LocalCategory } | null>(null);
   
-  const [catSortOrders, setCatSortOrders] = useState<Record<ChannelType, string[]>>(() => {
+  const [catSortOrders, setCatSortOrders] = useState<ChannelSortOrders>(() => {
     const ids = INITIAL_LOCAL_CATEGORIES.map(c => c.id);
     return { all: [...ids], mini: [...ids], meituan: [...ids], taobao: [...ids], pos: [...ids] };
   });
 
+  const [sortDrafts, setSortDrafts] = useState<ChannelSortOrders>({});
+  const [showSaveChannels, setShowSaveChannels] = useState(false);
+  const orderFor = (channel: ChannelType) => sortDrafts[channel] ?? catSortOrders[channel] ?? localCategories.map(category => category.id);
+  const saveSort = (channels: SortChannel[]) => {
+    const ids = orderFor(activeCatChannel);
+    setCatSortOrders(previous => saveChannelOrder(previous, channels, ids));
+    setSortDrafts({});
+    setShowSaveChannels(false);
+    setView('list');
+  };
+  const leaveSort = () => { setSortDrafts({}); setView('list'); };
+
   const getSortedCategories = (channel: ChannelType) => {
-    const currentOrder = catSortOrders[channel];
+    const currentOrder = view === 'sort' ? orderFor(channel) : catSortOrders[channel] ?? [];
     const sorted = [...localCategories].sort((a, b) => {
       const indexA = currentOrder.indexOf(a.id);
       const indexB = currentOrder.indexOf(b.id);
@@ -50,12 +63,12 @@ export const MobileCategoryManager: React.FC<Props> = ({ onBack }) => {
   };
 
   const handleCatMove = (id: string, direction: 'up' | 'down') => {
-    const currentOrder = [...catSortOrders[activeCatChannel]];
+    const currentOrder = [...orderFor(activeCatChannel)];
     const index = currentOrder.indexOf(id);
     if (index === -1) return;
     if (direction === 'up' && index > 0) [currentOrder[index], currentOrder[index - 1]] = [currentOrder[index - 1], currentOrder[index]];
     else if (direction === 'down' && index < currentOrder.length - 1) [currentOrder[index], currentOrder[index + 1]] = [currentOrder[index + 1], currentOrder[index]];
-    setCatSortOrders(prev => ({ ...prev, [activeCatChannel]: currentOrder }));
+    setSortDrafts(prev => ({ ...prev, [activeCatChannel]: currentOrder }));
   };
 
   const handleSaveCategory = (data: Partial<LocalCategory>) => {
@@ -71,7 +84,7 @@ export const MobileCategoryManager: React.FC<Props> = ({ onBack }) => {
       setLocalCategories(prev => [...prev, newCat]);
       setCatSortOrders(prev => {
         const next = { ...prev };
-        (Object.keys(next) as ChannelType[]).forEach(ch => { next[ch] = [...next[ch], newCat.id]; });
+        (Object.keys(next) as ChannelType[]).forEach(ch => { next[ch] = [...(next[ch] ?? []), newCat.id]; });
         return next;
       });
     } else if (editingCat?.type === 'edit' && editingCat.item) {
@@ -94,7 +107,7 @@ export const MobileCategoryManager: React.FC<Props> = ({ onBack }) => {
     return (
       <div className="flex-1 flex flex-col bg-[#F5F6FA] relative h-full">
           <div className="h-[50px] flex items-center justify-between px-4 border-b border-gray-100 shrink-0 bg-white z-10">
-              <button onClick={() => setView('list')} className="p-2 -ml-2 text-gray-600 hover:text-black transition-transform active:scale-95"><ChevronLeft size={24}/></button>
+              <button onClick={leaveSort} className="p-2 -ml-2 text-gray-600 hover:text-black transition-transform active:scale-95"><ChevronLeft size={24}/></button>
               <span className="font-bold text-base">分类排序</span>
               <div className="w-8"></div>
           </div>
@@ -106,8 +119,9 @@ export const MobileCategoryManager: React.FC<Props> = ({ onBack }) => {
               {sortedCategories.length === 0 ? (<div className="flex flex-col items-center justify-center h-60 text-gray-400 opacity-40"><span className="text-xs font-bold font-mono uppercase tracking-widest">No categories available</span></div>) : (sortedCategories.map((cat, index) => { const isBrand = cat.source === 'brand'; return (<div key={cat.id} className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm active:shadow-md transition-all"><div className="flex items-center flex-1"><div className="mr-4 flex flex-col space-y-1"><button onClick={() => handleCatMove(cat.id, 'up')} disabled={index === 0} className="p-1.5 bg-gray-50 rounded hover:bg-gray-200 disabled:opacity-20 transition-colors"><ArrowUp size={14} className="text-gray-600"/></button><button onClick={() => handleCatMove(cat.id, 'down')} disabled={index === sortedCategories.length - 1} className="p-1.5 bg-gray-50 rounded hover:bg-gray-200 disabled:opacity-20 transition-colors"><ArrowDown size={14} className="text-gray-600"/></button></div><div className="flex flex-col"><div className="flex items-center mb-1"><span className="font-black text-[15px] text-[#1F2129] mr-2">{cat.name}</span><span className={`text-[9px] px-1.5 py-0.5 rounded font-black border uppercase tracking-wider ${isBrand ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-green-50 text-green-600 border-green-100'}`}>{isBrand ? '总部' : '自建'}</span></div></div></div><div className="text-gray-300 p-2"><GripVertical size={20}/></div></div>); }))}
           </div>
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-              <button onClick={() => { alert('排序已保存'); setView('list'); }} className="w-full bg-[#1F2129] text-white py-3.5 rounded-2xl text-[15px] font-black shadow-lg shadow-gray-200 active:scale-[0.98] transition-all">保存排序</button>
+              <button onClick={() => activeCatChannel === 'all' ? setShowSaveChannels(true) : saveSort([activeCatChannel])} className="w-full bg-[#1F2129] text-white py-3.5 rounded-2xl text-[15px] font-black shadow-lg shadow-gray-200 active:scale-[0.98] transition-all">保存排序</button>
           </div>
+          {showSaveChannels && <MobileSortChannelSheet kind="分类" onClose={() => setShowSaveChannels(false)} onConfirm={saveSort} />}
           {showCatChannelSheet && (<div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in"><div onClick={() => setShowCatChannelSheet(false)} className="flex-1"></div><div className="bg-white rounded-t-[24px] p-4 pb-10 animate-in slide-in-from-bottom duration-300"><div className="flex justify-between items-center mb-4 px-2 pt-2"><span className="font-black text-lg text-[#1F2129]">切换排序渠道</span><button onClick={() => setShowCatChannelSheet(false)} className="bg-gray-100 p-1.5 rounded-full"><X size={16}/></button></div><div className="grid grid-cols-2 gap-3 mb-6">{ALL_CHANNELS_DEF.map(ch => (<div key={ch.id} onClick={() => { setActiveCatChannel(ch.id); setShowCatChannelSheet(false); }} className={`flex items-center p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${activeCatChannel === ch.id ? 'border-[#00C06B] bg-[#00C06B]/5' : 'border-gray-100 bg-white hover:border-gray-200'}`}><div className={`mr-3 ${activeCatChannel === ch.id ? 'text-[#00C06B]' : 'text-gray-400'}`}>{ch.icon}</div><span className={`text-sm font-black ${activeCatChannel === ch.id ? 'text-[#00C06B]' : 'text-gray-600'}`}>{ch.label}</span>{activeCatChannel === ch.id && <Check size={16} className="ml-auto text-[#00C06B]" strokeWidth={4}/>}</div>))}</div></div></div>)}
       </div>
     );
@@ -132,7 +146,7 @@ export const MobileCategoryManager: React.FC<Props> = ({ onBack }) => {
             <button onClick={() => setView('sort')} className="p-2 -mr-2 text-gray-500 font-black text-sm uppercase tracking-widest">排序</button>
         </div>
         <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 pb-32">
-             {localCategories.map(cat => (
+             {getSortedCategories(activeCatChannel).map(cat => (
                  <div 
                   key={cat.id} 
                   className="bg-white p-5 rounded-2xl border border-gray-50 flex items-center justify-between shadow-sm active:scale-[0.98] transition-all hover:border-[#00C06B]/20" 

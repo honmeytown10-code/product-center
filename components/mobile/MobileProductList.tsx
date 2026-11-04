@@ -3,11 +3,15 @@ import React, { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronDown, Search, Filter, Link2Off, Printer, Smartphone, Store, ShoppingBag, ChevronRight, CheckCircle2, Circle, List, Plus, X, Check, Delete, Clock, AlertTriangle, Coffee, Edit2 } from 'lucide-react';
 import { Product, CATEGORIES } from '../../types';
 import { ChannelType } from './types';
+import { INITIAL_CATEGORIES } from '../../types';
+import { applySortOrder, ChannelSortOrders } from './MobileSortChannelSheet';
 import { BatchActionType } from './MobileBatchComponents';
 import { MobilePriceEditor } from './MobilePriceEditor';
 
 interface Props {
   products: Product[];
+  sortOrders?: ChannelSortOrders;
+  categorySortOrders?: ChannelSortOrders;
   isBatchMode: boolean;
   selectedIds: Set<string>;
   batchActionType?: BatchActionType;
@@ -74,7 +78,7 @@ const SpecInventoryModal = ({ product, onClose }: { product: Product, onClose: (
 };
 
 export const MobileProductList: React.FC<Props> = ({ 
-    products, isBatchMode, selectedIds, batchActionType, onToggleSelection, onSelectAll, 
+    products, sortOrders = {}, categorySortOrders = {}, isBatchMode, selectedIds, batchActionType, onToggleSelection, onSelectAll,
     onBack, onNavigate, onBatchModeToggle, activeOrgType,
     toggleShelfStatus, onUpdateProduct, onEditProduct, isStockShared, isShelvesUnited
 }) => {
@@ -93,7 +97,7 @@ export const MobileProductList: React.FC<Props> = ({
     const [specInventoryItem, setSpecInventoryItem] = useState<Product | null>(null);
 
     const displayProducts = useMemo(() => {
-        return products.filter(p => {
+        return applySortOrder<Product>(products, sortOrders[activeChannel], product => product.id).filter(p => {
             if (selectedCategory !== '全部' && p.category !== selectedCategory && 
                 !CATEGORIES.find(c => c === selectedCategory && p.category.includes(c))) return false;
             if (searchQuery && !p.name.includes(searchQuery) && !p.skuCode.includes(searchQuery)) return false;
@@ -116,7 +120,7 @@ export const MobileProductList: React.FC<Props> = ({
             
             return true;
         });
-    }, [products, selectedCategory, searchQuery, activeChannel, filterType, productTypeFilter]);
+    }, [products, sortOrders, selectedCategory, searchQuery, activeChannel, filterType, productTypeFilter]);
 
     // --- Helpers ---
     const getProductChannelStatus = (productId: string, channel: ChannelType, globalStatus: string) => {
@@ -177,7 +181,7 @@ export const MobileProductList: React.FC<Props> = ({
             {/* List */}
             <div className="flex-1 flex overflow-hidden">
                 <div className="w-22 bg-[#F8FAFB] overflow-y-auto no-scrollbar pb-20 border-r border-gray-100 shrink-0">
-                    {CATEGORIES.map(cat => (<div key={cat} onClick={() => setSelectedCategory(cat)} className={`px-2 py-4 text-[11px] text-center font-bold border-l-4 transition-all relative ${selectedCategory === cat ? 'bg-white text-[#00C06B] border-[#00C06B]' : 'text-gray-500 border-transparent hover:bg-gray-100'}`}>{cat}</div>))}
+                    {['全部', ...applySortOrder(CATEGORIES.filter(name => name !== '全部'), (categorySortOrders[activeChannel] ?? []).map(id => INITIAL_CATEGORIES.find(category => category.id === id)?.name ?? id), name => name)].map(cat => (<div key={cat} onClick={() => setSelectedCategory(cat)} className={`px-2 py-4 text-[11px] text-center font-bold border-l-4 transition-all relative ${selectedCategory === cat ? 'bg-white text-[#00C06B] border-[#00C06B]' : 'text-gray-500 border-transparent hover:bg-gray-100'}`}>{cat}</div>))}
                 </div>
                 <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-24 space-y-3 bg-gray-50">
                     {displayProducts.map(product => {

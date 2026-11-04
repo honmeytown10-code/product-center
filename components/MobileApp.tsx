@@ -19,6 +19,7 @@ import { MobileProductTools } from './mobile/MobileProductTools';
 import { MobileBrandProductTools } from './mobile/MobileBrandProductTools';
 import { MobileProductSorter } from './mobile/MobileProductSorter';
 import { MobileCategorySorter } from './mobile/MobileCategorySorter';
+import { ChannelSortOrders, saveChannelOrder } from './mobile/MobileSortChannelSheet';
 import { MobileProductEditor } from './mobile/MobileProductEditor';
 import {
   applyBatchProductName,
@@ -71,6 +72,7 @@ export const MobileApp: React.FC = () => {
   const previewParams = new URLSearchParams(window.location.search);
   const previewProduct = previewParams.get('screen') === 'product-edit' ? products.find(item => item.id === previewParams.get('productId')) : undefined;
   const previewScreens: Record<string, Screen> = {
+    'product-sort': 'product_sort', 'category-sort': 'category_sort', 'product-list': 'product_list',
     'product-tools': 'product_tools', 'spec-list': 'spec_list', 'method-list': 'method_list',
     'label-list': 'label_list', 'category-list': 'category_list', 'badge-list': 'badge_list',
   };
@@ -84,6 +86,8 @@ export const MobileApp: React.FC = () => {
   const [methodNotice, setMethodNotice] = useState('');
   const methodScope = `${activeBrandId}:${activeOrg.id}`;
   const methodLibrary = storeMethodLibraries[methodScope] ?? INITIAL_LOCAL_METHODS;
+  const [sortOrders, setSortOrders] = useState<Record<string, { products: ChannelSortOrders; categories: ChannelSortOrders }>>({});
+  const currentSortOrders = sortOrders[methodScope] ?? { products: {}, categories: {} };
   useEffect(() => {
     if (!methodNotice) return;
     const timer = window.setTimeout(() => setMethodNotice(''), 3000);
@@ -365,6 +369,8 @@ export const MobileApp: React.FC = () => {
                 <>
                     <MobileProductList 
                         products={products}
+                        sortOrders={currentSortOrders.products}
+                        categorySortOrders={currentSortOrders.categories}
                         isBatchMode={isBatchMode}
                         selectedIds={selectedIds}
                         batchActionType={batchActionType}
@@ -474,9 +480,9 @@ export const MobileApp: React.FC = () => {
           case 'badge_list':
             return <MobileBadgeManager onBack={() => setCurrentScreen(returnScreen)} badges={storeBadges} onChange={setStoreBadges} />;
           case 'product_sort':
-            return <MobileProductSorter products={products} onBack={() => setCurrentScreen('product_list')} onSave={() => setCurrentScreen('product_list')} onNavigate={(t) => setCurrentScreen(t as Screen)}/>;
+            return <MobileProductSorter products={products} orders={currentSortOrders.products} onBack={() => setCurrentScreen('product_list')} onSave={(next, channels) => setSortOrders(previous => ({ ...previous, [methodScope]: { ...currentSortOrders, products: saveChannelOrder(currentSortOrders.products, channels, next.map(product => product.id)) } }))} onNavigate={(t) => setCurrentScreen(t as Screen)}/>;
           case 'category_sort':
-            return <MobileCategorySorter onBack={() => setCurrentScreen('product_sort')} onSave={() => setCurrentScreen('product_sort')} />;
+            return <MobileCategorySorter orders={currentSortOrders.categories} onBack={() => setCurrentScreen('product_sort')} onSave={(next, channels) => setSortOrders(previous => ({ ...previous, [methodScope]: { ...currentSortOrders, categories: saveChannelOrder(currentSortOrders.categories, channels, next.map(category => category.id)) } }))} />;
           case 'batch_operation_select': 
             return (
                 <BatchOperationSelect 

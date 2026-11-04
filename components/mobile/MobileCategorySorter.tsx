@@ -3,12 +3,14 @@ import {
   ChevronLeft, ArrowUp, ArrowDown, GripVertical, 
   ChevronDown, Check, LayoutGrid, Smartphone, Store, ShoppingBag, Printer, List
 } from 'lucide-react';
-import { INITIAL_CATEGORIES } from '../../types';
+import { Category, INITIAL_CATEGORIES } from '../../types';
 import { ChannelType } from './types';
+import { applySortOrder, ChannelSortOrders, MobileSortChannelSheet, SortChannel } from './MobileSortChannelSheet';
 
 interface Props {
   onBack: () => void;
-  onSave: () => void;
+  onSave: (categories: Category[], channels: SortChannel[]) => void;
+  orders?: ChannelSortOrders;
 }
 
 const ALL_CHANNELS_DEF: { id: ChannelType; label: string; icon: React.ReactNode; color: string }[] = [
@@ -19,10 +21,14 @@ const ALL_CHANNELS_DEF: { id: ChannelType; label: string; icon: React.ReactNode;
   { id: 'pos', label: 'POS收银', icon: <Printer size={14}/>, color: 'text-blue-600' },
 ];
 
-export const MobileCategorySorter: React.FC<Props> = ({ onBack, onSave }) => {
-  const [localCategories, setLocalCategories] = useState(INITIAL_CATEGORIES);
+export const MobileCategorySorter: React.FC<Props> = ({ onBack, onSave, orders = {} }) => {
+  const [drafts, setDrafts] = useState<Partial<Record<ChannelType, Category[]>>>({});
   const [activeChannel, setActiveChannel] = useState<ChannelType>('all');
   const [showChannelSheet, setShowChannelSheet] = useState(false);
+  const [showSaveChannels, setShowSaveChannels] = useState(false);
+  const localCategories = drafts[activeChannel] ?? applySortOrder(INITIAL_CATEGORIES, orders[activeChannel], category => category.id);
+  const setLocalCategories = (next: Category[]) => setDrafts(previous => ({ ...previous, [activeChannel]: next }));
+  const save = (channels: SortChannel[]) => { onSave(localCategories, channels); onBack(); };
 
   const moveCategory = (idx: number, direction: 'up' | 'down') => {
     const otherIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -66,14 +72,14 @@ export const MobileCategorySorter: React.FC<Props> = ({ onBack, onSave }) => {
               <div className="flex items-center flex-1">
                 <div className="flex flex-col mr-4 space-y-2">
                    <button 
-                    onClick={() => moveCategory(idx, 'up')} 
+                    aria-label={`上移${cat.name}`} onClick={() => moveCategory(idx, 'up')}
                     disabled={idx === 0}
                     className={`p-1 rounded bg-gray-50 transition-colors ${idx === 0 ? 'text-gray-100' : 'text-gray-400 active:bg-gray-200 active:text-black'}`}
                   >
                     <ArrowUp size={14} />
                   </button>
                   <button 
-                    onClick={() => moveCategory(idx, 'down')} 
+                    aria-label={`下移${cat.name}`} onClick={() => moveCategory(idx, 'down')}
                     disabled={idx === localCategories.length - 1}
                     className={`p-1 rounded bg-gray-50 transition-colors ${idx === localCategories.length - 1 ? 'text-gray-100' : 'text-gray-400 active:bg-gray-200 active:text-black'}`}
                   >
@@ -98,13 +104,14 @@ export const MobileCategorySorter: React.FC<Props> = ({ onBack, onSave }) => {
       {/* Footer */}
       <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-10 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
         <button 
-          onClick={() => { onSave(); onBack(); }}
+          onClick={() => activeChannel === 'all' ? setShowSaveChannels(true) : save([activeChannel])}
           className="w-full h-[52px] bg-[#1F2129] text-white rounded-2xl text-[15px] font-black shadow-lg active:scale-[0.98] transition-all flex items-center justify-center"
         >
           保存排序
         </button>
       </div>
 
+      {showSaveChannels && <MobileSortChannelSheet kind="分类" onClose={() => setShowSaveChannels(false)} onConfirm={save} />}
       {/* Channel Sheet */}
       {showChannelSheet && (
         <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in">

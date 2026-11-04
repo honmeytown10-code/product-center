@@ -1,3 +1,4 @@
+import { createComplexComboDetailDemo, enrichValueComboDemo } from './components/web/complexComboDetailDemo';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { 
@@ -126,14 +127,17 @@ interface ProductContextType {
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(() => [...INITIAL_PRODUCTS.map(product => ({
-    ...product,
-    // Demo library records carry their own sales channels; store coverage remains task-derived.
-    formData: {
-      salesScope: { channelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'] },
-      applicableChannelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'],
-    },
-  })), ...createBlindBagDemoProducts('/blind-bag-demo.svg')]);
+  const [products, setProducts] = useState<Product[]>(() => [...INITIAL_PRODUCTS.map(source => {
+    const product = source.id === '10' ? enrichValueComboDemo(source) : source;
+    return {
+      ...product,
+      formData: {
+        ...product.formData,
+        salesScope: { channelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'] },
+        applicableChannelIds: ['pos', 'mini_program_dine_in', 'mini_program_delivery'],
+      },
+    };
+  }), createComplexComboDetailDemo(), ...createBlindBagDemoProducts('/blind-bag-demo.svg')]);
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [opsCategoryConfigs, setOpsCategoryConfigs] = useState<OpsCategoryConfig[]>(INITIAL_OPS_CATEGORY_CONFIGS);
   const [policies, setPolicies] = useState<ManagementPolicy[]>(INITIAL_POLICIES);

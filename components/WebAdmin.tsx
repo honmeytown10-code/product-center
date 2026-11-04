@@ -1,4 +1,6 @@
+import { applyDetailShelfChange } from './web/comboDetailStoreOperations';
 import { createExtendedTask } from './web/extendedTasks';
+import { COMPLEX_COMBO_DEMO_ID, createComplexComboDetailDemo, COMPLEX_COMBO_STORES, COMPLEX_COMBO_TEMPLATES, COMPLEX_COMBO_SALES, VALUE_COMBO_STORES, VALUE_COMBO_SALES } from './web/complexComboDetailDemo';
 import { registerTaskSource, resolveTaskSource, saveTask, useLocalTaskScheduler } from './web/taskRepository';
 import { productValues } from './web/taskModel';
 
@@ -535,7 +537,11 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
     channelContext?: CreationContext['channelContext'];
     channelAttributeIds?: ThirdPartyChannelId[];
   } | null>(null);
-  const [detailContext, setDetailContext] = useState<any>(null); // New detail context
+  const [detailContext, setDetailContext] = useState<any>(() => {
+    if (new URLSearchParams(window.location.search).get('preview') === 'complex-combo') return createComplexComboDetailDemo();
+    const productId = new URLSearchParams(window.location.search).get('detailProductId');
+    return productId ? products.find(product => product.id === productId) || null : null;
+  });
   const [creationContext, setCreationContext] = useState<CreationContext | null>(() => {
     if (new URLSearchParams(window.location.search).get('preview') !== 'meituan-online-mutex') return null;
     const product = createMeituanMutexDemoProduct();
@@ -560,7 +566,7 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
   const [storeProductManagePreset, setStoreProductManagePreset] = useState<StoreProductManagePreset | null>(null);
   const [directStoreProductsByBrand, setDirectStoreProductsByBrand] = useState<Record<string, StoreProductRecord[]>>({});
   // Explicit legacy demo aliases only; production queries use canonical SPU IDs, never product names.
-  const demoStoreProducts = useMemo(() => MOCK_STORE_PRODUCTS.map(record => ({ ...record, baseProductId: ({ '974340414367182854': '1', '924336445413220352': '3', '934501236899667968': '4' } as Record<string, string>)[record.baseProductId] || record.baseProductId })), []);
+  const demoStoreProducts = useMemo(() => [...MOCK_STORE_PRODUCTS, ...COMPLEX_COMBO_STORES, ...VALUE_COMBO_STORES].map(record => ({ ...record, baseProductId: ({ '974340414367182854': '1', '924336445413220352': '3', '934501236899667968': '4' } as Record<string, string>)[record.baseProductId] || record.baseProductId })), []);
   const directStoreProducts = directStoreProductsByBrand[activeBrandId] || demoStoreProducts;
   const updateStoreRecords = (updater: (records: StoreProductRecord[]) => StoreProductRecord[]) => setDirectStoreProductsByBrand(current => ({ ...current, [activeBrandId]: updater(current[activeBrandId] || demoStoreProducts) }));
   const [directSyncBatchesByBrand, setDirectSyncBatchesByBrand] = useState<Record<string, PublishBatch[]>>({});
@@ -1385,6 +1391,12 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
           return (
               <WebProductDetail 
                   product={detailContext} 
+                  storeRecords={directStoreProducts}
+                  salesByPeriod={detailContext.id === '10' ? VALUE_COMBO_SALES : detailContext.id === COMPLEX_COMBO_DEMO_ID ? COMPLEX_COMBO_SALES : undefined}
+                  onChangeStoreShelf={async request => { const result = applyDetailShelfChange(directStoreProducts, request); updateStoreRecords(() => result.records); return result; }}
+                  templates={['10', COMPLEX_COMBO_DEMO_ID].includes(detailContext.id) ? COMPLEX_COMBO_TEMPLATES : PRODUCT_TEMPLATE_RECORDS.filter(template => templateMemberships[template.id]?.includes(detailContext.id))}
+                  onOpenStoreProducts={() => { setStoreProductManagePreset({ keyword: detailContext.name }); setDetailContext(null); setActiveMenu('store_product_list'); }}
+                  onOpenTemplates={() => { setDetailContext(null); setActiveMenu('product_template'); }}
                   onClose={() => setDetailContext(null)} 
                   onEdit={() => {
                     const product = detailContext;
@@ -1787,6 +1799,9 @@ export const WebAdmin: React.FC<{ experience?: WebAdminExperience }> = ({ experi
       if (activeMenu === 'channel_product_library' || activeMenu === 'platform_douyin' || activeMenu === 'platform_douyin_addons' || activeMenu === 'platform_meituan') {
           return (
             <WebChannelProductLibrary
+              detailStoreRecords={directStoreProducts}
+              onDetailShelfChange={async request => { const result = applyDetailShelfChange(directStoreProducts, request); updateStoreRecords(() => result.records); return result; }}
+              detailTemplatesByProduct={Object.fromEntries(products.map(product => [product.id, PRODUCT_TEMPLATE_RECORDS.filter(template => templateMemberships[template.id]?.includes(product.id))]))}
               key={`channel-workspace:${activeBrandId}:${omnichannelConfig.collaborationMode}`}
               unifiedManagementView={!!experience?.unified}
               configOverride={experience ? omnichannelConfig : undefined}

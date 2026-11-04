@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, ChevronRight } from 'lucide-react';
 import type { Product } from '../../types';
+import { WebComboProductDetail, type ComboDetailProps } from './WebComboProductDetail';
 
-interface Props {
+interface Props extends ComboDetailProps {
   product: Product;
   onClose: () => void;
   onEdit?: () => void;
@@ -66,7 +67,11 @@ const createDetailTabs = (isCombo: boolean, counts: { stores: number; templates:
   ];
 };
 
-export const WebProductDetail: React.FC<Props> = ({ product, onClose, onEdit }) => {
+export const WebProductDetail: React.FC<Props> = props => props.product.type === 'combo'
+  ? <WebComboProductDetail {...props} />
+  : <WebStandardProductDetail {...props} />;
+
+const WebStandardProductDetail: React.FC<Props> = ({ product, onClose, onEdit }) => {
   const isCombo = product.type === 'combo';
   const [activeTab, setActiveTab] = useState<DetailTabKey>(isCombo ? 'stores' : 'stores');
   const [groups, setGroups] = useState(INITIAL_GROUPS);

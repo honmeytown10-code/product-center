@@ -34,6 +34,7 @@ import {
   type OnlineOrderingPlatformView,
 } from './WebOnlineOrderingPlatformHub';
 import { WebProductSelectorDialog } from './WebProductSelectorDialog';
+import { WebComboProductDetail, type ComboDetailProps } from './WebComboProductDetail';
 
 type PlatformStatus = 'not_synced' | 'initial_reviewing' | 'initial_rejected' | 'effective' | 'update_reviewing' | 'update_rejected';
 type DouyinProductView = 'all' | 'douyin';
@@ -233,6 +234,9 @@ export type ChannelProductsSyncRequest = Omit<ChannelProductEditRequest, 'produc
 
 
 interface Props {
+  detailStoreRecords?: ComboDetailProps['storeRecords'];
+  onDetailShelfChange?: ComboDetailProps['onChangeStoreShelf'];
+  detailTemplatesByProduct?: Record<string, NonNullable<ComboDetailProps['templates']>>;
   onEditProduct?: (request: ChannelProductEditRequest) => void;
   onEditMasterProduct?: (request: ChannelProductEditRequest) => void;
   onSyncFromMaster?: (request: ChannelProductsSyncRequest) => void;
@@ -253,6 +257,9 @@ interface Props {
 }
 
 export const WebChannelProductLibrary: React.FC<Props> = ({
+  detailStoreRecords = [],
+  onDetailShelfChange,
+  detailTemplatesByProduct = {},
   onEditProduct,
   onEditMasterProduct,
   onSyncFromMaster,
@@ -284,6 +291,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
   );
   const [searchType, setSearchType] = useState('all');
   const [quickSearch, setQuickSearch] = useState('');
+  const [comboDetailId, setComboDetailId] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
@@ -798,6 +806,16 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
     setOperationMessage(`已导出 ${displayedProducts.length} 个渠道商品。`);
   };
 
+  const detailProduct = comboDetailId ? effectiveProducts.find(item => item.id === comboDetailId && activeProductIds.includes(item.id)) : undefined;
+  if (detailProduct && activeGroup) {
+    const channelAliases: Record<string, string> = { mini_dine: 'mini_program_dine_in', mini_take: 'mini_program_delivery' };
+    const scopedStores = detailStoreRecords.map(row => ({ ...row, channels: row.channels.filter(id => activeGroup.channels.some(channel => channel === (channelAliases[id] || id))) })).filter(row => row.channels.length > 0);
+    return <WebComboProductDetail product={detailProduct} catalogName={activeGroup.name}
+      storeRecords={scopedStores} storeChannelIds={activeGroup.channels} onChangeStoreShelf={onDetailShelfChange} templates={(detailTemplatesByProduct[detailProduct.id] || []).filter(template => template.channels.some(id => activeGroup.channels.some(channel => channel === id)))}
+      onClose={() => setComboDetailId(null)}
+      onEdit={onEditProduct ? () => { setComboDetailId(null); editChannelProduct(detailProduct); } : undefined} />;
+  }
+
   if (!activeGroup) {
     return (
       <main className="flex flex-1 items-center justify-center bg-[#F5F6FA] p-8">
@@ -1063,7 +1081,7 @@ export const WebChannelProductLibrary: React.FC<Props> = ({
                     <td className="border-b border-[#F0F0F0] px-5 py-4">
                       <div className="flex items-center gap-3">
                         <img src={product.image} alt="" className="h-11 w-11 shrink-0 border border-gray-100 object-cover" />
-                        <div className="min-w-0"><div className="truncate font-bold text-gray-900">{product.name}</div><div className="mt-1 text-xs text-gray-400">商品ID {product.id}</div></div>
+                        <div className="min-w-0">{product.type === 'combo' ? <button type="button" onClick={() => setComboDetailId(product.id)} className="block max-w-full truncate text-left font-bold text-gray-900 hover:text-[#00A35B]" title={`查看${product.name}详情`}>{product.name}</button> : <div className="truncate font-bold text-gray-900">{product.name}</div>}<div className="mt-1 text-xs text-gray-400">商品ID {product.id}</div></div>
                       </div>
                     </td>
                     <td className="border-b border-[#F0F0F0] px-4 py-4 text-gray-600">{getProductTypeName(product)}</td>
